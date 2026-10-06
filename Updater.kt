@@ -1,5 +1,8 @@
 package com.story.launcher
 
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -34,7 +37,10 @@ object Updater {
                 if (!ctx.packageManager.canRequestPackageInstalls()) return@Thread
                 val latest = JSONObject(open(BASE + "version.json").inputStream.bufferedReader().use { it.readText() }).getLong("versionCode")
                 val mine = ctx.packageManager.getPackageInfo(ctx.packageName, 0).longVersionCode
-                if (latest <= mine) return@Thread
+                if (latest <= mine) {  // up to date: clear any leftover "update ready" notification
+                    ctx.getSystemService(android.app.NotificationManager::class.java).cancel(InstallResultReceiver.UPDATE_NOTIFICATION)
+                    return@Thread
+                }
                 if (!force && latest == offered && System.currentTimeMillis() - offeredAt < 10 * 60_000) return@Thread
                 offered = latest; offeredAt = System.currentTimeMillis()
                 val apk = File(ctx.cacheDir, "story-update.apk")
@@ -64,13 +70,37 @@ object Updater {
     }
 }
 
-/** Android sometimes needs one tap to approve an update; this brings that prompt up. */
+/**
+ * Android sometimes needs one tap to approve an update; this brings that prompt up, and also
+ * leaves a "STORY update ready" notification that stays until the update is installed. Missed
+ * the prompt? Tap the notification: it opens STORY, which shows the prompt again.
+ */
 class InstallResultReceiver : BroadcastReceiver() {
     @Suppress("DEPRECATION")
     override fun onReceive(c: Context, i: Intent) {
         if (i.getIntExtra(PackageInstaller.EXTRA_STATUS, -1) == PackageInstaller.STATUS_PENDING_USER_ACTION) {
+            showUpdateNotification(c)
             val confirm = i.getParcelableExtra<Intent>(Intent.EXTRA_INTENT) ?: return
-            c.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            runCatching { c.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+        }
+    }
+
+    companion object {
+        const val UPDATE_NOTIFICATION = 2
+
+        fun showUpdateNotification(c: Context) {
+            val nm = c.getSystemService(NotificationManager::class.java)
+            nm.createNotificationChannel(NotificationChannel("story_update", "STORY updates", NotificationManager.IMPORTANCE_HIGH))
+            val open = PendingIntent.getActivity(c, 0, Intent(c, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+            val n = Notification.Builder(c, "story_update")
+                .setSmallIcon(android.R.drawable.stat_sys_download_done)
+                .setContentTitle("STORY update ready")
+                .setContentText("Tap to install")
+                .setContentIntent(open)
+                .setOngoing(true)       // can't be swiped away by accident
+                .setAutoCancel(false)   // stays after tapping, until the update is really installed
+                .build()
+            runCatching { nm.notify(UPDATE_NOTIFICATION, n) }
         }
     }
 }
@@ -78,6 +108,8 @@ class InstallResultReceiver : BroadcastReceiver() {
 /** Brings STORY back after a phone restart or after an update, so nothing needs setting up again. */
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(c: Context, i: Intent) {
+        // This version is installed now, so the "update ready" notification is done.
+        if (i.action == Intent.ACTION_MY_PACKAGE_REPLACED) c.getSystemService(android.app.NotificationManager::class.java).cancel(InstallResultReceiver.UPDATE_NOTIFICATION)
         val wanted = c.getSharedPreferences("story", Context.MODE_PRIVATE).getBoolean("enabled", false)
         if (wanted && android.provider.Settings.canDrawOverlays(c)) {
             runCatching { c.startForegroundService(Intent(c, OverlayService::class.java)) }
