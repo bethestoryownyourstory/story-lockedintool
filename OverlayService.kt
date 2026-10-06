@@ -55,7 +55,11 @@ class OverlayService : Service(), StoryBridge.Host {
     private var layerType = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
     private var bubbleWm: WindowManager? = null
     private val updateLoop = object : Runnable {
-        override fun run() { Updater.check(this@OverlayService); ui.postDelayed(this, 3 * 60 * 60_000L) }
+        override fun run() { Updater.check(this@OverlayService); ui.postDelayed(this, 15 * 60_000L) }
+    }
+    // Every unlock is also a good moment to pick up a new STORY version.
+    private val unlocked = object : android.content.BroadcastReceiver() {
+        override fun onReceive(c: Context, i: Intent) { Updater.check(this@OverlayService) }
     }
     private val dp get() = resources.displayMetrics.density
 
@@ -72,6 +76,8 @@ class OverlayService : Service(), StoryBridge.Host {
         addBar()
         ui.post { warmUp() }  // build both panes now so Station 3 and Pages open instantly
         ui.postDelayed(updateLoop, 15_000)  // then look for a new STORY version in the background
+        val unlockFilter = android.content.IntentFilter(Intent.ACTION_USER_PRESENT)
+        if (Build.VERSION.SDK_INT >= 33) registerReceiver(unlocked, unlockFilter, Context.RECEIVER_NOT_EXPORTED) else registerReceiver(unlocked, unlockFilter)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -85,6 +91,7 @@ class OverlayService : Service(), StoryBridge.Host {
         bubble?.let { runCatching { (bubbleWm ?: wm).removeView(it) } }
         instance = null
         ui.removeCallbacks(updateLoop)
+        runCatching { unregisterReceiver(unlocked) }
         bar?.let { runCatching { wm.removeView(it) } }
         running = false
         super.onDestroy()

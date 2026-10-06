@@ -15,14 +15,16 @@ import java.net.URL
 object Updater {
     private const val BASE = "https://github.com/bethestoryownyourstory/story-lockedintool/releases/download/latest/"
     @Volatile private var busy = false
+    @Volatile private var lastCheck = 0L
 
     private fun open(url: String): HttpURLConnection = (URL(url).openConnection() as HttpURLConnection).apply {
         connectTimeout = 15000; readTimeout = 30000; instanceFollowRedirects = true
     }
 
     fun check(ctx: Context) {
-        if (busy) return
-        busy = true
+        // Called often (every 15 min, on unlock, on opening STORY); asking more than once a minute is pointless.
+        if (busy || System.currentTimeMillis() - lastCheck < 60_000) return
+        busy = true; lastCheck = System.currentTimeMillis()
         Thread {
             try {
                 // Needs the one-time "allow STORY to install updates" switch from the setup screen.

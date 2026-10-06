@@ -53,4 +53,7 @@ class MainActivity : Activity() {
         col.addView(title("Build ${info.versionName} (code ${info.longVersionCode}) - built for Android API ${applicationInfo.targetSdkVersion} - this phone runs API ${Build.VERSION.SDK_INT}", 12f).apply { setTextColor(0xFF888888.toInt()); setPadding(0, pad, 0, 0) })
         setContentView(col)
     }
+
+    // Opening STORY also checks for a newer version, so updates arrive without waiting.
+    override fun onResume() { super.onResume(); Updater.check(applicationContext) }
 }

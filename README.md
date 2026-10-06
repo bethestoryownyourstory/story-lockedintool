@@ -19,10 +19,11 @@ What you get once it's running:
 ## Updating
 All files live in the repo root (no folders). The workflows arrange them into an Android project when they build.
 
-- **App changes** (`.kt`, `.xml` files): push them. "Build STORY APK" builds the app and publishes it, and installed phones update themselves.
+- **App changes** (`.kt`, `.xml` files): push them. "Build STORY APK" builds the app and publishes it. Installed phones update themselves: STORY checks every 15 minutes, on every unlock and whenever it is opened.
 - **Screen changes** (`index.html`): push it. It goes to the **Test channel** only.
   1. On a test phone: STORY setup screen -> **Test channel: ON**. That phone now shows the new screens.
-  2. When you're happy, approve it: Actions -> **STORY screens - Test, then Approve** -> **Run workflow**. Every phone gets the new screens.
+  2. When you're happy, say "approve" in the Claude chat and Claude runs **STORY screens - Test, then Approve** for you. Every phone gets the new screens.
+     (By hand, if ever needed: Actions -> that workflow -> **Run workflow**.)
 
 One-time setting for the Test channel: Settings -> Pages -> Build and deployment -> Source "Deploy from a branch" -> branch **gh-pages**, folder **/ (root)**.
 (The `gh-pages` branch is created by the first run of "STORY screens". `/` is live and `/preview/` is Test.)
