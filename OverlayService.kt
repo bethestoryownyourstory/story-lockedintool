@@ -96,7 +96,7 @@ class OverlayService : Service(), StoryBridge.Host {
         removePanelNow(); hidePicker(); destroyPanes()
         bubble?.let { runCatching { (bubbleWm ?: wm).removeView(it) } }
         instance = null
-        ui.removeCallbacks(updateLoop)
+        ui.removeCallbacks(updateLoop); ui.removeCallbacks(resumeAfterInstall)
         runCatching { unregisterReceiver(unlocked) }
         bar?.let { runCatching { wm.removeView(it) } }
         running = false
@@ -397,6 +397,22 @@ class OverlayService : Service(), StoryBridge.Host {
     }
 
     /** Gets the Pages out of the way (Home, Apps, opening an app). Station 3 is left exactly as it is. */
+    /**
+     * Android won't let you press "Update" while anything is drawn over the screen, so STORY
+     * steps aside while the install prompt is up. The update restarts STORY by itself; if you
+     * cancel instead, STORY comes back after 90 seconds.
+     */
+    fun pauseForInstall() {
+        ui.post {
+            ui.removeCallbacks(resumeAfterInstall)
+            removePanelNow(); hidePicker(); destroyPanes()
+            bubble?.let { runCatching { (bubbleWm ?: wm).removeView(it) } }; bubble = null
+            bar?.let { runCatching { wm.removeView(it) } }; bar = null
+            ui.postDelayed(resumeAfterInstall, 90_000)
+        }
+    }
+    private val resumeAfterInstall = Runnable { if (bubble == null) { pickLayer(); addBubble(); warmUp() } }
+
     override fun hidePanel() { ui.post { pagesPane?.takeIf { it.shown }?.let { hideOne(it) }; updateBubble() } }
 
     /** Station 3's corner arrow was tapped: the one way Station 3 closes. */

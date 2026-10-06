@@ -80,6 +80,7 @@ class InstallResultReceiver : BroadcastReceiver() {
     override fun onReceive(c: Context, i: Intent) {
         if (i.getIntExtra(PackageInstaller.EXTRA_STATUS, -1) == PackageInstaller.STATUS_PENDING_USER_ACTION) {
             showUpdateNotification(c)
+            OverlayService.instance?.pauseForInstall()  // so the Update button can be pressed
             val confirm = i.getParcelableExtra<Intent>(Intent.EXTRA_INTENT) ?: return
             runCatching { c.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
         }
