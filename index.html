@@ -1579,6 +1579,12 @@
      stack, right-aligned above the corner arrow that opens/closes them -- not scattered into
      separate pieces. The whole stack still gets lifted clear of a real floating dock (Wallet's
      pay bar, etc.) so the bar's buttons never sit under the dock's own buttons. */
+  /* Android overlay: Station 3 alone, transparent, over another app */
+  html:has(body.s3-only), body.s3-only{ background:transparent !important; }
+  body.s3-only *:not(.station3-region):not(.station3-region *){ background:transparent !important; box-shadow:none !important; border-color:transparent !important; backdrop-filter:none !important; -webkit-backdrop-filter:none !important; }
+  body.s3-only *{ visibility:hidden !important; }
+  body.s3-only .station3-region, body.s3-only .station3-region *{ visibility:visible !important; }
+  body.s3-only::before, body.s3-only::after{ display:none !important; }
   .station3-region{ position:absolute; inset:0; pointer-events:none; z-index:30; }
   /* Solid white fill plugging the gaps between the lifted Rows/Page Styles row, the bar
      card, and the corner arrow, so the whole silhouette reads as one continuous flush
@@ -4702,8 +4708,58 @@ function settingsHubScreen(){
     </div>
   `;
 }
+
+// ===== NATIVE BRIDGE -- only active inside the STORY Android launcher app =====
+// In a normal browser window.StoryNative doesn't exist and everything below is skipped, so the
+// web prototype keeps working exactly as before. Inside the launcher, the app list is the
+// phone's REAL installed apps (real icons), tapping one opens the real app, recents are the
+// phone's own, and Delete uninstalls.
+const NATIVE = (typeof window !== 'undefined') && !!window.StoryNative;
+function appIconHTML(a){
+  if(a && a.iconData) return `<img src="data:image/png;base64,${a.iconData}" alt="" style="width:100%;height:100%;object-fit:contain;border-radius:10px;">`;
+  return a ? a.icon : '';
+}
+function loadNativeApps(){
+  if(!NATIVE) return;
+  try{
+    const list = JSON.parse(window.StoryNative.getApps());
+    const storyApps = state.installedApps.filter(a=>a.section==='STORY');
+    state.installedApps = storyApps.concat(list.map(a=>({ id:'pkg:'+a.pkg, pkg:a.pkg, name:a.label, icon:'📱', iconData:a.icon, section:'PHONE APPS' })));
+  }catch(err){ console.warn('native apps unavailable', err); }
+}
+// Called by the Android overlay: open STORY on a given page (and optionally with Station 3 open).
+window.storyShow = function(page, station3){
+  state.recentsOpen=false; state.homePickerOpen=false; state.appMenuId=null;
+  state.current = page || state.lastPage || state.homeScreen || 'wallet';
+  if(['money','wallet','trading'].includes(state.current)) state.lastPage = state.current;
+  state.station3Open = !!station3;
+  renderDevice();
+};
+// Station 3 on its own, floating over whatever app is open (Android overlay). Nothing else of
+// STORY shows: only the Station 3 pieces; tapping anywhere else, or the corner arrow, closes it.
+window.storyStation3Only = function(){
+  document.body.classList.add('s3-only');
+  state.recentsOpen=false; state.homePickerOpen=false; state.appMenuId=null;
+  if(state.current==='dashboard') state.current = state.lastPage || 'wallet';
+  state.station3Open = true;
+  renderDevice();
+};
+document.addEventListener('click', (e)=>{
+  if(!NATIVE || !document.body.classList.contains('s3-only')) return;
+  const arrow = e.target.closest && e.target.closest('.station3-corner-arrow');
+  const inside = e.target.closest && e.target.closest('.station3-region');
+  if(arrow || !inside){ e.stopPropagation(); e.preventDefault(); window.StoryNative.closePanel(); }
+}, true);
+window.storyGoHome = function(){ state.recentsOpen=false; state.homePickerOpen=false; state.appMenuId=null; state.current = state.homeScreen || 'wallet'; renderDevice(); };
+document.addEventListener('click', (e)=>{
+  const el = e.target.closest && e.target.closest('[data-native-pkg]');
+  if(!el || !NATIVE) return;
+  if(Date.now() - appMenuOpenedAt < 450 || state.appMenuId) return; // finished a long-press, not a tap
+  e.stopPropagation();
+  window.StoryNative.launchApp(el.getAttribute('data-native-pkg'));
+}, true);
 function appsScreen(){
-  const sections = ['WORK & TRADING', 'STORY', 'SOCIAL'];
+  const sections = NATIVE ? ['STORY', 'PHONE APPS'] : ['WORK & TRADING', 'STORY', 'SOCIAL'];
   return `
     <div class="page-shell">
     ${topBar('Apps', false)}
@@ -4713,11 +4769,11 @@ function appsScreen(){
       return `
         <div class="section-title">${sec}</div>
         ${items.map(a=>{
-          const attr = a.nav ? `data-nav="${a.nav}"` : a.launchPopup ? `data-app-launchpopup="${a.launchPopup}"` : a.locked ? `data-app-locked="${escText(a.name)}"` : `data-app-toast="${escText(a.name)}"`;
+          const attr = a.pkg ? `data-native-pkg="${escText(a.pkg)}"` : a.nav ? `data-nav="${a.nav}"` : a.launchPopup ? `data-app-launchpopup="${a.launchPopup}"` : a.locked ? `data-app-locked="${escText(a.name)}"` : `data-app-toast="${escText(a.name)}"`;
           return `
             <div class="row-card app-row" style="cursor:pointer;" data-app-id="${a.id}" ${attr}>
               <div class="row">
-                <div class="row-left"><div class="row-icon">${a.icon}</div><div class="row-name">${escText(a.name)}</div></div>
+                <div class="row-left"><div class="row-icon">${appIconHTML(a)}</div><div class="row-name">${escText(a.name)}</div></div>
                 ${a.locked ? `<span class="chev-right" title="Locked">🔒</span>` : `<span class="chev-right">›</span>`}
               </div>
             </div>
@@ -4737,7 +4793,7 @@ function appMenuTemplate(){
   return `
     <div class="modal-overlay" data-action="app-menu-close">
       <div class="confirm-sheet" onclick="event.stopPropagation()">
-        <div class="confirm-title">${a.icon} ${escText(a.name)}</div>
+        <div class="confirm-title">${appIconHTML(a)} ${escText(a.name)}</div>
         <div class="confirm-btn-row">
           <button class="btn-wide" style="margin-top:0;" data-action="app-turn-into-page">Turn app into a page</button>
           <button class="btn-wide" style="margin-top:0;color:var(--red);" data-action="app-delete">Delete app</button>
@@ -6102,6 +6158,26 @@ function positionStation3(){
     arrow.style.bottom = (vh - bottomY) + 'px';
   }
 
+  // Correction pass: if any ancestor has a transform/perspective/filter (the 3D tilt, zoom
+  // fit, etc.), position:fixed is measured from THAT box instead of the viewport, so the
+  // coordinates above land a few px off and the button hangs past the bottom edge. Read where
+  // the arrow REALLY ended up and nudge it by the difference, then clamp inside the screen.
+  {
+    const wantBottom = Math.min(rect.bottom, vh, (window.visualViewport ? window.visualViewport.height + window.visualViewport.offsetTop : vh)) - gap;
+    let ar = arrow.getBoundingClientRect();
+    const dy = ar.bottom - wantBottom;
+    if(Math.abs(dy) > 0.5){
+      if(arrow.style.top && arrow.style.top !== 'auto'){
+        arrow.style.top = (parseFloat(arrow.style.top) - dy) + 'px';
+      } else {
+        arrow.style.bottom = (parseFloat(arrow.style.bottom) + dy) + 'px';
+      }
+    }
+    ar = arrow.getBoundingClientRect();
+    const dx = ar.right - (rect.right - gap);
+    if(Math.abs(dx) > 0.5 && dx > 0){ arrow.style.right = (parseFloat(arrow.style.right) + dx) + 'px'; }
+  }
+
   // Money Transfer FAB (money page only): lives outside the Station 3 region markup, but
   // uses the exact same fixed-positioning coordinate system -- anchored off the arrow's own
   // real rendered rect, not a separately-guessed inset -- so it always lines up with the
@@ -6113,10 +6189,26 @@ function positionStation3(){
   if(moneyFab){
     const fabArrowRect = arrow.getBoundingClientRect();
     const fabGap = 14; // deliberate, visible gap -- the two buttons must never touch
+    moneyFab.style.visibility = state.moneyTransferOpen ? 'hidden' : '';
     moneyFab.style.left = 'auto';
     moneyFab.style.top = 'auto';
     moneyFab.style.right = (vw - fabArrowRect.right) + 'px';
     moneyFab.style.bottom = (vh - fabArrowRect.top + fabGap) + 'px';
+    // Same correction as the arrow: the page's zoom-to-fit (or any transformed ancestor)
+    // rescales/offsets these fixed insets, which parked the button on top of the Station 3
+    // arrow so taps never reached it. Read the real box and nudge it to a true 14px gap.
+    const fb = (moneyFab.querySelector('button') || moneyFab).getBoundingClientRect();
+    const wantBottom = fabArrowRect.top - fabGap;
+    const dyF = fb.bottom - wantBottom;
+    if(Math.abs(dyF) > 0.5){
+      const zf = parseFloat(moneyFab.closest('[style*="zoom"]')?.style.zoom) || 1;
+      moneyFab.style.bottom = (parseFloat(moneyFab.style.bottom) + dyF / zf) + 'px';
+    }
+    const dxF = fb.right - fabArrowRect.right;
+    if(Math.abs(dxF) > 0.5){
+      const zf = parseFloat(moneyFab.closest('[style*="zoom"]')?.style.zoom) || 1;
+      moneyFab.style.right = (parseFloat(moneyFab.style.right) + dxF / zf) + 'px';
+    }
   }
 
   if(!quickRow && !sideCard) return;
@@ -7115,6 +7207,7 @@ function attachHandlers(){
     el.addEventListener('click', ()=>{
       if(!state.homePickerOpen) return;
       const raw = el.getAttribute('data-home-pick');
+      if(NATIVE && raw === 'apps' && window.StoryNative.showApps){ state.homePickerOpen = false; window.StoryNative.showApps(); return; }
       // "Pages" isn't a screen of its own -- it's the shortcut back into the Money/Wallet/
       // Focus stack, landing on whichever of those three was open last (same page attachSwipe()
       // and the Dashboard's own -> arrow already treat as "the" page to return to).
@@ -8005,6 +8098,7 @@ function attachHandlers(){
         case 'app-turn-into-page': state.appMenuId = null; showToast('Coming soon'); break;
         case 'app-delete': {
           const gone = state.installedApps.find(x=>x.id===state.appMenuId);
+          if(NATIVE && gone && gone.pkg){ state.appMenuId = null; window.StoryNative.uninstallApp(gone.pkg); break; }
           state.installedApps = state.installedApps.filter(x=>x.id!==state.appMenuId);
           state.appMenuId = null;
           if(gone) showToast(gone.name + ' deleted');
@@ -9840,6 +9934,7 @@ if(REAL_DEVICE){
   window.addEventListener('online', renderWifi);
   window.addEventListener('offline', renderWifi);
 }
+loadNativeApps();
 renderDevice();
 
 // Real-device status-row clock: unlike the desktop mockup's frozen "9:41" (a deliberate,
@@ -10156,7 +10251,7 @@ function endHomeSwipe(e){
   const farEnough = (h.dy / 168) > 0.3;
   homeSwipe = null;
   if(farEnough){
-    if(h.mode === 'recents'){ state.recentsOpen = true; }
+    if(h.mode === 'recents'){ if(NATIVE){ window.StoryNative.openRecents(); } else { state.recentsOpen = true; } }
     else { state.current = 'apps'; }
     renderDevice();
   }
