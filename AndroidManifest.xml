@@ -14,6 +14,7 @@
         android:label="STORY"
         android:theme="@style/Theme.Story">
 
+        <!-- Setup screen. STORY does NOT replace your home screen; it floats over it. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -24,6 +25,7 @@
             </intent-filter>
         </activity>
 
+        <!-- The overlay: Station 3 button + the bottom STORY bar, drawn over every app. -->
         <service
             android:name=".OverlayService"
             android:exported="false"
@@ -31,6 +33,7 @@
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Floating STORY button and bar drawn over other apps at the user's request" />
         </service>
 
+        <!-- Optional: lets STORY open the phone's real recents screen and lock the screen. -->
         <service
             android:name=".StoryAccessibilityService"
             android:exported="true"
