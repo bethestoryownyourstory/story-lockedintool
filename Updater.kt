@@ -55,6 +55,8 @@ object Updater {
         val installer = ctx.packageManager.packageInstaller
         val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
         if (Build.VERSION.SDK_INT >= 31) params.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
+        // STORY becomes the owner of its own updates, so from then on they install with no prompt.
+        if (Build.VERSION.SDK_INT >= 34) params.setRequestUpdateOwnership(true)
         val id = installer.createSession(params)
         installer.openSession(id).use { session ->
             session.openWrite("story", 0, apk.length()).use { out ->

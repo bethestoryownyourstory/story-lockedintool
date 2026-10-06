@@ -55,6 +55,14 @@ jobs:
               }
               compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
               kotlinOptions { jvmTarget = "17" }
+              // Every build MUST be signed with the same key (debug.keystore.b64), or phones refuse the update.
+              signingConfigs {
+                  create("story") {
+                      storeFile = rootProject.file("story.keystore")
+                      storePassword = "android"; keyAlias = "androiddebugkey"; keyPassword = "android"
+                  }
+              }
+              buildTypes { getByName("debug") { signingConfig = signingConfigs.getByName("story") } }
           }
           dependencies {
               implementation("androidx.core:core-ktx:1.13.1")
@@ -67,6 +75,7 @@ jobs:
         run: |
           mkdir -p ~/.android
           base64 -d debug.keystore.b64 > ~/.android/debug.keystore
+          base64 -d debug.keystore.b64 > build_src/story.keystore
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: 17 }
       - uses: gradle/actions/setup-gradle@v4
@@ -74,11 +83,24 @@ jobs:
       - name: Build
         working-directory: build_src
         run: gradle assembleDebug --no-daemon
+      - name: Check the APK can update the phones (same key, higher version)
+        run: |
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          APK=build_src/app/build/outputs/apk/debug/app-debug.apk
+          WANT=fc583323c0e7c386ff9388fbf1a033c0b1dd5962ceb523caee58cc5dadbb3569
+          GOT=$("$BT/apksigner" verify --print-certs "$APK" | grep -m1 'certificate SHA-256' | awk '{print $NF}')
+          echo "Signed with: $GOT"
+          [ "$GOT" = "$WANT" ] || { echo "::error::APK is signed with the wrong key ($GOT). Phones would say 'App not installed'."; exit 1; }
+          VC=$("$BT/aapt2" dump badging "$APK" | grep -o "versionCode='[0-9]*'" | grep -o '[0-9]\+')
+          PUB=$(curl -sfL "https://github.com/$GITHUB_REPOSITORY/releases/download/latest/version.json" | grep -o '[0-9]\+' || echo 0)
+          echo "This build: $VC   Published now: $PUB"
+          [ "$VC" -gt "$PUB" ] || { echo "::error::versionCode $VC is not higher than the published $PUB."; exit 1; }
       - uses: actions/upload-artifact@v4
         with:
           name: story-apk
           path: build_src/app/build/outputs/apk/debug/app-debug.apk
       - name: Publish this build so installed phones update themselves
+        if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
