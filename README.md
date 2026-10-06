@@ -19,7 +19,7 @@ What you get once it's running:
 ## Updating
 All files live in the repo root (no folders). The workflows arrange them into an Android project when they build.
 
-- **App changes** (`.kt`, `.xml` files): push them. "Build STORY APK" builds the app and publishes it. Installed phones update themselves: STORY checks every 15 minutes, on every unlock and whenever it is opened.
+- **App changes** (`.kt`, `.xml` files): push them. "Build STORY APK" builds the app and publishes it. Installed phones update themselves: While the screen is on, STORY checks every minute (and on every unlock and whenever it is opened), so a new build arrives about a minute after it is built.
 - **Screen changes** (`index.html`): push it. It goes to the **Test channel** only.
   1. On a test phone: STORY setup screen -> **Test channel: ON**. That phone now shows the new screens.
   2. When you're happy, say "approve" in the Claude chat and Claude runs **STORY screens - Test, then Approve** for you. Every phone gets the new screens.

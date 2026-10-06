@@ -16,14 +16,16 @@ object Updater {
     private const val BASE = "https://github.com/bethestoryownyourstory/story-lockedintool/releases/download/latest/"
     @Volatile private var busy = false
     @Volatile private var lastCheck = 0L
+    // The version Android is already asking to install, so the prompt doesn't pop up again every minute.
+    @Volatile private var offered = 0L; @Volatile private var offeredAt = 0L
 
     private fun open(url: String): HttpURLConnection = (URL(url).openConnection() as HttpURLConnection).apply {
-        connectTimeout = 15000; readTimeout = 30000; instanceFollowRedirects = true
+        connectTimeout = 15000; readTimeout = 30000; instanceFollowRedirects = true; useCaches = false
     }
 
     fun check(ctx: Context) {
-        // Called often (every 15 min, on unlock, on opening STORY); asking more than once a minute is pointless.
-        if (busy || System.currentTimeMillis() - lastCheck < 60_000) return
+        // Called every minute while the screen is on, on unlock and on opening STORY.
+        if (busy || System.currentTimeMillis() - lastCheck < 30_000) return
         busy = true; lastCheck = System.currentTimeMillis()
         Thread {
             try {
@@ -32,6 +34,8 @@ object Updater {
                 val latest = JSONObject(open(BASE + "version.json").inputStream.bufferedReader().use { it.readText() }).getLong("versionCode")
                 val mine = ctx.packageManager.getPackageInfo(ctx.packageName, 0).longVersionCode
                 if (latest <= mine) return@Thread
+                if (latest == offered && System.currentTimeMillis() - offeredAt < 10 * 60_000) return@Thread
+                offered = latest; offeredAt = System.currentTimeMillis()
                 val apk = File(ctx.cacheDir, "story-update.apk")
                 open(BASE + "app-debug.apk").inputStream.use { i -> apk.outputStream().use { o -> i.copyTo(o) } }
                 install(ctx, apk)

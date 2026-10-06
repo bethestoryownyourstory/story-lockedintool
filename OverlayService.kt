@@ -55,12 +55,18 @@ class OverlayService : Service(), StoryBridge.Host {
     private var layerType = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
     private var bubbleWm: WindowManager? = null
     private val updateLoop = object : Runnable {
-        override fun run() { Updater.check(this@OverlayService); ui.postDelayed(this, 15 * 60_000L) }
+        // Every minute while the screen is on: new app version? new screens? Nothing while the screen is off.
+        override fun run() {
+            if (getSystemService(android.os.PowerManager::class.java).isInteractive) { Updater.check(this@OverlayService); checkScreens() }
+            ui.postDelayed(this, 60_000L)
+        }
     }
     // Every unlock is also a good moment to pick up a new STORY version.
     private val unlocked = object : android.content.BroadcastReceiver() {
-        override fun onReceive(c: Context, i: Intent) { Updater.check(this@OverlayService) }
+        override fun onReceive(c: Context, i: Intent) { Updater.check(this@OverlayService); checkScreens() }
     }
+    // Which version of the screens (live or Test) the panes have loaded; see checkScreens().
+    @Volatile private var screensSeen: String? = null
     private val dp get() = resources.displayMetrics.density
 
     override fun onBind(i: Intent?): IBinder? = null
@@ -118,7 +124,32 @@ class OverlayService : Service(), StoryBridge.Host {
         else { layerWm = wm; layerType = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY }
     }
 
+    /** Asks the STORY site which screens are current; if they changed, the panes reload (when closed). */
+    private fun checkScreens() {
+        val url = remoteBase() + (if (getSharedPreferences("story", MODE_PRIVATE).getBoolean("preview", false)) "source.txt" else "live-source.txt") + "?t=" + System.currentTimeMillis()
+        Thread {
+            val v = runCatching {
+                (java.net.URL(url).openConnection() as java.net.HttpURLConnection).run {
+                    connectTimeout = 10000; readTimeout = 10000; useCaches = false
+                    if (responseCode == 200) inputStream.bufferedReader().use { it.readText().trim() } else null
+                }
+            }.getOrNull() ?: return@Thread
+            ui.post {
+                val before = screensSeen
+                screensSeen = v
+                if (before != null && before != v) for (p in listOfNotNull(s3Pane, pagesPane)) { if (p.shown) p.stale = true else reload(p) }
+            }
+        }.start()
+    }
+
+    /** Fresh copy of the screens, skipping the website's cache. */
+    private fun reload(p: Pane) {
+        p.stale = false; p.loadedAt = System.currentTimeMillis()
+        p.web.loadUrl(remoteBase() + "?" + (if (p.small) "s3=1&" else "") + "v=" + System.currentTimeMillis())
+    }
+
     private fun rebuildLayer() {
+        screensSeen = null
         val s3WasOpen = s3Pane?.shown == true
         removePanelNow()
         bubble?.let { runCatching { (bubbleWm ?: wm).removeView(it) } }; bubble = null
@@ -237,7 +268,7 @@ class OverlayService : Service(), StoryBridge.Host {
 
     // ---- STORY panes (built once, kept warm, so they open instantly) ----
     private class Pane(val frame: FrameLayout, val web: WebView, val lp: WindowManager.LayoutParams, val small: Boolean, val wm: WindowManager) {
-        var shown = false; var loadedAt = System.currentTimeMillis()
+        var shown = false; var loadedAt = System.currentTimeMillis(); var stale = false
         // Station 3 only: the window size while open, cut down to what Station 3 really covers.
         var openW = lp.width; var openH = lp.height
     }
@@ -281,7 +312,7 @@ class OverlayService : Service(), StoryBridge.Host {
             }
         }
         // Live: the screens come from the STORY site, so every upload reaches every phone with no reinstall.
-        wv.loadUrl(remoteBase() + query)
+        wv.loadUrl(remoteBase() + "?" + (if (small) "s3=1&" else "") + "v=" + System.currentTimeMillis())  // skip the website cache
         val s3W = (340 * dp).toInt(); val s3H = (520 * dp).toInt()
         // Station 3's page always lays out at full size, pinned to the corner; its window may be
         // smaller (see setStation3Size) and simply cuts off the empty part, so nothing reflows.
@@ -351,10 +382,7 @@ class OverlayService : Service(), StoryBridge.Host {
         p.web.evaluateJavascript("window.storyReset&&window.storyReset()", null)
         setShown(p, false)
         // Pick up the newest screens in the background so the next open is both instant and current.
-        if (System.currentTimeMillis() - p.loadedAt > 5 * 60_000) {
-            p.loadedAt = System.currentTimeMillis()
-            p.web.loadUrl(remoteBase() + if (p.small) "?s3=1" else "")
-        }
+        if (p.stale || System.currentTimeMillis() - p.loadedAt > 5 * 60_000) reload(p)
     }
 
     private fun removePanelNow() {
