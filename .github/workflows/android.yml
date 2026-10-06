@@ -1,0 +1,72 @@
+name: Build STORY APK
+on:
+  push:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Arrange the flat files into an Android project
+        run: |
+          B=build_src
+          M=$B/app/src/main
+          mkdir -p $M/java/com/story/launcher $M/res/values $M/res/xml $M/res/drawable $M/assets
+          cp AndroidManifest.xml $M/
+          cp MainActivity.kt OverlayService.kt StoryAccessibilityService.kt StoryBridge.kt $M/java/com/story/launcher/
+          cp accessibility_config.xml $M/res/xml/
+          cp strings.xml themes.xml $M/res/values/
+          cp ic_launcher.xml $M/res/drawable/
+          cp index.html $M/assets/index.html
+          cat > $B/settings.gradle.kts <<'X'
+          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+          dependencyResolutionManagement { repositories { google(); mavenCentral() } }
+          rootProject.name = "StoryOverlay"
+          include(":app")
+          X
+          cat > $B/build.gradle.kts <<'X'
+          plugins {
+              id("com.android.application") version "8.5.2" apply false
+              id("org.jetbrains.kotlin.android") version "1.9.24" apply false
+          }
+          X
+          cat > $B/gradle.properties <<'X'
+          org.gradle.jvmargs=-Xmx2g
+          android.useAndroidX=true
+          X
+          cat > $B/app/build.gradle.kts <<'X'
+          plugins {
+              id("com.android.application")
+              id("org.jetbrains.kotlin.android")
+          }
+          android {
+              namespace = "com.story.launcher"
+              compileSdk = 34
+              defaultConfig {
+                  applicationId = "com.story.launcher"
+                  minSdk = 26
+                  targetSdk = 34
+                  versionCode = 1
+                  versionName = "0.1"
+              }
+              compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
+              kotlinOptions { jvmTarget = "17" }
+          }
+          dependencies {
+              implementation("androidx.core:core-ktx:1.13.1")
+              implementation("androidx.appcompat:appcompat:1.7.0")
+              implementation("androidx.biometric:biometric:1.1.0")
+              implementation("androidx.webkit:webkit:1.11.0")
+          }
+          X
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 17 }
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: 8.9 }
+      - name: Build
+        working-directory: build_src
+        run: gradle assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: story-apk
+          path: build_src/app/build/outputs/apk/debug/app-debug.apk
