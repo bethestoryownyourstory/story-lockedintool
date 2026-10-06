@@ -13,7 +13,7 @@ jobs:
           M=$B/app/src/main
           mkdir -p $M/java/com/story/launcher $M/res/values $M/res/xml $M/res/drawable $M/assets
           cp AndroidManifest.xml $M/
-          cp MainActivity.kt OverlayService.kt StoryAccessibilityService.kt StoryBridge.kt $M/java/com/story/launcher/
+          cp *.kt $M/java/com/story/launcher/ StoryAccessibilityService.kt StoryBridge.kt $M/java/com/story/launcher/
           cp accessibility_config.xml $M/res/xml/
           cp strings.xml themes.xml $M/res/values/
           cp ic_launcher.xml $M/res/drawable/
