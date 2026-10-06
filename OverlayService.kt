@@ -47,6 +47,12 @@ class OverlayService : Service(), StoryBridge.Host {
     private var bubble: View? = null
     private var bar: View? = null
     private var picker: View? = null
+    // Station 3's button and window live in the accessibility layer when STORY system actions is on:
+    // that layer is drawn above everything, including the lock screen. Without it we fall back to
+    // the normal over-other-apps layer (which Android hides on the lock screen).
+    private lateinit var layerWm: WindowManager
+    private var layerType = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+    private var bubbleWm: WindowManager? = null
     private val dp get() = resources.displayMetrics.density
 
     override fun onBind(i: Intent?): IBinder? = null
@@ -55,6 +61,8 @@ class OverlayService : Service(), StoryBridge.Host {
         super.onCreate()
         wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         startAsForeground()
+        instance = this
+        pickLayer()
         addBubble()
         addBar()
         ui.post { warmUp() }  // build both panes now so Station 3 and Pages open instantly
@@ -62,12 +70,14 @@ class OverlayService : Service(), StoryBridge.Host {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) { stopSelf(); return START_NOT_STICKY }
+        if (intent?.action == ACTION_REBUILD) ui.post { rebuildLayer() }
         return START_STICKY
     }
 
     override fun onDestroy() {
         removePanelNow(); hidePicker(); destroyPanes()
-        bubble?.let { runCatching { wm.removeView(it) } }
+        bubble?.let { runCatching { (bubbleWm ?: wm).removeView(it) } }
+        instance = null
         bar?.let { runCatching { wm.removeView(it) } }
         running = false
         super.onDestroy()
@@ -81,6 +91,20 @@ class OverlayService : Service(), StoryBridge.Host {
             .setSmallIcon(android.R.drawable.ic_menu_view).setContentIntent(stop).setOngoing(true).build()
         if (Build.VERSION.SDK_INT >= 34) startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE) else startForeground(1, n)
         running = true
+    }
+
+    private fun pickLayer() {
+        val a = StoryAccessibilityService.instance
+        val awm = a?.let { runCatching { it.getSystemService(Context.WINDOW_SERVICE) as WindowManager }.getOrNull() }
+        if (awm != null) { layerWm = awm; layerType = WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY }
+        else { layerWm = wm; layerType = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY }
+    }
+
+    private fun rebuildLayer() {
+        removePanelNow()
+        bubble?.let { runCatching { (bubbleWm ?: wm).removeView(it) } }; bubble = null
+        s3Pane?.let { runCatching { it.wm.removeView(it.frame) }; it.web.destroy() }; s3Pane = null
+        pickLayer(); addBubble(); warmUp()
     }
 
     private fun overlayParams(w: Int, h: Int, gravity: Int, x: Int, y: Int, focusable: Boolean = false, watchOutside: Boolean = false): WindowManager.LayoutParams {
@@ -123,10 +147,11 @@ class OverlayService : Service(), StoryBridge.Host {
                 cornerRadii = floatArrayOf(20 * dp, 20 * dp, 0f, 0f, 0f, 0f, 0f, 0f)
                 setColor(Color.parseColor("#F2111111")); setStroke((1 * dp).toInt(), Color.parseColor("#55FFFFFF"))
             }
-            setOnClickListener { showPanel(station3Only = true) }  // Station 3 ONLY, never the full STORY pages
+            setOnClickListener { showPanel(station3Only = true) }  // Station 3 ONLY: its own buttons, nothing else, also on the lock screen
         }
         bubble = v
-        wm.addView(v, overlayParams(size, size, Gravity.BOTTOM or Gravity.END, 0, 0))  // flush in the bottom-right corner
+        bubbleWm = layerWm
+        layerWm.addView(v, overlayParams(size, size, Gravity.BOTTOM or Gravity.END, 0, 0).also { it.type = layerType })  // flush in the bottom-right corner
     }
 
     // ---- The STORY bar: the one bottom line ----
@@ -191,7 +216,7 @@ class OverlayService : Service(), StoryBridge.Host {
     private fun hidePicker() { picker?.let { runCatching { wm.removeView(it) } }; picker = null }
 
     // ---- STORY panes (built once, kept warm, so they open instantly) ----
-    private class Pane(val frame: FrameLayout, val web: WebView, val lp: WindowManager.LayoutParams, val small: Boolean) { var shown = false }
+    private class Pane(val frame: FrameLayout, val web: WebView, val lp: WindowManager.LayoutParams, val small: Boolean, val wm: WindowManager) { var shown = false }
     private var s3Pane: Pane? = null
     private var pagesPane: Pane? = null
 
@@ -230,9 +255,11 @@ class OverlayService : Service(), StoryBridge.Host {
         else
             WindowManager.LayoutParams(-1, -1, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, flagsFor(false, false), PixelFormat.TRANSLUCENT).apply { gravity = Gravity.TOP or Gravity.START }
         if (!small) { frame.setBackgroundColor(Color.BLACK); frame.setPadding(0, statusBarHeightPx(), 0, 0) }  // black continues behind the status bar; pages start below it
-        val p = Pane(frame, wv, lp, small)
+        val paneWm = if (small) layerWm else wm
+        if (small) lp.type = layerType
+        val p = Pane(frame, wv, lp, small, paneWm)
         if (small) frame.setOnTouchListener { _, e -> if (e.action == MotionEvent.ACTION_OUTSIDE) hidePanel(); false }
-        wm.addView(frame, lp)
+        paneWm.addView(frame, lp)
         return p
     }
 
@@ -246,7 +273,7 @@ class OverlayService : Service(), StoryBridge.Host {
         p.shown = shown
         p.lp.flags = flagsFor(p.small, shown)
         p.frame.alpha = if (shown) 1f else 0f
-        runCatching { wm.updateViewLayout(p.frame, p.lp) }
+        runCatching { p.wm.updateViewLayout(p.frame, p.lp) }
         if (shown && !p.small) p.web.requestFocus()
     }
 
@@ -278,7 +305,7 @@ class OverlayService : Service(), StoryBridge.Host {
     }
 
     private fun destroyPanes() {
-        for (p in listOfNotNull(s3Pane, pagesPane)) { runCatching { wm.removeView(p.frame) }; p.web.destroy() }
+        for (p in listOfNotNull(s3Pane, pagesPane)) { runCatching { p.wm.removeView(p.frame) }; p.web.destroy() }
         s3Pane = null; pagesPane = null
     }
 
@@ -286,6 +313,8 @@ class OverlayService : Service(), StoryBridge.Host {
 
     companion object {
         const val ACTION_STOP = "com.story.launcher.STOP"
+        const val ACTION_REBUILD = "com.story.launcher.REBUILD"
+        @Volatile var instance: OverlayService? = null
         @Volatile var running = false
     }
 }
