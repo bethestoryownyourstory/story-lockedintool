@@ -54,6 +54,6 @@ class MainActivity : Activity() {
         setContentView(col)
     }
 
-    // Opening STORY also checks for a newer version, so updates arrive without waiting.
-    override fun onResume() { super.onResume(); Updater.check(applicationContext) }
+    // Opening STORY also checks for a newer version, and brings back an install prompt you missed.
+    override fun onResume() { super.onResume(); Updater.check(applicationContext, force = true) }
 }

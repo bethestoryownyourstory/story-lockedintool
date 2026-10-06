@@ -23,9 +23,10 @@ object Updater {
         connectTimeout = 15000; readTimeout = 30000; instanceFollowRedirects = true; useCaches = false
     }
 
-    fun check(ctx: Context) {
+    /** force = you opened STORY yourself: always ask again, even if an install prompt was just shown and missed. */
+    fun check(ctx: Context, force: Boolean = false) {
         // Called every minute while the screen is on, on unlock and on opening STORY.
-        if (busy || System.currentTimeMillis() - lastCheck < 30_000) return
+        if (busy || (!force && System.currentTimeMillis() - lastCheck < 30_000)) return
         busy = true; lastCheck = System.currentTimeMillis()
         Thread {
             try {
@@ -34,7 +35,7 @@ object Updater {
                 val latest = JSONObject(open(BASE + "version.json").inputStream.bufferedReader().use { it.readText() }).getLong("versionCode")
                 val mine = ctx.packageManager.getPackageInfo(ctx.packageName, 0).longVersionCode
                 if (latest <= mine) return@Thread
-                if (latest == offered && System.currentTimeMillis() - offeredAt < 10 * 60_000) return@Thread
+                if (!force && latest == offered && System.currentTimeMillis() - offeredAt < 10 * 60_000) return@Thread
                 offered = latest; offeredAt = System.currentTimeMillis()
                 val apk = File(ctx.cacheDir, "story-update.apk")
                 open(BASE + "app-debug.apk").inputStream.use { i -> apk.outputStream().use { o -> i.copyTo(o) } }
