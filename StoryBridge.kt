@@ -15,10 +15,12 @@ import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 
 /** What the overlay panel (which shows the STORY screens) can ask the phone to do. JS name: window.StoryNative */
-class StoryBridge(private val ctx: Context, private val host: Host) {
+class StoryBridge(private val ctx: Context, private val host: Host, private val station3: Boolean = false) {
 
     interface Host {
         fun hidePanel()
+        fun closeStation3()
+        fun setStation3Size(w: Int, h: Int)
     }
 
     /** The phone's real launchable apps, with their real icons. */
@@ -74,6 +76,11 @@ class StoryBridge(private val ctx: Context, private val host: Host) {
         StoryAccessibilityService.instance?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_RECENTS)
     }
 
+    /** From Station 3's own window this is its corner arrow: the only thing that closes Station 3. */
     @JavascriptInterface
-    fun closePanel() { host.hidePanel() }
+    fun closePanel() { if (station3) host.closeStation3() else host.hidePanel() }
+
+    /** Station 3 tells us how much of the corner it really covers, so its window is no bigger than that. */
+    @JavascriptInterface
+    fun setStation3Size(w: Int, h: Int) { if (station3) host.setStation3Size(w, h) }
 }

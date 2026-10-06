@@ -4751,7 +4751,8 @@ window.storyShow = function(page, station3){
   renderDevice();
 };
 // Station 3 on its own, floating over whatever app is open (Android overlay). Nothing else of
-// STORY shows: only the Station 3 pieces; tapping anywhere else, or the corner arrow, closes it.
+// STORY shows: only the Station 3 pieces. It stays open until its corner arrow is tapped;
+// tapping anywhere else does nothing (the app's window only covers Station 3 itself anyway).
 window.storyStation3Only = function(){
   document.body.classList.add('s3-only');
   state.recentsOpen=false; state.homePickerOpen=false; state.appMenuId=null;
@@ -4767,8 +4768,9 @@ window.storyReset = function(){
 document.addEventListener('click', (e)=>{
   if(!NATIVE || !document.body.classList.contains('s3-only')) return;
   const arrow = e.target.closest && e.target.closest('.station3-corner-arrow');
-  const inside = e.target.closest && e.target.closest('.station3-region');
-  if(arrow || !inside){ e.stopPropagation(); e.preventDefault(); window.StoryNative.closePanel(); }
+  const inside = e.target.closest && e.target.closest('.station3-corner-arrow, .station3-bar-card, .station3-dialpad-card, .station3-quick-row');
+  if(arrow){ e.stopPropagation(); e.preventDefault(); window.StoryNative.closePanel(); }
+  else if(!inside){ e.stopPropagation(); e.preventDefault(); }
 }, true);
 // Dashboard "APPS" in the Android build: there is only the phone's own apps screen, so go to it.
 document.addEventListener('click', (e)=>{

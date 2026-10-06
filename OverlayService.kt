@@ -34,8 +34,9 @@ import androidx.webkit.WebViewAssetLoader
 
 /**
  * STORY as a layer over the phone. Your home screen, lock screen and apps stay exactly as they are.
- *  - Station 3: the round button at the bottom right. Opens ONLY Station 3, in a small window,
- *    so the rest of the screen stays fully usable underneath.
+ *  - Station 3: the round button at the bottom right. Opens ONLY Station 3, in a small window
+ *    cut to the size of Station 3 itself, so the rest of the screen stays fully usable underneath.
+ *    It stays open (over any app, through Home / Apps / app launches) until you tap its corner arrow.
  *  - The STORY bar: sits on the phone's own gesture line (or draws a line on phones that don't
  *    have one). It is the ONE bottom line, everywhere, including while STORY pages are open.
  *      tap = Apps | Pages, swipe up = real home screen, hold then swipe up = real recents.
@@ -111,17 +112,18 @@ class OverlayService : Service(), StoryBridge.Host {
     }
 
     private fun rebuildLayer() {
+        val s3WasOpen = s3Pane?.shown == true
         removePanelNow()
         bubble?.let { runCatching { (bubbleWm ?: wm).removeView(it) } }; bubble = null
         s3Pane?.let { runCatching { it.wm.removeView(it.frame) }; it.web.destroy() }; s3Pane = null
         pagesPane?.let { runCatching { it.wm.removeView(it.frame) }; it.web.destroy() }; pagesPane = null
         pickLayer(); addBubble(); warmUp()
+        if (s3WasOpen) showPanel(station3Only = true)
     }
 
-    private fun overlayParams(w: Int, h: Int, gravity: Int, x: Int, y: Int, focusable: Boolean = false, watchOutside: Boolean = false): WindowManager.LayoutParams {
+    private fun overlayParams(w: Int, h: Int, gravity: Int, x: Int, y: Int, focusable: Boolean = false): WindowManager.LayoutParams {
         var flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
         if (!focusable) flags = flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-        if (watchOutside) flags = flags or WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
         return WindowManager.LayoutParams(w, h, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, flags, PixelFormat.TRANSLUCENT).apply {
             this.gravity = gravity; this.x = x; this.y = y
         }
@@ -227,14 +229,19 @@ class OverlayService : Service(), StoryBridge.Host {
     private fun hidePicker() { picker?.let { runCatching { wm.removeView(it) } }; picker = null }
 
     // ---- STORY panes (built once, kept warm, so they open instantly) ----
-    private class Pane(val frame: FrameLayout, val web: WebView, val lp: WindowManager.LayoutParams, val small: Boolean, val wm: WindowManager) { var shown = false; var loadedAt = System.currentTimeMillis() }
+    private class Pane(val frame: FrameLayout, val web: WebView, val lp: WindowManager.LayoutParams, val small: Boolean, val wm: WindowManager) {
+        var shown = false; var loadedAt = System.currentTimeMillis()
+        // Station 3 only: the window size while open, cut down to what Station 3 really covers.
+        var openW = lp.width; var openH = lp.height
+    }
     private var s3Pane: Pane? = null
     private var pagesPane: Pane? = null
 
     private fun flagsFor(small: Boolean, shown: Boolean): Int {
         val base = WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
         return if (!shown) base or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-        else if (small) base or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
+        // No "watch outside touch": touching the app underneath must never close Station 3.
+        else if (small) base or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
         else base or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
     }
 
@@ -245,7 +252,7 @@ class OverlayService : Service(), StoryBridge.Host {
         val wv = WebView(themed).apply {
             setBackgroundColor(if (small) Color.TRANSPARENT else Color.BLACK)
             settings.javaScriptEnabled = true; settings.domStorageEnabled = true
-            addJavascriptInterface(StoryBridge(this@OverlayService, this@OverlayService), "StoryNative")
+            addJavascriptInterface(StoryBridge(this@OverlayService, this@OverlayService, station3 = small), "StoryNative")
         }
         val loader = WebViewAssetLoader.Builder().addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this)).build()
         val query = if (small) "?s3=1" else ""
@@ -263,15 +270,18 @@ class OverlayService : Service(), StoryBridge.Host {
                 if (r.isForMainFrame && r.url.toString().startsWith(REMOTE)) v.loadUrl(LOCAL + query)
             }
             override fun onPageFinished(v: WebView, url: String) {
-                if (small) v.evaluateJavascript("window.storyStation3Only&&window.storyStation3Only()", null)
+                if (small) { v.evaluateJavascript("window.storyStation3Only&&window.storyStation3Only()", null); v.evaluateJavascript(S3_JS, null) }
             }
         }
         // Live: the screens come from the STORY site, so every upload reaches every phone with no reinstall.
         wv.loadUrl(remoteBase() + query)
-        frame.addView(wv, FrameLayout.LayoutParams(-1, -1))
+        val s3W = (340 * dp).toInt(); val s3H = (520 * dp).toInt()
+        // Station 3's page always lays out at full size, pinned to the corner; its window may be
+        // smaller (see setStation3Size) and simply cuts off the empty part, so nothing reflows.
+        frame.addView(wv, if (small) FrameLayout.LayoutParams(s3W, s3H, Gravity.BOTTOM or Gravity.END) else FrameLayout.LayoutParams(-1, -1))
         frame.alpha = 0f
         val lp = if (small)
-            WindowManager.LayoutParams((340 * dp).toInt(), (520 * dp).toInt(), WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, flagsFor(true, false), PixelFormat.TRANSLUCENT).apply {
+            WindowManager.LayoutParams(s3W, s3H, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, flagsFor(true, false), PixelFormat.TRANSLUCENT).apply {
                 // Station 3's arrow sits 10dp inside this window, so nudge the window 10dp off-screen
                 // and the arrow lands exactly on the same corner as the button.
                 gravity = Gravity.BOTTOM or Gravity.END; x = -(10 * dp).toInt(); y = -(10 * dp).toInt()
@@ -282,7 +292,6 @@ class OverlayService : Service(), StoryBridge.Host {
         val paneWm = if (small) layerWm else wm
         if (small) lp.type = layerType
         val p = Pane(frame, wv, lp, small, paneWm)
-        if (small) frame.setOnTouchListener { _, e -> if (e.action == MotionEvent.ACTION_OUTSIDE) hidePanel(); false }
         paneWm.addView(frame, lp)
         return p
     }
@@ -296,6 +305,10 @@ class OverlayService : Service(), StoryBridge.Host {
     private fun setShown(p: Pane, shown: Boolean) {
         p.shown = shown
         p.lp.flags = flagsFor(p.small, shown)
+        // Android 12+ throws away touches that pass through another app's fully opaque window,
+        // even an untouchable one. A hidden pane is fully see-through, so apps underneath get every touch.
+        p.lp.alpha = if (shown) 1f else 0f
+        if (p.small && shown) { p.lp.width = p.openW; p.lp.height = p.openH }
         p.frame.alpha = if (shown) 1f else 0f
         runCatching { p.wm.updateViewLayout(p.frame, p.lp) }
         if (shown && !p.small) p.web.requestFocus()
@@ -306,15 +319,25 @@ class OverlayService : Service(), StoryBridge.Host {
         if (station3Only) {
             pagesPane?.takeIf { it.shown }?.let { hideOne(it) }
             val p = s3Pane!!
-            if (!p.shown) { p.web.evaluateJavascript("window.storyStation3Only&&window.storyStation3Only()", null); setShown(p, true) }
+            if (!p.shown) {
+                p.web.evaluateJavascript("window.storyStation3Only&&window.storyStation3Only()", null)
+                setShown(p, true)
+                p.web.evaluateJavascript("window.__storyS3Report&&window.__storyS3Report(true)", null)
+            }
         } else {
-            s3Pane?.takeIf { it.shown }?.let { hideOne(it) }
+            // Station 3 stays open; Pages opens underneath it.
             val p = pagesPane!!
             p.web.evaluateJavascript("window.storyShow&&window.storyShow(null,false)", null)
             if (!p.shown) setShown(p, true)
+            s3Pane?.takeIf { it.shown && it.wm === p.wm }?.let { s3 -> runCatching { s3.wm.removeView(s3.frame); s3.wm.addView(s3.frame, s3.lp) } }
         }
-        bubble?.visibility = View.GONE
+        updateBubble()
         addBar() // re-add last so the STORY bar stays on top of everything, including the pages
+    }
+
+    /** The corner button shows only while nothing of STORY is open (Station 3's own arrow sits in the same spot). */
+    private fun updateBubble() {
+        bubble?.visibility = if (s3Pane?.shown == true || pagesPane?.shown == true) View.GONE else View.VISIBLE
     }
 
     private fun hideOne(p: Pane) {
@@ -330,7 +353,7 @@ class OverlayService : Service(), StoryBridge.Host {
     private fun removePanelNow() {
         s3Pane?.takeIf { it.shown }?.let { hideOne(it) }
         pagesPane?.takeIf { it.shown }?.let { hideOne(it) }
-        bubble?.visibility = View.VISIBLE
+        updateBubble()
     }
 
     private fun destroyPanes() {
@@ -338,7 +361,26 @@ class OverlayService : Service(), StoryBridge.Host {
         s3Pane = null; pagesPane = null
     }
 
-    override fun hidePanel() { ui.post { removePanelNow() } }
+    /** Gets the Pages out of the way (Home, Apps, opening an app). Station 3 is left exactly as it is. */
+    override fun hidePanel() { ui.post { pagesPane?.takeIf { it.shown }?.let { hideOne(it) }; updateBubble() } }
+
+    /** Station 3's corner arrow was tapped: the one way Station 3 closes. */
+    override fun closeStation3() { ui.post { s3Pane?.takeIf { it.shown }?.let { hideOne(it) }; updateBubble() } }
+
+    override fun setStation3Size(w: Int, h: Int) {
+        ui.post {
+            val p = s3Pane ?: return@post
+            if (!p.shown) return@post  // closed: keep the last open size for next time
+            val full = p.web.layoutParams
+            val pad = 16  // room for Station 3's shadow
+            p.openW = ((w + pad) * dp).toInt().coerceIn((40 * dp).toInt(), full.width)
+            p.openH = ((h + pad) * dp).toInt().coerceIn((40 * dp).toInt(), full.height)
+            if (p.lp.width != p.openW || p.lp.height != p.openH) {
+                p.lp.width = p.openW; p.lp.height = p.openH
+                runCatching { p.wm.updateViewLayout(p.frame, p.lp) }
+            }
+        }
+    }
 
     companion object {
         const val ACTION_STOP = "com.story.launcher.STOP"
@@ -347,5 +389,42 @@ class OverlayService : Service(), StoryBridge.Host {
         const val ACTION_REBUILD = "com.story.launcher.REBUILD"
         @Volatile var instance: OverlayService? = null
         @Volatile var running = false
+
+        /**
+         * Added to Station 3's page by the app itself, so it works with every version of the
+         * screens (live or Test): taps on empty space do nothing (Station 3 stays open), and
+         * Station 3 reports the corner area it covers so its window can shrink to just that.
+         */
+        private const val S3_JS = """(function(){
+  if(window.__storyS3Native) return; window.__storyS3Native = true;
+  var PIECES = '.station3-corner-arrow,.station3-bar-card,.station3-dialpad-card,.station3-quick-row';
+  window.addEventListener('click', function(e){
+    if(!document.body || !document.body.classList.contains('s3-only')) return;
+    var t = e.target;
+    if(t && t.closest && t.closest(PIECES)) return;
+    e.stopPropagation(); e.preventDefault();
+  }, true);
+  var last = '';
+  function report(force){
+    if(force) last = '';
+    if(!document.body || !document.body.classList.contains('s3-only') || !window.StoryNative || !window.StoryNative.setStation3Size) return;
+    var vw = window.innerWidth, vh = window.innerHeight, minL = vw, minT = vh;
+    document.querySelectorAll('.station3-region ' + PIECES.split(',').join(',.station3-region ')).forEach(function(el){
+      var b = el.getBoundingClientRect();
+      if(b.width > 0 && b.height > 0){ minL = Math.min(minL, b.left); minT = Math.min(minT, b.top); }
+    });
+    if(minL >= vw || minT >= vh) return;
+    var k = Math.ceil(vw - minL) + 'x' + Math.ceil(vh - minT);
+    if(k === last) return; last = k;
+    window.StoryNative.setStation3Size(Math.ceil(vw - minL), Math.ceil(vh - minT));
+  }
+  var queued = false;
+  function soon(){ if(queued) return; queued = true; requestAnimationFrame(function(){ queued = false; report(); }); }
+  new MutationObserver(soon).observe(document.documentElement, { subtree:true, childList:true, attributes:true, attributeFilter:['class','style'] });
+  document.addEventListener('transitionend', soon, true);
+  window.addEventListener('resize', soon);
+  window.__storyS3Report = report;
+  report();
+})();"""
     }
 }
