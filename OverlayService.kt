@@ -211,7 +211,9 @@ class OverlayService : Service(), StoryBridge.Host {
             background = GradientDrawable().apply {
                 // A corner piece: rounded only on the top-left, square into the screen corner.
                 cornerRadii = floatArrayOf(20 * dp, 20 * dp, 0f, 0f, 0f, 0f, 0f, 0f)
-                setColor(Color.parseColor("#F2111111")); setStroke((1 * dp).toInt(), Color.parseColor("#55FFFFFF"))
+                // Fully solid, so nothing behind it (like Station 3's white bar) can show through its edge pixels.
+                // Same look as before over dark screens: #111111, and the grey the old see-through outline made over it.
+                setColor(Color.parseColor("#FF111111")); setStroke((1 * dp).toInt(), Color.parseColor("#FF5F5F5F"))
             }
             // The ONE Station 3 button: it stays on screen, exactly the same, open or closed -- tap to open, tap to close.
             setOnClickListener { if (s3Pane?.shown == true) closeStation3() else showPanel(station3Only = true) }
