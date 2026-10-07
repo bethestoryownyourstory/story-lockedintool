@@ -1602,7 +1602,17 @@
   /* Over other apps the corner button keeps its size and place when open (see positionStation3()). */
   /* Tight in the corner: the bar / dial pad round only their top-left, like the corner button. */
   /* The bar is exactly as tall as the 40px corner button, so it just extends it to the left. */
-  body.s3-only .station3-bar-card{ border-radius:20px 0 0 0 !important; height:40px; padding:0 6px 0 10px; box-sizing:border-box; display:flex; align-items:center; }
+  body.s3-only .station3-bar-card{ border-radius:20px 0 0 0 !important; height:40px; padding:0 46px 0 10px; box-sizing:border-box; display:flex; align-items:center; }
+  body.s3-only .station3-dialpad-card{ padding-right:54px !important; }
+  /* The corner button looks exactly the same open or closed -- the same black button the app shows
+     when Station 3 is closed (#F2111111, thin light outline, rounded top-left, white up-left arrow). */
+  body.s3-only .station3-corner-arrow, body.s3-only .station3-corner-arrow-open{
+    transform:none !important; background:#111111 !important; color:#fff !important;
+    border:1px solid rgba(255,255,255,0.33) !important; border-radius:20px 0 0 0 !important;
+    box-shadow:none !important; -webkit-backdrop-filter:none !important; backdrop-filter:none !important;
+  }
+  body.s3-only .station3-corner-arrow svg{ display:none; }
+  body.s3-only .station3-corner-arrow::after{ content:'\2196'; font:18px Roboto, sans-serif; line-height:1; color:#fff; }
   body.s3-only .station3-bar{ padding:0; gap:2px; }
   body.s3-only .station3-btn{ width:32px; height:32px; }
   body.s3-only .station3-btn-chevron{ width:26px; height:26px; }
@@ -6172,7 +6182,7 @@ function positionStation3(){
     // Over other apps the corner button never changes size or place: always 40x40 in the corner,
     // exactly where the closed button sits. Opening only adds the bar beside it.
     arrow.style.height = ''; arrow.style.width = '';
-    arrow.style.borderRadius = arrow.classList.contains('station3-corner-arrow-open') ? '0' : '';
+    arrow.style.borderRadius = '';
   }
 
   if(REAL_DEVICE){
@@ -6287,7 +6297,9 @@ function positionStation3(){
     sideCard.style.top = 'auto';
     // Shifted OVERLAP px further right than a true flush join, so it laps under the
     // arrow's left edge instead of just touching it.
-    sideCard.style.right = (vw - arrowRect.left - OVERLAP) + 'px';
+    // Over other apps the white part runs on underneath the black button, so the button simply sits
+    // at its right end, unchanged.
+    sideCard.style.right = (s3Only ? vw - arrowRect.right : vw - arrowRect.left - OVERLAP) + 'px';
     sideCard.style.bottom = (vh - arrowRect.bottom) + 'px';
   }
   // The white fill plugging the lifted gap: spans from the quick-row's real bottom edge
