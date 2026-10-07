@@ -510,7 +510,9 @@ class OverlayService : Service(), StoryBridge.Host {
     // playing (or starts), STORY leaves the sound on. The app never closes; its sound is back when Pages closes.
     private var quietFocus: android.media.AudioFocusRequest? = null
     private var quietWatch: android.media.AudioManager.AudioPlaybackCallback? = null
-    private fun musicPlaying(am: android.media.AudioManager) = runCatching {
+    // Music = audio marked as music, or anything playing from an app other than the one on screen
+    // (a music app playing in the background). That is never paused or muted.
+    private fun musicPlaying(am: android.media.AudioManager) = StoryAccessibilityService.backgroundMusicPlaying(this) || runCatching {
         am.activePlaybackConfigurations.any { it.audioAttributes.contentType == android.media.AudioAttributes.CONTENT_TYPE_MUSIC }
     }.getOrDefault(false)
     private fun setMuted(am: android.media.AudioManager, on: Boolean) {
@@ -539,7 +541,7 @@ class OverlayService : Service(), StoryBridge.Host {
         // Music starts while Pages is open: give the sound back straight away.
         val watch = object : android.media.AudioManager.AudioPlaybackCallback() {
             override fun onPlaybackConfigChanged(configs: MutableList<android.media.AudioPlaybackConfiguration>) {
-                if (configs.any { it.audioAttributes.contentType == android.media.AudioAttributes.CONTENT_TYPE_MUSIC }) setMuted(am, false)
+                if (configs.any { it.audioAttributes.contentType == android.media.AudioAttributes.CONTENT_TYPE_MUSIC } || StoryAccessibilityService.backgroundMusicPlaying(this@OverlayService)) setMuted(am, false)
             }
         }
         runCatching { am.registerAudioPlaybackCallback(watch, ui) }
