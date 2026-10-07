@@ -5,7 +5,8 @@ import android.content.Intent
 import android.view.accessibility.AccessibilityEvent
 
 class StoryAccessibilityService : AccessibilityService() {
-    override fun onServiceConnected() { instance = this; refreshOverlay() }
+    // Android keeps this service connected, so it's also a good moment to bring STORY back if it was switched on.
+    override fun onServiceConnected() { instance = this; KeepAlive.ensureRunning(this); refreshOverlay() }
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
     override fun onInterrupt() {}
     override fun onUnbind(intent: Intent?): Boolean { instance = null; refreshOverlay(); return super.onUnbind(intent) }

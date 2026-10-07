@@ -17,7 +17,7 @@ jobs:
           mkdir -p $M/java/com/story/launcher $M/res/values $M/res/xml $M/res/drawable $M/assets
           cp AndroidManifest.xml $M/
           cp *.kt $M/java/com/story/launcher/
-          cp accessibility_config.xml $M/res/xml/
+          cp accessibility_config.xml file_paths.xml $M/res/xml/
           cp strings.xml themes.xml $M/res/values/
           cp ic_launcher.xml $M/res/drawable/
           cp index.html $M/assets/index.html
@@ -69,6 +69,7 @@ jobs:
               implementation("androidx.appcompat:appcompat:1.7.0")
               implementation("androidx.biometric:biometric:1.1.0")
               implementation("androidx.webkit:webkit:1.11.0")
+              implementation("androidx.work:work-runtime-ktx:2.9.1")
           }
           X
       - name: Use one fixed signing key so updates install over the old version

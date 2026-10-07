@@ -9,15 +9,27 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInstaller
 import android.os.Build
+import androidx.core.content.FileProvider
+import androidx.work.Constraints
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.Worker
+import androidx.work.WorkerParameters
 import org.json.JSONObject
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.concurrent.TimeUnit
 
 /**
- * Looks for a newer STORY build on this phone's channel (see Release).
+ * Looks for a newer STORY build on this phone's channel (see Release), for everyone, whether or
+ * not STORY is switched on: Android runs UpdateWorker every 15 minutes, and STORY also checks
+ * every minute while it runs, on unlock and whenever the setup screen opens.
  *  - Test (owner): installs it by itself, straight away.
  *  - Live (everyone else): shows "Update available" (Update now / Later); required after 3 days.
+ * What it's doing is shown on the setup screen ("Updates: ...").
  */
 object Updater {
     @Volatile private var busy = false
@@ -30,31 +42,55 @@ object Updater {
         connectTimeout = 15000; readTimeout = 30000; instanceFollowRedirects = true; useCaches = false
     }
 
+    // ---- What the setup screen shows ----
+    fun setStatus(ctx: Context, s: String) {
+        ctx.getSharedPreferences("story", Context.MODE_PRIVATE).edit().putString("upd_status", s).putLong("upd_status_at", System.currentTimeMillis()).apply()
+    }
+    fun status(ctx: Context): Pair<String, Long> {
+        val p = ctx.getSharedPreferences("story", Context.MODE_PRIVATE)
+        return (p.getString("upd_status", null) ?: "Not checked yet") to p.getLong("upd_status_at", 0)
+    }
+
+    /** Every 15 minutes with internet, even when STORY is off. Safe to call often. */
+    fun schedule(ctx: Context) {
+        val req = PeriodicWorkRequestBuilder<UpdateWorker>(15, TimeUnit.MINUTES)
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()).build()
+        runCatching { WorkManager.getInstance(ctx.applicationContext).enqueueUniquePeriodicWork("story-update", ExistingPeriodicWorkPolicy.KEEP, req) }
+    }
+
     /** force = you opened STORY yourself: always ask again, even if an install prompt was just shown and missed. */
     fun check(ctx: Context, force: Boolean = false) {
-        // Called every minute while the screen is on, on unlock and on opening STORY.
         if (busy || (!force && System.currentTimeMillis() - lastCheck < 30_000)) return
+        Thread { checkNow(ctx.applicationContext, force) }.start()
+    }
+
+    /** Blocking version (UpdateWorker runs this). */
+    fun checkNow(ctx: Context, force: Boolean = false) {
+        if (busy) return
         busy = true; lastCheck = System.currentTimeMillis()
-        Thread {
-            try {
-                val base = Release.base(ctx)
-                val latest = JSONObject(open(base + "version.json").inputStream.bufferedReader().use { it.readText() }).getLong("versionCode")
-                val mine = ctx.packageManager.getPackageInfo(ctx.packageName, 0).longVersionCode
-                if (latest <= mine) {  // up to date: clear any leftover update notifications
-                    Release.clearPending(ctx)
-                    val nm = ctx.getSystemService(NotificationManager::class.java)
-                    nm.cancel(InstallResultReceiver.UPDATE_NOTIFICATION); nm.cancel(UpdateActivity.NOTIFICATION)
-                    return@Thread
-                }
-                if (!Release.isOwner(ctx)) { offerToUser(ctx, latest, force); return@Thread }
-                // Test channel (owner): install by itself. Needs the one-time "allow STORY to update itself" switch.
-                if (!ctx.packageManager.canRequestPackageInstalls()) return@Thread
-                if (!force && latest == offered && System.currentTimeMillis() - offeredAt < 10 * 60_000) return@Thread
-                offered = latest; offeredAt = System.currentTimeMillis()
-                download(base, ctx)?.let { install(ctx, it) }
-            } catch (_: Throwable) {
-            } finally { busy = false }
-        }.start()
+        try {
+            val base = Release.base(ctx)
+            val latest = JSONObject(open(base + "version.json").inputStream.bufferedReader().use { it.readText() }).getLong("versionCode")
+            val mine = ctx.packageManager.getPackageInfo(ctx.packageName, 0).longVersionCode
+            if (latest <= mine) {  // up to date: clear any leftover update notifications
+                setStatus(ctx, "Up to date (build $mine)")
+                Release.clearPending(ctx)
+                val nm = ctx.getSystemService(NotificationManager::class.java)
+                nm.cancel(InstallResultReceiver.UPDATE_NOTIFICATION); nm.cancel(UpdateActivity.NOTIFICATION)
+                return
+            }
+            if (!Release.isOwner(ctx)) { setStatus(ctx, "Build $latest is available"); offerToUser(ctx, latest, force); return }
+            // Test channel (owner): install by itself. Needs the one-time "allow STORY to update itself" switch.
+            if (!ctx.packageManager.canRequestPackageInstalls()) { setStatus(ctx, "Build $latest is ready - tap \"Allow STORY to update itself\""); return }
+            if (!force && latest == offered && System.currentTimeMillis() - offeredAt < 10 * 60_000) return
+            offered = latest; offeredAt = System.currentTimeMillis()
+            setStatus(ctx, "Downloading build $latest…")
+            val apk = download(base, ctx)
+            setStatus(ctx, "Installing build $latest…")
+            install(ctx, apk)
+        } catch (e: Throwable) {
+            setStatus(ctx, "Couldn't check for updates (no internet?)")
+        } finally { busy = false }
     }
 
     /** Live users: a new version is out. Ask (Update now / Later); after 3 days it's required. */
@@ -76,8 +112,10 @@ object Updater {
         return runCatching { install(ctx, apk); null }.getOrElse { "Couldn't start the update: ${it.message}" }
     }
 
-    private fun download(base: String, ctx: Context): File? {
-        val apk = File(ctx.cacheDir, "story-update.apk")
+    private fun apkFile(ctx: Context) = File(ctx.cacheDir, "story-update.apk")
+
+    private fun download(base: String, ctx: Context): File {
+        val apk = apkFile(ctx)
         open(base + "app-debug.apk").inputStream.use { i -> apk.outputStream().use { o -> i.copyTo(o) } }
         return apk
     }
@@ -101,21 +139,69 @@ object Updater {
             session.commit(pending.intentSender)
         }
     }
+
+    /**
+     * Plan B when the quiet install fails (some phones, e.g. Xiaomi, refuse it): open the already
+     * downloaded update in Android's normal installer -- the same screen as installing it by hand.
+     */
+    fun installWithSystemInstaller(ctx: Context): Boolean = runCatching {
+        val apk = apkFile(ctx)
+        if (!apk.exists()) return false
+        val uri = FileProvider.getUriForFile(ctx, ctx.packageName + ".files", apk)
+        OverlayService.instance?.pauseForInstall()
+        ctx.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/vnd.android.package-archive")
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK))
+        true
+    }.getOrDefault(false)
+}
+
+/** Android runs this every 15 minutes (with internet), even when STORY is switched off. */
+class UpdateWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params) {
+    override fun doWork(): Result {
+        KeepAlive.ensureRunning(applicationContext)
+        Updater.checkNow(applicationContext)
+        return Result.success()
+    }
+}
+
+/** Once you tap Start, STORY stays on until you tap Stop -- after restarts, updates and app kills. */
+object KeepAlive {
+    fun ensureRunning(c: Context) {
+        val wanted = c.getSharedPreferences("story", Context.MODE_PRIVATE).getBoolean("enabled", false)
+        if (wanted && !OverlayService.running && android.provider.Settings.canDrawOverlays(c)) {
+            runCatching { c.startForegroundService(Intent(c, OverlayService::class.java)) }
+        }
+    }
 }
 
 /**
- * Android sometimes needs one tap to approve an update; this brings that prompt up, and also
- * leaves a "STORY update ready" notification that stays until the update is installed. Missed
- * the prompt? Tap the notification: it opens STORY, which shows the prompt again.
+ * The result of an update. Android sometimes needs one tap to approve it: this brings that prompt
+ * up, and leaves a "STORY update ready" notification until it's installed. If the quiet install
+ * fails, it says why on the setup screen and opens Android's normal installer instead.
  */
 class InstallResultReceiver : BroadcastReceiver() {
     @Suppress("DEPRECATION")
     override fun onReceive(c: Context, i: Intent) {
-        if (i.getIntExtra(PackageInstaller.EXTRA_STATUS, -1) == PackageInstaller.STATUS_PENDING_USER_ACTION) {
-            showUpdateNotification(c)
-            OverlayService.instance?.pauseForInstall()  // so the Update button can be pressed
-            val confirm = i.getParcelableExtra<Intent>(Intent.EXTRA_INTENT) ?: return
-            runCatching { c.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+        val status = i.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)
+        when (status) {
+            PackageInstaller.STATUS_PENDING_USER_ACTION -> {
+                Updater.setStatus(c, "Waiting for you to tap Update")
+                showUpdateNotification(c)
+                OverlayService.instance?.pauseForInstall()  // so the Update button can be pressed
+                val confirm = i.getParcelableExtra<Intent>(Intent.EXTRA_INTENT) ?: return
+                runCatching { c.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            }
+            PackageInstaller.STATUS_SUCCESS -> Updater.setStatus(c, "Updated")
+            PackageInstaller.STATUS_FAILURE_ABORTED -> {
+                Updater.setStatus(c, "Update cancelled - it will ask again")
+                OverlayService.instance?.resumeNow()
+            }
+            else -> {
+                val why = i.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: "error $status"
+                Updater.setStatus(c, "Quiet update failed ($why) - opening Android's installer")
+                OverlayService.instance?.resumeNow()
+                if (!Updater.installWithSystemInstaller(c)) Updater.setStatus(c, "Update failed: $why")
+            }
         }
     }
 
@@ -146,10 +232,10 @@ class BootReceiver : BroadcastReceiver() {
         if (i.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
             val nm = c.getSystemService(NotificationManager::class.java)
             nm.cancel(InstallResultReceiver.UPDATE_NOTIFICATION); nm.cancel(UpdateActivity.NOTIFICATION)
+            val v = runCatching { c.packageManager.getPackageInfo(c.packageName, 0).longVersionCode }.getOrDefault(0)
+            Updater.setStatus(c, "Updated to build $v")
         }
-        val wanted = c.getSharedPreferences("story", Context.MODE_PRIVATE).getBoolean("enabled", false)
-        if (wanted && android.provider.Settings.canDrawOverlays(c)) {
-            runCatching { c.startForegroundService(Intent(c, OverlayService::class.java)) }
-        }
+        Updater.schedule(c)
+        KeepAlive.ensureRunning(c)
     }
 }

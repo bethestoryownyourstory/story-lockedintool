@@ -82,6 +82,7 @@ class OverlayService : Service(), StoryBridge.Host {
         addBar()
         ui.post { warmUp() }  // build both panes now so Station 3 and Pages open instantly
         ui.postDelayed(updateLoop, 15_000)  // then look for a new STORY version in the background
+        Updater.schedule(this)              // and keep checking every 15 minutes even if STORY is off
         val unlockFilter = android.content.IntentFilter(Intent.ACTION_USER_PRESENT)
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(unlocked, unlockFilter, Context.RECEIVER_NOT_EXPORTED) else registerReceiver(unlocked, unlockFilter)
     }
@@ -106,9 +107,10 @@ class OverlayService : Service(), StoryBridge.Host {
     private fun startAsForeground() {
         val nm = getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(NotificationChannel("story", "STORY", NotificationManager.IMPORTANCE_MIN))
-        val stop = android.app.PendingIntent.getService(this, 0, Intent(this, OverlayService::class.java).setAction(ACTION_STOP), android.app.PendingIntent.FLAG_IMMUTABLE)
-        val n = Notification.Builder(this, "story").setContentTitle("STORY is on").setContentText("Tap to turn off")
-            .setSmallIcon(android.R.drawable.ic_menu_view).setContentIntent(stop).setOngoing(true).build()
+        // Tapping the notification opens STORY; it never switches STORY off (only "Stop STORY" does).
+        val openApp = android.app.PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), android.app.PendingIntent.FLAG_IMMUTABLE)
+        val n = Notification.Builder(this, "story").setContentTitle("STORY is on").setContentText("Stays on until you tap Stop STORY")
+            .setSmallIcon(android.R.drawable.ic_menu_view).setContentIntent(openApp).setOngoing(true).build()
         if (Build.VERSION.SDK_INT >= 34) startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE) else startForeground(1, n)
         running = true
     }
@@ -327,6 +329,10 @@ class OverlayService : Service(), StoryBridge.Host {
         else
             WindowManager.LayoutParams(-1, -1, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, flagsFor(false, false), PixelFormat.TRANSLUCENT).apply { gravity = Gravity.TOP or Gravity.START }
         if (!small) { frame.setBackgroundColor(Color.BLACK); frame.setPadding(0, statusBarHeightPx(), 0, 0) }  // black continues behind the status bar; pages start below it
+        // Hidden from the start, and fully see-through to Android too: on Android 12+ an untouchable
+        // window that isn't see-through still swallows touches meant for the apps underneath
+        // ("isn't optimised for the latest version of Android. Screen touches may be delayed...").
+        lp.alpha = 0f
         val paneWm = if (small) layerWm else wm
         if (small) lp.type = layerType
         val p = Pane(frame, wv, lp, small, paneWm)
@@ -417,6 +423,9 @@ class OverlayService : Service(), StoryBridge.Host {
         }
     }
     private val resumeAfterInstall = Runnable { if (bubble == null) { pickLayer(); addBubble(); warmUp() } }
+
+    /** The install prompt is gone (installed, cancelled or failed): bring STORY straight back. */
+    fun resumeNow() { ui.post { ui.removeCallbacks(resumeAfterInstall); resumeAfterInstall.run() } }
 
     override fun hidePanel() { ui.post { pagesPane?.takeIf { it.shown }?.let { hideOne(it) }; updateBubble() } }
 
