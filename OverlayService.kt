@@ -147,7 +147,7 @@ class OverlayService : Service(), StoryBridge.Host {
     /** Fresh copy of the screens, skipping the website's cache. */
     private fun reload(p: Pane) {
         p.stale = false; p.loadedAt = System.currentTimeMillis()
-        p.web.loadUrl(remoteBase() + "?" + (if (p.small) "s3=1&" else "") + "v=" + System.currentTimeMillis())
+        p.web.loadUrl(remoteBase() + "?" + (if (p.dial) "s3=1&dial=1&" else if (p.small) "s3=1&" else "") + "v=" + System.currentTimeMillis())
     }
 
     private fun rebuildLayer() {
@@ -157,6 +157,7 @@ class OverlayService : Service(), StoryBridge.Host {
         bubble?.let { runCatching { (bubbleWm ?: wm).removeView(it) } }; bubble = null
         s3Pane?.let { runCatching { it.wm.removeView(it.frame) }; it.web.destroy() }; s3Pane = null
         pagesPane?.let { runCatching { it.wm.removeView(it.frame) }; it.web.destroy() }; pagesPane = null
+        dialPane?.let { runCatching { it.wm.removeView(it.frame) }; it.web.destroy() }; dialPane = null
         pickLayer(); addBubble(); warmUp()
         if (s3WasOpen) showPanel(station3Only = true)
     }
@@ -280,7 +281,7 @@ class OverlayService : Service(), StoryBridge.Host {
     private fun hidePicker() { picker?.let { runCatching { wm.removeView(it) } }; picker = null }
 
     // ---- STORY panes (built once, kept warm, so they open instantly) ----
-    private class Pane(val frame: FrameLayout, val web: WebView, val lp: WindowManager.LayoutParams, val small: Boolean, val wm: WindowManager) {
+    private class Pane(val frame: FrameLayout, val web: WebView, val lp: WindowManager.LayoutParams, val small: Boolean, val wm: WindowManager, val dial: Boolean = false) {
         var shown = false; var loadedAt = System.currentTimeMillis(); var stale = false
         // Station 3 only: true while its page (re)loads -- it stays invisible until it's drawn, never a white box.
         var loading = true
@@ -289,6 +290,8 @@ class OverlayService : Service(), StoryBridge.Host {
     }
     private var s3Pane: Pane? = null
     private var pagesPane: Pane? = null
+    // The dial pad's own window: sits still in the middle above Station 3, shown / hidden, never resized.
+    private var dialPane: Pane? = null
 
     private fun flagsFor(small: Boolean, shown: Boolean): Int {
         val base = WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
@@ -299,16 +302,16 @@ class OverlayService : Service(), StoryBridge.Host {
     }
 
     @SuppressLint("SetJavaScriptEnabled")
-    private fun buildPane(small: Boolean): Pane {
+    private fun buildPane(small: Boolean, dial: Boolean = false): Pane {
         val themed = ContextThemeWrapper(this, R.style.Theme_Story)
         val frame = FrameLayout(themed)
         val wv = WebView(themed).apply {
             setBackgroundColor(if (small) Color.TRANSPARENT else Color.BLACK)
             settings.javaScriptEnabled = true; settings.domStorageEnabled = true
-            addJavascriptInterface(StoryBridge(this@OverlayService, this@OverlayService, station3 = small), "StoryNative")
+            addJavascriptInterface(StoryBridge(this@OverlayService, this@OverlayService, station3 = small, dial = dial), "StoryNative")
         }
         val loader = WebViewAssetLoader.Builder().addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this)).build()
-        val query = if (small) "?s3=1" else ""
+        val query = if (dial) "?s3=1&dial=1" else if (small) "?s3=1" else ""
         var paneRef: Pane? = null
         wv.webViewClient = object : WebViewClient() {
             override fun onPageStarted(v: WebView, url: String, favicon: android.graphics.Bitmap?) {
@@ -333,7 +336,10 @@ class OverlayService : Service(), StoryBridge.Host {
                 if (r.isForMainFrame && r.url.toString().startsWith(REMOTE)) v.loadUrl(LOCAL + query)
             }
             override fun onPageFinished(v: WebView, url: String) {
-                if (small) {
+                if (dial) {
+                    v.evaluateJavascript("window.storyDialOnly&&window.storyDialOnly()", null); v.evaluateJavascript(DIAL_JS, null)
+                    ui.postDelayed({ paneRef?.let { it.loading = false; if (it.shown) it.frame.alpha = 1f } }, 200)
+                } else if (small) {
                     v.evaluateJavascript("window.storyStation3Only&&window.storyStation3Only()", null); v.evaluateJavascript(S3_JS, null)
                     // Show it again once Station 3 has actually drawn (a moment after the page is ready).
                     ui.postDelayed({ paneRef?.let { it.loading = false; if (it.shown) it.frame.alpha = 1f } }, 200)
@@ -341,16 +347,28 @@ class OverlayService : Service(), StoryBridge.Host {
             }
         }
         // Live: the screens come from the STORY site, so every upload reaches every phone with no reinstall.
-        wv.loadUrl(remoteBase() + "?" + (if (small) "s3=1&" else "") + "v=" + System.currentTimeMillis())  // skip the website cache
+        wv.loadUrl(remoteBase() + query + (if (query.isEmpty()) "?" else "&") + "v=" + System.currentTimeMillis())  // skip the website cache
         // Station 3's page spans the whole screen width (plus the 10dp it reaches past the right edge), so the
         // dial pad can open in the middle of the screen. The window itself is cut down to what's showing.
         val s3W = resources.displayMetrics.widthPixels + (10 * dp).toInt()
         val s3H = minOf((640 * dp).toInt(), realHeightPx())
         // Station 3's page always lays out at full size, pinned to the corner; its window may be
         // smaller (see setStation3Size) and simply cuts off the empty part, so nothing reflows.
-        frame.addView(wv, if (small) FrameLayout.LayoutParams(s3W, s3H, Gravity.BOTTOM or Gravity.END) else FrameLayout.LayoutParams(-1, -1))
+        // The dial pad page also lays out at a fixed size (pinned bottom-left); its window just cuts it to the dial pad.
+        val dialW = ((280 + 70) * dp).toInt(); val dialH = minOf((560 * dp).toInt(), realHeightPx())
+        frame.addView(wv, when {
+            dial -> FrameLayout.LayoutParams(dialW, dialH, Gravity.BOTTOM or Gravity.START)
+            small -> FrameLayout.LayoutParams(s3W, s3H, Gravity.BOTTOM or Gravity.END)
+            else -> FrameLayout.LayoutParams(-1, -1)
+        })
         frame.alpha = 0f
-        val lp = if (small)
+        val lp = if (dial)
+            WindowManager.LayoutParams(dialW, dialH, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, flagsFor(true, false), PixelFormat.TRANSLUCENT).apply {
+                // Middle of the screen, just above Station 3's 40dp bar (which sits on the bottom edge).
+                gravity = Gravity.BOTTOM or Gravity.START
+                x = (resources.displayMetrics.widthPixels - (280 * dp).toInt()) / 2; y = (52 * dp).toInt()
+            }
+        else if (small)
             WindowManager.LayoutParams(s3W, s3H, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, flagsFor(true, false), PixelFormat.TRANSLUCENT).apply {
                 // Station 3's arrow sits 10dp inside this window, so nudge the window 10dp off-screen
                 // and the arrow lands exactly on the same corner as the button.
@@ -366,7 +384,7 @@ class OverlayService : Service(), StoryBridge.Host {
         pinToScreen(lp)  // Station 3's window sits exactly on the corner, like the button
         val paneWm = if (small) layerWm else wm
         if (small) lp.type = layerType
-        val p = Pane(frame, wv, lp, small, paneWm)
+        val p = Pane(frame, wv, lp, small, paneWm, dial)
         paneRef = p
         paneWm.addView(frame, lp)
         return p
@@ -375,6 +393,7 @@ class OverlayService : Service(), StoryBridge.Host {
     private fun warmUp() {
         if (s3Pane == null) s3Pane = buildPane(true)
         if (pagesPane == null) pagesPane = buildPane(false)
+        if (dialPane == null) dialPane = buildPane(true, dial = true)
         addBar()
     }
 
@@ -422,21 +441,24 @@ class OverlayService : Service(), StoryBridge.Host {
     }
 
     private fun hideOne(p: Pane) {
-        p.web.evaluateJavascript("window.storyReset&&window.storyReset()", null)
+        // Station 3 and the dial pad keep their page exactly as it is while hidden, so showing them
+        // again changes nothing on screen (no re-layout, no resize, no jump).
+        if (!p.small) p.web.evaluateJavascript("window.storyReset&&window.storyReset()", null)
         setShown(p, false)
         // Pick up the newest screens in the background so the next open is both instant and current.
         if (p.stale || System.currentTimeMillis() - p.loadedAt > 5 * 60_000) reload(p)
     }
 
     private fun removePanelNow() {
+        dialPane?.takeIf { it.shown }?.let { hideOne(it) }
         s3Pane?.takeIf { it.shown }?.let { hideOne(it) }
         pagesPane?.takeIf { it.shown }?.let { hideOne(it) }
         updateBubble()
     }
 
     private fun destroyPanes() {
-        for (p in listOfNotNull(s3Pane, pagesPane)) { runCatching { p.wm.removeView(p.frame) }; p.web.destroy() }
-        s3Pane = null; pagesPane = null
+        for (p in listOfNotNull(s3Pane, pagesPane, dialPane)) { runCatching { p.wm.removeView(p.frame) }; p.web.destroy() }
+        s3Pane = null; pagesPane = null; dialPane = null
     }
 
     /** Gets the Pages out of the way (Home, Apps, opening an app). Station 3 is left exactly as it is. */
@@ -462,12 +484,34 @@ class OverlayService : Service(), StoryBridge.Host {
     override fun hidePanel() { ui.post { pagesPane?.takeIf { it.shown }?.let { hideOne(it) }; updateBubble() } }
 
     /** Station 3's corner arrow was tapped: the one way Station 3 closes. */
-    override fun closeStation3() { ui.post { s3Pane?.takeIf { it.shown }?.let { hideOne(it) }; updateBubble() } }
+    override fun closeStation3() { ui.post { dialPane?.takeIf { it.shown }?.let { hideOne(it) }; s3Pane?.takeIf { it.shown }?.let { hideOne(it) }; updateBubble() } }
+
+    override fun toggleDialpad() { ui.post {
+        val d = dialPane ?: return@post
+        if (d.shown) hideOne(d) else if (s3Pane?.shown == true) setShown(d, true)
+    } }
+
+    override fun closeDialpad() { ui.post { dialPane?.takeIf { it.shown }?.let { hideOne(it) } } }
+
+    /** Fits the dial pad's window to it (dial pad + the X beside it), centred on the screen. Done while hidden. */
+    override fun setDialSize(w: Int, h: Int) {
+        ui.post {
+            val p = dialPane ?: return@post
+            val full = p.web.layoutParams
+            p.openW = ((w + 58) * dp).toInt().coerceAtMost(full.width)
+            p.openH = ((h + 2) * dp).toInt().coerceAtMost(full.height)
+            val x = (resources.displayMetrics.widthPixels - (w * dp).toInt()) / 2
+            if (p.lp.width != p.openW || p.lp.height != p.openH || p.lp.x != x) {
+                p.lp.width = p.openW; p.lp.height = p.openH; p.lp.x = x
+                runCatching { p.wm.updateViewLayout(p.frame, p.lp) }
+            }
+        }
+    }
 
     override fun setStation3Size(w: Int, h: Int) {
         ui.post {
+            // Sized once, while still hidden (the page is always kept open), so it never changes on screen.
             val p = s3Pane ?: return@post
-            if (!p.shown) return@post  // closed: keep the last open size for next time
             val full = p.web.layoutParams
             val pad = 16  // room for Station 3's shadow
             p.openW = ((w + pad) * dp).toInt().coerceIn((40 * dp).toInt(), full.width)
@@ -492,6 +536,31 @@ class OverlayService : Service(), StoryBridge.Host {
          * screens (live or Test): taps on empty space do nothing (Station 3 stays open), and
          * Station 3 reports the corner area it covers so its window can shrink to just that.
          */
+        /** Added to the dial pad's page: reports its size so its window fits it, and ignores taps on empty space. */
+        private const val DIAL_JS = """(function(){
+  if(window.__storyDialNative) return; window.__storyDialNative = true;
+  window.addEventListener('click', function(e){
+    var t = e.target;
+    if(t && t.closest && t.closest('.station3-dialpad-card')) return;
+    e.stopPropagation(); e.preventDefault();
+  }, true);
+  var last = '';
+  function report(){
+    var pad = document.querySelector('.station3-dialpad-float');
+    if(!pad || !window.StoryNative || !window.StoryNative.setDialSize) return;
+    var b = pad.getBoundingClientRect();
+    if(!(b.width > 0 && b.height > 0)) return;
+    var k = Math.ceil(b.width) + 'x' + Math.ceil(b.height);
+    if(k === last) return; last = k;
+    window.StoryNative.setDialSize(Math.ceil(b.width), Math.ceil(b.height));
+  }
+  var queued = false;
+  function soon(){ if(queued) return; queued = true; requestAnimationFrame(function(){ queued = false; report(); }); }
+  new MutationObserver(soon).observe(document.documentElement, { subtree:true, childList:true, attributes:true, attributeFilter:['class','style'] });
+  window.addEventListener('resize', soon);
+  report();
+})();"""
+
         private const val S3_JS = """(function(){
   if(window.__storyS3Native) return; window.__storyS3Native = true;
   var PIECES = '.station3-corner-arrow,.station3-bar-card,.station3-dialpad-card,.station3-quick-row';

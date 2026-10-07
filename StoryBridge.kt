@@ -15,12 +15,15 @@ import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 
 /** What the overlay panel (which shows the STORY screens) can ask the phone to do. JS name: window.StoryNative */
-class StoryBridge(private val ctx: Context, private val host: Host, private val station3: Boolean = false) {
+class StoryBridge(private val ctx: Context, private val host: Host, private val station3: Boolean = false, private val dial: Boolean = false) {
 
     interface Host {
         fun hidePanel()
         fun closeStation3()
         fun setStation3Size(w: Int, h: Int)
+        fun toggleDialpad()
+        fun closeDialpad()
+        fun setDialSize(w: Int, h: Int)
     }
 
     /** The phone's real launchable apps, with their real icons. */
@@ -82,5 +85,17 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
 
     /** Station 3 tells us how much of the corner it really covers, so its window is no bigger than that. */
     @JavascriptInterface
-    fun setStation3Size(w: Int, h: Int) { if (station3) host.setStation3Size(w, h) }
+    fun setStation3Size(w: Int, h: Int) { if (station3 && !dial) host.setStation3Size(w, h) }
+
+    /** Station 3's dial pad button: show / hide the dial pad's own window (it never moves Station 3). */
+    @JavascriptInterface
+    fun toggleDialpad() { if (station3) host.toggleDialpad() }
+
+    /** The X beside the dial pad. */
+    @JavascriptInterface
+    fun closeDialpad() { if (station3) host.closeDialpad() }
+
+    /** The dial pad page reports its size once, so its window fits it before it's ever shown. */
+    @JavascriptInterface
+    fun setDialSize(w: Int, h: Int) { if (dial) host.setDialSize(w, h) }
 }
