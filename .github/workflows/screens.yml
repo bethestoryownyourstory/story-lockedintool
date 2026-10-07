@@ -1,9 +1,9 @@
 name: STORY screens - Test, then Approve
-# Upload a new index.html  -> it goes to the TEST channel only
-#   (phones with "Test channel: ON" on the STORY setup screen see it; everyone else keeps the live screens).
-# Happy with it? Actions -> "STORY screens - Test, then Approve" -> Run workflow
-#   -> the Test screens become the live screens for every phone.
-# The site is published from the gh-pages branch:  /  = live,  /preview/  = Test.
+# Push a new index.html -> it goes to the TEST channel only (the owner's phone).
+# Approve (the owner's "Publish live update" button runs this through the release server,
+# or Actions -> this workflow -> Run workflow) -> the Test version goes LIVE for everyone:
+#   - the app: the "latest" (Test) release build is copied to the "live" release
+#   - the screens: gh-pages /preview/ is copied to /  (the site is published from gh-pages)
 on:
   push:
     paths: ['index.html', 'manifest.json', 'icon-192.png', 'icon-512.png']
@@ -47,13 +47,30 @@ jobs:
           git -C site commit -qm "Test channel: ${GITHUB_REF_NAME} ${GITHUB_SHA::7}" || echo "Nothing new"
           git -C site push origin HEAD:gh-pages
           echo "### On the Test channel now: ${GITHUB_REF_NAME} ${GITHUB_SHA::7}" >> "$GITHUB_STEP_SUMMARY"
-          echo "Check it on a phone with **Test channel: ON**, then approve with **Run workflow** on this workflow." >> "$GITHUB_STEP_SUMMARY"
+          echo "Check it on the owner's phone (Test channel), then tap **Publish live update** in STORY." >> "$GITHUB_STEP_SUMMARY"
+      - name: Approve -> the Test app build goes live for everyone
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p promote
+          gh release download latest -p app-debug.apk -p version.json -D promote --clobber
+          N=$(grep -o '[0-9]\+' promote/version.json)
+          if gh release view live >/dev/null 2>&1; then
+            # APK first, then version.json, so phones never see a new version number before its APK.
+            gh release upload live promote/app-debug.apk --clobber
+            gh release upload live promote/version.json --clobber
+            gh release edit live --title "STORY live build $N" --latest
+          else
+            gh release create live promote/app-debug.apk promote/version.json --title "STORY live build $N" --notes "Live channel: the STORY build every user gets" --latest
+          fi
+          echo "### Live app now: build $N" >> "$GITHUB_STEP_SUMMARY"
       - name: Approve -> Test screens go live for everyone
         if: github.event_name == 'workflow_dispatch'
         run: |
           if [ ! -f site/preview/index.html ]; then
-            echo "Nothing on the Test channel yet - upload an index.html first." >> "$GITHUB_STEP_SUMMARY"
-            exit 1
+            echo "No Test screens yet - live screens unchanged." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
           fi
           cp site/preview/index.html site/preview/manifest.json site/preview/icon-192.png site/preview/icon-512.png site/
           cp site/preview/source.txt site/live-source.txt

@@ -1,7 +1,7 @@
 name: Build STORY APK
 on:
   push:
-    paths-ignore: ['index.html', '*.md']
+    paths-ignore: ['index.html', '*.md', 'release.json', 'release-worker.js', 'screens.yml', '.github/workflows/screens.yml']
   workflow_dispatch:
 permissions:
   contents: write
@@ -99,7 +99,9 @@ jobs:
         with:
           name: story-apk
           path: build_src/app/build/outputs/apk/debug/app-debug.apk
-      - name: Publish this build so installed phones update themselves
+      # Test channel = the "latest" release: the owner's phone installs every main build by itself.
+      # Live channel = the "live" release: only changes when the owner publishes (screens.yml).
+      - name: Publish this build to the Test channel
         if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -108,4 +110,6 @@ jobs:
           cp build_src/app/build/outputs/apk/debug/app-debug.apk app-debug.apk
           echo "{\"versionCode\": $N}" > version.json
           gh release delete latest --yes --cleanup-tag || true
-          gh release create latest app-debug.apk version.json --title "STORY build $N" --notes "Latest STORY build" --latest
+          gh release create latest app-debug.apk version.json --title "STORY test build $N" --notes "Test channel: newest STORY build (owner's phone)" --latest=false
+          # First time only: start the Live channel with this build.
+          gh release view live >/dev/null 2>&1 || gh release create live app-debug.apk version.json --title "STORY live build $N" --notes "Live channel: the STORY build every user gets" --latest

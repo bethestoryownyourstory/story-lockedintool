@@ -29,6 +29,15 @@
             </intent-filter>
         </activity>
 
+        <!-- "Update available" for Live users (Update now / Later; required after 3 days). -->
+        <activity
+            android:name=".UpdateActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
         <!-- Restarts STORY after a phone restart or an update. -->
         <receiver android:name=".BootReceiver" android:exported="true">
             <intent-filter>

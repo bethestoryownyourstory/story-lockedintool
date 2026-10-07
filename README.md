@@ -16,14 +16,18 @@ What you get once it's running:
 2. Repo -> Actions -> "Build STORY launcher APK" -> when green, download **story-launcher-apk**, unzip, install `app-debug.apk`.
 3. Open **STORY**: (1) allow display over other apps, (2) turn on "STORY system actions" in Accessibility, (3) Start STORY.
 
-## Updating
+## Releases: Test and Live
 All files live in the repo root (no folders). The workflows arrange them into an Android project when they build.
 
-- **App changes** (`.kt`, `.xml` files): push them. "Build STORY APK" builds the app and publishes it. Installed phones update themselves: While the screen is on, STORY checks every minute (and on every unlock and whenever it is opened), so a new build arrives about a minute after it is built.
-- **Screen changes** (`index.html`): push it. It goes to the **Test channel** only.
-  1. On a test phone: STORY setup screen -> **Test channel: ON**. That phone now shows the new screens.
-  2. When you're happy, say "approve" in the Claude chat and Claude runs **STORY screens - Test, then Approve** for you. Every phone gets the new screens.
-     (By hand, if ever needed: Actions -> that workflow -> **Run workflow**.)
+- **Test channel** (the owner's phone): every push to `main` is built and published as the `latest` release, and the newest
+  `index.html` goes to `/preview/`. The owner's phone installs new builds by itself within a couple of minutes.
+- **Live channel** (everyone else): the `live` release and the live screens. They only change when the owner publishes.
+  Users see **Update available** (Update now / Later). If they choose Later for 3 days, the update becomes required.
+- **Publishing:** in owner mode, the STORY setup screen has **Publish live update**. It asks for the PIN and sends it to the
+  release server (`release-worker.js`, a Cloudflare Worker). The server checks the PIN and runs "STORY screens - Test, then
+  Approve", which copies the Test app build and screens to Live.
+- **Owner mode:** on the setup screen, tap the build line at the bottom 7 times and enter the PIN (checked by the server).
+- **Changing the PIN:** Cloudflare -> Workers -> story-release -> Settings -> Variables and Secrets -> `PIN`. No app update needed.
+- **Server address:** `release.json` (`"server"`). The app reads it from GitHub, so changing it needs no app update.
 
-One-time setting for the Test channel: Settings -> Pages -> Build and deployment -> Source "Deploy from a branch" -> branch **gh-pages**, folder **/ (root)**.
-(The `gh-pages` branch is created by the first run of "STORY screens". `/` is live and `/preview/` is Test.)
+The website is published from the `gh-pages` branch (`/` = live, `/preview/` = Test).

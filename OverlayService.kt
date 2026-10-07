@@ -113,9 +113,9 @@ class OverlayService : Service(), StoryBridge.Host {
         running = true
     }
 
-    /** Live screens, or the "test" copy when the Test channel switch on the setup screen is on. */
+    /** Live screens for everyone; the owner (Test channel) gets the newest copy from /preview/. */
     private fun remoteBase(): String =
-        REMOTE + if (getSharedPreferences("story", MODE_PRIVATE).getBoolean("preview", false)) "preview/" else ""
+        REMOTE + if (Release.isOwner(this)) "preview/" else ""
 
     private fun pickLayer() {
         val a = StoryAccessibilityService.instance
@@ -126,7 +126,7 @@ class OverlayService : Service(), StoryBridge.Host {
 
     /** Asks the STORY site which screens are current; if they changed, the panes reload (when closed). */
     private fun checkScreens() {
-        val url = remoteBase() + (if (getSharedPreferences("story", MODE_PRIVATE).getBoolean("preview", false)) "source.txt" else "live-source.txt") + "?t=" + System.currentTimeMillis()
+        val url = remoteBase() + (if (Release.isOwner(this)) "source.txt" else "live-source.txt") + "?t=" + System.currentTimeMillis()
         Thread {
             val v = runCatching {
                 (java.net.URL(url).openConnection() as java.net.HttpURLConnection).run {
@@ -353,6 +353,11 @@ class OverlayService : Service(), StoryBridge.Host {
     }
 
     private fun showPanel(station3Only: Boolean) {
+        // An update that has waited 3 days is required: STORY opens the update window instead.
+        if (Release.isRequired(this)) {
+            runCatching { startActivity(Intent(this, UpdateActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            return
+        }
         warmUp()
         if (station3Only) {
             pagesPane?.takeIf { it.shown }?.let { hideOne(it) }

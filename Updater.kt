@@ -14,10 +14,14 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 
-/** Looks for a newer STORY build and installs it by itself (see InstallResultReceiver for the one-time approval). */
+/**
+ * Looks for a newer STORY build on this phone's channel (see Release).
+ *  - Test (owner): installs it by itself, straight away.
+ *  - Live (everyone else): shows "Update available" (Update now / Later); required after 3 days.
+ */
 object Updater {
-    private const val BASE = "https://github.com/bethestoryownyourstory/story-lockedintool/releases/download/latest/"
     @Volatile private var busy = false
+    @Volatile private var promptedAt = 0L
     @Volatile private var lastCheck = 0L
     // The version Android is already asking to install, so the prompt doesn't pop up again every minute.
     @Volatile private var offered = 0L; @Volatile private var offeredAt = 0L
@@ -33,22 +37,49 @@ object Updater {
         busy = true; lastCheck = System.currentTimeMillis()
         Thread {
             try {
-                // Needs the one-time "allow STORY to install updates" switch from the setup screen.
-                if (!ctx.packageManager.canRequestPackageInstalls()) return@Thread
-                val latest = JSONObject(open(BASE + "version.json").inputStream.bufferedReader().use { it.readText() }).getLong("versionCode")
+                val base = Release.base(ctx)
+                val latest = JSONObject(open(base + "version.json").inputStream.bufferedReader().use { it.readText() }).getLong("versionCode")
                 val mine = ctx.packageManager.getPackageInfo(ctx.packageName, 0).longVersionCode
-                if (latest <= mine) {  // up to date: clear any leftover "update ready" notification
-                    ctx.getSystemService(android.app.NotificationManager::class.java).cancel(InstallResultReceiver.UPDATE_NOTIFICATION)
+                if (latest <= mine) {  // up to date: clear any leftover update notifications
+                    Release.clearPending(ctx)
+                    val nm = ctx.getSystemService(NotificationManager::class.java)
+                    nm.cancel(InstallResultReceiver.UPDATE_NOTIFICATION); nm.cancel(UpdateActivity.NOTIFICATION)
                     return@Thread
                 }
+                if (!Release.isOwner(ctx)) { offerToUser(ctx, latest, force); return@Thread }
+                // Test channel (owner): install by itself. Needs the one-time "allow STORY to update itself" switch.
+                if (!ctx.packageManager.canRequestPackageInstalls()) return@Thread
                 if (!force && latest == offered && System.currentTimeMillis() - offeredAt < 10 * 60_000) return@Thread
                 offered = latest; offeredAt = System.currentTimeMillis()
-                val apk = File(ctx.cacheDir, "story-update.apk")
-                open(BASE + "app-debug.apk").inputStream.use { i -> apk.outputStream().use { o -> i.copyTo(o) } }
-                install(ctx, apk)
+                download(base, ctx)?.let { install(ctx, it) }
             } catch (_: Throwable) {
             } finally { busy = false }
         }.start()
+    }
+
+    /** Live users: a new version is out. Ask (Update now / Later); after 3 days it's required. */
+    private fun offerToUser(ctx: Context, latest: Long, force: Boolean) {
+        Release.notePending(ctx, latest)
+        val required = Release.isRequired(ctx)
+        UpdateActivity.notify(ctx, required)
+        val now = System.currentTimeMillis()
+        if (!required && now < Release.laterUntil(ctx)) return          // they tapped Later: wait a day (or until required)
+        if (!force && now - promptedAt < 30 * 60_000) return              // don't pop up more than every 30 minutes
+        promptedAt = now
+        runCatching { ctx.startActivity(Intent(ctx, UpdateActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+    }
+
+    /** "Update now" in the Update available window. Returns a message if it couldn't start. Run off the main thread. */
+    fun installNow(ctx: Context): String? {
+        if (!ctx.packageManager.canRequestPackageInstalls()) return "allow"
+        val apk = runCatching { download(Release.base(ctx), ctx) }.getOrNull() ?: return "Couldn't download the update. Check your connection and try again."
+        return runCatching { install(ctx, apk); null }.getOrElse { "Couldn't start the update: ${it.message}" }
+    }
+
+    private fun download(base: String, ctx: Context): File? {
+        val apk = File(ctx.cacheDir, "story-update.apk")
+        open(base + "app-debug.apk").inputStream.use { i -> apk.outputStream().use { o -> i.copyTo(o) } }
+        return apk
     }
 
     private fun install(ctx: Context, apk: File) {
@@ -112,7 +143,10 @@ class InstallResultReceiver : BroadcastReceiver() {
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(c: Context, i: Intent) {
         // This version is installed now, so the "update ready" notification is done.
-        if (i.action == Intent.ACTION_MY_PACKAGE_REPLACED) c.getSystemService(android.app.NotificationManager::class.java).cancel(InstallResultReceiver.UPDATE_NOTIFICATION)
+        if (i.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
+            val nm = c.getSystemService(NotificationManager::class.java)
+            nm.cancel(InstallResultReceiver.UPDATE_NOTIFICATION); nm.cancel(UpdateActivity.NOTIFICATION)
+        }
         val wanted = c.getSharedPreferences("story", Context.MODE_PRIVATE).getBoolean("enabled", false)
         if (wanted && android.provider.Settings.canDrawOverlays(c)) {
             runCatching { c.startForegroundService(Intent(c, OverlayService::class.java)) }
