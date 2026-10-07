@@ -115,6 +115,7 @@ class OverlayService : Service(), StoryBridge.Host {
 
     override fun onDestroy() {
         if (gated) { super.onDestroy(); return }
+        quietApps(false)
         removePanelNow(); hidePicker(); destroyPanes()
         bubble?.let { runCatching { (bubbleWm ?: wm).removeView(it) } }
         instance = null
@@ -180,6 +181,7 @@ class OverlayService : Service(), StoryBridge.Host {
         bubble?.let { runCatching { (bubbleWm ?: wm).removeView(it) } }; bubble = null
         removeBarBg()
         s3Pane?.let { runCatching { it.wm.removeView(it.frame) }; it.web.destroy() }; s3Pane = null
+        quietApps(false)
         pagesPane?.let { runCatching { it.wm.removeView(it.frame) }; it.web.destroy() }; pagesPane = null
         dialPane?.let { runCatching { it.wm.removeView(it.frame) }; it.web.destroy() }; dialPane = null
         pickLayer(); addBubble(); warmUp()
@@ -462,6 +464,26 @@ class OverlayService : Service(), StoryBridge.Host {
         runCatching { p.wm.updateViewLayout(p.frame, p.lp) }
         if (p === s3Pane) syncBarBg()
         if (shown && !p.small) p.web.requestFocus()
+        if (p === pagesPane) quietApps(shown)
+    }
+
+    // While Pages is open, sound from the app underneath (a TikTok video, YouTube...) pauses; music keeps
+    // playing. Done with Android's audio focus -- the app just pauses, it never closes, and gets its sound
+    // back when Pages closes.
+    private var quietFocus: android.media.AudioFocusRequest? = null
+    private fun quietApps(on: Boolean) {
+        val am = getSystemService(android.media.AudioManager::class.java) ?: return
+        if (!on) { quietFocus?.let { runCatching { am.abandonAudioFocusRequest(it) } }; quietFocus = null; return }
+        if (quietFocus != null) return
+        val music = runCatching { am.activePlaybackConfigurations.any { it.audioAttributes.contentType == android.media.AudioAttributes.CONTENT_TYPE_MUSIC } }.getOrDefault(false)
+        if (music) return
+        val req = android.media.AudioFocusRequest.Builder(android.media.AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+            .setAudioAttributes(android.media.AudioAttributes.Builder()
+                .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MOVIE).build())
+            .setOnAudioFocusChangeListener { }
+            .build()
+        if (runCatching { am.requestAudioFocus(req) }.getOrNull() == android.media.AudioManager.AUDIOFOCUS_REQUEST_GRANTED) quietFocus = req
     }
 
     private fun showPanel(station3Only: Boolean) {
@@ -592,6 +614,7 @@ class OverlayService : Service(), StoryBridge.Host {
     }
 
     private fun destroyPanes() {
+        quietApps(false)
         removeBarBg()
         for (p in listOfNotNull(s3Pane, pagesPane, dialPane)) { runCatching { p.wm.removeView(p.frame) }; p.web.destroy() }
         s3Pane = null; pagesPane = null; dialPane = null
