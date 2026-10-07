@@ -1637,6 +1637,10 @@
   /* Pages inside the STORY app: Station 3 is the app's own -- the exact same button and bar as over
      every other app, on top -- so the page draws none of its own. */
   html.native:not(.s3-early) .station3-region{ display:none !important; }
+  /* Pages inside the STORY app are full screen, flush to every edge: the app already puts them over
+     the phone's status bar and gesture area, so no extra space is kept for those bars here. */
+  html.native:not(.s3-early) .phone-frame{ padding-top:0 !important; padding-bottom:0 !important; }
+  html.native:not(.s3-early) #content-area{ padding-bottom:0 !important; }
   /* Solid white fill plugging the gaps between the lifted Rows/Page Styles row, the bar
      card, and the corner arrow, so the whole silhouette reads as one continuous flush
      white shape with no bare strip of background showing through anywhere. Pure fill --
