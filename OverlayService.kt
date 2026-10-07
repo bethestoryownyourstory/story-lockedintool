@@ -162,11 +162,22 @@ class OverlayService : Service(), StoryBridge.Host {
     }
 
     private fun overlayParams(w: Int, h: Int, gravity: Int, x: Int, y: Int, focusable: Boolean = false): WindowManager.LayoutParams {
-        var flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+        var flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
         if (!focusable) flags = flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
         return WindowManager.LayoutParams(w, h, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, flags, PixelFormat.TRANSLUCENT).apply {
             this.gravity = gravity; this.x = x; this.y = y
+            pinToScreen(this)
         }
+    }
+
+    /**
+     * STORY's windows stay exactly where STORY puts them. Without this, newer Android versions push
+     * them up out of the gesture-bar / system-bar area -- which lifted the corner button off the corner.
+     */
+    private fun pinToScreen(lp: WindowManager.LayoutParams) {
+        if (Build.VERSION.SDK_INT >= 30) { lp.fitInsetsTypes = 0; lp.fitInsetsSides = 0; lp.isFitInsetsIgnoringVisibility = true }
+        if (Build.VERSION.SDK_INT >= 30) lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+        else if (Build.VERSION.SDK_INT >= 28) lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
     }
 
     /** True when the phone uses swipe gestures (so it already has a gesture line). 3-button phones don't. */
@@ -278,7 +289,7 @@ class OverlayService : Service(), StoryBridge.Host {
     private var pagesPane: Pane? = null
 
     private fun flagsFor(small: Boolean, shown: Boolean): Int {
-        val base = WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+        val base = WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
         return if (!shown) base or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
         // No "watch outside touch": touching the app underneath must never close Station 3.
         else if (small) base or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
@@ -333,6 +344,7 @@ class OverlayService : Service(), StoryBridge.Host {
         // window that isn't see-through still swallows touches meant for the apps underneath
         // ("isn't optimised for the latest version of Android. Screen touches may be delayed...").
         lp.alpha = 0f
+        pinToScreen(lp)  // Station 3's window sits exactly on the corner, like the button
         val paneWm = if (small) layerWm else wm
         if (small) lp.type = layerType
         val p = Pane(frame, wv, lp, small, paneWm)
