@@ -1640,7 +1640,10 @@
   /* Pages inside the STORY app are full screen, flush to every edge: the app already puts them over
      the phone's status bar and gesture area, so no extra space is kept for those bars here. */
   html.native:not(.s3-early) .phone-frame{ padding-top:0 !important; padding-bottom:0 !important; }
-  html.native:not(.s3-early) #content-area{ padding-bottom:0 !important; }
+  html.native:not(.s3-early) #content-area{ padding-top:0 !important; padding-bottom:0 !important; }
+  html.native:not(.s3-early) .page-top{ margin-top:0 !important; }
+  html.native:not(.s3-early) .phone-float-dock{ padding-bottom:0 !important; }
+  html.native:not(.s3-early) .story-screen{ margin-top:0 !important; margin-bottom:0 !important; padding-bottom:0 !important; }
   /* Solid white fill plugging the gaps between the lifted Rows/Page Styles row, the bar
      card, and the corner arrow, so the whole silhouette reads as one continuous flush
      white shape with no bare strip of background showing through anywhere. Pure fill --
@@ -9789,7 +9792,8 @@ function fitPageToScreen(area, el, pageKey){
       dockTop = dock.getBoundingClientRect().top;
       dock.querySelectorAll('*').forEach(n=>{ const t = n.getBoundingClientRect().top; if(t > 0 && t < dockTop) dockTop = t; });
     }
-    return (dock ? dockTop : area.getBoundingClientRect().bottom) - 6;
+    // In the app the page runs right down to the screen's edge, like Station 3 (no 6px gap).
+    return (dock ? dockTop : area.getBoundingClientRect().bottom) - (NATIVE ? 0 : 6);
   };
   const cached = FIT_CACHE[key];
   if(cached){
