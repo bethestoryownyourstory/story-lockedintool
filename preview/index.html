@@ -1634,6 +1634,9 @@
   /* Over other apps: no animations at all -- straight, instant open and close. */
   body.s3-only .station3-region, body.s3-only .station3-region *{ transition:none !important; animation:none !important; }
   .station3-region{ position:absolute; inset:0; pointer-events:none; z-index:30; }
+  /* Pages inside the STORY app: Station 3 is the app's own -- the exact same button and bar as over
+     every other app, on top -- so the page draws none of its own. */
+  html.native:not(.s3-early) .station3-region{ display:none !important; }
   /* Solid white fill plugging the gaps between the lifted Rows/Page Styles row, the bar
      card, and the corner arrow, so the whole silhouette reads as one continuous flush
      white shape with no bare strip of background showing through anywhere. Pure fill --
@@ -9792,48 +9795,56 @@ let appMenuOpenedAt = 0;
 function goToPageIndex(next){
   const idx = PAGES.indexOf(state.current);
   if(next===idx || next<0 || next>PAGES.length-1) return;
-  const area = document.getElementById('content-area');
-  if(!area || pageSwipeAnimating){
-    // No live content area to animate from (or a previous swipe is still mid-flight) --
-    // fall back to the old instant-cut behavior rather than fight with it.
+  const wrap = document.getElementById('device-wrap');
+  const oldFrame = wrap && wrap.firstElementChild;
+  if(!oldFrame || pageSwipeAnimating || state.device !== 'phone'){
+    // Nothing on screen to slide from (or a previous swipe is still mid-flight): plain cut.
     state.current = PAGES[next];
     state.lastPage = state.current;
     renderDevice();
     return;
   }
-  const dir = next > idx ? 1 : -1; // +1: new page is to the right (Focus-ward); -1: to the left (Money-ward)
-  const outgoingHTML = area.innerHTML;
-  const outgoingScroll = area.scrollTop;
+  const dir = next > idx ? 1 : -1; // +1: new page comes in from the right; -1: from the left
+  // The new page is drawn ONCE, in its real final layout (same size, same zoom, its own dock),
+  // and simply slides in -- the outgoing screen is the real, untouched old one sliding out.
+  // Nothing is re-drawn or re-sized when the slide ends, so nothing jumps, stretches or snaps.
+  const oldArea = oldFrame.querySelector('#content-area');
+  const oldScroll = oldArea ? oldArea.scrollTop : 0;
+  const wrapRect = wrap.getBoundingClientRect();
+  const r = oldFrame.getBoundingClientRect();
   pageSwipeAnimating = true;
   state.current = PAGES[next];
   state.lastPage = state.current;
-  const incomingHTML = renderScreenContent();
-
-  area.innerHTML = `<div id="page-swipe-track" style="display:flex; align-items:flex-start; width:200%;">
-    <div id="page-swipe-old" style="width:50%; flex-shrink:0; overflow:hidden;"><div style="transform:translateY(${-outgoingScroll}px);">${outgoingHTML}</div></div>
-    <div id="page-swipe-new" style="width:50%; flex-shrink:0;"></div>
-  </div>`;
-  const track = document.getElementById('page-swipe-track');
-  const oldPane = document.getElementById('page-swipe-old');
-  const newPane = document.getElementById('page-swipe-new');
-  newPane.innerHTML = incomingHTML;
-  fitPageToScreen(area, newPane.firstElementChild);
-
-  if(dir < 0){
-    // Old page needs to end up on the RIGHT of the track so the slide-to-0% reveals the new
-    // page entering from the left -- swap the DOM order rather than the CSS order property, so
-    // nothing here depends on direction-aware flex/writing-mode behavior.
-    track.insertBefore(newPane, oldPane);
-  }
-  track.style.transform = dir > 0 ? 'translateX(0%)' : 'translateX(-50%)';
-  requestAnimationFrame(()=>{
-    track.style.transition = 'transform 0.19s cubic-bezier(.22,.9,.24,1)';
-    track.style.transform = dir > 0 ? 'translateX(-50%)' : 'translateX(0%)';
-  });
-  setTimeout(()=>{
+  renderDevice();
+  const newFrame = wrap.firstElementChild;
+  const prevPos = wrap.style.position, prevOverflow = wrap.style.overflow;
+  if(getComputedStyle(wrap).position === 'static') wrap.style.position = 'relative';
+  wrap.style.overflow = 'hidden';
+  Object.assign(oldFrame.style, { position:'absolute', left:(r.left - wrapRect.left)+'px', top:(r.top - wrapRect.top)+'px',
+    width:r.width+'px', height:r.height+'px', margin:'0', pointerEvents:'none' });
+  wrap.appendChild(oldFrame); // after the new one, so every lookup by id still finds the live page
+  const oldAreaBack = oldFrame.querySelector('#content-area');
+  if(oldAreaBack) oldAreaBack.scrollTop = oldScroll;
+  const w = r.width;
+  const ease = 'transform 0.19s cubic-bezier(.22,.9,.24,1)';
+  newFrame.style.willChange = oldFrame.style.willChange = 'transform';
+  newFrame.style.transform = 'translate3d(' + (dir * w) + 'px,0,0)';
+  oldFrame.style.transform = 'translate3d(0,0,0)';
+  let done = false;
+  const finish = ()=>{
+    if(done) return; done = true;
+    if(oldFrame.parentNode) oldFrame.parentNode.removeChild(oldFrame);
+    newFrame.style.transition = newFrame.style.transform = newFrame.style.willChange = '';
+    wrap.style.position = prevPos; wrap.style.overflow = prevOverflow;
     pageSwipeAnimating = false;
-    renderDevice();
-  }, 200);
+  };
+  requestAnimationFrame(()=>{ requestAnimationFrame(()=>{
+    newFrame.style.transition = oldFrame.style.transition = ease;
+    newFrame.style.transform = 'translate3d(0,0,0)';
+    oldFrame.style.transform = 'translate3d(' + (-dir * w) + 'px,0,0)';
+    newFrame.addEventListener('transitionend', finish, { once:true });
+    setTimeout(finish, 260);
+  }); });
 }
 
 function attachColorPicker(){
