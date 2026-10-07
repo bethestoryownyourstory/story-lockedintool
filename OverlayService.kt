@@ -312,8 +312,8 @@ class OverlayService : Service(), StoryBridge.Host {
         fun word(t: String, onTap: () -> Unit) = TextView(this).apply {
             text = t; setTextColor(Color.WHITE); textSize = 18f; setPadding((14 * dp).toInt(), 0, (14 * dp).toInt(), 0); setOnClickListener { hidePicker(); onTap() }
         }
-        // Apps = the phone's own apps / home screen. There is no second "STORY apps" screen.
-        row.addView(word("Apps") { hidePanel(); StoryAccessibilityService.instance?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME) })
+        // Apps = straight back to whatever was underneath (the app you were on, untouched, or the home screen).
+        row.addView(word("Apps") { hidePanel() })
         row.addView(TextView(this).apply { text = "|"; setTextColor(Color.parseColor("#66FFFFFF")); textSize = 18f })
         row.addView(word("Pages") { showPanel(station3Only = false) })  // the only way into STORY itself
         picker = row

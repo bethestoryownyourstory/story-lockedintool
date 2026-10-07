@@ -67,12 +67,9 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         ctx.startActivity(Intent(Intent.ACTION_DELETE, Uri.parse("package:$pkg")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 
-    /** "Apps" in STORY's Apps | Pages switch: back to the phone's own home screen, untouched. */
+    /** "Apps" in STORY's Apps | Pages switch: back to the app you were on (or the home screen), untouched. */
     @JavascriptInterface
-    fun showApps() {
-        host.hidePanel()
-        StoryAccessibilityService.instance?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME)
-    }
+    fun showApps() { host.hidePanel() }
 
     @JavascriptInterface
     fun openRecents() {
