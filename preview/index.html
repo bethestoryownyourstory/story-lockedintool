@@ -1608,6 +1608,8 @@
   /* Over other apps the Station 3 button itself is drawn by the app, always the same, on top -- the page
      only keeps an invisible placeholder where it sits, to line the bar up against. */
   body.s3-only .station3-region .station3-corner-arrow{ visibility:hidden !important; pointer-events:none !important; }
+  /* The app draws Station 3's white bar itself (pixel-exact with the button); the page draws only the icons on it. */
+  html.s3-native-bar body.s3-only .station3-bar-card{ background:transparent !important; box-shadow:none !important; }
   body.s3-only .station3-dialpad-float{ width:280px !important; max-width:none !important; }
   /* The dial pad closes with the X just outside its right side, halfway down (where the arrow used to be),
      so no ^ inside. */
