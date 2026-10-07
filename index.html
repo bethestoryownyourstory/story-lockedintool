@@ -4766,6 +4766,11 @@ function settingsHubScreen(){
 // phone's REAL installed apps (real icons), tapping one opens the real app, recents are the
 // phone's own, and Delete uninstalls.
 const NATIVE = (typeof window !== 'undefined') && !!window.StoryNative;
+// Pages in the Android app: tell the app when a text box is being typed in, so the keyboard shows above the Pages.
+if(NATIVE && window.StoryNative.setTyping && !/[?&]s3=1/.test(location.search)){
+  const editable = el=>!!el && (el.tagName==='INPUT' || el.tagName==='TEXTAREA' || el.isContentEditable);
+  document.addEventListener('focusin', e=>{ if(editable(e.target)) try{ window.StoryNative.setTyping(true); }catch(err){} }, true);
+}
 function appIconHTML(a){
   if(a && a.iconData) return `<img src="data:image/png;base64,${a.iconData}" alt="" style="width:100%;height:100%;object-fit:contain;border-radius:10px;">`;
   return a ? a.icon : '';
@@ -9741,31 +9746,27 @@ function notePageSwipeGo(idx){
 // are meant to scroll (Community, Notes) are left alone via NO_FIT_SCREENS.
 const NO_FIT_SCREENS = new Set(['notes-canvas','scratch-draw']);
 const FIT_MIN_SCALE = 0.5;
-function fitPageToScreen(area, el){
+// Each page's fitted zoom is remembered (per page and screen size), so drawing a page again --
+// every swipe, every live price tick -- applies it in one layout pass instead of re-measuring
+// six times. A remembered zoom is only used when one check shows it still fits exactly.
+const FIT_CACHE = {};
+function fitPageToScreen(area, el, pageKey){
   if(!area) return;
   el = el || area.firstElementChild;
-  if(!el || NO_FIT_SCREENS.has(state.current)) return;
+  const page = pageKey || state.current;
+  if(!el || NO_FIT_SCREENS.has(page)) return;
   if(el.id === 'page-swipe-track') return;
-  el.style.zoom = '';
   const topBarEl = el.querySelector(':scope > .page-top');
-  if(topBarEl) topBarEl.style.zoom = '';
-  area.style.paddingBottom = '';
-  const dock = document.querySelector('.wallet-float-dock');
-  const areaRect = area.getBoundingClientRect();
-  // Bottom limit: just above the Wallet page's floating Send/Receive dock if there is one,
-  // otherwise the bottom of the content area. The area's own bottom padding is dropped
-  // while fitting, so the page can use the whole screen instead of leaving a dead gap.
-  // The dock's "MONEY TRANSFER" pill sits above the dock's own box, so use the highest top
-  // of anything inside it, not just the dock element.
-  let dockTop = Infinity;
-  if(dock){
-    dockTop = dock.getBoundingClientRect().top;
-    dock.querySelectorAll('*').forEach(n=>{ const t = n.getBoundingClientRect().top; if(t > 0 && t < dockTop) dockTop = t; });
-  }
-  const limit = (dock ? dockTop : areaRect.bottom) - 6;
-  // Zoom doesn't shrink everything linearly (width-driven things like the card's aspect-ratio
-  // get TALLER as the page is zoomed out and its box widens), so: one computed guess from the
-  // natural size, then a few corrective passes that re-measure where the content really ends.
+  const frame = area.closest('.phone-screen, .laptop-screen') || document;
+  const dock = frame.querySelector('.wallet-float-dock');
+  const key = page + '|' + area.clientWidth + 'x' + area.clientHeight + '|' + (dock ? 1 : 0);
+  const applyZoom = z=>{
+    el.style.zoom = z === 1 ? '' : z.toFixed(4);
+    // Keep the header (back button, title, dots) at its natural size and position so it lines
+    // up exactly with the same row on every other page -- only the body below it scales.
+    if(topBarEl) topBarEl.style.zoom = z === 1 ? '' : (1 / z).toFixed(4);
+    area.style.paddingBottom = z === 1 ? '' : '0px';
+  };
   const measure = ()=>{
     const r = el.getBoundingClientRect();
     let cb = r.top;
@@ -9775,20 +9776,67 @@ function fitPageToScreen(area, el){
     });
     return { top: r.top, bottom: cb };
   };
+  const limitNow = ()=>{
+    // Bottom limit: just above the Wallet page's floating Send/Receive dock if there is one,
+    // otherwise the bottom of the content area. The dock's "MONEY TRANSFER" pill sits above the
+    // dock's own box, so use the highest top of anything inside it, not just the dock element.
+    let dockTop = Infinity;
+    if(dock){
+      dockTop = dock.getBoundingClientRect().top;
+      dock.querySelectorAll('*').forEach(n=>{ const t = n.getBoundingClientRect().top; if(t > 0 && t < dockTop) dockTop = t; });
+    }
+    return (dock ? dockTop : area.getBoundingClientRect().bottom) - 6;
+  };
+  const cached = FIT_CACHE[key];
+  if(cached){
+    applyZoom(cached.zoom);
+    const m = measure(), limit = limitNow();
+    // Same content height and same limit as when it was worked out = exactly what a fresh fit gives.
+    if(Math.abs(limit - cached.limit) <= 1 && Math.abs(m.bottom - cached.bottom) <= 1) return;
+  }
+  applyZoom(1);
+  const limit = limitNow();
+  // Zoom doesn't shrink everything linearly (width-driven things like the card's aspect-ratio
+  // get TALLER as the page is zoomed out and its box widens), so: one computed guess from the
+  // natural size, then a few corrective passes that re-measure where the content really ends.
   let m = measure();
-  if(m.bottom <= limit) return;
+  if(m.bottom <= limit){ FIT_CACHE[key] = { zoom:1, limit, bottom:m.bottom }; return; }
   area.style.paddingBottom = '0px';
   let zoom = 1;
   for(let i=0; i<6 && m.bottom > limit + 1 && zoom > FIT_MIN_SCALE; i++){
-    const next = Math.max(FIT_MIN_SCALE, zoom * Math.min(0.98, (limit - m.top) / (m.bottom - m.top)));
-    el.style.zoom = next.toFixed(4);
-    // Keep the header (back button, title, dots) at its natural size and position so it lines
-    // up exactly with the same row on every other page -- only the body below it scales.
-    if(topBarEl) topBarEl.style.zoom = (1 / next).toFixed(4);
-    zoom = next;
+    zoom = Math.max(FIT_MIN_SCALE, zoom * Math.min(0.98, (limit - m.top) / (m.bottom - m.top)));
+    applyZoom(zoom);
     m = measure();
   }
+  FIT_CACHE[key] = { zoom, limit, bottom:m.bottom };
 }
+
+// Works out every swipe page's fit ahead of time, off screen, so even the first swipe to a page
+// doesn't stall while it's measured.
+function prewarmPageFits(){
+  if(state.device !== 'phone') return;
+  const live = document.getElementById('device-wrap');
+  if(!live) return;
+  const r = live.getBoundingClientRect();
+  const saved = state.current;
+  PAGES.forEach(pg=>{
+    if(pg === saved) return;
+    const host = document.createElement('div');
+    host.className = 'device-wrap';
+    host.setAttribute('aria-hidden', 'true');
+    host.style.cssText = 'position:fixed;left:0;top:0;width:' + r.width + 'px;height:' + r.height + 'px;visibility:hidden;pointer-events:none;z-index:-1;';
+    let frameHTML = '', contentHTML = '';
+    try{ state.current = pg; frameHTML = buildPhone(); contentHTML = renderScreenContent(); }
+    finally{ state.current = saved; }
+    host.innerHTML = frameHTML;
+    document.body.appendChild(host);
+    const area = host.querySelector('#content-area');
+    if(area){ area.innerHTML = contentHTML; try{ fitPageToScreen(area, null, pg); }catch(e){} }
+    host.remove();
+  });
+}
+setTimeout(()=>{ try{ prewarmPageFits(); }catch(e){} }, 1200);
+window.addEventListener('resize', ()=>{ setTimeout(()=>{ try{ prewarmPageFits(); }catch(e){} }, 400); });
 
 let pageSwipeAnimating = false;
 let appMenuOpenedAt = 0;
@@ -10451,7 +10499,7 @@ document.addEventListener('pointerup', endRecentDrag, true);
 document.addEventListener('pointercancel', endRecentDrag, true);
 
 setInterval(()=>{
-  if(state.current !== 'trading') return;
+  if(state.current !== 'trading' || pageSwipeAnimating) return;
   const active = document.activeElement;
   if(active && (active.tagName === 'INPUT')) return;
   if(!state.positions.length) return;
@@ -10472,7 +10520,7 @@ setInterval(()=>{
 // periodically re-renders so a red/green amount actually flips to white live, without
 // needing some other interaction to happen to trigger it first.
 setInterval(()=>{
-  if(state.current !== 'wallet') return;
+  if(state.current !== 'wallet' || pageSwipeAnimating) return;
   const active = document.activeElement;
   if(active && (active.tagName === 'INPUT')) return;
   renderDevice();

@@ -25,6 +25,7 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         fun closeDialpad()
         fun setDialSize(w: Int, h: Int)
         fun setBarWidth(w: Double)
+        fun setTyping(on: Boolean)
     }
 
     /** The phone's real launchable apps, with their real icons. */
@@ -70,6 +71,10 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
     /** "Apps" in STORY's Apps | Pages switch: back to the app you were on (or the home screen), untouched. */
     @JavascriptInterface
     fun showApps() { host.hidePanel() }
+
+    /** The Pages report when a text box is being typed in (so the keyboard can show above them). */
+    @JavascriptInterface
+    fun setTyping(on: Boolean) { if (!station3) host.setTyping(on) }
 
     @JavascriptInterface
     fun openRecents() {

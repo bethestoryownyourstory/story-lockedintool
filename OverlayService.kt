@@ -124,7 +124,7 @@ class OverlayService : Service(), StoryBridge.Host {
         runCatching { unregisterReceiver(unlocked) }
         runCatching { unregisterReceiver(screenOff) }
         ui.removeCallbacks(aodSwap)
-        bar?.let { runCatching { wm.removeView(it) } }
+        bar?.let { runCatching { (barWm ?: wm).removeView(it) } }
         running = false
         super.onDestroy()
     }
@@ -266,16 +266,18 @@ class OverlayService : Service(), StoryBridge.Host {
     // ---- The STORY bar: the one bottom line ----
     @SuppressLint("ClickableViewAccessibility")
     private fun addBar() {
-        bar?.let { runCatching { wm.removeView(it) } }
+        bar?.let { runCatching { (barWm ?: wm).removeView(it) } }
         val hasLine = phoneHasGestureLine()
         val w = (150 * dp).toInt(); val h = (26 * dp).toInt()
         val touch = ViewConfiguration.get(this).scaledTouchSlop
-        val v: View = if (hasLine) View(this) else FrameLayout(this).apply {
-            // Phones with 3-button navigation have no gesture line, so draw one.
-            addView(View(context).apply {
-                background = GradientDrawable().apply { cornerRadius = 3 * dp; setColor(Color.parseColor("#B3FFFFFF")) }
-            }, FrameLayout.LayoutParams((110 * dp).toInt(), (5 * dp).toInt(), Gravity.CENTER))
+        // STORY's own line. Phones with 3-button navigation have no gesture line, so it always shows;
+        // on gesture phones it shows over the full-screen Pages (which cover the phone's own line).
+        val line = View(this).apply {
+            background = GradientDrawable().apply { cornerRadius = 3 * dp; setColor(Color.parseColor("#B3FFFFFF")) }
         }
+        val v: View = FrameLayout(this).apply { addView(line, FrameLayout.LayoutParams((110 * dp).toInt(), (5 * dp).toInt(), Gravity.CENTER)) }
+        barLine = line; barHasLine = hasLine
+        updateBarLine()
         var downT = 0L; var downY = 0f; var downX = 0f; var moved = false; var held = false
         v.setOnTouchListener { _, e ->
             when (e.action) {
@@ -299,8 +301,13 @@ class OverlayService : Service(), StoryBridge.Host {
         }
         bar = v
         val bottom = if (hasLine) 0 else navBarHeightPx() + (6 * dp).toInt()
-        wm.addView(v, overlayParams(w, h, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL, 0, bottom))
+        barWm = layerWm
+        layerWm.addView(v, overlayParams(w, h, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL, 0, bottom).also { it.type = layerType })
     }
+    private var barWm: WindowManager? = null
+    private var barLine: View? = null
+    private var barHasLine = false
+    private fun updateBarLine() { barLine?.visibility = if (!barHasLine || pagesPane?.shown == true) View.VISIBLE else View.INVISIBLE }
 
     // ---- Apps | Pages switch ----
     private fun showPicker() {
@@ -317,15 +324,16 @@ class OverlayService : Service(), StoryBridge.Host {
         row.addView(word("Apps") { hidePanel() })
         row.addView(TextView(this).apply { text = "|"; setTextColor(Color.parseColor("#66FFFFFF")); textSize = 18f })
         row.addView(word("Pages") { showPanel(station3Only = false) })  // the only way into STORY itself
-        picker = row
-        wm.addView(row, overlayParams(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL, 0, (64 * dp).toInt() + (if (phoneHasGestureLine()) 0 else navBarHeightPx())))
+        picker = row; pickerWm = layerWm
+        layerWm.addView(row, overlayParams(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL, 0, (64 * dp).toInt() + (if (phoneHasGestureLine()) 0 else navBarHeightPx())).also { it.type = layerType })
         ui.postDelayed({ hidePicker() }, 4000)
     }
 
-    private fun hidePicker() { picker?.let { runCatching { wm.removeView(it) } }; picker = null }
+    private var pickerWm: WindowManager? = null
+    private fun hidePicker() { picker?.let { runCatching { (pickerWm ?: wm).removeView(it) } }; picker = null }
 
     // ---- STORY panes (built once, kept warm, so they open instantly) ----
-    private class Pane(val frame: FrameLayout, val web: WebView, val lp: WindowManager.LayoutParams, val small: Boolean, val wm: WindowManager, val dial: Boolean = false) {
+    private class Pane(val frame: FrameLayout, val web: WebView, val lp: WindowManager.LayoutParams, val small: Boolean, var wm: WindowManager, val dial: Boolean = false) {
         var shown = false; var loadedAt = System.currentTimeMillis(); var stale = false
         // Station 3 only: true while its page (re)loads -- it stays invisible until it's drawn, never a white box.
         var loading = true
@@ -420,15 +428,18 @@ class OverlayService : Service(), StoryBridge.Host {
                 gravity = Gravity.BOTTOM or Gravity.END; x = -(10 * dp).toInt(); y = -(10 * dp).toInt()
             }
         else
-            WindowManager.LayoutParams(-1, -1, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, flagsFor(false, false), PixelFormat.TRANSLUCENT).apply { gravity = Gravity.TOP or Gravity.START }
-        if (!small) { frame.setBackgroundColor(Color.BLACK); frame.setPadding(0, statusBarHeightPx(), 0, 0) }  // black continues behind the status bar; pages start below it
+            // Full screen: over the status bar too. On 3-button phones it stops above the buttons so they keep working.
+            WindowManager.LayoutParams(-1, if (phoneHasGestureLine()) -1 else realHeightPx() - navBarHeightPx(), WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, flagsFor(false, false), PixelFormat.TRANSLUCENT).apply { gravity = Gravity.TOP or Gravity.START }
+        if (!small) frame.setBackgroundColor(Color.BLACK)
         // Hidden from the start, and fully see-through to Android too: on Android 12+ an untouchable
         // window that isn't see-through still swallows touches meant for the apps underneath
         // ("isn't optimised for the latest version of Android. Screen touches may be delayed...").
         lp.alpha = 0f
         pinToScreen(lp)  // Station 3's window sits exactly on the corner, like the button
-        val paneWm = if (small) layerWm else wm
-        if (small) lp.type = layerType
+        // Everything sits in STORY's top layer (above the status bar); the Pages are built first, so
+        // Station 3's windows always stay above them.
+        val paneWm = layerWm
+        lp.type = layerType
         val p = Pane(frame, wv, lp, small, paneWm, dial)
         paneRef = p
         paneWm.addView(frame, lp)
@@ -447,8 +458,8 @@ class OverlayService : Service(), StoryBridge.Host {
 
     private fun warmUp() {
         val fresh = s3Pane == null || dialPane == null
+        if (pagesPane == null) pagesPane = buildPane(false)  // first, so Station 3 stays above the Pages
         if (s3Pane == null) { addBarBg(); s3Pane = buildPane(true) }  // the white goes in first, so it sits under Station 3's page
-        if (pagesPane == null) pagesPane = buildPane(false)
         if (dialPane == null) dialPane = buildPane(true, dial = true)
         if (fresh) raiseBubble()  // done while Station 3 is still hidden, so nothing visibly changes later
         addBar()
@@ -465,7 +476,7 @@ class OverlayService : Service(), StoryBridge.Host {
         runCatching { p.wm.updateViewLayout(p.frame, p.lp) }
         if (p === s3Pane) syncBarBg()
         if (shown && !p.small) p.web.requestFocus()
-        if (p === pagesPane) quietApps(shown)
+        if (p === pagesPane) { quietApps(shown); updateBarLine(); if (!shown && pagesTyping) pagesBackToTop() }
     }
 
     // While Pages is open, STORY silences the app underneath itself (a TikTok video, YouTube...), like the
@@ -524,12 +535,7 @@ class OverlayService : Service(), StoryBridge.Host {
             val p = pagesPane!!
             p.web.evaluateJavascript("window.storyShow&&window.storyShow(null,false)", null)
             if (!p.shown) setShown(p, true)
-            // Without STORY system actions Station 3 shares the Pages' layer: keep all of it above the Pages.
-            if (s3Pane?.wm === p.wm) {
-                barBg?.let { v -> barBgLp?.let { lp -> runCatching { (barBgWm ?: wm).removeView(v); (barBgWm ?: wm).addView(v, lp) } } }
-                for (q in listOfNotNull(s3Pane, dialPane)) runCatching { q.wm.removeView(q.frame); q.wm.addView(q.frame, q.lp) }
-                raiseBubble()
-            }
+
         }
         updateBubble()
         addBar() // re-add last so the STORY bar stays on top of everything, including the pages
@@ -659,7 +665,7 @@ class OverlayService : Service(), StoryBridge.Host {
             ui.removeCallbacks(resumeAfterInstall)
             hidePicker()
             pagesPane?.takeIf { it.shown }?.let { hideOne(it) }; updateBubble()
-            bar?.let { runCatching { wm.removeView(it) } }; bar = null
+            bar?.let { runCatching { (barWm ?: wm).removeView(it) } }; bar = null
             ui.postDelayed(resumeAfterInstall, 90_000)
         }
     }
@@ -680,6 +686,34 @@ class OverlayService : Service(), StoryBridge.Host {
         val d = dialPane ?: return@post
         if (d.shown) hideOne(d) else if (s3Pane?.shown == true) setShown(d, true)
     } }
+
+    // Android draws the keyboard below STORY's top layer, so while something is being typed in the
+    // Pages they drop to the normal overlay layer (keyboard on top); they go back up when the Pages close.
+    private var pagesTyping = false
+    override fun setTyping(on: Boolean) { ui.post {
+        val p = pagesPane ?: return@post
+        if (!on || pagesTyping || !p.shown || p.wm === wm) return@post
+        runCatching { p.wm.removeView(p.frame) }
+        p.lp.type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY; p.wm = wm
+        runCatching { wm.addView(p.frame, p.lp) }
+        pagesTyping = true
+        p.web.requestFocus()
+        ui.postDelayed({ runCatching { getSystemService(android.view.inputmethod.InputMethodManager::class.java).showSoftInput(p.web, 0) } }, 120)
+    } }
+
+    /** The Pages (hidden now) go back to the top layer, with Station 3, the bar and the line above them. */
+    private fun pagesBackToTop() {
+        val p = pagesPane ?: return
+        pagesTyping = false
+        if (p.wm === layerWm) return
+        runCatching { p.wm.removeView(p.frame) }
+        p.lp.type = layerType; p.wm = layerWm
+        runCatching { layerWm.addView(p.frame, p.lp) }
+        barBg?.let { v -> barBgLp?.let { lp -> runCatching { (barBgWm ?: wm).removeView(v); (barBgWm ?: wm).addView(v, lp) } } }
+        for (q in listOfNotNull(s3Pane, dialPane)) runCatching { q.wm.removeView(q.frame); q.wm.addView(q.frame, q.lp) }
+        raiseBubble()
+        addBar()
+    }
 
     override fun closeDialpad() { ui.post { dialPane?.takeIf { it.shown }?.let { hideOne(it) } } }
 
