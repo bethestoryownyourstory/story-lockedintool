@@ -1599,8 +1599,11 @@
   body.s3-only::before, body.s3-only::after{ display:none !important; }
   /* Over the phone's apps: no Rows / Page Styles buttons, and the arrow rounds its own top. */
   body.s3-only .station3-quick-row, body.s3-only .station3-connector, body.s3-only .station3-connector-2{ display:none !important; }
-  /* The open arrow's size and rounding are set in positionStation3(): over other apps it becomes the
-     rounded right end of ONE even pill with the bar (or the dial pad), so there's no step between them. */
+  /* The open arrow's size is set in positionStation3(): over other apps it becomes the right end of
+     ONE even corner piece with the bar (or the dial pad), so there's no step between them. */
+  /* Tight in the corner: the bar / dial pad round only their top-left, like the corner button. */
+  body.s3-only .station3-bar-card{ border-radius:36px 0 0 0 !important; }
+  body.s3-only .station3-dialpad-card{ border-radius:20px 0 0 0 !important; }
   /* No spin animation over other apps: a half-turned tall arrow measures wrong while it lines up. */
   body.s3-only .station3-corner-arrow{ transition:background 0.15s ease !important; }
   .station3-region{ position:absolute; inset:0; pointer-events:none; z-index:30; }
@@ -6150,10 +6153,10 @@ function positionStation3(){
   const screenEl = region.closest('.phone-screen, .laptop-screen');
   if(!screenEl) return;
   const rect = screenEl.getBoundingClientRect();
-  // Over other apps (Android overlay) Station 3 sits a little in from the screen edges, so the
-  // phone's rounded screen corner and bottom edge never cut it off.
+  // Over other apps (Android overlay) the app pulls the window 10px past the screen edges, so with
+  // this 10px gap Station 3 sits tight in the bottom-right corner, like the corner button.
   const s3Only = document.body.classList.contains('s3-only');
-  const gap = s3Only ? 20 : 10;
+  const gap = 10;
   const arrowH = 40;
   const vw = window.innerWidth, vh = window.innerHeight;
   const rightPx = Math.max(gap, vw - rect.right + gap);
@@ -6162,16 +6165,20 @@ function positionStation3(){
   const sideCard = region.querySelector('.station3-bar-card, .station3-dialpad-card');
   if(!arrow) return;
   if(s3Only){
-    // Open: the arrow is as tall as the bar/dial pad beside it and rounded on its outer side, so the
-    // two read as one even pill. The arrow is rotated 180deg, so its DOM left corners are the
-    // visual right corners.
+    // Open: the arrow is as tall as the bar/dial pad beside it and square, so together they make one
+    // even corner piece: square where it meets the screen edges, rounded only on its top-left.
     const open = arrow.classList.contains('station3-corner-arrow-open') && sideCard;
-    const dial = open && sideCard.classList.contains('station3-dialpad-card');
-    const h = open ? sideCard.offsetHeight + 'px' : '';
+    const h = open ? Math.ceil(sideCard.getBoundingClientRect().height) + 'px' : '';
     // A new height only settles after this pass, so line everything up once more next frame.
     if(arrow.style.height !== h){ arrow.style.height = h; requestAnimationFrame(() => positionStation3()); }
     arrow.style.width = open ? '46px' : '';
-    arrow.style.borderRadius = open ? (dial ? '20px 0 0 20px' : '999px 0 0 999px') : '';
+    arrow.style.borderRadius = open ? '0' : '';
+    // The bar / dial pad can still grow a little after it first draws (fonts etc.): follow it.
+    if(window.ResizeObserver){
+      window.__s3CardWatch = window.__s3CardWatch || new ResizeObserver(() => requestAnimationFrame(() => positionStation3()));
+      window.__s3CardWatch.disconnect();
+      if(open) window.__s3CardWatch.observe(sideCard);
+    }
   }
 
   if(REAL_DEVICE){
