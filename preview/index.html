@@ -1603,7 +1603,7 @@
   /* Tight in the corner: the bar / dial pad round only their top-left, like the corner button. */
   /* The bar is exactly as tall as the 40px corner button, so it just extends it to the left. */
   body.s3-only .station3-bar-card{ border-radius:20px 0 0 0 !important; height:40px; padding:0 46px 0 10px; box-sizing:border-box; display:flex; align-items:center; }
-  body.s3-only .station3-dialpad-card{ padding-right:54px !important; }
+  body.s3-only .station3-dialpad-card{ border-radius:20px !important; }
   /* The corner button looks exactly the same open or closed -- the same black button the app shows
      when Station 3 is closed (#F2111111, thin light outline, rounded top-left, white up-left arrow). */
   body.s3-only .station3-corner-arrow, body.s3-only .station3-corner-arrow-open{
@@ -1617,7 +1617,6 @@
   body.s3-only .station3-btn{ width:32px; height:32px; }
   body.s3-only .station3-btn-chevron{ width:26px; height:26px; }
   body.s3-only .station3-btn-plus{ width:34px; height:34px; box-shadow:none; }
-  body.s3-only .station3-dialpad-card{ border-radius:20px 0 0 0 !important; }
   /* Over other apps: no animations at all -- straight, instant open and close. */
   body.s3-only .station3-region, body.s3-only .station3-region *{ transition:none !important; animation:none !important; }
   .station3-region{ position:absolute; inset:0; pointer-events:none; z-index:30; }
@@ -6122,6 +6121,14 @@ function station3DialpadHTML(){
 // and the arrow stays at the true bottom-right corner. positionStation3() snaps all three
 // flush against each other with zero gap so together they read as one merged white button.
 function station3SideCardHTML(){
+  // Over other apps (Android overlay): the bar always stays, and the dial pad opens as its own card
+  // in the middle of the screen above it (placed and animated in positionStation3()).
+  if(document.body.classList.contains('s3-only')){
+    return `
+    <div class="station3-bar-card">${station3BarHTML()}</div>
+    ${state.station3DialpadOpen ? `<div class="station3-dialpad-card station3-dialpad-float">${station3DialpadHTML()}</div>` : ''}
+  `;
+  }
   return `
     <div class="${state.station3DialpadOpen ? 'station3-dialpad-card' : 'station3-bar-card'}">
       ${state.station3DialpadOpen ? station3DialpadHTML() : station3BarHTML()}
@@ -6301,6 +6308,32 @@ function positionStation3(){
     // at its right end, unchanged.
     sideCard.style.right = (s3Only ? vw - arrowRect.right : vw - arrowRect.left - OVERLAP) + 'px';
     sideCard.style.bottom = (vh - arrowRect.bottom) + 'px';
+  }
+  // Over other apps: the dial pad sits in the middle of the screen, just above Station 3, and grows
+  // out of the dial pad button when it opens. Station 3 itself stays exactly where it is.
+  if(s3Only){
+    const pad = region.querySelector('.station3-dialpad-float');
+    if(pad){
+      // The app's window reaches 10px past the right screen edge, so the screen's middle is (vw - 10) / 2.
+      const w = pad.offsetWidth;
+      pad.style.right = 'auto'; pad.style.top = 'auto';
+      pad.style.left = Math.max(8, ((vw - 10) - w) / 2) + 'px';
+      pad.style.bottom = (vh - arrowRect.top + 12) + 'px';
+      if(!window.__s3DialShown){
+        const chev = region.querySelector('.station3-btn-chevron');
+        if(chev && pad.animate){
+          const c = chev.getBoundingClientRect(), r = pad.getBoundingClientRect();
+          const origin = (c.left + c.width / 2 - r.left) + 'px ' + (c.top + c.height / 2 - r.top) + 'px';
+          const a = pad.animate([
+            { transform: 'scale(0.06)', opacity: 0, transformOrigin: origin },
+            { transform: 'scale(1)', opacity: 1, transformOrigin: origin }
+          ], { duration: 220, easing: 'cubic-bezier(.2,.8,.2,1)' });
+          // Tell the app the dial pad has reached full size, so its window fits it.
+          a.onfinish = () => pad.style.setProperty('--s3-open', '1');
+        }
+      }
+    }
+    window.__s3DialShown = !!pad;
   }
   // The white fill plugging the lifted gap: spans from the quick-row's real bottom edge
   // down to the arrow's real top edge, same right edge as the arrow, so it always fits the
