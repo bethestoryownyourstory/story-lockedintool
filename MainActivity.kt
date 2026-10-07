@@ -53,6 +53,13 @@ class MainActivity : Activity() {
         col.addView(btn("Stop STORY") { getSharedPreferences("story", MODE_PRIVATE).edit().putBoolean("enabled", false).apply(); stopService(Intent(this, OverlayService::class.java)) })
         // So the phone never shuts STORY down to save battery, and lets it start by itself after a restart.
         col.addView(btn("4. Keep STORY always on") { keepAlwaysOn() })
+        // STORY's Always On Display (switch Samsung's own Always On Display off when using this).
+        val prefs = getSharedPreferences("story", MODE_PRIVATE)
+        fun aodLabel() = if (prefs.getBoolean("aod", false)) "Always On Display: ON" else "Always On Display: off"
+        col.addView(Button(this).apply {
+            text = aodLabel(); isAllCaps = false
+            setOnClickListener { prefs.edit().putBoolean("aod", !prefs.getBoolean("aod", false)).apply(); text = aodLabel() }
+        })
         // Updates: what's happening, at a glance.
         updateLine = title("", 14f).apply { setTextColor(Color.parseColor("#FFCCCCCC")); setPadding(0, pad, 0, pad / 2) }
         col.addView(updateLine)

@@ -63,7 +63,20 @@ class OverlayService : Service(), StoryBridge.Host {
     }
     // Every unlock is also a good moment to pick up a new STORY version.
     private val unlocked = object : android.content.BroadcastReceiver() {
-        override fun onReceive(c: Context, i: Intent) { Updater.check(this@OverlayService); checkScreens() }
+        override fun onReceive(c: Context, i: Intent) {
+            AodActivity.instance?.finish()  // unlocked (e.g. fingerprint) while the Always On Display was up
+            Updater.check(this@OverlayService); checkScreens()
+        }
+    }
+    // Always On Display: when the screen goes off, STORY's dim always-on screen comes up instead
+    // (if switched on). Pressing power while it's up turns the screen truly off.
+    private val screenOff = object : android.content.BroadcastReceiver() {
+        override fun onReceive(c: Context, i: Intent) {
+            val aod = AodActivity.instance
+            if (aod != null) { aod.finish(); return }
+            if (!AodActivity.enabled(c)) return
+            runCatching { startActivity(Intent(c, AodActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)) }
+        }
     }
     // Which version of the screens (live or Test) the panes have loaded; see checkScreens().
     @Volatile private var screensSeen: String? = null
@@ -85,6 +98,8 @@ class OverlayService : Service(), StoryBridge.Host {
         Updater.schedule(this)              // and keep checking every 15 minutes even if STORY is off
         val unlockFilter = android.content.IntentFilter(Intent.ACTION_USER_PRESENT)
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(unlocked, unlockFilter, Context.RECEIVER_NOT_EXPORTED) else registerReceiver(unlocked, unlockFilter)
+        val offFilter = android.content.IntentFilter(Intent.ACTION_SCREEN_OFF)
+        if (Build.VERSION.SDK_INT >= 33) registerReceiver(screenOff, offFilter, Context.RECEIVER_NOT_EXPORTED) else registerReceiver(screenOff, offFilter)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -99,6 +114,8 @@ class OverlayService : Service(), StoryBridge.Host {
         instance = null
         ui.removeCallbacks(updateLoop); ui.removeCallbacks(resumeAfterInstall)
         runCatching { unregisterReceiver(unlocked) }
+        runCatching { unregisterReceiver(screenOff) }
+        ui.removeCallbacks(aodSwap)
         bar?.let { runCatching { wm.removeView(it) } }
         running = false
         super.onDestroy()
@@ -530,6 +547,40 @@ class OverlayService : Service(), StoryBridge.Host {
             getSharedPreferences("story", MODE_PRIVATE).edit().putInt("bar_w", px).apply()
             runCatching { (barBgWm ?: wm).updateViewLayout(v, lp) }
         }
+    }
+
+    // ---- Always On Display burn-in protection ----
+    // While the always-on screen is up, a fine black checkerboard (every other pixel) lies over Station 3's
+    // windows, and every minute it swaps to the other half of the pixels. So each pixel is lit only half
+    // the time and nothing stays on one spot -- while Station 3 itself never moves a pixel.
+    private var aodOn = false
+    private var aodPhase = false
+    private val aodSwap = object : Runnable { override fun run() { aodPhase = !aodPhase; applyAodMask(); ui.postDelayed(this, 60_000) } }
+
+    fun setAod(on: Boolean) {
+        ui.post {
+            aodOn = on
+            ui.removeCallbacks(aodSwap)
+            if (on) ui.postDelayed(aodSwap, 60_000)
+            applyAodMask()
+        }
+    }
+
+    private fun checker(phase: Boolean): android.graphics.drawable.Drawable {
+        val bmp = android.graphics.Bitmap.createBitmap(2, 2, android.graphics.Bitmap.Config.ARGB_8888)
+        val on = Color.BLACK; val off = Color.TRANSPARENT
+        bmp.setPixel(0, 0, if (phase) on else off); bmp.setPixel(1, 1, if (phase) on else off)
+        bmp.setPixel(1, 0, if (phase) off else on); bmp.setPixel(0, 1, if (phase) off else on)
+        bmp.density = resources.displayMetrics.densityDpi  // one checker square = one screen pixel
+        return android.graphics.drawable.BitmapDrawable(resources, bmp).apply {
+            setTileModeXY(android.graphics.Shader.TileMode.REPEAT, android.graphics.Shader.TileMode.REPEAT)
+            paint.isFilterBitmap = false; paint.isAntiAlias = false
+        }
+    }
+
+    private fun applyAodMask() {
+        val views = listOfNotNull(bubble, barBg, s3Pane?.frame, dialPane?.frame)
+        for (v in views) v.foreground = if (aodOn) checker(aodPhase) else null
     }
 
     private fun destroyPanes() {

@@ -39,6 +39,18 @@
             android:taskAffinity=""
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
+        <!-- STORY's Always On Display: a dim always-on screen with Station 3 when the screen would turn off. -->
+        <activity
+            android:name=".AodActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleInstance"
+            android:taskAffinity=""
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:screenOrientation="portrait"
+            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
+
         <!-- Restarts STORY after a phone restart or an update. -->
         <receiver android:name=".BootReceiver" android:exported="true">
             <intent-filter>
