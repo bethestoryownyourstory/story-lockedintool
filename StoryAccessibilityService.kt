@@ -48,8 +48,20 @@ class StoryAccessibilityService : AccessibilityService() {
         private val mediaSessions = ConcurrentHashMap<String, MediaSession.Token>()
 
         /** Music: something playing from an app that isn't the one on screen (Spotify, YouTube Music...). */
-        fun backgroundMusicPlaying(c: Context): Boolean = mediaSessions.entries.any { (pkg, token) ->
-            pkg != foregroundPkg && runCatching { MediaController(c, token).playbackState?.state == PlaybackState.STATE_PLAYING }.getOrDefault(false)
+        fun backgroundMusicPlaying(c: Context): Boolean {
+            // With STORY's music access: every player on the phone, including ones started before STORY.
+            val all = runCatching {
+                c.getSystemService(android.media.session.MediaSessionManager::class.java)
+                    .getActiveSessions(ComponentName(c, StoryMediaListener::class.java))
+            }.getOrNull()
+            if (all != null && all.any { it.packageName != foregroundPkg && it.playbackState?.state == PlaybackState.STATE_PLAYING }) return true
+            // Without it: the players STORY has seen through their notifications.
+            return mediaSessions.entries.any { (pkg, token) ->
+                pkg != foregroundPkg && runCatching { MediaController(c, token).playbackState?.state == PlaybackState.STATE_PLAYING }.getOrDefault(false)
+            }
         }
+        fun hasMusicAccess(c: Context) = runCatching {
+            c.getSystemService(android.media.session.MediaSessionManager::class.java).getActiveSessions(ComponentName(c, StoryMediaListener::class.java)); true
+        }.getOrDefault(false)
     }
 }

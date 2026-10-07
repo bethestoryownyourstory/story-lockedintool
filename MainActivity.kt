@@ -44,6 +44,13 @@ class MainActivity : Activity() {
         col.addView(btn("Allow STORY to update itself (one time)") {
             startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName")))
         })
+        // So music keeps playing when the Pages open (STORY needs to see which players are playing).
+        col.addView(btn("Keep music playing on the Pages (one time)") {
+            val i = if (Build.VERSION.SDK_INT >= 30) Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS)
+                .putExtra(Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME, android.content.ComponentName(this, StoryMediaListener::class.java).flattenToString())
+                else Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+            runCatching { startActivity(i) }.onFailure { runCatching { startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) } }
+        })
         col.addView(btn("3. Start STORY") {
             if (!Settings.canDrawOverlays(this)) { startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))); return@btn }
             if (Build.VERSION.SDK_INT >= 33) requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 1)
