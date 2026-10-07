@@ -155,6 +155,7 @@ class OverlayService : Service(), StoryBridge.Host {
         val s3WasOpen = s3Pane?.shown == true
         removePanelNow()
         bubble?.let { runCatching { (bubbleWm ?: wm).removeView(it) } }; bubble = null
+        removeBarBg()
         s3Pane?.let { runCatching { it.wm.removeView(it.frame) }; it.web.destroy() }; s3Pane = null
         pagesPane?.let { runCatching { it.wm.removeView(it.frame) }; it.web.destroy() }; pagesPane = null
         dialPane?.let { runCatching { it.wm.removeView(it.frame) }; it.web.destroy() }; dialPane = null
@@ -324,7 +325,7 @@ class OverlayService : Service(), StoryBridge.Host {
         var paneRef: Pane? = null
         wv.webViewClient = object : WebViewClient() {
             override fun onPageStarted(v: WebView, url: String, favicon: android.graphics.Bitmap?) {
-                if (small) paneRef?.let { it.loading = true; it.frame.alpha = 0f }
+                if (small) paneRef?.let { it.loading = true; it.frame.alpha = 0f; syncBarBg() }
             }
             // Android sometimes shuts the page down to free memory, which leaves a blank white window:
             // build STORY's windows again instead (and don't let it take the app down).
@@ -347,12 +348,12 @@ class OverlayService : Service(), StoryBridge.Host {
             override fun onPageFinished(v: WebView, url: String) {
                 if (dial) {
                     v.evaluateJavascript("window.storyDialOnly&&window.storyDialOnly()", null); v.evaluateJavascript(DIAL_JS, null)
-                    ui.postDelayed({ paneRef?.let { it.loading = false; if (it.shown) it.frame.alpha = 1f } }, 200)
+                    ui.postDelayed({ paneRef?.let { it.loading = false; if (it.shown) it.frame.alpha = 1f }; syncBarBg() }, 200)
                 } else if (small) {
                     v.evaluateJavascript(exactGeometryJs(), null)
                     v.evaluateJavascript("window.storyStation3Only&&window.storyStation3Only()", null); v.evaluateJavascript(S3_JS, null)
                     // Show it again once Station 3 has actually drawn (a moment after the page is ready).
-                    ui.postDelayed({ paneRef?.let { it.loading = false; if (it.shown) it.frame.alpha = 1f } }, 200)
+                    ui.postDelayed({ paneRef?.let { it.loading = false; if (it.shown) it.frame.alpha = 1f }; syncBarBg() }, 200)
                 }
             }
         }
@@ -407,12 +408,12 @@ class OverlayService : Service(), StoryBridge.Host {
      */
     private fun exactGeometryJs(): String {
         val gap = (10 * dp).toInt() / dp; val btn = (40 * dp).toInt() / dp
-        return "window.__s3Gap=$gap;window.__s3Btn=$btn;"
+        return "window.__s3Gap=$gap;window.__s3Btn=$btn;document.documentElement.classList.add('s3-native-bar');"
     }
 
     private fun warmUp() {
         val fresh = s3Pane == null || dialPane == null
-        if (s3Pane == null) s3Pane = buildPane(true)
+        if (s3Pane == null) { addBarBg(); s3Pane = buildPane(true) }  // the white goes in first, so it sits under Station 3's page
         if (pagesPane == null) pagesPane = buildPane(false)
         if (dialPane == null) dialPane = buildPane(true, dial = true)
         if (fresh) raiseBubble()  // done while Station 3 is still hidden, so nothing visibly changes later
@@ -428,6 +429,7 @@ class OverlayService : Service(), StoryBridge.Host {
         if (p.small && shown) { p.lp.width = p.openW; p.lp.height = p.openH }
         p.frame.alpha = if (shown && !(p.small && p.loading)) 1f else 0f
         runCatching { p.wm.updateViewLayout(p.frame, p.lp) }
+        if (p === s3Pane) syncBarBg()
         if (shown && !p.small) p.web.requestFocus()
     }
 
@@ -479,7 +481,58 @@ class OverlayService : Service(), StoryBridge.Host {
         updateBubble()
     }
 
+    // ---- Station 3's white bar, drawn by the app with exactly the same pixel maths as the Station 3 button,
+    //      so its top and bottom match the button perfectly. The page draws only the icons on it. ----
+    private var barBg: View? = null
+    private var barBgLp: WindowManager.LayoutParams? = null
+    private var barBgWm: WindowManager? = null
+
+    private fun addBarBg() {
+        removeBarBg()
+        val v = View(this).apply {
+            background = GradientDrawable().apply {
+                cornerRadii = floatArrayOf(20 * dp, 20 * dp, 0f, 0f, 0f, 0f, 0f, 0f)  // like the button: rounded top-left
+                setColor(Color.WHITE)
+            }
+        }
+        val h = (40 * dp).toInt()  // the button's own height, same rounding
+        val lp = overlayParams(getSharedPreferences("story", MODE_PRIVATE).getInt("bar_w", (220 * dp).toInt()), h, Gravity.BOTTOM or Gravity.END, 0, 0).also {
+            it.type = layerType
+            it.flags = it.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+            it.alpha = 0f
+        }
+        v.visibility = View.INVISIBLE
+        barBg = v; barBgLp = lp; barBgWm = layerWm
+        runCatching { layerWm.addView(v, lp) }
+    }
+
+    private fun removeBarBg() {
+        barBg?.let { runCatching { (barBgWm ?: wm).removeView(it) } }
+        barBg = null; barBgLp = null
+    }
+
+    /** The white shows exactly while Station 3's page shows. */
+    private fun syncBarBg() {
+        val v = barBg ?: return; val lp = barBgLp ?: return
+        val on = s3Pane?.let { it.shown && !it.loading } == true
+        v.visibility = if (on) View.VISIBLE else View.INVISIBLE
+        val a = if (on) 1f else 0f
+        if (lp.alpha != a) { lp.alpha = a; runCatching { (barBgWm ?: wm).updateViewLayout(v, lp) } }
+    }
+
+    override fun setBarWidth(w: Double) {
+        ui.post {
+            val v = barBg ?: return@post; val lp = barBgLp ?: return@post
+            val px = Math.round(w * dp).toInt()
+            if (px <= 0 || lp.width == px) return@post
+            lp.width = px
+            getSharedPreferences("story", MODE_PRIVATE).edit().putInt("bar_w", px).apply()
+            runCatching { (barBgWm ?: wm).updateViewLayout(v, lp) }
+        }
+    }
+
     private fun destroyPanes() {
+        removeBarBg()
         for (p in listOfNotNull(s3Pane, pagesPane, dialPane)) { runCatching { p.wm.removeView(p.frame) }; p.web.destroy() }
         s3Pane = null; pagesPane = null; dialPane = null
     }
@@ -606,6 +659,8 @@ class OverlayService : Service(), StoryBridge.Host {
     var k = Math.ceil(vw - minL) + 'x' + Math.ceil(vh - minT);
     if(k === last) return; last = k;
     window.StoryNative.setStation3Size(Math.ceil(vw - minL), Math.ceil(vh - minT));
+    var bc = document.querySelector('.station3-region .station3-bar-card');
+    if(bc && window.StoryNative.setBarWidth) window.StoryNative.setBarWidth(bc.getBoundingClientRect().width);
   }
   var queued = false;
   function soon(){ if(queued) return; queued = true; requestAnimationFrame(function(){ queued = false; report(); }); }

@@ -24,6 +24,7 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         fun toggleDialpad()
         fun closeDialpad()
         fun setDialSize(w: Int, h: Int)
+        fun setBarWidth(w: Double)
     }
 
     /** The phone's real launchable apps, with their real icons. */
@@ -94,6 +95,10 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
     /** The X beside the dial pad. */
     @JavascriptInterface
     fun closeDialpad() { if (station3) host.closeDialpad() }
+
+    /** Station 3's page reports how wide its white bar is; the app draws that white itself, pixel-exact with the button. */
+    @JavascriptInterface
+    fun setBarWidth(w: Double) { if (station3 && !dial) host.setBarWidth(w) }
 
     /** The dial pad page reports its size once, so its window fits it before it's ever shown. */
     @JavascriptInterface
