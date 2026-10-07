@@ -9,34 +9,23 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
-import android.net.Uri
 import android.os.Bundle
-import android.provider.Settings
 import android.view.Gravity
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
 
 /**
- * "Update available" for Live users: Update now / Later. Once the update has waited 3 days
- * there is no Later any more -- the window can't be closed and STORY stays locked until it's updated.
+ * Users sign once: "Automatic updates - I agree". After that STORY updates itself, automatically,
+ * and never asks or reminds them again. Until they agree, a waiting update becomes required after
+ * 3 days (this window can't be closed then).
  */
 class UpdateActivity : Activity() {
-    private lateinit var status: TextView
     private var required = false
-    private var bar: android.widget.ProgressBar? = null
-    private val ui = android.os.Handler(android.os.Looper.getMainLooper())
-    // Loading bar: follows the download until the installer takes over.
-    private val follow = object : Runnable { override fun run() {
-        val pct = Updater.progress(this@UpdateActivity)
-        bar?.visibility = if (pct == null) android.view.View.GONE else android.view.View.VISIBLE
-        bar?.isIndeterminate = pct != null && pct < 0
-        if (pct != null && pct >= 0) { bar?.progress = pct; status.text = "Downloading the update… $pct%" }
-        ui.postDelayed(this, 300)
-    } }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (Release.agreedAuto(this) || Release.isOwner(this)) { finish(); return }
         required = Release.isRequired(this)
         setFinishOnTouchOutside(!required)
         val d = resources.displayMetrics.density
@@ -46,22 +35,19 @@ class UpdateActivity : Activity() {
             background = GradientDrawable().apply { cornerRadius = 20 * d; setColor(Color.parseColor("#FF151517")) }
         }
         fun text(t: String, size: Float, color: Int = Color.WHITE) = TextView(this).apply { text = t; textSize = size; setTextColor(color); setPadding(0, 0, 0, pad / 2) }
-        card.addView(text(if (required) "Update required" else "Update available", 22f))
+        card.addView(text("Automatic updates", 22f))
         card.addView(text(
-            if (required) "This STORY update has waited 3 days. Update now to keep using STORY."
-            else "A new version of STORY is ready.", 15f, Color.parseColor("#FFCCCCCC")))
-        status = text("", 13f, Color.parseColor("#FF8B8B92"))
-        card.addView(status)
-        bar = android.widget.ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply { max = 100; visibility = android.view.View.GONE }
-        card.addView(bar)
+            "STORY keeps itself up to date. Whenever a new version comes out, it installs by itself, " +
+            "automatically. You won't be asked or reminded again.", 15f, Color.parseColor("#FFCCCCCC")))
         val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.END }
-        if (!required) row.addView(Button(this).apply {
-            text = "Later"; isAllCaps = false
-            setOnClickListener { Release.later(this@UpdateActivity); finish() }
-        })
         row.addView(Button(this).apply {
-            text = "Update now"; isAllCaps = false
-            setOnClickListener { updateNow(this) }
+            text = "I agree"; isAllCaps = false
+            setOnClickListener {
+                Release.setAgreedAuto(this@UpdateActivity)
+                getSystemService(NotificationManager::class.java).cancel(NOTIFICATION)
+                Updater.check(applicationContext, force = true)  // the waiting update (if any) installs now
+                finish()
+            }
         })
         card.addView(row)
         setContentView(LinearLayout(this).apply {
@@ -69,26 +55,6 @@ class UpdateActivity : Activity() {
             addView(card, LinearLayout.LayoutParams(-1, -2))
             setOnClickListener { if (!required) finish() }
         })
-    }
-
-    private fun updateNow(b: Button) {
-        b.isEnabled = false; status.text = "Downloading the update…"
-        ui.post(follow)
-        Thread {
-            val err = Updater.installNow(applicationContext)
-            runOnUiThread {
-                ui.removeCallbacks(follow); bar?.visibility = android.view.View.GONE
-                b.isEnabled = true
-                when (err) {
-                    null -> status.text = "Installing… STORY restarts by itself when it's done."
-                    "allow" -> {
-                        status.text = "Allow STORY to update itself, then come back and tap Update now."
-                        startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName")))
-                    }
-                    else -> status.text = err
-                }
-            }
-        }.start()
     }
 
     // Back closes it only while the update isn't required yet.
@@ -99,7 +65,7 @@ class UpdateActivity : Activity() {
     companion object {
         const val NOTIFICATION = 3
 
-        /** A notification that stays until the update is installed; tapping it opens this window. */
+        /** Until the user agrees: a notification that opens the agreement. */
         fun notify(c: Context, required: Boolean) {
             val nm = c.getSystemService(NotificationManager::class.java)
             nm.createNotificationChannel(NotificationChannel("story_update", "STORY updates", NotificationManager.IMPORTANCE_HIGH))
@@ -107,7 +73,7 @@ class UpdateActivity : Activity() {
             val n = Notification.Builder(c, "story_update")
                 .setSmallIcon(android.R.drawable.stat_sys_download_done)
                 .setContentTitle(if (required) "STORY update required" else "STORY update available")
-                .setContentText("Tap to update")
+                .setContentText("Tap to turn on automatic updates")
                 .setContentIntent(open)
                 .setOngoing(required)
                 .setOnlyAlertOnce(true)

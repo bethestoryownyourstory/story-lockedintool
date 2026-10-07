@@ -55,10 +55,10 @@ class OverlayService : Service(), StoryBridge.Host {
     private var layerType = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
     private var bubbleWm: WindowManager? = null
     private val updateLoop = object : Runnable {
-        // Every minute while the screen is on: new app version? new screens? Nothing while the screen is off.
+        // Every 20 seconds while the screen is on: new app version? new screens? Nothing while the screen is off.
         override fun run() {
             if (getSystemService(android.os.PowerManager::class.java).isInteractive) { Updater.check(this@OverlayService); checkScreens() }
-            ui.postDelayed(this, 60_000L)
+            ui.postDelayed(this, 20_000L)
         }
     }
     // Every unlock is also a good moment to pick up a new STORY version.

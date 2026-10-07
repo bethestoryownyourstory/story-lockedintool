@@ -29,6 +29,10 @@ object Release {
     fun setOwner(ctx: Context, on: Boolean) { prefs(ctx).edit().putBoolean("owner", on).apply() }
     fun base(ctx: Context) = if (isOwner(ctx)) TEST_BASE else LIVE_BASE
 
+    /** The user signed "Automatic updates - I agree" once: updates install by themselves, never asked again. */
+    fun agreedAuto(ctx: Context) = prefs(ctx).getBoolean("auto_agreed", false)
+    fun setAgreedAuto(ctx: Context) { prefs(ctx).edit().putBoolean("auto_agreed", true).apply() }
+
     // ---- Live users: the pending update and its 3-day clock ----
     /** A newer Live version was found: start (or keep) the 3-day clock. */
     fun notePending(ctx: Context, version: Long) {

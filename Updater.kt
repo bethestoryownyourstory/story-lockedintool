@@ -84,7 +84,7 @@ object Updater {
 
     /** force = you opened STORY yourself: always ask again, even if an install prompt was just shown and missed. */
     fun check(ctx: Context, force: Boolean = false) {
-        if (busy || (!force && System.currentTimeMillis() - lastCheck < 30_000)) return
+        if (busy || (!force && System.currentTimeMillis() - lastCheck < 15_000)) return
         Thread { checkNow(ctx.applicationContext, force) }.start()
     }
 
@@ -103,8 +103,8 @@ object Updater {
                 nm.cancel(InstallResultReceiver.UPDATE_NOTIFICATION); nm.cancel(UpdateActivity.NOTIFICATION)
                 return
             }
-            if (!Release.isOwner(ctx)) { setStatus(ctx, "Build $latest is available"); offerToUser(ctx, latest, force); return }
-            // Test channel (owner): install by itself. Needs the one-time "allow STORY to update itself" switch.
+            if (!Release.isOwner(ctx) && !Release.agreedAuto(ctx)) { setStatus(ctx, "Build $latest is available"); offerToUser(ctx, latest, force); return }
+            // Owner, or a user who agreed to automatic updates: install by itself. Needs the one-time "allow STORY to update itself" switch.
             if (!ctx.packageManager.canRequestPackageInstalls()) { setStatus(ctx, "Build $latest is ready - tap \"Allow STORY to update itself\""); return }
             if (!force && latest == offered && System.currentTimeMillis() - offeredAt < 10 * 60_000) return
             offered = latest; offeredAt = System.currentTimeMillis()
@@ -226,9 +226,18 @@ class InstallResultReceiver : BroadcastReceiver() {
         val status = i.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)
         when (status) {
             PackageInstaller.STATUS_PENDING_USER_ACTION -> {
-                // Android wants a tap. Its background-install prompt silently fails on some phones
-                // (Xiaomi), so drop it and open Android's normal installer instead -- the same screen
-                // as installing the file by hand, which works everywhere.
+                // Android wants one tap. The first time, use its own session prompt: once that's approved,
+                // STORY owns its updates and later ones install with no tap at all. If that prompt
+                // has already been tried, open Android's normal installer instead (works everywhere).
+                val prefs = c.getSharedPreferences("story", Context.MODE_PRIVATE)
+                val confirm = i.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)
+                if (confirm != null && !prefs.getBoolean("session_confirm_tried", false)) {
+                    prefs.edit().putBoolean("session_confirm_tried", true).apply()
+                    Updater.setStatus(c, "Approve once - after this STORY updates by itself")
+                    OverlayService.instance?.pauseForInstall()
+                    if (runCatching { c.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess) return
+                    OverlayService.instance?.resumeNow()
+                }
                 val id = i.getIntExtra(PackageInstaller.EXTRA_SESSION_ID, -1)
                 if (id >= 0) runCatching { c.packageManager.packageInstaller.abandonSession(id) }
                 Updater.doneProgress(c)
@@ -237,15 +246,18 @@ class InstallResultReceiver : BroadcastReceiver() {
                 if (!Updater.installWithSystemInstaller(c)) {
                     // Plan B failed too: fall back to Android's own prompt.
                     OverlayService.instance?.pauseForInstall()
-                    val confirm = i.getParcelableExtra<Intent>(Intent.EXTRA_INTENT) ?: return
+                    confirm ?: return
                     runCatching { c.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
                 }
             }
             PackageInstaller.STATUS_SUCCESS -> { Updater.doneProgress(c); Updater.setStatus(c, "Updated") }
             PackageInstaller.STATUS_FAILURE_ABORTED -> {
                 Updater.doneProgress(c)
-                Updater.setStatus(c, "Update cancelled - it will ask again")
+                val why = i.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)
                 OverlayService.instance?.resumeNow()
+                // The one-time prompt didn't go through (some phones cancel it): use Android's installer.
+                Updater.setStatus(c, "Quiet update stopped${if (why != null) " ($why)" else ""} - opening Android's installer")
+                if (!Updater.installWithSystemInstaller(c)) Updater.setStatus(c, "Update cancelled - it will try again")
             }
             else -> {
                 Updater.doneProgress(c)
