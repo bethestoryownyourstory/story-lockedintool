@@ -4204,7 +4204,7 @@ function tradingScreen(){
   const zoneColor = plNeg ? '239,91,91' : '62,207,106';
   return `
     <div class="page-shell">
-    ${topBar('Trading', true, '<button class="order-corner-btn" data-action="order-panel" title="New Order"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>')}
+    ${topBar('Trading', true)}
     ${pageArrows()}
     <div class="eyebrow">FOCUS</div>
     <div class="big-num" style="font-size:24px;">EURUSD <span class="delta-up" style="font-size:15px;">1.08432 +0.42%</span></div>
@@ -9753,6 +9753,7 @@ function notePageSwipeGo(idx){
 // are meant to scroll (Community, Notes) are left alone via NO_FIT_SCREENS.
 const NO_FIT_SCREENS = new Set(['notes-canvas','scratch-draw']);
 const FIT_MIN_SCALE = 0.5;
+const FIT_MAX_SCALE = 1.35;
 // Each page's fitted zoom is remembered (per page and screen size), so drawing a page again --
 // every swipe, every live price tick -- applies it in one layout pass instead of re-measuring
 // six times. A remembered zoom is only used when one check shows it still fits exactly.
@@ -9808,11 +9809,21 @@ function fitPageToScreen(area, el, pageKey){
   // get TALLER as the page is zoomed out and its box widens), so: one computed guess from the
   // natural size, then a few corrective passes that re-measure where the content really ends.
   let m = measure();
-  if(m.bottom <= limit){ FIT_CACHE[key] = { zoom:1, limit, bottom:m.bottom }; return; }
-  area.style.paddingBottom = '0px';
   let zoom = 1;
+  if(m.bottom <= limit){
+    if(!NATIVE || m.bottom >= limit - 1){ FIT_CACHE[key] = { zoom:1, limit, bottom:m.bottom }; return; }
+    // In the app a short page grows to fill the screen right down to the bottom edge -- no empty space.
+    for(let i=0; i<6 && m.bottom < limit - 1; i++){
+      const next = Math.min(FIT_MAX_SCALE, zoom * (limit - m.top) / (m.bottom - m.top));
+      if(next <= zoom + 0.0005) break;
+      zoom = next;
+      applyZoom(zoom);
+      m = measure();
+    }
+  }
+  area.style.paddingBottom = '0px';
   for(let i=0; i<6 && m.bottom > limit + 1 && zoom > FIT_MIN_SCALE; i++){
-    zoom = Math.max(FIT_MIN_SCALE, zoom * Math.min(0.98, (limit - m.top) / (m.bottom - m.top)));
+    zoom = Math.max(FIT_MIN_SCALE, zoom * Math.min(NATIVE ? 0.999 : 0.98, (limit - m.top) / (m.bottom - m.top)));
     applyZoom(zoom);
     m = measure();
   }
