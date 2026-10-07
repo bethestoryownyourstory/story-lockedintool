@@ -512,7 +512,7 @@ class OverlayService : Service(), StoryBridge.Host {
     private fun showPanel(station3Only: Boolean) {
         warmUp()
         if (station3Only) {
-            pagesPane?.takeIf { it.shown }?.let { hideOne(it) }
+            // Station 3 opens exactly the same over the Pages as over any app -- the Pages stay put.
             // Instant: Station 3's page is already drawn and sized (done once, when it loaded), so opening
             // only shows its window -- no redraw, no re-measuring, no other windows touched.
             val p = s3Pane!!
@@ -524,15 +524,20 @@ class OverlayService : Service(), StoryBridge.Host {
             val p = pagesPane!!
             p.web.evaluateJavascript("window.storyShow&&window.storyShow(null,false)", null)
             if (!p.shown) setShown(p, true)
-            s3Pane?.takeIf { it.shown && it.wm === p.wm }?.let { s3 -> runCatching { s3.wm.removeView(s3.frame); s3.wm.addView(s3.frame, s3.lp) } }
+            // Without STORY system actions Station 3 shares the Pages' layer: keep all of it above the Pages.
+            if (s3Pane?.wm === p.wm) {
+                barBg?.let { v -> barBgLp?.let { lp -> runCatching { (barBgWm ?: wm).removeView(v); (barBgWm ?: wm).addView(v, lp) } } }
+                for (q in listOfNotNull(s3Pane, dialPane)) runCatching { q.wm.removeView(q.frame); q.wm.addView(q.frame, q.lp) }
+                raiseBubble()
+            }
         }
         updateBubble()
         addBar() // re-add last so the STORY bar stays on top of everything, including the pages
     }
 
-    /** The Station 3 button is always there (open or closed); only the full-screen Pages, which have their own, hide it. */
+    /** The Station 3 button is always there and always the same -- over apps, over the Pages, open or closed. */
     private fun updateBubble() {
-        bubble?.visibility = if (pagesPane?.shown == true) View.GONE else View.VISIBLE
+        bubble?.visibility = View.VISIBLE
     }
 
     private fun hideOne(p: Pane) {
