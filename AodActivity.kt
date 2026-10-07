@@ -12,8 +12,8 @@ import android.view.WindowInsetsController
 import android.view.WindowManager
 
 /**
- * STORY's Always On Display: when the screen would turn off, a black, very dim screen stays on with
- * Station 3 in its exact spot (the overlay windows sit on top of it, unchanged). Station 3 works as
+ * STORY's Always On Display: when the screen would turn off, a black screen stays on with
+ * Station 3 in its exact spot, at the phone's own brightness (the overlay windows sit on top of it, unchanged). Station 3 works as
  * always -- tap it and it extends. Double-tap anywhere else for the normal lock screen; press power
  * for a truly off screen. While it's up, Station 3's pixels take turns (see OverlayService.setAod)
  * so nothing burns into the screen, without Station 3 moving at all.
@@ -24,8 +24,8 @@ class AodActivity : Activity() {
         if (Build.VERSION.SDK_INT >= 27) { setShowWhenLocked(true); setTurnScreenOn(true) }
         @Suppress("DEPRECATION")
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON)
-        // As dim as the screen goes, like Samsung's own Always On Display.
-        window.attributes = window.attributes.apply { screenBrightness = 0.01f }
+        // Same brightness as the phone (the owner's setting, auto-brightness included) -- no override.
+        window.attributes = window.attributes.apply { screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE }
         val tap = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
             override fun onDown(e: MotionEvent) = true
             override fun onDoubleTap(e: MotionEvent): Boolean { finish(); return true }
