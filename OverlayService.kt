@@ -94,6 +94,7 @@ class OverlayService : Service(), StoryBridge.Host {
         if (!Release.agreedAuto(this)) { gated = true; running = false; UpdateActivity.ask(this, force = true); stopSelf(); return }
         instance = this
         getSharedPreferences("story", MODE_PRIVATE).edit().putBoolean("enabled", true).apply()
+        quietApps(false)  // never leave the phone muted (e.g. STORY was restarted while the Pages were open)
         pickLayer()
         addBubble()
         addBar()
@@ -467,16 +468,29 @@ class OverlayService : Service(), StoryBridge.Host {
         if (p === pagesPane) quietApps(shown)
     }
 
-    // While Pages is open, sound from the app underneath (a TikTok video, YouTube...) pauses; music keeps
-    // playing. Done with Android's audio focus -- the app just pauses, it never closes, and gets its sound
-    // back when Pages closes.
+    // While Pages is open, STORY silences the app underneath itself (a TikTok video, YouTube...), like the
+    // phone would: apps that listen pause, and any that don't are muted. Music is never touched -- if music is
+    // playing (or starts), STORY leaves the sound on. The app never closes; its sound is back when Pages closes.
     private var quietFocus: android.media.AudioFocusRequest? = null
+    private var quietWatch: android.media.AudioManager.AudioPlaybackCallback? = null
+    private fun musicPlaying(am: android.media.AudioManager) = runCatching {
+        am.activePlaybackConfigurations.any { it.audioAttributes.contentType == android.media.AudioAttributes.CONTENT_TYPE_MUSIC }
+    }.getOrDefault(false)
+    private fun setMuted(am: android.media.AudioManager, on: Boolean) {
+        val prefs = getSharedPreferences("story", MODE_PRIVATE)
+        if (on == prefs.getBoolean("muted_by_story", false)) return
+        runCatching { am.adjustStreamVolume(android.media.AudioManager.STREAM_MUSIC, if (on) android.media.AudioManager.ADJUST_MUTE else android.media.AudioManager.ADJUST_UNMUTE, 0) }
+        prefs.edit().putBoolean("muted_by_story", on).apply()
+    }
     private fun quietApps(on: Boolean) {
         val am = getSystemService(android.media.AudioManager::class.java) ?: return
-        if (!on) { quietFocus?.let { runCatching { am.abandonAudioFocusRequest(it) } }; quietFocus = null; return }
-        if (quietFocus != null) return
-        val music = runCatching { am.activePlaybackConfigurations.any { it.audioAttributes.contentType == android.media.AudioAttributes.CONTENT_TYPE_MUSIC } }.getOrDefault(false)
-        if (music) return
+        if (!on) {
+            quietWatch?.let { runCatching { am.unregisterAudioPlaybackCallback(it) } }; quietWatch = null
+            setMuted(am, false)
+            quietFocus?.let { runCatching { am.abandonAudioFocusRequest(it) } }; quietFocus = null
+            return
+        }
+        if (quietWatch != null || musicPlaying(am)) return
         val req = android.media.AudioFocusRequest.Builder(android.media.AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
             .setAudioAttributes(android.media.AudioAttributes.Builder()
                 .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
@@ -484,6 +498,15 @@ class OverlayService : Service(), StoryBridge.Host {
             .setOnAudioFocusChangeListener { }
             .build()
         if (runCatching { am.requestAudioFocus(req) }.getOrNull() == android.media.AudioManager.AUDIOFOCUS_REQUEST_GRANTED) quietFocus = req
+        setMuted(am, true)
+        // Music starts while Pages is open: give the sound back straight away.
+        val watch = object : android.media.AudioManager.AudioPlaybackCallback() {
+            override fun onPlaybackConfigChanged(configs: MutableList<android.media.AudioPlaybackConfiguration>) {
+                if (configs.any { it.audioAttributes.contentType == android.media.AudioAttributes.CONTENT_TYPE_MUSIC }) setMuted(am, false)
+            }
+        }
+        runCatching { am.registerAudioPlaybackCallback(watch, ui) }
+        quietWatch = watch
     }
 
     private fun showPanel(station3Only: Boolean) {
