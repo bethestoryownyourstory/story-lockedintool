@@ -460,13 +460,12 @@ class OverlayService : Service(), StoryBridge.Host {
         warmUp()
         if (station3Only) {
             pagesPane?.takeIf { it.shown }?.let { hideOne(it) }
+            // Instant: Station 3's page is already drawn and sized (done once, when it loaded), so opening
+            // only shows its window -- no redraw, no re-measuring, no other windows touched.
             val p = s3Pane!!
-            if (!p.shown) {
-                p.web.evaluateJavascript(exactGeometryJs(), null)
-                p.web.evaluateJavascript("window.storyStation3Only&&window.storyStation3Only()", null)
-                setShown(p, true)
-                p.web.evaluateJavascript("window.__storyS3Report&&window.__storyS3Report(true)", null)
-            }
+            if (!p.shown) setShown(p, true)
+            updateBubble()
+            return
         } else {
             // Station 3 stays open; Pages opens underneath it.
             val p = pagesPane!!
@@ -488,8 +487,9 @@ class OverlayService : Service(), StoryBridge.Host {
         // again changes nothing on screen (no re-layout, no resize, no jump).
         if (!p.small) p.web.evaluateJavascript("window.storyReset&&window.storyReset()", null)
         setShown(p, false)
-        // Pick up the newest screens in the background so the next open is both instant and current.
-        if (p.stale || System.currentTimeMillis() - p.loadedAt > 5 * 60_000) reload(p)
+        // New screens were published: pick them up in the background. Station 3 / the dial pad only reload
+        // then (never on a timer), so tapping them open is always instant.
+        if (p.stale || (!p.small && System.currentTimeMillis() - p.loadedAt > 5 * 60_000)) reload(p)
     }
 
     private fun removePanelNow() {
