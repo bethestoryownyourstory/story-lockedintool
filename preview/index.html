@@ -1599,13 +1599,17 @@
   body.s3-only::before, body.s3-only::after{ display:none !important; }
   /* Over the phone's apps: no Rows / Page Styles buttons, and the arrow rounds its own top. */
   body.s3-only .station3-quick-row, body.s3-only .station3-connector, body.s3-only .station3-connector-2{ display:none !important; }
-  /* The open arrow's size is set in positionStation3(): over other apps it becomes the right end of
-     ONE even corner piece with the bar (or the dial pad), so there's no step between them. */
+  /* Over other apps the corner button keeps its size and place when open (see positionStation3()). */
   /* Tight in the corner: the bar / dial pad round only their top-left, like the corner button. */
-  body.s3-only .station3-bar-card{ border-radius:36px 0 0 0 !important; }
+  /* The bar is exactly as tall as the 40px corner button, so it just extends it to the left. */
+  body.s3-only .station3-bar-card{ border-radius:20px 0 0 0 !important; height:40px; padding:0 6px 0 10px; box-sizing:border-box; display:flex; align-items:center; }
+  body.s3-only .station3-bar{ padding:0; gap:2px; }
+  body.s3-only .station3-btn{ width:32px; height:32px; }
+  body.s3-only .station3-btn-chevron{ width:26px; height:26px; }
+  body.s3-only .station3-btn-plus{ width:34px; height:34px; box-shadow:none; }
   body.s3-only .station3-dialpad-card{ border-radius:20px 0 0 0 !important; }
-  /* No spin animation over other apps: a half-turned tall arrow measures wrong while it lines up. */
-  body.s3-only .station3-corner-arrow{ transition:background 0.15s ease !important; }
+  /* Over other apps: no animations at all -- straight, instant open and close. */
+  body.s3-only .station3-region, body.s3-only .station3-region *{ transition:none !important; animation:none !important; }
   .station3-region{ position:absolute; inset:0; pointer-events:none; z-index:30; }
   /* Solid white fill plugging the gaps between the lifted Rows/Page Styles row, the bar
      card, and the corner arrow, so the whole silhouette reads as one continuous flush
@@ -6165,20 +6169,10 @@ function positionStation3(){
   const sideCard = region.querySelector('.station3-bar-card, .station3-dialpad-card');
   if(!arrow) return;
   if(s3Only){
-    // Open: the arrow is as tall as the bar/dial pad beside it and square, so together they make one
-    // even corner piece: square where it meets the screen edges, rounded only on its top-left.
-    const open = arrow.classList.contains('station3-corner-arrow-open') && sideCard;
-    const h = open ? Math.ceil(sideCard.getBoundingClientRect().height) + 'px' : '';
-    // A new height only settles after this pass, so line everything up once more next frame.
-    if(arrow.style.height !== h){ arrow.style.height = h; requestAnimationFrame(() => positionStation3()); }
-    arrow.style.width = open ? '46px' : '';
-    arrow.style.borderRadius = open ? '0' : '';
-    // The bar / dial pad can still grow a little after it first draws (fonts etc.): follow it.
-    if(window.ResizeObserver){
-      window.__s3CardWatch = window.__s3CardWatch || new ResizeObserver(() => requestAnimationFrame(() => positionStation3()));
-      window.__s3CardWatch.disconnect();
-      if(open) window.__s3CardWatch.observe(sideCard);
-    }
+    // Over other apps the corner button never changes size or place: always 40x40 in the corner,
+    // exactly where the closed button sits. Opening only adds the bar beside it.
+    arrow.style.height = ''; arrow.style.width = '';
+    arrow.style.borderRadius = arrow.classList.contains('station3-corner-arrow-open') ? '0' : '';
   }
 
   if(REAL_DEVICE){
