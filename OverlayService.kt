@@ -72,11 +72,35 @@ class OverlayService : Service(), StoryBridge.Host {
     // Always On Display: when the screen goes off, STORY's dim always-on screen comes up instead
     // (if switched on). Pressing power while it's up turns the screen truly off.
     private val screenOff = object : android.content.BroadcastReceiver() {
-        override fun onReceive(c: Context, i: Intent) {
-            val aod = AodActivity.instance
-            if (aod != null) { aod.finish(); return }
-            if (!AodActivity.enabled(c)) return
-            runCatching { startActivity(Intent(c, AodActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)) }
+        override fun onReceive(c: Context, i: Intent) { onScreenOff() }
+    }
+    // Always On Display: the moment the screen goes off, switch it straight back on with Station 3
+    // showing. Android's display watcher usually reports "off" before the screen-off broadcast does,
+    // so whichever comes first wins; the other one is ignored.
+    @Volatile private var aodStartedAt = 0L
+    private fun onScreenOff() {
+        val now = System.currentTimeMillis()
+        if (now - aodStartedAt < 2_000) return             // the same screen-off, reported twice
+        aodStartedAt = now
+        val aod = AodActivity.instance
+        if (aod != null) { aod.finish(); return }          // power pressed while Always On Display was up: truly off
+        if (!AodActivity.enabled(this)) return
+        // Wake the screen right now, in parallel with the black screen starting (not after it).
+        runCatching {
+            @Suppress("DEPRECATION")
+            getSystemService(android.os.PowerManager::class.java).newWakeLock(
+                android.os.PowerManager.SCREEN_DIM_WAKE_LOCK or android.os.PowerManager.ACQUIRE_CAUSES_WAKEUP or android.os.PowerManager.ON_AFTER_RELEASE,
+                "story:aod").acquire(1_500)
+        }
+        runCatching { startActivity(Intent(this, AodActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)) }
+    }
+    private val displayWatch = object : android.hardware.display.DisplayManager.DisplayListener {
+        override fun onDisplayAdded(id: Int) {}
+        override fun onDisplayRemoved(id: Int) {}
+        override fun onDisplayChanged(id: Int) {
+            if (id != android.view.Display.DEFAULT_DISPLAY) return
+            val d = getSystemService(android.hardware.display.DisplayManager::class.java).getDisplay(id) ?: return
+            if (d.state == android.view.Display.STATE_OFF && !getSystemService(android.os.PowerManager::class.java).isInteractive) onScreenOff()
         }
     }
     // Which version of the screens (live or Test) the panes have loaded; see checkScreens().
@@ -105,6 +129,7 @@ class OverlayService : Service(), StoryBridge.Host {
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(unlocked, unlockFilter, Context.RECEIVER_NOT_EXPORTED) else registerReceiver(unlocked, unlockFilter)
         val offFilter = android.content.IntentFilter(Intent.ACTION_SCREEN_OFF)
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(screenOff, offFilter, Context.RECEIVER_NOT_EXPORTED) else registerReceiver(screenOff, offFilter)
+        runCatching { getSystemService(android.hardware.display.DisplayManager::class.java).registerDisplayListener(displayWatch, ui) }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -123,6 +148,7 @@ class OverlayService : Service(), StoryBridge.Host {
         ui.removeCallbacks(updateLoop); ui.removeCallbacks(resumeAfterInstall)
         runCatching { unregisterReceiver(unlocked) }
         runCatching { unregisterReceiver(screenOff) }
+        runCatching { getSystemService(android.hardware.display.DisplayManager::class.java).unregisterDisplayListener(displayWatch) }
         ui.removeCallbacks(aodSwap)
         bar?.let { runCatching { (barWm ?: wm).removeView(it) } }
         running = false
