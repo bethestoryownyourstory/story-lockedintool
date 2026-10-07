@@ -282,6 +282,8 @@ class OverlayService : Service(), StoryBridge.Host {
     // ---- STORY panes (built once, kept warm, so they open instantly) ----
     private class Pane(val frame: FrameLayout, val web: WebView, val lp: WindowManager.LayoutParams, val small: Boolean, val wm: WindowManager) {
         var shown = false; var loadedAt = System.currentTimeMillis(); var stale = false
+        // Station 3 only: true while its page (re)loads -- it stays invisible until it's drawn, never a white box.
+        var loading = true
         // Station 3 only: the window size while open, cut down to what Station 3 really covers.
         var openW = lp.width; var openH = lp.height
     }
@@ -307,7 +309,17 @@ class OverlayService : Service(), StoryBridge.Host {
         }
         val loader = WebViewAssetLoader.Builder().addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this)).build()
         val query = if (small) "?s3=1" else ""
+        var paneRef: Pane? = null
         wv.webViewClient = object : WebViewClient() {
+            override fun onPageStarted(v: WebView, url: String, favicon: android.graphics.Bitmap?) {
+                if (small) paneRef?.let { it.loading = true; it.frame.alpha = 0f }
+            }
+            // Android sometimes shuts the page down to free memory, which leaves a blank white window:
+            // build STORY's windows again instead (and don't let it take the app down).
+            override fun onRenderProcessGone(v: WebView, detail: android.webkit.RenderProcessGoneDetail): Boolean {
+                ui.post { rebuildLayer() }
+                return true
+            }
             override fun shouldInterceptRequest(v: WebView, r: WebResourceRequest): WebResourceResponse? = loader.shouldInterceptRequest(r.url)
             // STORY pages only: never navigate this window to any other site.
             override fun shouldOverrideUrlLoading(v: WebView, r: WebResourceRequest): Boolean {
@@ -321,12 +333,19 @@ class OverlayService : Service(), StoryBridge.Host {
                 if (r.isForMainFrame && r.url.toString().startsWith(REMOTE)) v.loadUrl(LOCAL + query)
             }
             override fun onPageFinished(v: WebView, url: String) {
-                if (small) { v.evaluateJavascript("window.storyStation3Only&&window.storyStation3Only()", null); v.evaluateJavascript(S3_JS, null) }
+                if (small) {
+                    v.evaluateJavascript("window.storyStation3Only&&window.storyStation3Only()", null); v.evaluateJavascript(S3_JS, null)
+                    // Show it again once Station 3 has actually drawn (a moment after the page is ready).
+                    ui.postDelayed({ paneRef?.let { it.loading = false; if (it.shown) it.frame.alpha = 1f } }, 200)
+                }
             }
         }
         // Live: the screens come from the STORY site, so every upload reaches every phone with no reinstall.
         wv.loadUrl(remoteBase() + "?" + (if (small) "s3=1&" else "") + "v=" + System.currentTimeMillis())  // skip the website cache
-        val s3W = (340 * dp).toInt(); val s3H = (520 * dp).toInt()
+        // Station 3's page spans the whole screen width (plus the 10dp it reaches past the right edge), so the
+        // dial pad can open in the middle of the screen. The window itself is cut down to what's showing.
+        val s3W = resources.displayMetrics.widthPixels + (10 * dp).toInt()
+        val s3H = minOf((640 * dp).toInt(), realHeightPx())
         // Station 3's page always lays out at full size, pinned to the corner; its window may be
         // smaller (see setStation3Size) and simply cuts off the empty part, so nothing reflows.
         frame.addView(wv, if (small) FrameLayout.LayoutParams(s3W, s3H, Gravity.BOTTOM or Gravity.END) else FrameLayout.LayoutParams(-1, -1))
@@ -348,6 +367,7 @@ class OverlayService : Service(), StoryBridge.Host {
         val paneWm = if (small) layerWm else wm
         if (small) lp.type = layerType
         val p = Pane(frame, wv, lp, small, paneWm)
+        paneRef = p
         paneWm.addView(frame, lp)
         return p
     }
@@ -365,7 +385,7 @@ class OverlayService : Service(), StoryBridge.Host {
         // even an untouchable one. A hidden pane is fully see-through, so apps underneath get every touch.
         p.lp.alpha = if (shown) 1f else 0f
         if (p.small && shown) { p.lp.width = p.openW; p.lp.height = p.openH }
-        p.frame.alpha = if (shown) 1f else 0f
+        p.frame.alpha = if (shown && !(p.small && p.loading)) 1f else 0f
         runCatching { p.wm.updateViewLayout(p.frame, p.lp) }
         if (shown && !p.small) p.web.requestFocus()
     }
