@@ -24,6 +24,16 @@ import android.widget.TextView
 class UpdateActivity : Activity() {
     private lateinit var status: TextView
     private var required = false
+    private var bar: android.widget.ProgressBar? = null
+    private val ui = android.os.Handler(android.os.Looper.getMainLooper())
+    // Loading bar: follows the download until the installer takes over.
+    private val follow = object : Runnable { override fun run() {
+        val pct = Updater.progress(this@UpdateActivity)
+        bar?.visibility = if (pct == null) android.view.View.GONE else android.view.View.VISIBLE
+        bar?.isIndeterminate = pct != null && pct < 0
+        if (pct != null && pct >= 0) { bar?.progress = pct; status.text = "Downloading the update… $pct%" }
+        ui.postDelayed(this, 300)
+    } }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -42,6 +52,8 @@ class UpdateActivity : Activity() {
             else "A new version of STORY is ready.", 15f, Color.parseColor("#FFCCCCCC")))
         status = text("", 13f, Color.parseColor("#FF8B8B92"))
         card.addView(status)
+        bar = android.widget.ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply { max = 100; visibility = android.view.View.GONE }
+        card.addView(bar)
         val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.END }
         if (!required) row.addView(Button(this).apply {
             text = "Later"; isAllCaps = false
@@ -61,9 +73,11 @@ class UpdateActivity : Activity() {
 
     private fun updateNow(b: Button) {
         b.isEnabled = false; status.text = "Downloading the update…"
+        ui.post(follow)
         Thread {
             val err = Updater.installNow(applicationContext)
             runOnUiThread {
+                ui.removeCallbacks(follow); bar?.visibility = android.view.View.GONE
                 b.isEnabled = true
                 when (err) {
                     null -> status.text = "Installing… STORY restarts by itself when it's done."

@@ -19,6 +19,7 @@ import android.widget.TextView
 /** One-time setup. STORY floats over your phone as it already is -- nothing about your home screen changes. */
 class MainActivity : Activity() {
     private var updateLine: TextView? = null
+    private var updateBar: android.widget.ProgressBar? = null
     private val ui = android.os.Handler(android.os.Looper.getMainLooper())
     // Keeps the "Updates: ..." line current while this screen is open.
     private val refresh = object : Runnable { override fun run() { showUpdateStatus(); ui.postDelayed(this, 1000) } }
@@ -55,6 +56,9 @@ class MainActivity : Activity() {
         // Updates: what's happening, at a glance.
         updateLine = title("", 14f).apply { setTextColor(Color.parseColor("#FFCCCCCC")); setPadding(0, pad, 0, pad / 2) }
         col.addView(updateLine)
+        // Loading bar while an update downloads / installs.
+        updateBar = android.widget.ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply { max = 100; visibility = android.view.View.GONE; setPadding(0, 0, 0, pad / 2) }
+        col.addView(updateBar)
         col.addView(btn("Check for updates now") { Updater.setStatus(this, "Checking…"); showUpdateStatus(); Updater.check(applicationContext, force = true) })
         // Owner only: you see the newest version (Test channel) and can publish it to everyone.
         if (Release.isOwner(this)) {
@@ -80,6 +84,12 @@ class MainActivity : Activity() {
         val (s, at) = Updater.status(this)
         val ago = if (at == 0L) "" else android.text.format.DateUtils.getRelativeTimeSpanString(at, System.currentTimeMillis(), android.text.format.DateUtils.SECOND_IN_MILLIS).toString()
         updateLine?.text = "Updates: $s" + if (ago.isEmpty()) "" else "  ·  $ago"
+        val pct = Updater.progress(this)
+        updateBar?.apply {
+            visibility = if (pct == null) android.view.View.GONE else android.view.View.VISIBLE
+            isIndeterminate = pct != null && pct < 0
+            if (pct != null && pct >= 0) progress = pct
+        }
     }
 
     /** Ask Android not to shut STORY down for battery, then (on Xiaomi phones) open the Autostart switch. */

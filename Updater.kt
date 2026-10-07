@@ -46,6 +46,30 @@ object Updater {
     fun setStatus(ctx: Context, s: String) {
         ctx.getSharedPreferences("story", Context.MODE_PRIVATE).edit().putString("upd_status", s).putLong("upd_status_at", System.currentTimeMillis()).apply()
     }
+    /** Download progress 0-100 while downloading, -1 while installing (no percentage), null otherwise. */
+    fun progress(ctx: Context): Int? {
+        val p = ctx.getSharedPreferences("story", Context.MODE_PRIVATE)
+        return if (p.contains("upd_progress")) p.getInt("upd_progress", 0) else null
+    }
+    private fun setProgress(ctx: Context, pct: Int?) {
+        val e = ctx.getSharedPreferences("story", Context.MODE_PRIVATE).edit()
+        if (pct == null) e.remove("upd_progress") else e.putInt("upd_progress", pct)
+        e.apply()
+        val nm = ctx.getSystemService(NotificationManager::class.java)
+        if (pct == null) { nm.cancel(PROGRESS_NOTIFICATION); return }
+        nm.createNotificationChannel(NotificationChannel("story_progress", "STORY update progress", NotificationManager.IMPORTANCE_LOW))
+        val n = Notification.Builder(ctx, "story_progress")
+            .setSmallIcon(android.R.drawable.stat_sys_download)
+            .setContentTitle(if (pct >= 0) "Updating STORY…" else "Installing STORY update…")
+            .setContentText(if (pct >= 0) "Downloading $pct%" else "Almost done")
+            .setProgress(100, maxOf(pct, 0), pct < 0)
+            .setOngoing(true).setOnlyAlertOnce(true).build()
+        runCatching { nm.notify(PROGRESS_NOTIFICATION, n) }
+    }
+    /** The download is done and handed to Android's installer (or it failed): the loading bar goes away. */
+    fun doneProgress(ctx: Context) = setProgress(ctx, null)
+    const val PROGRESS_NOTIFICATION = 4
+
     fun status(ctx: Context): Pair<String, Long> {
         val p = ctx.getSharedPreferences("story", Context.MODE_PRIVATE)
         return (p.getString("upd_status", null) ?: "Not checked yet") to p.getLong("upd_status_at", 0)
@@ -84,11 +108,12 @@ object Updater {
             if (!ctx.packageManager.canRequestPackageInstalls()) { setStatus(ctx, "Build $latest is ready - tap \"Allow STORY to update itself\""); return }
             if (!force && latest == offered && System.currentTimeMillis() - offeredAt < 10 * 60_000) return
             offered = latest; offeredAt = System.currentTimeMillis()
-            setStatus(ctx, "Downloading build $latest…")
-            val apk = download(base, ctx)
+            val apk = download(base, ctx, latest)
             setStatus(ctx, "Installing build $latest…")
+            setProgress(ctx, -1)
             install(ctx, apk)
         } catch (e: Throwable) {
+            doneProgress(ctx)
             setStatus(ctx, "Couldn't check for updates (no internet?)")
         } finally { busy = false }
     }
@@ -108,15 +133,31 @@ object Updater {
     /** "Update now" in the Update available window. Returns a message if it couldn't start. Run off the main thread. */
     fun installNow(ctx: Context): String? {
         if (!ctx.packageManager.canRequestPackageInstalls()) return "allow"
-        val apk = runCatching { download(Release.base(ctx), ctx) }.getOrNull() ?: return "Couldn't download the update. Check your connection and try again."
-        return runCatching { install(ctx, apk); null }.getOrElse { "Couldn't start the update: ${it.message}" }
+        val v = ctx.getSharedPreferences("story", Context.MODE_PRIVATE).getLong("upd_version", 0)
+        val apk = runCatching { download(Release.base(ctx), ctx, v) }.getOrNull() ?: run { doneProgress(ctx); return "Couldn't download the update. Check your connection and try again." }
+        setProgress(ctx, -1)
+        return runCatching { install(ctx, apk); null }.getOrElse { doneProgress(ctx); "Couldn't start the update: ${it.message}" }
     }
 
     private fun apkFile(ctx: Context) = File(ctx.cacheDir, "story-update.apk")
 
-    private fun download(base: String, ctx: Context): File {
+    /** Downloads the update, showing a loading bar (notification + setup screen) as it goes. */
+    private fun download(base: String, ctx: Context, version: Long): File {
         val apk = apkFile(ctx)
-        open(base + "app-debug.apk").inputStream.use { i -> apk.outputStream().use { o -> i.copyTo(o) } }
+        val label = if (version > 0) "build $version" else "the update"
+        val c = open(base + "app-debug.apk")
+        val total = c.contentLengthLong
+        var done = 0L; var shown = -1
+        setStatus(ctx, "Downloading $label…"); setProgress(ctx, 0)
+        c.inputStream.use { i -> apk.outputStream().use { o ->
+            val buf = ByteArray(64 * 1024)
+            while (true) {
+                val n = i.read(buf); if (n < 0) break
+                o.write(buf, 0, n); done += n
+                val pct = if (total > 0) (done * 100 / total).toInt() else 0
+                if (pct != shown && (pct - shown >= 2 || pct == 100)) { shown = pct; setStatus(ctx, "Downloading $label… $pct%"); setProgress(ctx, pct) }
+            }
+        } }
         return apk
     }
 
@@ -190,6 +231,7 @@ class InstallResultReceiver : BroadcastReceiver() {
                 // as installing the file by hand, which works everywhere.
                 val id = i.getIntExtra(PackageInstaller.EXTRA_SESSION_ID, -1)
                 if (id >= 0) runCatching { c.packageManager.packageInstaller.abandonSession(id) }
+                Updater.doneProgress(c)
                 Updater.setStatus(c, "Waiting for you to tap Update")
                 showUpdateNotification(c)
                 if (!Updater.installWithSystemInstaller(c)) {
@@ -199,12 +241,14 @@ class InstallResultReceiver : BroadcastReceiver() {
                     runCatching { c.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
                 }
             }
-            PackageInstaller.STATUS_SUCCESS -> Updater.setStatus(c, "Updated")
+            PackageInstaller.STATUS_SUCCESS -> { Updater.doneProgress(c); Updater.setStatus(c, "Updated") }
             PackageInstaller.STATUS_FAILURE_ABORTED -> {
+                Updater.doneProgress(c)
                 Updater.setStatus(c, "Update cancelled - it will ask again")
                 OverlayService.instance?.resumeNow()
             }
             else -> {
+                Updater.doneProgress(c)
                 val why = i.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: "error $status"
                 Updater.setStatus(c, "Quiet update failed ($why) - opening Android's installer")
                 OverlayService.instance?.resumeNow()
@@ -239,7 +283,8 @@ class BootReceiver : BroadcastReceiver() {
         // This version is installed now, so the "update ready" notification is done.
         if (i.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
             val nm = c.getSystemService(NotificationManager::class.java)
-            nm.cancel(InstallResultReceiver.UPDATE_NOTIFICATION); nm.cancel(UpdateActivity.NOTIFICATION)
+            nm.cancel(InstallResultReceiver.UPDATE_NOTIFICATION); nm.cancel(UpdateActivity.NOTIFICATION); nm.cancel(Updater.PROGRESS_NOTIFICATION)
+            c.getSharedPreferences("story", Context.MODE_PRIVATE).edit().remove("upd_progress").apply()
             val v = runCatching { c.packageManager.getPackageInfo(c.packageName, 0).longVersionCode }.getOrDefault(0)
             Updater.setStatus(c, "Updated to build $v")
         }
