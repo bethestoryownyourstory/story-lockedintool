@@ -6214,7 +6214,10 @@ function positionStation3(){
   // Over other apps (Android overlay) the app pulls the window 10px past the screen edges, so with
   // this 10px gap Station 3 sits tight in the bottom-right corner, like the corner button.
   const s3Only = document.body.classList.contains('s3-only');
-  const gap = 10;
+  // Over other apps the app tells the page the exact pixel gap and button size it used for its own
+  // Station 3 button (window.__s3Gap / __s3Btn), so the white bar lines up with it to the pixel.
+  const gap = (s3Only && window.__s3Gap) ? window.__s3Gap : 10;
+  const s3Btn = (s3Only && window.__s3Btn) ? window.__s3Btn : 40;
   const arrowH = 40;
   const vw = window.innerWidth, vh = window.innerHeight;
   const rightPx = Math.max(gap, vw - rect.right + gap);
@@ -6225,7 +6228,9 @@ function positionStation3(){
   if(s3Only){
     // Over other apps the corner button never changes size or place: always 40x40 in the corner,
     // exactly where the closed button sits. Opening only adds the bar beside it.
-    arrow.style.height = ''; arrow.style.width = '';
+    arrow.style.height = s3Btn + 'px'; arrow.style.width = s3Btn + 'px';
+    const bar = region.querySelector('.station3-bar-card');
+    if(bar) bar.style.height = s3Btn + 'px';
     arrow.style.borderRadius = '';
   }
 
