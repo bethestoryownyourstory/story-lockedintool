@@ -1643,6 +1643,8 @@
   html.native:not(.s3-early) #content-area{ padding-top:0 !important; padding-bottom:0 !important; }
   html.native:not(.s3-early) .page-top{ margin-top:0 !important; }
   html.native:not(.s3-early) .phone-float-dock{ padding-bottom:0 !important; }
+  /* While pages slide under the finger, nothing gets text-selected. */
+  body.page-sliding, body.page-sliding *{ -webkit-user-select:none !important; user-select:none !important; }
   html.native:not(.s3-early) .story-screen{ margin-top:0 !important; margin-bottom:0 !important; padding-bottom:0 !important; }
   /* Solid white fill plugging the gaps between the lifted Rows/Page Styles row, the bar
      card, and the corner arrow, so the whole silhouette reads as one continuous flush
@@ -9859,32 +9861,26 @@ window.addEventListener('resize', ()=>{ setTimeout(()=>{ try{ prewarmPageFits();
 
 let pageSwipeAnimating = false;
 let appMenuOpenedAt = 0;
-function goToPageIndex(next){
+// Page-to-page slide. The new page is drawn ONCE, in its real final layout, and slides in while the
+// real, untouched old screen slides out -- nothing is redrawn or resized when the slide ends. On a
+// phone the slide follows the finger. The "‹ Dashboard" button stays in one place throughout.
+function beginPageSlide(next){
   const idx = PAGES.indexOf(state.current);
-  if(next===idx || next<0 || next>PAGES.length-1) return;
+  if(next===idx || next<0 || next>PAGES.length-1 || pageSwipeAnimating) return null;
   const wrap = document.getElementById('device-wrap');
   const oldFrame = wrap && wrap.firstElementChild;
-  if(!oldFrame || pageSwipeAnimating || state.device !== 'phone'){
-    // Nothing on screen to slide from (or a previous swipe is still mid-flight): plain cut.
-    state.current = PAGES[next];
-    state.lastPage = state.current;
-    renderDevice();
-    return;
-  }
+  if(!oldFrame || state.device !== 'phone') return null;
   const dir = next > idx ? 1 : -1; // +1: new page comes in from the right; -1: from the left
-  // The new page is drawn ONCE, in its real final layout (same size, same zoom, its own dock),
-  // and simply slides in -- the outgoing screen is the real, untouched old one sliding out.
-  // Nothing is re-drawn or re-sized when the slide ends, so nothing jumps, stretches or snaps.
   const oldArea = oldFrame.querySelector('#content-area');
   const oldScroll = oldArea ? oldArea.scrollTop : 0;
   const wrapRect = wrap.getBoundingClientRect();
   const r = oldFrame.getBoundingClientRect();
+  const prev = { current: state.current, lastPage: state.lastPage, pos: wrap.style.position, overflow: wrap.style.overflow, frameStyle: oldFrame.getAttribute('style') };
   pageSwipeAnimating = true;
   state.current = PAGES[next];
   state.lastPage = state.current;
   renderDevice();
   const newFrame = wrap.firstElementChild;
-  const prevPos = wrap.style.position, prevOverflow = wrap.style.overflow;
   if(getComputedStyle(wrap).position === 'static') wrap.style.position = 'relative';
   wrap.style.overflow = 'hidden';
   Object.assign(oldFrame.style, { position:'absolute', left:(r.left - wrapRect.left)+'px', top:(r.top - wrapRect.top)+'px',
@@ -9892,26 +9888,98 @@ function goToPageIndex(next){
   wrap.appendChild(oldFrame); // after the new one, so every lookup by id still finds the live page
   const oldAreaBack = oldFrame.querySelector('#content-area');
   if(oldAreaBack) oldAreaBack.scrollTop = oldScroll;
-  const w = r.width;
-  const ease = 'transform 0.19s cubic-bezier(.22,.9,.24,1)';
+  // One Dashboard button, standing still: while the pages slide, a single copy of it sits on top in
+  // exactly the same spot (both pages' own copies are hidden), so on screen it never moves.
+  const oldBack = oldFrame.querySelector('.dash-back');
+  const newBack = newFrame.querySelector('.dash-back');
+  let fixedBack = null;
+  if(oldBack){
+    const br = oldBack.getBoundingClientRect();
+    fixedBack = oldBack.cloneNode(true);
+    Object.assign(fixedBack.style, { position:'absolute', left:(br.left - wrapRect.left)+'px', top:(br.top - wrapRect.top)+'px',
+      width:br.width+'px', height:br.height+'px', margin:'0', zIndex:'50', pointerEvents:'none', visibility:'visible', boxSizing:'border-box', whiteSpace:'nowrap' });
+    // Same look to the pixel as the page's own button (it inherits some styling from the page).
+    const cs = getComputedStyle(oldBack);
+    ['color','opacity','font','letterSpacing','textShadow','background','borderRadius','padding','boxShadow','filter','border'].forEach(k=>{ fixedBack.style[k] = cs[k]; });
+    // The page's brightness dimmer sits over the page, so the copy gets the very same dimming.
+    const dimEl = oldFrame.querySelector('#system-dimmer');
+    const dimA = dimEl ? parseFloat(getComputedStyle(dimEl).opacity) || 0 : 0;
+    if(dimA > 0) fixedBack.style.filter = 'brightness(' + (1 - dimA) + ')';
+    // Drawn through the same zoom steps as the page's own button (page zoom, then the header's
+    // counter-zoom), so its text is rasterised identically.
+    const zShell = parseFloat(getComputedStyle(oldBack.closest('.page-shell') || oldBack).zoom) || 1;
+    const zTop = parseFloat(getComputedStyle(oldBack.closest('.page-top') || oldBack).zoom) || 1;
+    const outer = document.createElement('div'), inner = document.createElement('div');
+    outer.style.cssText = 'position:absolute;left:0;top:0;z-index:50;pointer-events:none;zoom:' + zShell + ';';
+    inner.style.cssText = 'position:absolute;left:0;top:0;zoom:' + zTop + ';';
+    const z = zShell * zTop;
+    Object.assign(fixedBack.style, { left:((br.left - wrapRect.left) / z)+'px', top:((br.top - wrapRect.top) / z)+'px',
+      width:(br.width / z)+'px', height:(br.height / z)+'px', zIndex:'' });
+    inner.appendChild(fixedBack); outer.appendChild(inner);
+    wrap.appendChild(outer);
+    fixedBack = outer;
+    oldBack.style.visibility = 'hidden';
+    if(newBack) newBack.style.visibility = 'hidden';
+  }
   newFrame.style.willChange = oldFrame.style.willChange = 'transform';
-  newFrame.style.transform = 'translate3d(' + (dir * w) + 'px,0,0)';
-  oldFrame.style.transform = 'translate3d(0,0,0)';
-  let done = false;
+  document.body.classList.add('page-sliding');
+  const sl = { dir, w:r.width, wrap, oldFrame, newFrame, newBack, oldBack, fixedBack, prev, offset:0, done:false };
+  setPageSlide(sl, 0);
+  return sl;
+}
+// dx = how far the finger has dragged (negative = left). 0 = not moved yet.
+function setPageSlide(sl, dx){
+  const span = -sl.dir * sl.w;                              // full drag needed to finish
+  const d = sl.dir > 0 ? Math.max(span, Math.min(0, dx)) : Math.min(span, Math.max(0, dx));
+  sl.offset = d;
+  const newX = sl.dir * sl.w + d;
+  sl.newFrame.style.transform = 'translate3d(' + newX + 'px,0,0)';
+  sl.oldFrame.style.transform = 'translate3d(' + d + 'px,0,0)';
+}
+// Finish the slide: commit = go to the new page; otherwise slide back to where it was.
+function endPageSlide(sl, commit){
+  if(!sl || sl.done) return;
+  const ease = 'transform 0.19s cubic-bezier(.22,.9,.24,1)';
+  const els = [sl.newFrame, sl.oldFrame];
+  els.forEach(e=>{ e.style.transition = ease; });
+  setPageSlide(sl, commit ? -sl.dir * sl.w : 0);
+  let finished = false;
   const finish = ()=>{
-    if(done) return; done = true;
-    if(oldFrame.parentNode) oldFrame.parentNode.removeChild(oldFrame);
-    newFrame.style.transition = newFrame.style.transform = newFrame.style.willChange = '';
-    wrap.style.position = prevPos; wrap.style.overflow = prevOverflow;
+    if(finished) return; finished = true; sl.done = true;
+    if(sl.fixedBack && sl.fixedBack.parentNode) sl.fixedBack.parentNode.removeChild(sl.fixedBack);
+    document.body.classList.remove('page-sliding');
+    if(commit){
+      if(sl.oldFrame.parentNode) sl.oldFrame.parentNode.removeChild(sl.oldFrame);
+      sl.newFrame.style.transition = sl.newFrame.style.transform = sl.newFrame.style.willChange = '';
+      if(sl.newBack) sl.newBack.style.visibility = '';
+    } else {
+      // Back to the page you were on, exactly as it was (same scroll, nothing redrawn).
+      if(sl.newFrame.parentNode) sl.newFrame.parentNode.removeChild(sl.newFrame);
+      const scroll = (sl.oldFrame.querySelector('#content-area') || {}).scrollTop || 0;
+      if(sl.prev.frameStyle === null) sl.oldFrame.removeAttribute('style'); else sl.oldFrame.setAttribute('style', sl.prev.frameStyle);
+      const ob = sl.oldFrame.querySelector('.dash-back'); if(ob) ob.style.visibility = '';
+      const a = sl.oldFrame.querySelector('#content-area'); if(a) a.scrollTop = scroll;
+      state.current = sl.prev.current; state.lastPage = sl.prev.lastPage;
+      lastScreenKey = currentScreenKey();
+    }
+    sl.wrap.style.position = sl.prev.pos; sl.wrap.style.overflow = sl.prev.overflow;
     pageSwipeAnimating = false;
   };
-  requestAnimationFrame(()=>{ requestAnimationFrame(()=>{
-    newFrame.style.transition = oldFrame.style.transition = ease;
-    newFrame.style.transform = 'translate3d(0,0,0)';
-    oldFrame.style.transform = 'translate3d(' + (-dir * w) + 'px,0,0)';
-    newFrame.addEventListener('transitionend', finish, { once:true });
-    setTimeout(finish, 260);
-  }); });
+  requestAnimationFrame(()=>{ sl.newFrame.addEventListener('transitionend', finish, { once:true }); setTimeout(finish, 260); });
+}
+function goToPageIndex(next){
+  const idx = PAGES.indexOf(state.current);
+  if(next===idx || next<0 || next>PAGES.length-1) return;
+  const sl = beginPageSlide(next);
+  if(!sl){
+    if(pageSwipeAnimating) return;
+    // Nothing on screen to slide from: plain cut.
+    state.current = PAGES[next];
+    state.lastPage = state.current;
+    renderDevice();
+    return;
+  }
+  requestAnimationFrame(()=>{ requestAnimationFrame(()=>endPageSlide(sl, true)); });
 }
 
 function attachColorPicker(){
@@ -10006,26 +10074,40 @@ function attachSwipe(){
   if(state.device !== 'phone') return;
   const shell = document.querySelector('.page-shell');
   if(!shell || !PAGES.includes(state.current)) return;
-  let startX=null, startY=null, active=false, pid=null;
-
+  // The pages follow the finger: drag left for the page on the right, right for the page on the left.
+  // Let go past a quarter of the screen (or with a quick flick) and it finishes; otherwise it slides back.
   shell.addEventListener('pointerdown', e=>{
-    startX = e.clientX; startY = e.clientY; active = true; pid = e.pointerId;
+    if(pageSwipeAnimating) return;
+    const startX = e.clientX, startY = e.clientY, pid = e.pointerId;
+    let sl = null, gaveUp = false, lastX = startX, lastT = performance.now(), vx = 0;
+    const move = ev=>{
+      if(ev.pointerId !== pid || gaveUp) return;
+      const dx = ev.clientX - startX, dy = ev.clientY - startY;
+      if(!sl){
+        if(Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)){ gaveUp = true; return; }   // scrolling up/down
+        if(Math.abs(dx) < 10 || Math.abs(dx) < Math.abs(dy) * 1.2) return;
+        const idx = PAGES.indexOf(state.current);
+        sl = beginPageSlide(idx + (dx < 0 ? 1 : -1));
+        if(!sl){ gaveUp = true; return; }
+      }
+      const now = performance.now();
+      if(now > lastT){ vx = (ev.clientX - lastX) / (now - lastT); lastX = ev.clientX; lastT = now; }
+      setPageSlide(sl, dx);
+    };
+    const up = ev=>{
+      if(ev.pointerId !== pid) return;
+      document.removeEventListener('pointermove', move, true);
+      document.removeEventListener('pointerup', up, true);
+      document.removeEventListener('pointercancel', up, true);
+      if(!sl) return;
+      const far = Math.abs(sl.offset) > sl.w * 0.25;
+      const flick = Math.abs(vx) > 0.35 && Math.sign(vx) === -sl.dir;
+      endPageSlide(sl, ev.type !== 'pointercancel' && (far || flick));
+    };
+    document.addEventListener('pointermove', move, true);
+    document.addEventListener('pointerup', up, true);
+    document.addEventListener('pointercancel', up, true);
   });
-
-  shell.addEventListener('pointerup', e=>{
-    if(!active || startX===null || e.pointerId !== pid) return;
-    active = false;
-    const dx = e.clientX - startX, dy = e.clientY - startY;
-    if(Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy)){
-      const idx = PAGES.indexOf(state.current);
-      // drag LEFT reveals the next page to the right (Focus); drag RIGHT reveals the previous page to the left (Money)
-      if(dx < 0) goToPageIndex(idx + 1);
-      if(dx > 0) goToPageIndex(idx - 1);
-    }
-    startX=null; startY=null; pid=null;
-  });
-
-  shell.addEventListener('pointercancel', ()=>{ active=false; startX=null; pid=null; });
 }
 
 document.getElementById('btn-phone').addEventListener('click', ()=>{
