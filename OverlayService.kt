@@ -212,11 +212,20 @@ class OverlayService : Service(), StoryBridge.Host {
                 cornerRadii = floatArrayOf(20 * dp, 20 * dp, 0f, 0f, 0f, 0f, 0f, 0f)
                 setColor(Color.parseColor("#F2111111")); setStroke((1 * dp).toInt(), Color.parseColor("#55FFFFFF"))
             }
-            setOnClickListener { showPanel(station3Only = true) }  // Station 3 ONLY: its own buttons, nothing else, also on the lock screen
+            // The ONE Station 3 button: it stays on screen, exactly the same, open or closed -- tap to open, tap to close.
+            setOnClickListener { if (s3Pane?.shown == true) closeStation3() else showPanel(station3Only = true) }
         }
         bubble = v
         bubbleWm = layerWm
-        layerWm.addView(v, overlayParams(size, size, Gravity.BOTTOM or Gravity.END, 0, 0).also { it.type = layerType })  // flush in the bottom-right corner
+        bubbleLp = overlayParams(size, size, Gravity.BOTTOM or Gravity.END, 0, 0).also { it.type = layerType }
+        layerWm.addView(v, bubbleLp)  // flush in the bottom-right corner
+    }
+    private var bubbleLp: WindowManager.LayoutParams? = null
+
+    /** Keeps the Station 3 button above Station 3's own windows (it sits on top of the bar's right end). */
+    private fun raiseBubble() {
+        val v = bubble ?: return; val lp = bubbleLp ?: return
+        runCatching { (bubbleWm ?: wm).removeView(v); (bubbleWm ?: wm).addView(v, lp) }
     }
 
     // ---- The STORY bar: the one bottom line ----
@@ -391,9 +400,11 @@ class OverlayService : Service(), StoryBridge.Host {
     }
 
     private fun warmUp() {
+        val fresh = s3Pane == null || dialPane == null
         if (s3Pane == null) s3Pane = buildPane(true)
         if (pagesPane == null) pagesPane = buildPane(false)
         if (dialPane == null) dialPane = buildPane(true, dial = true)
+        if (fresh) raiseBubble()  // done while Station 3 is still hidden, so nothing visibly changes later
         addBar()
     }
 
@@ -435,9 +446,9 @@ class OverlayService : Service(), StoryBridge.Host {
         addBar() // re-add last so the STORY bar stays on top of everything, including the pages
     }
 
-    /** The corner button shows only while nothing of STORY is open (Station 3's own arrow sits in the same spot). */
+    /** The Station 3 button is always there (open or closed); only the full-screen Pages, which have their own, hide it. */
     private fun updateBubble() {
-        bubble?.visibility = if (s3Pane?.shown == true || pagesPane?.shown == true) View.GONE else View.VISIBLE
+        bubble?.visibility = if (pagesPane?.shown == true) View.GONE else View.VISIBLE
     }
 
     private fun hideOne(p: Pane) {

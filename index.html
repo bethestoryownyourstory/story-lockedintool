@@ -1602,9 +1602,12 @@
   /* Over other apps the corner button keeps its size and place when open (see positionStation3()). */
   /* Tight in the corner: the bar / dial pad round only their top-left, like the corner button. */
   /* The bar is exactly as tall as the 40px corner button, so it just extends it to the left. */
-  body.s3-only .station3-bar-card{ border-radius:20px 0 0 0 !important; height:40px; padding:0 46px 0 10px; box-sizing:border-box; display:flex; align-items:center; }
+  body.s3-only .station3-bar-card{ border-radius:20px 0 0 0 !important; height:40px; padding:0 6px 0 10px; box-sizing:border-box; display:flex; align-items:center; }
   body.s3-only .station3-dialpad-card{ border-radius:20px !important; }
   body.s3-dial .station3-corner-arrow, body.s3-dial .station3-bar-card{ display:none !important; }
+  /* Over other apps the Station 3 button itself is drawn by the app, always the same, on top -- the page
+     only keeps an invisible placeholder where it sits, to line the bar up against. */
+  body.s3-only .station3-region .station3-corner-arrow{ visibility:hidden !important; pointer-events:none !important; }
   body.s3-only .station3-dialpad-float{ width:280px !important; max-width:none !important; }
   /* The dial pad closes with the X just outside its right side, halfway down (where the arrow used to be),
      so no ^ inside. */
@@ -6340,7 +6343,9 @@ function positionStation3(){
     // arrow's left edge instead of just touching it.
     // Over other apps the white part runs on underneath the black button, so the button simply sits
     // at its right end, unchanged.
-    sideCard.style.right = (s3Only ? vw - arrowRect.right : vw - arrowRect.left - OVERLAP) + 'px';
+    // Over other apps the bar ends exactly at the Station 3 button's left edge (the app's own button
+    // sits there, on top), so the button's shape never changes.
+    sideCard.style.right = (s3Only ? vw - arrowRect.left : vw - arrowRect.left - OVERLAP) + 'px';
     sideCard.style.bottom = (vh - arrowRect.bottom) + 'px';
   }
   // Over other apps: the dial pad sits still in the middle of the screen, just above Station 3. No animation.
