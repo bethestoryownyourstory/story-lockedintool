@@ -1599,7 +1599,10 @@
   body.s3-only::before, body.s3-only::after{ display:none !important; }
   /* Over the phone's apps: no Rows / Page Styles buttons, and the arrow rounds its own top. */
   body.s3-only .station3-quick-row, body.s3-only .station3-connector, body.s3-only .station3-connector-2{ display:none !important; }
-  body.s3-only .station3-corner-arrow-open{ border-radius:20px 0 20px 0 !important; }
+  /* The open arrow's size and rounding are set in positionStation3(): over other apps it becomes the
+     rounded right end of ONE even pill with the bar (or the dial pad), so there's no step between them. */
+  /* No spin animation over other apps: a half-turned tall arrow measures wrong while it lines up. */
+  body.s3-only .station3-corner-arrow{ transition:background 0.15s ease !important; }
   .station3-region{ position:absolute; inset:0; pointer-events:none; z-index:30; }
   /* Solid white fill plugging the gaps between the lifted Rows/Page Styles row, the bar
      card, and the corner arrow, so the whole silhouette reads as one continuous flush
@@ -6147,7 +6150,10 @@ function positionStation3(){
   const screenEl = region.closest('.phone-screen, .laptop-screen');
   if(!screenEl) return;
   const rect = screenEl.getBoundingClientRect();
-  const gap = 10;
+  // Over other apps (Android overlay) Station 3 sits a little in from the screen edges, so the
+  // phone's rounded screen corner and bottom edge never cut it off.
+  const s3Only = document.body.classList.contains('s3-only');
+  const gap = s3Only ? 20 : 10;
   const arrowH = 40;
   const vw = window.innerWidth, vh = window.innerHeight;
   const rightPx = Math.max(gap, vw - rect.right + gap);
@@ -6155,6 +6161,18 @@ function positionStation3(){
   const quickRow = region.querySelector('.station3-quick-row');
   const sideCard = region.querySelector('.station3-bar-card, .station3-dialpad-card');
   if(!arrow) return;
+  if(s3Only){
+    // Open: the arrow is as tall as the bar/dial pad beside it and rounded on its outer side, so the
+    // two read as one even pill. The arrow is rotated 180deg, so its DOM left corners are the
+    // visual right corners.
+    const open = arrow.classList.contains('station3-corner-arrow-open') && sideCard;
+    const dial = open && sideCard.classList.contains('station3-dialpad-card');
+    const h = open ? sideCard.offsetHeight + 'px' : '';
+    // A new height only settles after this pass, so line everything up once more next frame.
+    if(arrow.style.height !== h){ arrow.style.height = h; requestAnimationFrame(() => positionStation3()); }
+    arrow.style.width = open ? '46px' : '';
+    arrow.style.borderRadius = open ? (dial ? '20px 0 0 20px' : '999px 0 0 999px') : '';
+  }
 
   if(REAL_DEVICE){
     // On a real phone the screen box IS the viewport (no mockup to scroll around), so this
@@ -6173,7 +6191,7 @@ function positionStation3(){
     const floorY = Math.min(rect.bottom, visH);
     arrow.style.right = rightPx + 'px';
     arrow.style.bottom = 'auto';
-    arrow.style.top = (floorY - gap - arrowH) + 'px';
+    arrow.style.top = (floorY - gap - (arrow.offsetHeight || arrowH)) + 'px';
   } else {
     // Mirrors what position:sticky would do if it could see past the mockup's own
     // overflow:hidden: stay at the natural spot relative to the screen's bottom, but never get
