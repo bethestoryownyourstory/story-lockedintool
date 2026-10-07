@@ -221,6 +221,7 @@ class OverlayService : Service(), StoryBridge.Host {
     }
 
     // ---- Station 3 button (bottom right) ----
+    @SuppressLint("ClickableViewAccessibility")
     private fun addBubble() {
         val size = (40 * dp).toInt()  // same size as Station 3's own arrow
         val v = TextView(this).apply {
@@ -232,7 +233,13 @@ class OverlayService : Service(), StoryBridge.Host {
                 setColor(Color.parseColor("#FF111111"))
             }
             // The ONE Station 3 button: it stays on screen, exactly the same, open or closed -- tap to open, tap to close.
-            setOnClickListener { if (s3Pane?.shown == true) closeStation3() else showPanel(station3Only = true) }
+            // It reacts the instant your finger touches it (not when you lift it), so there's no wait.
+            setOnTouchListener { _, e ->
+                if (e.actionMasked == MotionEvent.ACTION_DOWN) {
+                    if (s3Pane?.shown == true) closeStation3Now() else showPanel(station3Only = true)
+                }
+                true
+            }
         }
         bubble = v
         bubbleWm = layerWm
@@ -612,7 +619,10 @@ class OverlayService : Service(), StoryBridge.Host {
     override fun hidePanel() { ui.post { pagesPane?.takeIf { it.shown }?.let { hideOne(it) }; updateBubble() } }
 
     /** Station 3's corner arrow was tapped: the one way Station 3 closes. */
-    override fun closeStation3() { ui.post { dialPane?.takeIf { it.shown }?.let { hideOne(it) }; s3Pane?.takeIf { it.shown }?.let { hideOne(it) }; updateBubble() } }
+    override fun closeStation3() { ui.post { closeStation3Now() } }
+
+    /** Closes Station 3 (and its dial pad) right now, on the spot. */
+    private fun closeStation3Now() { dialPane?.takeIf { it.shown }?.let { hideOne(it) }; s3Pane?.takeIf { it.shown }?.let { hideOne(it) }; updateBubble() }
 
     override fun toggleDialpad() { ui.post {
         val d = dialPane ?: return@post
