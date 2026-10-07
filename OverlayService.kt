@@ -349,6 +349,7 @@ class OverlayService : Service(), StoryBridge.Host {
                     v.evaluateJavascript("window.storyDialOnly&&window.storyDialOnly()", null); v.evaluateJavascript(DIAL_JS, null)
                     ui.postDelayed({ paneRef?.let { it.loading = false; if (it.shown) it.frame.alpha = 1f } }, 200)
                 } else if (small) {
+                    v.evaluateJavascript(exactGeometryJs(), null)
                     v.evaluateJavascript("window.storyStation3Only&&window.storyStation3Only()", null); v.evaluateJavascript(S3_JS, null)
                     // Show it again once Station 3 has actually drawn (a moment after the page is ready).
                     ui.postDelayed({ paneRef?.let { it.loading = false; if (it.shown) it.frame.alpha = 1f } }, 200)
@@ -399,6 +400,16 @@ class OverlayService : Service(), StoryBridge.Host {
         return p
     }
 
+    /**
+     * The exact pixel gap (the 10dp Station 3's window reaches past the screen edges) and button size
+     * (40dp) the app uses, in the page's units -- so the page's white bar lines up with the app's
+     * Station 3 button to the pixel, with no sliver of white above or below it.
+     */
+    private fun exactGeometryJs(): String {
+        val gap = (10 * dp).toInt() / dp; val btn = (40 * dp).toInt() / dp
+        return "window.__s3Gap=$gap;window.__s3Btn=$btn;"
+    }
+
     private fun warmUp() {
         val fresh = s3Pane == null || dialPane == null
         if (s3Pane == null) s3Pane = buildPane(true)
@@ -431,6 +442,7 @@ class OverlayService : Service(), StoryBridge.Host {
             pagesPane?.takeIf { it.shown }?.let { hideOne(it) }
             val p = s3Pane!!
             if (!p.shown) {
+                p.web.evaluateJavascript(exactGeometryJs(), null)
                 p.web.evaluateJavascript("window.storyStation3Only&&window.storyStation3Only()", null)
                 setShown(p, true)
                 p.web.evaluateJavascript("window.__storyS3Report&&window.__storyS3Report(true)", null)
