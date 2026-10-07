@@ -54,6 +54,7 @@ class OverlayService : Service(), StoryBridge.Host {
     private lateinit var layerWm: WindowManager
     private var layerType = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
     private var bubbleWm: WindowManager? = null
+    private var gated = false
     private val updateLoop = object : Runnable {
         // Every 20 seconds while the screen is on: new app version? new screens? Nothing while the screen is off.
         override fun run() {
@@ -88,6 +89,9 @@ class OverlayService : Service(), StoryBridge.Host {
         super.onCreate()
         wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         startAsForeground()
+        // Using STORY means agreeing to automatic updates (everyone, owner included). Not agreed yet:
+        // show the agreement and stay off; agreeing starts STORY.
+        if (!Release.agreedAuto(this)) { gated = true; running = false; UpdateActivity.ask(this, force = true); stopSelf(); return }
         instance = this
         getSharedPreferences("story", MODE_PRIVATE).edit().putBoolean("enabled", true).apply()
         pickLayer()
@@ -103,12 +107,14 @@ class OverlayService : Service(), StoryBridge.Host {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (gated) return START_NOT_STICKY
         if (intent?.action == ACTION_STOP) { getSharedPreferences("story", MODE_PRIVATE).edit().putBoolean("enabled", false).apply(); stopSelf(); return START_NOT_STICKY }
         if (intent?.action == ACTION_REBUILD) ui.post { rebuildLayer() }
         return START_STICKY
     }
 
     override fun onDestroy() {
+        if (gated) { super.onDestroy(); return }
         removePanelNow(); hidePicker(); destroyPanes()
         bubble?.let { runCatching { (bubbleWm ?: wm).removeView(it) } }
         instance = null
@@ -459,11 +465,6 @@ class OverlayService : Service(), StoryBridge.Host {
     }
 
     private fun showPanel(station3Only: Boolean) {
-        // An update that has waited 3 days is required: STORY opens the update window instead.
-        if (Release.isRequired(this)) {
-            runCatching { startActivity(Intent(this, UpdateActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-            return
-        }
         warmUp()
         if (station3Only) {
             pagesPane?.takeIf { it.shown }?.let { hideOne(it) }

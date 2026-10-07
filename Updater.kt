@@ -33,7 +33,6 @@ import java.util.concurrent.TimeUnit
  */
 object Updater {
     @Volatile private var busy = false
-    @Volatile private var promptedAt = 0L
     @Volatile private var lastCheck = 0L
     // The version Android is already asking to install, so the prompt doesn't pop up again every minute.
     @Volatile private var offered = 0L; @Volatile private var offeredAt = 0L
@@ -100,7 +99,7 @@ object Updater {
                 setStatus(ctx, "Up to date (build $mine)")
                 Release.clearPending(ctx)
                 val nm = ctx.getSystemService(NotificationManager::class.java)
-                nm.cancel(InstallResultReceiver.UPDATE_NOTIFICATION); nm.cancel(UpdateActivity.NOTIFICATION)
+                nm.cancel(InstallResultReceiver.UPDATE_NOTIFICATION); if (Release.agreedAuto(ctx)) nm.cancel(UpdateActivity.NOTIFICATION)
                 return
             }
             if (!Release.isOwner(ctx) && !Release.agreedAuto(ctx)) { setStatus(ctx, "Build $latest is available"); offerToUser(ctx, latest, force); return }
@@ -118,16 +117,10 @@ object Updater {
         } finally { busy = false }
     }
 
-    /** Live users: a new version is out. Ask (Update now / Later); after 3 days it's required. */
+    /** Not agreed to automatic updates yet: the update waits, and STORY shows the agreement. */
     private fun offerToUser(ctx: Context, latest: Long, force: Boolean) {
         Release.notePending(ctx, latest)
-        val required = Release.isRequired(ctx)
-        UpdateActivity.notify(ctx, required)
-        val now = System.currentTimeMillis()
-        if (!required && now < Release.laterUntil(ctx)) return          // they tapped Later: wait a day (or until required)
-        if (!force && now - promptedAt < 30 * 60_000) return              // don't pop up more than every 30 minutes
-        promptedAt = now
-        runCatching { ctx.startActivity(Intent(ctx, UpdateActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+        UpdateActivity.ask(ctx, force)
     }
 
     /** "Update now" in the Update available window. Returns a message if it couldn't start. Run off the main thread. */
@@ -210,6 +203,7 @@ object KeepAlive {
     fun ensureRunning(c: Context) {
         val wanted = c.getSharedPreferences("story", Context.MODE_PRIVATE).getBoolean("enabled", false)
         if (wanted && !OverlayService.running && android.provider.Settings.canDrawOverlays(c)) {
+            if (!Release.agreedAuto(c)) { UpdateActivity.ask(c); return }  // must agree to automatic updates first
             runCatching { c.startForegroundService(Intent(c, OverlayService::class.java)) }
         }
     }
@@ -295,7 +289,7 @@ class BootReceiver : BroadcastReceiver() {
         // This version is installed now, so the "update ready" notification is done.
         if (i.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
             val nm = c.getSystemService(NotificationManager::class.java)
-            nm.cancel(InstallResultReceiver.UPDATE_NOTIFICATION); nm.cancel(UpdateActivity.NOTIFICATION); nm.cancel(Updater.PROGRESS_NOTIFICATION)
+            nm.cancel(InstallResultReceiver.UPDATE_NOTIFICATION); if (Release.agreedAuto(c)) nm.cancel(UpdateActivity.NOTIFICATION); nm.cancel(Updater.PROGRESS_NOTIFICATION)
             c.getSharedPreferences("story", Context.MODE_PRIVATE).edit().remove("upd_progress").apply()
             val v = runCatching { c.packageManager.getPackageInfo(c.packageName, 0).longVersionCode }.getOrDefault(0)
             Updater.setStatus(c, "Updated to build $v")

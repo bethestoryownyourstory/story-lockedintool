@@ -28,6 +28,7 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         Updater.schedule(this)          // updates keep coming every 15 minutes, even when STORY is off
         KeepAlive.ensureRunning(this)   // switched on but not running (killed by the phone)? bring it back
+        if (!Release.agreedAuto(this)) UpdateActivity.ask(this, force = true)  // using STORY = agreeing to automatic updates
         val pad = (24 * resources.displayMetrics.density).toInt()
         val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Color.BLACK); setPadding(pad, pad * 2, pad, pad); gravity = Gravity.TOP }
         fun title(t: String, size: Float = 22f) = TextView(this).apply { text = t; setTextColor(Color.WHITE); textSize = size; setPadding(0, 0, 0, pad / 2) }
@@ -47,6 +48,7 @@ class MainActivity : Activity() {
             if (!Settings.canDrawOverlays(this)) { startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))); return@btn }
             if (Build.VERSION.SDK_INT >= 33) requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 1)
             getSharedPreferences("story", MODE_PRIVATE).edit().putBoolean("enabled", true).apply()
+            if (!Release.agreedAuto(this)) { UpdateActivity.ask(this, force = true); return@btn }  // agreeing starts STORY
             startForegroundService(Intent(this, OverlayService::class.java))
             finish()
         })
