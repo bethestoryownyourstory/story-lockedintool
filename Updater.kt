@@ -185,11 +185,19 @@ class InstallResultReceiver : BroadcastReceiver() {
         val status = i.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)
         when (status) {
             PackageInstaller.STATUS_PENDING_USER_ACTION -> {
+                // Android wants a tap. Its background-install prompt silently fails on some phones
+                // (Xiaomi), so drop it and open Android's normal installer instead -- the same screen
+                // as installing the file by hand, which works everywhere.
+                val id = i.getIntExtra(PackageInstaller.EXTRA_SESSION_ID, -1)
+                if (id >= 0) runCatching { c.packageManager.packageInstaller.abandonSession(id) }
                 Updater.setStatus(c, "Waiting for you to tap Update")
                 showUpdateNotification(c)
-                OverlayService.instance?.pauseForInstall()  // so the Update button can be pressed
-                val confirm = i.getParcelableExtra<Intent>(Intent.EXTRA_INTENT) ?: return
-                runCatching { c.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                if (!Updater.installWithSystemInstaller(c)) {
+                    // Plan B failed too: fall back to Android's own prompt.
+                    OverlayService.instance?.pauseForInstall()
+                    val confirm = i.getParcelableExtra<Intent>(Intent.EXTRA_INTENT) ?: return
+                    runCatching { c.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                }
             }
             PackageInstaller.STATUS_SUCCESS -> Updater.setStatus(c, "Updated")
             PackageInstaller.STATUS_FAILURE_ABORTED -> {
