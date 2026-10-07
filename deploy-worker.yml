@@ -1,0 +1,32 @@
+name: Deploy STORY release server
+# Puts release-worker.js on Cloudflare as the "story-release" Worker - no code editor needed.
+# Runs when release-worker.js changes, or Actions -> this workflow -> Run workflow.
+# Needs two repo secrets (Settings -> Secrets and variables -> Actions):
+#   CLOUDFLARE_API_TOKEN  - Cloudflare API token from the "Edit Cloudflare Workers" template
+#   CLOUDFLARE_ACCOUNT_ID - your Cloudflare account ID
+# The Worker's own PIN and GITHUB_TOKEN secrets stay in Cloudflare and are kept on every deploy.
+on:
+  push:
+    branches: [main]
+    paths: ['release-worker.js', '.github/workflows/deploy-worker.yml']
+  workflow_dispatch:
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the Cloudflare secrets are set
+        id: ready
+        env:
+          T: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          A: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -n "$T" ] && [ -n "$A" ]; then echo "ok=true" >> "$GITHUB_OUTPUT"
+          else echo "### Not deployed: add CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID in Settings -> Secrets and variables -> Actions." >> "$GITHUB_STEP_SUMMARY"; fi
+      - name: Deploy to Cloudflare
+        if: steps.ready.outputs.ok == 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy release-worker.js --name story-release --compatibility-date 2025-01-01
