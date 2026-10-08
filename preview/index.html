@@ -1427,8 +1427,7 @@
   .notif-scroll-wrap{ position:relative; }
   .notif-scroll{ scrollbar-width:none; }
   .notif-scroll::-webkit-scrollbar{ display:none; }
-  .pay-scroll-track{ position:absolute; top:0; bottom:4px; right:-15px; width:16px; display:none; touch-action:none; cursor:pointer; z-index:5; }
-  .pay-scroll-track.visible{ display:block; }
+  .pay-scroll-track{ position:absolute; top:0; bottom:4px; right:-15px; width:16px; touch-action:none; cursor:pointer; z-index:5; }
   .pay-scroll-line{ position:absolute; top:0; bottom:0; left:6px; width:4px; border-radius:3px; background:rgba(255,255,255,0.06); }
   .pay-scroll-thumb{ position:absolute; left:0; width:4px; border-radius:3px; background:rgba(255,255,255,0.38); }
   .notif-card{
@@ -7146,11 +7145,9 @@ function updatePayScroll(){
   const track = document.getElementById('pay-scroll-track');
   const thumb = document.getElementById('pay-scroll-thumb');
   if(!el || !track || !thumb) return;
-  const scrollable = el.scrollHeight - el.clientHeight > 2;
-  track.classList.toggle('visible', scrollable);
-  if(!scrollable) return;
+  // Always on screen; when everything fits, the bar simply fills the whole line.
   const h = track.clientHeight;
-  const th = Math.max(20, (el.clientHeight / el.scrollHeight) * h);
+  const th = Math.min(h, Math.max(20, (el.clientHeight / Math.max(1, el.scrollHeight)) * h));
   const max = el.scrollHeight - el.clientHeight;
   thumb.style.height = th + 'px';
   thumb.style.top = ((max > 0 ? el.scrollTop / max : 0) * (h - th)) + 'px';
