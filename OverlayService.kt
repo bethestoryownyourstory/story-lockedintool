@@ -761,10 +761,25 @@ class OverlayService : Service(), StoryBridge.Host {
     }
 
     /** Swipe down from the top over the Pages: the phone's own notification panel, as anywhere else. */
+    // The Pages sit above the phone's notification panel, so while it's down they step out of the way
+    // (hidden, not reloaded), and come straight back when it's pushed up again -- unless something
+    // in the panel opened another app.
+    private var pagesAwayForPanel = false
+    private var panelFromPkg: String? = null
     private fun openPhonePanel() {
-        lowerPages()
+        val p = pagesPane ?: return
+        if (p.shown) { setShown(p, false); pagesAwayForPanel = true; panelFromPkg = StoryAccessibilityService.foregroundPkg; updateBubble() }
         StoryAccessibilityService.instance?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_NOTIFICATIONS)
     }
+    fun onPhonePanel(open: Boolean) { ui.post {
+        if (open || !pagesAwayForPanel) return@post
+        ui.postDelayed({
+            if (!pagesAwayForPanel) return@postDelayed
+            pagesAwayForPanel = false
+            val p = pagesPane ?: return@postDelayed
+            if (!p.shown && StoryAccessibilityService.foregroundPkg == panelFromPkg) { setShown(p, true); updateBubble(); addBar() }
+        }, 250)
+    } }
 
     /** The Pages (hidden now) go back to the top layer, with Station 3, the bar and the line above them. */
     private fun pagesBackToTop() {
