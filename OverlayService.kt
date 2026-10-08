@@ -308,12 +308,13 @@ class OverlayService : Service(), StoryBridge.Host {
         val hasLine = phoneHasGestureLine()
         val w = (150 * dp).toInt(); val h = (26 * dp).toInt()
         val touch = ViewConfiguration.get(this).scaledTouchSlop
-        // STORY's own line. Phones with 3-button navigation have no gesture line, so it always shows;
-        // on gesture phones it shows over the full-screen Pages (which cover the phone's own line).
+        // STORY's own line, only on phones that don't have one (3-button navigation). It's the exact size
+        // and shape of Android's own gesture line (read from the phone's System UI), so it's the same line.
+        val (lineW, lineH, lineR) = phoneLineSize()
         val line = View(this).apply {
-            background = GradientDrawable().apply { cornerRadius = 3 * dp; setColor(Color.parseColor("#B3FFFFFF")) }
+            background = GradientDrawable().apply { cornerRadius = lineR; setColor(Color.parseColor("#B3FFFFFF")) }
         }
-        val v: View = FrameLayout(this).apply { addView(line, FrameLayout.LayoutParams((110 * dp).toInt(), (5 * dp).toInt(), Gravity.CENTER)) }
+        val v: View = FrameLayout(this).apply { addView(line, FrameLayout.LayoutParams(lineW, lineH, Gravity.CENTER)) }
         barLine = line; barHasLine = hasLine
         updateBarLine()
         var downT = 0L; var downY = 0f; var downX = 0f; var moved = false; var held = false
@@ -345,7 +346,21 @@ class OverlayService : Service(), StoryBridge.Host {
     private var barWm: WindowManager? = null
     private var barLine: View? = null
     private var barHasLine = false
-    private fun updateBarLine() { barLine?.visibility = if (!barHasLine || pagesPane?.shown == true) View.VISIBLE else View.INVISIBLE }
+    // The phone's own line shows everywhere (the Pages sit under it), so STORY only draws one when the phone has none.
+    private fun updateBarLine() { barLine?.visibility = if (!barHasLine) View.VISIBLE else View.INVISIBLE }
+
+    /** Android's gesture line size (width, height, corner radius in px), from the phone's own System UI. */
+    private fun phoneLineSize(): Triple<Int, Int, Float> {
+        val r = runCatching { packageManager.getResourcesForApplication("com.android.systemui") }.getOrNull()
+        fun dim(name: String, fallbackDp: Float): Float {
+            val id = r?.getIdentifier(name, "dimen", "com.android.systemui") ?: 0
+            return if (id != 0) runCatching { r!!.getDimension(id) }.getOrDefault(fallbackDp * dp) else fallbackDp * dp
+        }
+        val w = dim("navigation_home_handle_width", 108f)
+        val radius = dim("navigation_handle_radius", 2f)
+        val h = maxOf(dim("navigation_handle_height", 0f), radius * 2)
+        return Triple(Math.round(w), maxOf(1, Math.round(h)), radius)
+    }
 
     // ---- Apps | Pages switch ----
     private fun showPicker() {
