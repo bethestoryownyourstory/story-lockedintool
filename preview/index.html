@@ -1422,6 +1422,15 @@
     margin-bottom:4px; padding-right:2px;
     -webkit-overflow-scrolling:touch; scroll-behavior:smooth; overscroll-behavior:contain;
   }
+  /* Payments' own scroll indicator, just right of the cards (same look as the page's scrollbar).
+     Drag it to scroll the payments; it moves with them. */
+  .notif-scroll-wrap{ position:relative; }
+  .notif-scroll{ scrollbar-width:none; }
+  .notif-scroll::-webkit-scrollbar{ display:none; }
+  .pay-scroll-track{ position:absolute; top:0; bottom:4px; right:-15px; width:16px; display:none; touch-action:none; cursor:pointer; z-index:5; }
+  .pay-scroll-track.visible{ display:block; }
+  .pay-scroll-line{ position:absolute; top:0; bottom:0; left:6px; width:4px; border-radius:3px; background:rgba(255,255,255,0.06); }
+  .pay-scroll-thumb{ position:absolute; left:0; width:4px; border-radius:3px; background:rgba(255,255,255,0.38); }
   .notif-card{
     position:relative; overflow:hidden;
     display:flex; align-items:center; gap:10px; background:rgba(0,0,0,0.45);
@@ -3971,7 +3980,8 @@ function moneyScreen(){
     <div style="color:${pctNeg?'var(--red)':'var(--green)'};font-size:12px;font-weight:600;">${pctNeg?'-':'+'}${Math.abs(state.netWorthChangePct)}% this month</div>
 
     <div class="section-title">PAYMENTS</div>
-    <div class="notif-scroll">
+    <div class="notif-scroll-wrap">
+    <div class="notif-scroll" id="pay-scroll">
       ${state.notifications.map(n=>`
         <div class="notif-card" data-notif="${n.id}">
           <div class="notif-icon-wrap">${n.icon}</div>
@@ -3985,6 +3995,8 @@ function moneyScreen(){
           </div>
         </div>
       `).join('')}
+    </div>
+    <div class="pay-scroll-track" id="pay-scroll-track"><div class="pay-scroll-line"><div class="pay-scroll-thumb" id="pay-scroll-thumb"></div></div></div>
     </div>
     <div class="section-title">ASSETS</div>
     <div class="row-card">
@@ -7101,6 +7113,7 @@ function renderDevice(){
     }
   }
   positionStation3();
+  attachPayScroll();
   if(typeof updatePhoneStatusClock === 'function') updatePhoneStatusClock();
   updateScrollHint();
   updateScrollbarThumb();
@@ -7128,6 +7141,43 @@ function updateScrollHint(){
 // proportion of clientHeight/scrollHeight and scrollTop. Hidden entirely when there's nothing
 // to scroll. Called once right after every render and again on every 'scroll' tick (wired in
 // attachHandlers(), since #content-area is torn down and rebuilt on every render).
+function updatePayScroll(){
+  const el = document.getElementById('pay-scroll');
+  const track = document.getElementById('pay-scroll-track');
+  const thumb = document.getElementById('pay-scroll-thumb');
+  if(!el || !track || !thumb) return;
+  const scrollable = el.scrollHeight - el.clientHeight > 2;
+  track.classList.toggle('visible', scrollable);
+  if(!scrollable) return;
+  const h = track.clientHeight;
+  const th = Math.max(20, (el.clientHeight / el.scrollHeight) * h);
+  const max = el.scrollHeight - el.clientHeight;
+  thumb.style.height = th + 'px';
+  thumb.style.top = ((max > 0 ? el.scrollTop / max : 0) * (h - th)) + 'px';
+}
+function attachPayScroll(){
+  const el = document.getElementById('pay-scroll');
+  const track = document.getElementById('pay-scroll-track');
+  if(!el || !track) return;
+  el.addEventListener('scroll', updatePayScroll, { passive:true });
+  const scrollTo = y=>{
+    const r = track.getBoundingClientRect();
+    const th = (document.getElementById('pay-scroll-thumb') || {}).offsetHeight || 20;
+    const f = Math.max(0, Math.min(1, (y - r.top - th / 2) / Math.max(1, r.height - th)));
+    el.style.scrollBehavior = 'auto';
+    el.scrollTop = f * (el.scrollHeight - el.clientHeight);
+    updatePayScroll();
+  };
+  track.addEventListener('pointerdown', e=>{
+    e.stopPropagation(); e.preventDefault();
+    try{ track.setPointerCapture(e.pointerId); }catch(err){}
+    scrollTo(e.clientY);
+    const move = ev=>scrollTo(ev.clientY);
+    const up = ()=>{ track.removeEventListener('pointermove', move); track.removeEventListener('pointerup', up); track.removeEventListener('pointercancel', up); el.style.scrollBehavior = ''; };
+    track.addEventListener('pointermove', move); track.addEventListener('pointerup', up); track.addEventListener('pointercancel', up);
+  });
+  updatePayScroll();
+}
 function updateScrollbarThumb(){
   const el = document.getElementById('content-area');
   const track = document.getElementById('scrollbar-track');
