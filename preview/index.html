@@ -10043,20 +10043,20 @@ function beginPageSlide(next){
   const liveDim = liveFrame.querySelector('#system-dimmer'), newDim = newFrame.querySelector('#system-dimmer');
   if(liveDim && newDim) newDim.style.opacity = getComputedStyle(liveDim).opacity;
   wrap.appendChild(newFrame);
-  // One Dashboard button, standing still: a single copy of it sits on top in exactly the same spot,
-  // drawn through the same zoom steps and dimming as the page's own (both pages' copies are hidden).
-  const liveBack = liveFrame.querySelector('.dash-back');
-  const newBack = newFrame.querySelector('.dash-back');
-  let fixedBack = null;
-  if(liveBack){
-    const br = liveBack.getBoundingClientRect();
-    const copy = liveBack.cloneNode(true);
-    const cs = getComputedStyle(liveBack);
-    ['color','opacity','font','letterSpacing','textShadow','background','borderRadius','padding','boxShadow','filter','border'].forEach(k=>{ copy.style[k] = cs[k]; });
-    const dimA = liveDim ? parseFloat(getComputedStyle(liveDim).opacity) || 0 : 0;
+  // One Dashboard button and one set of page dots, standing still: a single copy of each sits on top in
+  // exactly the same spot, drawn through the same zoom steps and dimming as the page's own (both pages'
+  // copies are hidden). The dots' highlight moves to the page you're sliding to once it's half way in.
+  const dimA = liveDim ? parseFloat(getComputedStyle(liveDim).opacity) || 0 : 0;
+  const pinCopy = (sel)=>{
+    const own = liveFrame.querySelector(sel);
+    if(!own) return null;
+    const br = own.getBoundingClientRect();
+    const copy = own.cloneNode(true);
+    const cs = getComputedStyle(own);
+    ['color','opacity','font','letterSpacing','textShadow','background','borderRadius','padding','boxShadow','filter','border','display','flexDirection','gap','alignItems'].forEach(k=>{ copy.style[k] = cs[k]; });
     if(dimA > 0) copy.style.filter = 'brightness(' + (1 - dimA) + ')';
-    const zShell = parseFloat(getComputedStyle(liveBack.closest('.page-shell') || liveBack).zoom) || 1;
-    const zTop = parseFloat(getComputedStyle(liveBack.closest('.page-top') || liveBack).zoom) || 1;
+    const zShell = parseFloat(getComputedStyle(own.closest('.page-shell') || own).zoom) || 1;
+    const zTop = parseFloat(getComputedStyle(own.closest('.page-top') || own).zoom) || 1;
     const z = zShell * zTop;
     Object.assign(copy.style, { position:'absolute', left:((br.left - wrapRect.left) / z)+'px', top:((br.top - wrapRect.top) / z)+'px',
       width:(br.width / z)+'px', height:(br.height / z)+'px', margin:'0', pointerEvents:'none', visibility:'visible', boxSizing:'border-box', whiteSpace:'nowrap' });
@@ -10064,13 +10064,17 @@ function beginPageSlide(next){
     outer.style.cssText = 'position:absolute;left:0;top:0;z-index:50;pointer-events:none;zoom:' + zShell + ';';
     inner.style.cssText = 'position:absolute;left:0;top:0;zoom:' + zTop + ';';
     inner.appendChild(copy); outer.appendChild(inner); wrap.appendChild(outer);
-    fixedBack = outer;
-    liveBack.style.visibility = 'hidden';
-    if(newBack) newBack.style.visibility = 'hidden';
-  }
+    own.style.visibility = 'hidden';
+    const theirs = newFrame.querySelector(sel); if(theirs) theirs.style.visibility = 'hidden';
+    return { outer, copy, own };
+  };
+  const pinnedBack = pinCopy('.dash-back');
+  const pinnedDots = pinCopy('.page-dots');
+  const liveBack = pinnedBack && pinnedBack.own;
+  const fixedBack = pinnedBack && pinnedBack.outer;
   liveFrame.style.willChange = newFrame.style.willChange = 'transform';
   document.body.classList.add('page-sliding');
-  const sl = { dir, w:r.width, wrap, oldFrame:liveFrame, newFrame, liveBack, fixedBack, prev, next, offset:0, done:false };
+  const sl = { dir, w:r.width, wrap, oldFrame:liveFrame, newFrame, liveBack, fixedBack, pinnedDots, from:idx, prev, next, offset:0, done:false };
   setPageSlide(sl, 0);
   return sl;
 }
@@ -10081,6 +10085,10 @@ function setPageSlide(sl, dx){
   sl.offset = d;
   sl.newFrame.style.transform = 'translate3d(' + (sl.dir * sl.w + d) + 'px,0,0)';
   sl.oldFrame.style.transform = 'translate3d(' + d + 'px,0,0)';
+  if(sl.pinnedDots){
+    const on = Math.abs(d) > sl.w / 2 ? sl.next : sl.from;
+    sl.pinnedDots.copy.querySelectorAll('.dot').forEach((dot, k)=>dot.classList.toggle('active', k === on));
+  }
 }
 // Finish the slide: commit = go to the new page; otherwise slide back to where it was.
 let currentSlide = null;
@@ -10101,6 +10109,7 @@ function endPageSlide(sl, commit){
       sl.oldFrame.style.transition = sl.oldFrame.style.transform = sl.oldFrame.style.willChange = '';
       Object.assign(sl.oldFrame.style, { position:'', left:'', top:'', width:'', height:'', margin:'', pointerEvents:'' });
       if(sl.liveBack) sl.liveBack.style.visibility = '';
+      if(sl.pinnedDots){ sl.pinnedDots.own.style.visibility = ''; if(sl.pinnedDots.outer.parentNode) sl.pinnedDots.outer.remove(); }
       const keep = document.createElement('div');
       keep.className = 'device-wrap'; keep.setAttribute('aria-hidden', 'true');
       keep.style.cssText = 'position:fixed;left:0;top:0;width:' + sl.w + 'px;height:' + sl.wrap.getBoundingClientRect().height + 'px;visibility:hidden;pointer-events:none;z-index:-1;';
@@ -10121,6 +10130,7 @@ function endPageSlide(sl, commit){
       if(sl.fixedBack && sl.fixedBack.parentNode) sl.fixedBack.parentNode.removeChild(sl.fixedBack);
       sl.oldFrame.style.transition = sl.oldFrame.style.transform = sl.oldFrame.style.willChange = '';
       if(sl.liveBack) sl.liveBack.style.visibility = '';
+      if(sl.pinnedDots){ sl.pinnedDots.own.style.visibility = ''; if(sl.pinnedDots.outer.parentNode) sl.pinnedDots.outer.remove(); }
       sl.wrap.style.position = sl.prev.pos; sl.wrap.style.overflow = sl.prev.overflow;
       pageSwipeAnimating = false;
     }
