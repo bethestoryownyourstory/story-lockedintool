@@ -1664,6 +1664,10 @@
   html.focus .phone-screen, html.focus .phone-frame, html.focus .phone-content, html.focus .page-shell, html.focus .story-screen{ background:#000 !important; background-image:none !important; }
   /* Everything that was a near-black grey is real black now; a hairline keeps each piece's shape visible. */
   html.focus{ --card:#000; --bg-page:#000; }
+  /* No scrollbar line down the side of any page, ever (the Payments indicator is its own thing). */
+  html.focus .custom-scrollbar-track{ display:none !important; }
+  html.focus *:not(.notif-scroll){ scrollbar-width:none; }
+  html.focus *::-webkit-scrollbar{ width:0 !important; height:0 !important; display:none; }
   /* Colour swatches (a black one included) keep a thin ring so every option is visible on black. */
   html.focus .notes-swatch{ outline:1px solid rgba(255,255,255,0.22); outline-offset:-1px; }
   html.focus :is(.layouts-btn, .arrow-btn, .dash-back, .order-corner-btn, .notif-icon-wrap, .close-filter-btn, .avatar-add,
@@ -4339,7 +4343,7 @@ function tradingScreen(){
         <button class="lot-btn" data-closecount="1">+</button>
       </div>
     </div>
-    ${hasProfitable ? swipeConfirmHTML('Close All Active Positions', 'close-all') : ''}
+    ${hasProfitable ? swipeConfirmHTML('Close All Active Positions', 'close-all') : `<div style="visibility:hidden;pointer-events:none;" aria-hidden="true">${swipeConfirmHTML('Close All Active Positions', 'close-all-placeholder')}</div>`}
     </div>
     </div>
 
@@ -9924,12 +9928,9 @@ function fitPageToScreen(area, el, pageKey){
     return (dock ? dockTop : area.getBoundingClientRect().bottom) - (NATIVE ? 0 : 6);
   };
   const cached = FIT_CACHE[key];
-  if(cached){
-    applyZoom(cached.zoom);
-    const m = measure(), limit = limitNow();
-    // Same content height and same limit as when it was worked out = exactly what a fresh fit gives.
-    if(Math.abs(limit - cached.limit) <= 1 && Math.abs(m.bottom - cached.bottom) <= 1) return;
-  }
+  // Once a page's size is worked out it stays: live changes (prices, a trade flipping from profit to loss,
+  // an extra row) never make the page zoom in or out. Only a different screen size works it out again.
+  if(cached){ applyZoom(cached.zoom); return; }
   applyZoom(1);
   const limit = limitNow();
   // Zoom doesn't shrink everything linearly (width-driven things like the card's aspect-ratio
