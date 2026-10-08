@@ -1,6 +1,7 @@
 # STORY - working rules
 
 - **STORY works as one with the phone.** Once on, it is on and always running, like part of the system, and it uses the phone's full potential: STORY does things itself (e.g. silencing apps under the Pages) instead of depending on other apps to cooperate.
+- **Black means real black (#000000).** Whenever the owner says "black", use pure #000 -- never a dark grey. The Pages background and cards are #000 (html.focus).
 - **Change only what the owner asks for.** Every design in STORY stays exactly as it is unless the owner says to change it - no "improvements", no side changes. If the owner says something is wrong but not where or how it should be, ASK before changing anything. Only fix directly when it's clear what is wrong and how it should look.
 
 - All source files live in the repo root, flat (no folders). `.github/workflows/android.yml` turns them into an Android project at build time; `android.yml` / `screens.yml` / `deploy-worker.yml` in the root are copies of the workflows - keep them identical.
