@@ -7,6 +7,7 @@
   if(window.StoryNative){ document.documentElement.classList.add('native'); }
   if(window.StoryNative && !/[?&]s3=1/.test(location.search)){ document.documentElement.classList.add('focus'); }
   if(/[?&]s3=1/.test(location.search)){ document.documentElement.classList.add('s3-early'); }
+  if(/[?&]profile=1/.test(location.search)){ document.documentElement.classList.add('profile-early'); }
 }catch(e){} })();
 </script>
 <meta charset="UTF-8">
@@ -1705,6 +1706,36 @@
   html.focus .notif-label{ font-weight:500; color:#dcdbd6; }
     
   html.focus .page-title{ font-weight:600; letter-spacing:0.3px; }
+  /* ===== PROFILE (opens from Station 3's profile button, attached to Station 3) =====
+     Its own window, the whole screen around Station 3. Only the profile shows; Station 3's bar and
+     button sit on top of it. The line that traces Station 3's bar (top edge and rounded left end)
+     joins the two into one piece -- always the opposite colour of Profile's background. */
+  html.profile-early, html.profile-early body{ background:transparent !important; }
+  html.profile-early body > *:not(#story-profile){ display:none !important; }
+  #story-profile{ --pf-bg:#000; --pf-fg:#fff; --pf-line:#fff; --pf-muted:rgba(255,255,255,0.55); --pf-hair:rgba(255,255,255,0.12);
+    position:fixed; inset:0; background:var(--pf-bg); color:var(--pf-fg); font-family:var(--font-body);
+    -webkit-user-select:none; user-select:none; -webkit-tap-highlight-color:transparent; }
+  #story-profile .pf-scroll{ position:absolute; left:0; right:0; top:0; overflow-y:auto; scrollbar-width:none; padding:0 20px; box-sizing:border-box; }
+  #story-profile .pf-scroll::-webkit-scrollbar{ display:none; }
+  #story-profile .pf-head{ display:flex; align-items:center; gap:14px; }
+  #story-profile .pf-avatar{ width:64px; height:64px; border-radius:50%; flex-shrink:0; border:1.5px solid var(--pf-fg);
+    display:flex; align-items:center; justify-content:center; font-size:24px; font-weight:700; }
+  #story-profile .pf-names{ flex:1; min-width:0; }
+  #story-profile .pf-name{ font-size:20px; font-weight:700; letter-spacing:-0.2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #story-profile .pf-user{ font-size:13px; color:var(--pf-muted); margin-top:2px; }
+  #story-profile .pf-more{ width:36px; height:36px; border-radius:50%; border:none; background:transparent; color:var(--pf-fg);
+    font-size:22px; line-height:1; display:flex; align-items:center; justify-content:center; align-self:flex-start; }
+  #story-profile .pf-stats{ display:flex; margin:22px 0 18px; }
+  #story-profile .pf-stat{ flex:1; text-align:center; }
+  #story-profile .pf-stat-n{ font-family:var(--font-mono); font-size:20px; font-weight:700; font-variant-numeric:tabular-nums; }
+  #story-profile .pf-stat-l{ font-size:11px; letter-spacing:1px; text-transform:uppercase; color:var(--pf-muted); margin-top:3px; }
+  #story-profile .pf-bio{ border:1px solid var(--pf-hair); border-radius:14px; padding:14px 16px; font-size:14px; line-height:1.5; min-height:72px; box-sizing:border-box; }
+  #story-profile .pf-bio-l{ font-size:10px; letter-spacing:1.4px; color:var(--pf-muted); margin-bottom:6px; }
+  #story-profile .pf-edit{ display:block; width:100%; margin-top:14px; padding:12px 0; border-radius:12px; border:1px solid var(--pf-fg);
+    background:transparent; color:var(--pf-fg); font-size:14px; font-weight:700; font-family:inherit; }
+  #story-profile .pf-edit:active, #story-profile .pf-more:active{ opacity:0.6; }
+  #story-profile .pf-line{ position:fixed; right:0; bottom:0; box-sizing:border-box; pointer-events:none;
+    border-top:2px solid var(--pf-line); border-left:2px solid var(--pf-line); border-top-left-radius:22px; }
   /* Apps area: rows off screen aren't laid out or drawn until scrolled to, so it opens instantly. */
   .app-row{ content-visibility:auto; contain-intrinsic-size:auto 46px; }
   /* While pages slide under the finger, nothing gets text-selected. */
@@ -4967,6 +4998,47 @@ document.addEventListener('click', e=>{
     }
   }
 }, true);
+// Profile (its own window, ?s3=1&profile=1): drawn once, then only re-measured around Station 3's bar.
+window.storyProfileOnly = function(){
+  if(document.getElementById('story-profile')) return;
+  const p = state.profile || (state.profile = { name:'Your Name', username:'username', following:'7', followers:'100k', posts:'3', bio:'' });
+  const el = document.createElement('div');
+  el.id = 'story-profile';
+  el.innerHTML = `
+    <div class="pf-scroll">
+      <div class="pf-head">
+        <div class="pf-avatar">${escText((p.name || '?').trim().charAt(0).toUpperCase())}</div>
+        <div class="pf-names"><div class="pf-name">${escText(p.name)}</div><div class="pf-user">@${escText(p.username)}</div></div>
+        <button class="pf-more" data-pf="menu" aria-label="More">⋮</button>
+      </div>
+      <div class="pf-stats">
+        <div class="pf-stat"><div class="pf-stat-n">${escText(p.following)}</div><div class="pf-stat-l">Following</div></div>
+        <div class="pf-stat"><div class="pf-stat-n">${escText(p.followers)}</div><div class="pf-stat-l">Followers</div></div>
+        <div class="pf-stat"><div class="pf-stat-n">${escText(p.posts)}</div><div class="pf-stat-l">Posts</div></div>
+      </div>
+      <div class="pf-bio"><div class="pf-bio-l">BIO</div>${p.bio ? escText(p.bio) : '<span style="color:var(--pf-muted)">Nothing here yet.</span>'}</div>
+      <button class="pf-edit" data-pf="edit">Edit profile</button>
+    </div>
+    <div class="pf-line"></div>`;
+  document.body.appendChild(el);
+  el.addEventListener('click', e=>{
+    const b = e.target.closest('[data-pf]');
+    if(!b) return;
+    showToast((b.getAttribute('data-pf') === 'edit' ? 'Edit profile' : 'Profile menu') + ' — coming soon');
+  });
+  window.storyProfileGeom();
+};
+window.storyProfileGeom = function(){
+  const el = document.getElementById('story-profile');
+  if(!el) return;
+  const barW = window.__pfBarW || 220, barH = window.__pfBarH || 40, top = window.__pfTop || 24;
+  const line = el.querySelector('.pf-line'), sc = el.querySelector('.pf-scroll');
+  // The line hugs the outside of Station 3's bar: along its top edge and down its rounded left end.
+  line.style.width = (barW + 2) + 'px';
+  line.style.height = (barH + 2) + 'px';
+  sc.style.top = (top + 16) + 'px';
+  sc.style.bottom = (barH + 18) + 'px';
+};
 window.storyGoHome = function(){ state.recentsOpen=false; state.homePickerOpen=false; state.appMenuId=null; state.current = state.homeScreen || 'wallet'; renderDevice(); };
 document.addEventListener('click', (e)=>{
   const el = e.target.closest && e.target.closest('[data-native-pkg]');
@@ -8480,7 +8552,7 @@ function attachHandlers(){
         case 'station3-create-post': showToast('Create & post — coming soon'); break;
         case 'station3-call-history': showToast('Call history — coming soon'); break;
         case 'station3-messages': showToast('Messages — coming soon'); break;
-        case 'station3-profile': showToast('Profile — coming soon'); break;
+        case 'station3-profile': if(NATIVE && window.StoryNative.toggleProfile){ window.StoryNative.toggleProfile(); } else { showToast('Profile — coming soon'); } break;
 
         case 'note-delete': {
           state.confirmDialog = { message: 'Delete this note? This cannot be undone.', action: 'confirm-delete-current-note' };
