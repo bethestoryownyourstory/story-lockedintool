@@ -1764,6 +1764,7 @@
   #story-profile .cr-btn{ width:46px; height:46px; border-radius:50%; border:none; background:rgba(0,0,0,0.35); color:#fff; display:flex; align-items:center; justify-content:center; padding:0; }
   #story-profile .cr-btn:active{ opacity:0.6; }
   #story-profile .cr-btn.dim{ opacity:0.45; }
+  #story-profile .cr-del{ position:absolute; left:16px; top:calc(var(--pf-top, 24px) + 12px); }
   #story-profile .cr-btn-space{ width:46px; height:46px; }
   #story-profile .cr-side{ position:absolute; right:16px; display:flex; flex-direction:column; gap:12px; top:calc(var(--pf-top, 24px) + 12px); }
   #story-profile .cr-bottom{ position:absolute; left:0; right:0; bottom:14px; display:flex; flex-direction:column; align-items:center; gap:14px; }
@@ -5479,6 +5480,7 @@ window.storyProfileOnly = function(){
     </div>
     <div class="pf-create" hidden>
       <div class="cr-shot" hidden><img alt="" hidden><video playsinline loop hidden></video></div>
+      <button class="cr-btn cr-del" data-pf="cr-delete" aria-label="Delete" hidden><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>
       <div class="cr-side">
         <button class="cr-btn" data-pf="cr-post" aria-label="Post"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>
         <button class="cr-btn" data-pf="cr-music" aria-label="Music"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg></button>
@@ -5548,13 +5550,14 @@ window.storyProfileOnly = function(){
       const m = b.getAttribute('data-m');
       if(m === 'live'){ showToast('Live — coming soon'); return; }
       if(crRecording) return;
-      crMode = m; crRender();
+      crMode = crMode === m ? null : m; crRender();  // tap a chosen box again: back to the normal camera
     }
     else if(k === 'cr-music') showToast('Music — coming soon');
+    else if(k === 'cr-delete'){ window.StoryNative.createDiscard(); crClear(); }
     else if(k === 'cr-add'){
       if(crRecording) return;
       pfGridFor = 'create';
-      const access = window.StoryNative.photoAccess ? window.StoryNative.photoAccess() : 'none';
+      const access = window.StoryNative.mediaAccess ? window.StoryNative.mediaAccess() : 'none';
       if(access === 'none') window.StoryNative.requestPhotoAccess(); else openPhotoGrid(access);
     }
     else if(k === 'cr-post') crPost();
@@ -5646,7 +5649,7 @@ window.storyProfileReset = function(){
   const ms = el.querySelector('.pf-msgs-search input'); if(ms){ ms.value = ''; } msgView.q = ''; msgView.menuFor = null;
   if(crRecording && NATIVE && window.StoryNative.createVideo) window.StoryNative.createVideo(false);
   if(crHas && NATIVE && window.StoryNative.createDiscard) window.StoryNative.createDiscard();
-  crRecording = false; crClear(); el.querySelector('.cr-sheet').hidden = true;
+  crRecording = false; crClear(); el.querySelector('.cr-sheet').hidden = true; crCameraReady = false; clearTimeout(crWatch); crMode = null;
   el.classList.remove('pf-creating'); el.querySelector('.pf-create').hidden = true;
   const main = el.querySelector('.pf-home'); main.hidden = false; main.scrollTop = 0;
 };
@@ -5664,14 +5667,17 @@ window.storyS3Page = function(which){
 // Shutter: tap = picture, hold = video (Video box: tap to start, tap to stop - videos only). After you make
 // something you see it (a video plays) and ✓ posts it: Video / Profile -> your profile's posts; Highlight -> asks
 // which highlight EVERY time (never assumes the last one). Live and music are coming soon.
-let crMode = 'profile', crRecording = false, crHas = '', crHoldT = 0, crHeld = false;
+let crCameraReady = false;
+let crMode = null, crRecording = false, crHas = '', crHoldT = 0, crHeld = false;
 const HL_MAX = 50;
 function profilePosts(){ try{ return JSON.parse(localStorage.getItem('story-posts') || '[]') || []; }catch(e){ return []; } }
 function profileHighlights(){ try{ return JSON.parse(localStorage.getItem('story-highlights') || '[]') || []; }catch(e){ return []; } }
 function saveHighlights(h){ try{ localStorage.setItem('story-highlights', JSON.stringify(h)); }catch(e){} renderHighlights(); }
 function crShow(){
   const el = document.getElementById('story-profile'); if(!el) return;
+  const was = !el.querySelector('.pf-create').hidden;
   el.classList.add('pf-creating'); el.querySelector('.pf-create').hidden = false; crRender();
+  if(!was && !crCameraReady) crWatchCamera();
 }
 function crRender(){
   const el = document.getElementById('story-profile'); if(!el) return;
@@ -5683,6 +5689,7 @@ function crRender(){
   shot.hidden = !crHas;
   img.hidden = crHas !== 'photo'; vid.hidden = crHas !== 'video';
   cr.querySelector('[data-pf="cr-post"]').classList.toggle('dim', !crHas);
+  cr.querySelector('.cr-del').hidden = !crHas;
 }
 function crClear(){
   const el = document.getElementById('story-profile'); if(!el) return;
@@ -5691,8 +5698,10 @@ function crClear(){
   crHas = ''; crRender();
 }
 // What the camera / phone reports back.
-window.storyCreateEvent = function(kind){
+window.storyCreateEvent = function(kind, why){
   const el = document.getElementById('story-profile'); if(!el) return;
+  if(kind === 'ready'){ crCameraReady = true; clearTimeout(crWatch); return; }
+  if(kind === 'asking'){ clearTimeout(crWatch); return; }  // Android is asking for the camera (first time only)
   if(kind === 'recording'){ crRecording = true; crRender(); return; }
   if(kind === 'photo' || kind === 'video'){
     crRecording = false;
@@ -5704,10 +5713,17 @@ window.storyCreateEvent = function(kind){
   }
   crRecording = false; crRender();
   if(kind === 'denied') showToast('STORY isn’t allowed to use the camera');
-  else if(kind === 'error') showToast('That didn’t work — try again');
+  else if(kind === 'error'){ clearTimeout(crWatch); showToast('Camera problem' + (why ? ': ' + why : ' — try again')); }
 };
+// If the camera hasn't opened a few seconds after Create opens, say so (instead of a silent blank screen).
+let crWatch = 0;
+function crWatchCamera(){
+  clearTimeout(crWatch);
+  if(!NATIVE) return;
+  crWatch = setTimeout(()=>{ const el = document.getElementById('story-profile'); if(el && !el.querySelector('.pf-create').hidden) showToast('The camera didn’t open — close Create and open it again'); }, 6000);
+}
 function crShutterDown(){
-  if(crHas){ crHoldT = 0; window.StoryNative.createDiscard(); crClear(); return; }  // looking at what you made: back to the camera
+  if(crHas){ crHoldT = 0; return; }  // looking at what you made: delete it (bin, top left) or post it (✓)
   if(crMode === 'video'){ window.StoryNative.createVideo(!crRecording); if(crRecording){ crRecording = false; crRender(); } return; }
   crHeld = false; clearTimeout(crHoldT);
   crHoldT = setTimeout(()=>{ crHeld = true; window.StoryNative.createVideo(true); }, 350);
@@ -5721,6 +5737,7 @@ function crShutterUp(){
 function crPost(){
   if(crRecording) return;
   if(!crHas){ showToast('Take a picture or video first'); return; }
+  if(!crMode){ showToast('Choose Video, Profile or Highlight to post'); return; }
   if(crMode === 'highlight'){ crOpenHighlights(); return; }
   const kept = window.StoryNative.createKeep(); if(!kept){ showToast('That didn’t work — try again'); return; }
   const [id, kind] = kept.split(':');
@@ -5873,6 +5890,7 @@ function morePhotos(){
   grid.insertAdjacentHTML('beforeend', next.map(m=>'<button class="pf-photo" data-pf="photos-pick" data-id="' + m.id + '" data-v="' + (m.v ? 1 : 0) + '"><img alt="" loading="lazy" decoding="async" src="' + PF_PHOTO_BASE + (m.v ? 'thumbv/' : 'thumb/') + m.id + '">' + (m.v ? '<span class="pf-photo-v">▶</span>' : '') + '</button>').join(''));
 }
 window.storyPhotoAccessDone = function(access){
+  if(pfGridFor === 'create' && window.StoryNative.mediaAccess) access = window.StoryNative.mediaAccess();  // pictures AND videos
   if(access !== 'none') openPhotoGrid(access);
   else if(pfGridFor === 'create') showToast('STORY isn’t allowed to see your pictures');
   else window.StoryNative.pickProfilePhoto();  // not allowed: the phone's own picker instead

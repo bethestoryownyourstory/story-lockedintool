@@ -96,6 +96,15 @@ class ProfilePhotoActivity : Activity() {
             else -> "none"
         }
 
+        /** For Create's +: pictures AND videos. "full" only when both are allowed (an older yes to pictures alone
+         *  doesn't cover videos, so Create asks again); "partial" = the ones you chose to share (Android 14+). */
+        fun mediaAccess(c: Context): String = when {
+            Build.VERSION.SDK_INT >= 33 && has(c, android.Manifest.permission.READ_MEDIA_IMAGES) && has(c, android.Manifest.permission.READ_MEDIA_VIDEO) -> "full"
+            Build.VERSION.SDK_INT >= 34 && has(c, android.Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED) -> "partial"
+            Build.VERSION.SDK_INT < 33 && has(c, android.Manifest.permission.READ_EXTERNAL_STORAGE) -> "full"
+            else -> "none"
+        }
+
         /** The phone's pictures, newest first, as a JSON list of ids. */
         fun listPhotos(c: Context): String {
             val ids = org.json.JSONArray()

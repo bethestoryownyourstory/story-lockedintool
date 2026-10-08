@@ -150,6 +150,9 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
     fun listMedia(): String = ProfilePhotoActivity.listMedia(ctx)
 
     @JavascriptInterface
+    fun mediaAccess(): String = ProfilePhotoActivity.mediaAccess(ctx)
+
+    @JavascriptInterface
     fun createUseFromPhone(id: String, video: Boolean) { if (profile) id.toLongOrNull()?.let { host.createUseFromPhone(it, video) } }
 
     @JavascriptInterface

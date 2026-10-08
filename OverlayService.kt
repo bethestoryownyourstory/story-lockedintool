@@ -977,7 +977,7 @@ class OverlayService : Service(), StoryBridge.Host {
     fun closeS3WindowFromCamera() { ui.post { profilePane?.takeIf { it.shown }?.let { hideOne(it) } } }
     /** The camera tells Create what happened: ready / recording / photo / video / denied / error. */
     fun createEvent(kind: String, extra: String) { ui.post {
-        profilePane?.web?.evaluateJavascript("window.storyCreateEvent&&window.storyCreateEvent('$kind')", null)
+        profilePane?.web?.evaluateJavascript("window.storyCreateEvent&&window.storyCreateEvent('$kind'," + org.json.JSONObject.quote(extra) + ")", null)
     } }
     override fun createShutter() { ui.post { CreateCameraActivity.instance?.takePhoto() ?: createEvent("error", "") } }
     override fun createVideo(on: Boolean) { ui.post { if (on) CreateCameraActivity.instance?.startVideo() ?: createEvent("error", "") else CreateCameraActivity.instance?.stopVideo() } }

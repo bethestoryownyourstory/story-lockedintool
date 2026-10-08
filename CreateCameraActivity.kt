@@ -37,13 +37,17 @@ class CreateCameraActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         instance = this
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        val preview = PreviewView(this).apply { scaleType = PreviewView.ScaleType.FILL_CENTER; setBackgroundColor(Color.BLACK) }
+        val preview = PreviewView(this).apply {
+            scaleType = PreviewView.ScaleType.FILL_CENTER; setBackgroundColor(Color.BLACK)
+            implementationMode = PreviewView.ImplementationMode.COMPATIBLE  // drawn like a normal view, under STORY's window
+        }
         setContentView(FrameLayout(this).apply { setBackgroundColor(Color.BLACK); addView(preview, FrameLayout.LayoutParams(-1, -1)) })
         previewView = preview
         val need = arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO).filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
         if (need.isEmpty()) startCamera()
         else {
             // One time only: Android's own "allow camera / microphone" sits under STORY's windows, so they step aside.
+            OverlayService.instance?.createEvent("asking", "")
             OverlayService.instance?.stepAsideForCamera()
             requestPermissions(need.toTypedArray(), 3)
         }
@@ -58,39 +62,89 @@ class CreateCameraActivity : AppCompatActivity() {
         else OverlayService.instance?.createEvent("denied", "")
     }
 
+    private var provider: ProcessCameraProvider? = null
+    private var preview: Preview? = null
+
     private fun startCamera() {
         val future = ProcessCameraProvider.getInstance(this)
         future.addListener({
-            runCatching {
-                val provider = future.get()
-                val preview = Preview.Builder().build().also { it.setSurfaceProvider(previewView?.surfaceProvider) }
-                val ic = ImageCapture.Builder().setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY).build()
-                val recorder = Recorder.Builder()
-                    .setQualitySelector(QualitySelector.from(Quality.FHD, FallbackStrategy.lowerQualityOrHigherThan(Quality.SD)))
-                    .build()
-                val vc = VideoCapture.withOutput(recorder)
-                provider.unbindAll()
-                provider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, preview, ic, vc)
-                imageCapture = ic; videoCapture = vc
-                OverlayService.instance?.createEvent("ready", "")
-            }.onFailure { OverlayService.instance?.createEvent("error", "") }
+            val err = runCatching {
+                provider = future.get()
+                preview = Preview.Builder().build().also { it.setSurfaceProvider(previewView?.surfaceProvider) }
+                bindBest()
+            }.exceptionOrNull()
+            if (err != null) OverlayService.instance?.createEvent("error", "camera: " + (err.message ?: err.javaClass.simpleName))
+            else OverlayService.instance?.createEvent("ready", "")
         }, ContextCompat.getMainExecutor(this))
+    }
+
+    private fun recorder(q: Quality) = VideoCapture.withOutput(Recorder.Builder()
+        .setQualitySelector(QualitySelector.from(q, FallbackStrategy.lowerQualityOrHigherThan(Quality.SD))).build())
+
+    /** Not every phone can run preview + pictures + video at once: try the best set first, then step down.
+     *  Whatever is left out is switched in only when it's needed (see startVideo). */
+    private fun bindBest() {
+        val p = provider ?: throw IllegalStateException("no camera")
+        val pv = preview ?: throw IllegalStateException("no preview")
+        val sel = if (p.hasCamera(CameraSelector.DEFAULT_BACK_CAMERA)) CameraSelector.DEFAULT_BACK_CAMERA else CameraSelector.DEFAULT_FRONT_CAMERA
+        var last: Throwable? = null
+        for (q in listOf(Quality.FHD, Quality.HD, Quality.SD, null)) {
+            val r = runCatching {
+                p.unbindAll()
+                val ic = ImageCapture.Builder().setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY).build()
+                if (q != null) {
+                    val vc = recorder(q)
+                    p.bindToLifecycle(this, sel, pv, ic, vc)
+                    imageCapture = ic; videoCapture = vc
+                } else {
+                    p.bindToLifecycle(this, sel, pv, ic)
+                    imageCapture = ic; videoCapture = null
+                }
+            }
+            if (r.isSuccess) return
+            last = r.exceptionOrNull()
+        }
+        // Last resort: just the camera picture; pictures and video are switched in when used.
+        p.unbindAll(); p.bindToLifecycle(this, sel, pv)
+        imageCapture = null; videoCapture = null
+        if (last != null && p.availableCameraInfos.isEmpty()) throw last
+    }
+
+    private fun selector(): CameraSelector {
+        val p = provider
+        return if (p == null || p.hasCamera(CameraSelector.DEFAULT_BACK_CAMERA)) CameraSelector.DEFAULT_BACK_CAMERA else CameraSelector.DEFAULT_FRONT_CAMERA
     }
 
     /** Shutter (tap): a picture. */
     fun takePhoto() {
-        val ic = imageCapture ?: run { OverlayService.instance?.createEvent("error", ""); return }
+        var ic = imageCapture
+        if (ic == null) {
+            // This phone couldn't keep pictures switched on alongside video: switch them in now.
+            ic = runCatching {
+                val p = provider!!; p.unbindAll()
+                ImageCapture.Builder().build().also { p.bindToLifecycle(this, selector(), preview!!, it); imageCapture = it; videoCapture = null }
+            }.getOrNull()
+        }
+        if (ic == null) { OverlayService.instance?.createEvent("error", "pictures aren't available on this camera"); return }
         val f = captureFile(this, "jpg"); clearCapture(this)
         ic.takePicture(ImageCapture.OutputFileOptions.Builder(f).build(), ContextCompat.getMainExecutor(this),
             object : ImageCapture.OnImageSavedCallback {
                 override fun onImageSaved(output: ImageCapture.OutputFileResults) { OverlayService.instance?.createEvent("photo", "") }
-                override fun onError(e: ImageCaptureException) { OverlayService.instance?.createEvent("error", "") }
+                override fun onError(e: ImageCaptureException) { OverlayService.instance?.createEvent("error", "picture: " + (e.message ?: "")) }
             })
     }
 
     /** Shutter in Video (tap to start / stop) or held down: a video, with sound when the microphone is allowed. */
     fun startVideo() {
-        val vc = videoCapture ?: run { OverlayService.instance?.createEvent("error", ""); return }
+        var vc = videoCapture
+        if (vc == null) {
+            // Video wasn't switched on alongside pictures on this phone: switch it in for this recording.
+            vc = runCatching {
+                val p = provider!!; p.unbindAll()
+                recorder(Quality.HD).also { p.bindToLifecycle(this, selector(), preview!!, it); videoCapture = it; imageCapture = null }
+            }.getOrNull()
+        }
+        if (vc == null) { OverlayService.instance?.createEvent("error", "video isn't available on this camera"); return }
         if (recording != null) return
         clearCapture(this)
         val f = captureFile(this, "mp4")
@@ -101,7 +155,7 @@ class CreateCameraActivity : AppCompatActivity() {
                 is VideoRecordEvent.Start -> OverlayService.instance?.createEvent("recording", "")
                 is VideoRecordEvent.Finalize -> {
                     recording = null
-                    if (e.hasError() && !f.exists()) OverlayService.instance?.createEvent("error", "")
+                    if (e.hasError() && (!f.exists() || f.length() == 0L)) OverlayService.instance?.createEvent("error", "video: error " + e.error)
                     else OverlayService.instance?.createEvent("video", "")
                 }
             }
