@@ -1651,6 +1651,19 @@
   html.native:not(.s3-early) #content-area{ padding-top:0 !important; padding-bottom:0 !important; }
   html.native:not(.s3-early) .page-top{ margin-top:0 !important; }
   html.native:not(.s3-early) .phone-float-dock{ padding-bottom:0 !important; }
+  /* ===== STORY IN 3D (the app's Pages and Dashboard; never Station 3) =====
+     Built into the design, nothing moves or tracks anything: seen from slightly above, every card,
+     row, pill and button is a solid slab with real thickness -- its lit top face, then its side edge
+     running down underneath it, then its shadow on the screen below. Thicker the higher it sits
+     (rows 3px, cards 5px, floating pieces 7px). Pressed, it sinks in (the edge disappears).
+     Letters and numbers are raised too: each has its own little edge under it. */
+  /* Every card/button/pill gets .slab (see makeSlabs()): its own shadow plus a solid side edge in a
+     darker shade of its own colour. :active rules (pressed) still win, so a press sinks it in. */
+  :where(html.native:not(.s3-early)) .slab{ box-shadow:var(--slab-edge), var(--slab-base) !important; }
+  :where(html.native:not(.s3-early)) .slab:active{ box-shadow:var(--slab-base) !important; }
+  :where(html.native:not(.s3-early)) :where(.phone-screen) :where(*){
+    text-shadow: 0 1px 0 rgba(96,96,104,0.75), 0 2px 0 rgba(52,52,58,0.85), 0 3px 4px rgba(0,0,0,0.8);
+  }
   /* Apps area: rows off screen aren't laid out or drawn until scrolled to, so it opens instantly. */
   .app-row{ content-visibility:auto; contain-intrinsic-size:auto 46px; }
   /* While pages slide under the finger, nothing gets text-selected. */
@@ -7113,6 +7126,7 @@ function renderDevice(){
   }
   positionStation3();
   attachPayScroll();
+  makeSlabs();
   if(typeof updatePhoneStatusClock === 'function') updatePhoneStatusClock();
   updateScrollHint();
   updateScrollbarThumb();
@@ -7140,6 +7154,58 @@ function updateScrollHint(){
 // proportion of clientHeight/scrollHeight and scrollTop. Hidden entirely when there's nothing
 // to scroll. Called once right after every render and again on every 'scroll' tick (wired in
 // attachHandlers(), since #content-area is torn down and rebuilt on every render).
+// STORY in 3D: gives every card, row, pill and button on the page real thickness -- a solid side
+// edge under it in a darker shade of its own colour, then its shadow. Worked out once per kind of
+// element (cached), so it costs next to nothing on each redraw. Never touches Station 3.
+const SLAB_CACHE = new Map();
+function slabFor(el){
+  const key = el.tagName + '.' + (typeof el.className === 'string' ? el.className : '');
+  if(SLAB_CACHE.has(key)) return SLAB_CACHE.get(key);
+  let out = null;
+  const cs = getComputedStyle(el);
+  const r = parseFloat(cs.borderTopLeftRadius) || 0;
+  const bg = cs.backgroundColor.match(/[\d.]+/g) || [];
+  const bgA = bg.length === 4 ? parseFloat(bg[3]) : (bg.length === 3 ? 1 : 0);
+  const bw = parseFloat(cs.borderTopWidth) || 0;
+  const hasImg = cs.backgroundImage && cs.backgroundImage !== 'none';
+  if(r >= 6 && (bgA > 0.02 || bw > 0 || hasImg) && cs.display !== 'inline' && cs.position !== 'fixed'){
+    // Edge colour: a darker shade of the face; dark/see-through faces get a grey edge so it shows.
+    let [cr, cg, cb] = bg.length >= 3 ? bg.slice(0,3).map(Number) : [21,21,23];
+    const lum = (cr*0.3 + cg*0.59 + cb*0.11) * (bgA || 0);
+    if(lum < 40){ cr = 62; cg = 62; cb = 68; } else { cr *= 0.55; cg *= 0.55; cb *= 0.55; }
+    out = { r:Math.round(cr), g:Math.round(cg), b:Math.round(cb), base: cs.boxShadow === 'none' ? '0 0 0 transparent' : cs.boxShadow };
+  }
+  SLAB_CACHE.set(key, out);
+  return out;
+}
+function makeSlabs(){
+  if(!NATIVE || document.body.classList.contains('s3-only')) return;
+  const area = document.getElementById('content-area');
+  if(!area) return;
+  const frame = area.closest('.phone-screen') || area;
+  // Read every size first, then write -- so the page is laid out once, not once per element.
+  const todo = [];
+  frame.querySelectorAll('*').forEach(el=>{
+    if(el.classList.contains('slab') || el.closest('.station3-region')) return;
+    const s = slabFor(el);
+    if(!s) return;
+    const h = el.offsetHeight, w = el.offsetWidth;
+    if(h < 18 || w < 18) return;
+    todo.push([el, s, h]);
+  });
+  todo.forEach(([el, s, h])=>{
+    const t = h < 44 ? 4 : h < 130 ? 6 : 8;      // thicker the bigger the piece
+    const layers = [];
+    for(let i = 1; i <= t; i++){
+      const k = 1 - (i - 1) / (t * 2.2);         // the side gets darker towards the bottom
+      layers.push(`0 ${i}px 0 rgb(${Math.round(s.r*k)},${Math.round(s.g*k)},${Math.round(s.b*k)})`);
+    }
+    layers.push(`0 ${t + 3}px ${t + 6}px rgba(0,0,0,0.55)`);
+    el.style.setProperty('--slab-edge', layers.join(','));
+    el.style.setProperty('--slab-base', s.base);
+    el.classList.add('slab');
+  });
+}
 function updatePayScroll(){
   const el = document.getElementById('pay-scroll');
   const track = document.getElementById('pay-scroll-track');
