@@ -1749,6 +1749,44 @@
   #story-profile .pf-field-box input::placeholder{ color:var(--pf-muted); }
   #story-profile .pf-field-msg{ font-size:12px; color:var(--pf-muted); margin:8px 2px 0; min-height:16px; }
   #story-profile .pf-field-msg.bad{ color:#e63946; }
+  /* Highlights row on Profile */
+  #story-profile .pf-hls{ display:flex; gap:14px; margin-top:16px; overflow-x:auto; scrollbar-width:none; }
+  #story-profile .pf-hls::-webkit-scrollbar{ display:none; }
+  #story-profile .pf-hl{ flex:0 0 auto; width:66px; display:flex; flex-direction:column; align-items:center; gap:6px; border:none; background:transparent; color:var(--pf-fg); padding:0; font-family:inherit; }
+  #story-profile .pf-hl-c{ width:62px; height:62px; border-radius:50%; border:1.5px solid var(--pf-fg); overflow:hidden; display:block; }
+  #story-profile .pf-hl-c img, #story-profile .pf-hl-c video{ width:100%; height:100%; object-fit:cover; display:block; }
+  #story-profile .pf-hl-n{ font-size:11px; max-width:66px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  /* Create: see-through where the camera shows; controls float on it */
+  #story-profile.pf-creating .pf-bg{ display:none; }
+  #story-profile .pf-create{ position:fixed; inset:0; color:#fff; }
+  #story-profile .cr-shot{ position:absolute; inset:0; background:#000; }
+  #story-profile .cr-shot img, #story-profile .cr-shot video{ width:100%; height:100%; object-fit:contain; display:block; }
+  #story-profile .cr-btn{ width:46px; height:46px; border-radius:50%; border:none; background:rgba(0,0,0,0.35); color:#fff; display:flex; align-items:center; justify-content:center; padding:0; }
+  #story-profile .cr-btn:active{ opacity:0.6; }
+  #story-profile .cr-btn.dim{ opacity:0.45; }
+  #story-profile .cr-btn-space{ width:46px; height:46px; }
+  #story-profile .cr-side{ position:absolute; right:16px; display:flex; flex-direction:column; gap:12px; top:calc(var(--pf-top, 24px) + 12px); }
+  #story-profile .cr-bottom{ position:absolute; left:0; right:0; bottom:14px; display:flex; flex-direction:column; align-items:center; gap:14px; }
+  #story-profile .cr-row{ width:100%; padding:0 28px; box-sizing:border-box; display:flex; align-items:center; justify-content:space-between; }
+  #story-profile .cr-shutter{ width:76px; height:76px; border-radius:50%; border:4px solid #fff; background:transparent; padding:5px; display:flex; touch-action:none; }
+  #story-profile .cr-shutter span{ flex:1; border-radius:50%; background:#fff; transition:transform 0.15s ease; }
+  #story-profile .cr-shutter.vid span{ background:#e63946; }
+  #story-profile .cr-shutter.rec span{ background:#e63946; transform:scale(0.55); border-radius:8px; }
+  #story-profile .cr-modes{ display:flex; gap:8px; padding:0 16px; width:100%; box-sizing:border-box; }
+  #story-profile .cr-mode{ flex:1; padding:9px 0; border-radius:10px; border:1px solid rgba(255,255,255,0.45); background:rgba(0,0,0,0.35); color:#fff; font-size:13px; font-weight:700; font-family:inherit; }
+  #story-profile .cr-mode.on{ background:#fff; color:#000; border-color:#fff; }
+  #story-profile .cr-sheet{ position:absolute; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:flex-end; }
+  #story-profile .cr-sheet-card{ width:100%; background:var(--pf-bg); color:var(--pf-fg); border-radius:18px 18px 0 0; padding:18px 18px 20px; box-sizing:border-box; max-height:70%; overflow-y:auto; scrollbar-width:none; }
+  #story-profile .cr-sheet-t{ font-size:16px; font-weight:700; margin-bottom:10px; }
+  #story-profile .cr-sheet-row{ display:flex; justify-content:space-between; width:100%; padding:13px 2px; border:none; border-top:1px solid var(--pf-hair); background:transparent; color:var(--pf-fg); font-size:15px; font-family:inherit; }
+  #story-profile .cr-sheet-row:disabled{ opacity:0.4; }
+  #story-profile .cr-sheet-n{ color:var(--pf-muted); font-size:13px; }
+  #story-profile .cr-sheet-new{ display:flex; gap:8px; margin-top:12px; }
+  #story-profile .cr-sheet-new input{ flex:1; min-width:0; border:1px solid var(--pf-fg); border-radius:10px; background:transparent; color:var(--pf-fg); padding:11px 12px; font-size:15px; font-family:inherit; outline:none; -webkit-user-select:text; user-select:text; }
+  #story-profile .cr-sheet-new button{ border:none; border-radius:10px; background:var(--pf-fg); color:var(--pf-bg); padding:0 18px; font-weight:700; font-size:14px; font-family:inherit; }
+  #story-profile .cr-sheet-cancel{ width:100%; margin-top:12px; padding:12px 0; border:none; background:transparent; color:var(--pf-muted); font-size:14px; font-weight:600; font-family:inherit; }
+  #story-profile .pf-photo{ position:relative; }
+  #story-profile .pf-photo-v{ position:absolute; right:5px; bottom:4px; font-size:11px; color:#fff; text-shadow:0 0 3px #000; }
   /* Messages (same window as Profile) */
   #story-profile .pf-msgs-top{ display:flex; align-items:center; gap:8px; }
   #story-profile .pf-msgs-search{ flex:1; min-width:0; display:flex; align-items:center; gap:8px; border:1px solid var(--pf-hair); border-radius:12px; padding:0 12px; color:var(--pf-muted); }
@@ -5394,7 +5432,8 @@ window.storyProfileOnly = function(){
         <div class="pf-stat"><div class="pf-stat-n" data-pf-stat="followers">${fmtCount(st.followers)}</div><div class="pf-stat-l">Followers</div></div>
         <div class="pf-stat"><div class="pf-stat-n" data-pf-stat="posts">${fmtCount(st.posts)}</div><div class="pf-stat-l">Posts</div></div>
       </div>
-      <div class="pf-bio"><div class="pf-bio-l">BIO</div><div class="pf-bio-t">${p.bio ? escText(p.bio) : '<span style="color:var(--pf-muted)">Nothing here yet.</span>'}</div></div>
+      <div class="pf-bio" data-anchor="bio"><div class="pf-bio-l">BIO</div><div class="pf-bio-t">${p.bio ? escText(p.bio) : '<span style="color:var(--pf-muted)">Nothing here yet.</span>'}</div></div>
+      <div class="pf-hls" hidden></div>
     </div>
     <div class="pf-scroll pf-editor" hidden>
       <div class="pf-ed-head"><button class="pf-ed-back" data-pf="edit-back" aria-label="Back">‹</button><div class="pf-ed-title">Edit profile</div></div>
@@ -5438,6 +5477,34 @@ window.storyProfileOnly = function(){
         <div class="pf-msgs-lock"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>End-to-end encrypted</div>
       </div>
     </div>
+    <div class="pf-create" hidden>
+      <div class="cr-shot" hidden><img alt="" hidden><video playsinline loop hidden></video></div>
+      <div class="cr-side">
+        <button class="cr-btn" data-pf="cr-post" aria-label="Post"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>
+        <button class="cr-btn" data-pf="cr-music" aria-label="Music"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg></button>
+      </div>
+      <div class="cr-bottom">
+        <div class="cr-row">
+          <button class="cr-btn" data-pf="cr-add" aria-label="Add from your phone"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+          <button class="cr-shutter" aria-label="Shutter"><span></span></button>
+          <span class="cr-btn-space"></span>
+        </div>
+        <div class="cr-modes">
+          <button class="cr-mode" data-pf="cr-mode" data-m="live">Live</button>
+          <button class="cr-mode" data-pf="cr-mode" data-m="video">Video</button>
+          <button class="cr-mode" data-pf="cr-mode" data-m="profile">Profile</button>
+          <button class="cr-mode" data-pf="cr-mode" data-m="highlight">Highlight</button>
+        </div>
+      </div>
+      <div class="cr-sheet" hidden>
+        <div class="cr-sheet-card">
+          <div class="cr-sheet-t">Add to which highlight?</div>
+          <div class="cr-sheet-list"></div>
+          <div class="cr-sheet-new"><input type="text" maxlength="20" placeholder="New highlight name" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="done"><button data-pf="cr-hl-new">Add</button></div>
+          <button class="cr-sheet-cancel" data-pf="cr-hl-cancel">Cancel</button>
+        </div>
+      </div>
+    </div>
     <div class="pf-viewer" data-pf="viewer-close" hidden><img alt="Profile picture"></div>
     <div class="pf-gap"><div class="pf-gap-clip"><svg></svg></div></div>
     <div class="pf-line"></div>`;
@@ -5457,8 +5524,13 @@ window.storyProfileOnly = function(){
     else if(k === 'edit'){ main.hidden = true; ed.hidden = false; ed.scrollTop = 0; }
     else if(k === 'edit-back'){ ed.hidden = true; main.hidden = false; }
     else if(k === 'photo-change') pickProfilePhoto();
-    else if(k === 'photos-back'){ el.querySelector('.pf-photos').hidden = true; ed.hidden = false; }
+    else if(k === 'photos-back'){ el.querySelector('.pf-photos').hidden = true; if(pfGridFor === 'create') crShow(); else ed.hidden = false; }
     else if(k === 'photos-more') window.StoryNative.requestPhotoAccess();
+    else if(k === 'photos-pick' && pfGridFor === 'create'){
+      // Create's +: that picture / video becomes what you made (you see it, then ✓ to post it).
+      window.StoryNative.createUseFromPhone(b.getAttribute('data-id'), b.getAttribute('data-v') === '1');
+      el.querySelector('.pf-photos').hidden = true; crShow();
+    }
     else if(k === 'photos-pick'){
       // Instant: Profile shows the picture now; the app saves the sharp copy in the background.
       const id = b.getAttribute('data-id');
@@ -5472,6 +5544,29 @@ window.storyProfileOnly = function(){
       if(NATIVE && window.StoryNative.removeProfilePhoto) window.StoryNative.removeProfilePhoto();
       else { try{ localStorage.removeItem('story-profile-photo'); }catch(err){} window.storyProfilePhotoChanged(); }
     }
+    else if(k === 'cr-mode'){
+      const m = b.getAttribute('data-m');
+      if(m === 'live'){ showToast('Live — coming soon'); return; }
+      if(crRecording) return;
+      crMode = m; crRender();
+    }
+    else if(k === 'cr-music') showToast('Music — coming soon');
+    else if(k === 'cr-add'){
+      if(crRecording) return;
+      pfGridFor = 'create';
+      const access = window.StoryNative.photoAccess ? window.StoryNative.photoAccess() : 'none';
+      if(access === 'none') window.StoryNative.requestPhotoAccess(); else openPhotoGrid(access);
+    }
+    else if(k === 'cr-post') crPost();
+    else if(k === 'cr-hl-pick') crAddToHighlight(b.getAttribute('data-id'));
+    else if(k === 'cr-hl-new'){
+      const inp = el.querySelector('.cr-sheet-new input'), name = inp.value.trim();
+      if(!name){ inp.focus(); return; }
+      const hl = profileHighlights(); const h = { id:'h' + Date.now(), name, items:[] }; hl.push(h); saveHighlights(hl);
+      inp.value = ''; inp.blur(); crAddToHighlight(h.id);
+    }
+    else if(k === 'cr-hl-cancel'){ el.querySelector('.cr-sheet').hidden = true; }
+    else if(k === 'hl-open') showToast('Highlights — coming soon');
     else if(k === 'ed-name') openProfileField('name');
     else if(k === 'ed-username') openProfileField('username');
     else if(k === 'field-box'){ const box = profileFieldBox(); profileTypingOn(); if(box && document.activeElement !== box) box.focus(); }
@@ -5488,6 +5583,13 @@ window.storyProfileOnly = function(){
     }
     else showToast('Profile menu — coming soon');
   });
+  const shutter = el.querySelector('.cr-shutter');
+  shutter.addEventListener('pointerdown', e=>{ e.preventDefault(); crShutterDown(); });
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach(t=>shutter.addEventListener(t, crShutterUp));
+  const hlName = el.querySelector('.cr-sheet-new input');
+  hlName.addEventListener('pointerdown', profileTypingOn); hlName.addEventListener('focus', profileTypingOn);
+  hlName.addEventListener('keydown', e=>{ if(e.key === 'Enter'){ e.preventDefault(); el.querySelector('[data-pf="cr-hl-new"]').click(); } });
+  renderHighlights();
   const msgSearch = el.querySelector('.pf-msgs-search input');
   msgSearch.addEventListener('input', ()=>{ msgView.q = msgSearch.value; renderMsgList(); });
   msgSearch.addEventListener('pointerdown', profileTypingOn);
@@ -5542,17 +5644,123 @@ window.storyProfileReset = function(){
   const ae = document.activeElement; if(ae && ae.closest && ae.closest('.pf-field')) ae.blur();
   el.querySelector('.pf-editor').hidden = true; el.querySelector('.pf-viewer').hidden = true; el.querySelector('.pf-photos').hidden = true; el.querySelector('.pf-field').hidden = true; el.querySelector('.pf-msgs').hidden = true;
   const ms = el.querySelector('.pf-msgs-search input'); if(ms){ ms.value = ''; } msgView.q = ''; msgView.menuFor = null;
+  if(crRecording && NATIVE && window.StoryNative.createVideo) window.StoryNative.createVideo(false);
+  if(crHas && NATIVE && window.StoryNative.createDiscard) window.StoryNative.createDiscard();
+  crRecording = false; crClear(); el.querySelector('.cr-sheet').hidden = true;
+  el.classList.remove('pf-creating'); el.querySelector('.pf-create').hidden = true;
   const main = el.querySelector('.pf-home'); main.hidden = false; main.scrollTop = 0;
 };
 // Profile and Messages share ONE window attached to Station 3 (same gap, line and scene): the app says which shows.
 window.storyS3Page = function(which){
   const el = document.getElementById('story-profile'); if(!el || PF_GAP_WINDOW) return;
   window.storyProfileReset();
+  if(which === 'create'){ el.querySelector('.pf-home').hidden = true; crShow(); return; }
   const msgs = which === 'messages';
   el.querySelector('.pf-home').hidden = msgs;
   el.querySelector('.pf-msgs').hidden = !msgs;
   if(msgs){ el.querySelector('.pf-msgs').scrollTop = 0; renderMsgList(); }
 };
+// ---- Create (Station 3's +): the real camera shows through this window (the app runs it underneath). ----
+// Shutter: tap = picture, hold = video (Video box: tap to start, tap to stop - videos only). After you make
+// something you see it (a video plays) and ✓ posts it: Video / Profile -> your profile's posts; Highlight -> asks
+// which highlight EVERY time (never assumes the last one). Live and music are coming soon.
+let crMode = 'profile', crRecording = false, crHas = '', crHoldT = 0, crHeld = false;
+const HL_MAX = 50;
+function profilePosts(){ try{ return JSON.parse(localStorage.getItem('story-posts') || '[]') || []; }catch(e){ return []; } }
+function profileHighlights(){ try{ return JSON.parse(localStorage.getItem('story-highlights') || '[]') || []; }catch(e){ return []; } }
+function saveHighlights(h){ try{ localStorage.setItem('story-highlights', JSON.stringify(h)); }catch(e){} renderHighlights(); }
+function crShow(){
+  const el = document.getElementById('story-profile'); if(!el) return;
+  el.classList.add('pf-creating'); el.querySelector('.pf-create').hidden = false; crRender();
+}
+function crRender(){
+  const el = document.getElementById('story-profile'); if(!el) return;
+  const cr = el.querySelector('.pf-create');
+  cr.querySelectorAll('.cr-mode').forEach(b=>b.classList.toggle('on', b.getAttribute('data-m') === crMode));
+  cr.querySelector('.cr-shutter').classList.toggle('rec', crRecording);
+  cr.querySelector('.cr-shutter').classList.toggle('vid', crMode === 'video');
+  const shot = cr.querySelector('.cr-shot'), img = shot.querySelector('img'), vid = shot.querySelector('video');
+  shot.hidden = !crHas;
+  img.hidden = crHas !== 'photo'; vid.hidden = crHas !== 'video';
+  cr.querySelector('[data-pf="cr-post"]').classList.toggle('dim', !crHas);
+}
+function crClear(){
+  const el = document.getElementById('story-profile'); if(!el) return;
+  const vid = el.querySelector('.cr-shot video'); try{ vid.pause(); }catch(e){} vid.removeAttribute('src'); try{ vid.load(); }catch(e){}
+  el.querySelector('.cr-shot img').removeAttribute('src');
+  crHas = ''; crRender();
+}
+// What the camera / phone reports back.
+window.storyCreateEvent = function(kind){
+  const el = document.getElementById('story-profile'); if(!el) return;
+  if(kind === 'recording'){ crRecording = true; crRender(); return; }
+  if(kind === 'photo' || kind === 'video'){
+    crRecording = false;
+    const url = PF_PHOTO_BASE + 'capture?v=' + Date.now();
+    const shot = el.querySelector('.cr-shot');
+    if(kind === 'photo') shot.querySelector('img').src = url;
+    else { const v = shot.querySelector('video'); v.src = url; v.play().catch(()=>{}); }
+    crHas = kind; crRender(); return;
+  }
+  crRecording = false; crRender();
+  if(kind === 'denied') showToast('STORY isn’t allowed to use the camera');
+  else if(kind === 'error') showToast('That didn’t work — try again');
+};
+function crShutterDown(){
+  if(crHas){ crHoldT = 0; window.StoryNative.createDiscard(); crClear(); return; }  // looking at what you made: back to the camera
+  if(crMode === 'video'){ window.StoryNative.createVideo(!crRecording); if(crRecording){ crRecording = false; crRender(); } return; }
+  crHeld = false; clearTimeout(crHoldT);
+  crHoldT = setTimeout(()=>{ crHeld = true; window.StoryNative.createVideo(true); }, 350);
+}
+function crShutterUp(){
+  if(crMode === 'video' || crHas) return;
+  clearTimeout(crHoldT);
+  if(crHeld){ crHeld = false; crHoldT = 0; window.StoryNative.createVideo(false); crRecording = false; crRender(); }
+  else if(crHoldT){ crHoldT = 0; window.StoryNative.createShutter(); }
+}
+function crPost(){
+  if(crRecording) return;
+  if(!crHas){ showToast('Take a picture or video first'); return; }
+  if(crMode === 'highlight'){ crOpenHighlights(); return; }
+  const kept = window.StoryNative.createKeep(); if(!kept){ showToast('That didn’t work — try again'); return; }
+  const [id, kind] = kept.split(':');
+  const posts = profilePosts(); posts.unshift({ id, kind, at: Date.now() });
+  try{ localStorage.setItem('story-posts', JSON.stringify(posts)); }catch(e){}
+  bumpProfileStat('posts', 1); window.storyProfileRefresh();
+  crClear(); showToast('Posted to your profile');
+}
+function crOpenHighlights(){
+  const el = document.getElementById('story-profile'); if(!el) return;
+  const hl = profileHighlights();
+  el.querySelector('.cr-sheet-list').innerHTML = hl.map(h=>{
+    const full = h.items.length >= HL_MAX;
+    return '<button class="cr-sheet-row" data-pf="cr-hl-pick" data-id="' + escText(h.id) + '"' + (full ? ' disabled' : '') + '><span>' + escText(h.name) + '</span><span class="cr-sheet-n">' + (full ? 'Full' : h.items.length + ' / ' + HL_MAX) + '</span></button>';
+  }).join('');
+  el.querySelector('.cr-sheet').hidden = false;
+}
+function crAddToHighlight(hid){
+  const el = document.getElementById('story-profile'); if(!el) return;
+  const hl = profileHighlights(), h = hl.find(x=>x.id === hid);
+  if(!h || h.items.length >= HL_MAX) return;
+  const kept = window.StoryNative.createKeep(); if(!kept){ showToast('That didn’t work — try again'); return; }
+  const [id, kind] = kept.split(':');
+  h.items.unshift({ id, kind, at: Date.now() }); saveHighlights(hl);
+  el.querySelector('.cr-sheet').hidden = true;
+  crClear(); showToast('Added to ' + h.name);
+}
+// Highlights on Profile: circles under the bio, the newest thing in each as its cover, the name underneath.
+function renderHighlights(){
+  const el = document.getElementById('story-profile'); if(!el || PF_GAP_WINDOW) return;
+  const row = el.querySelector('.pf-hls'); if(!row) return;
+  const hl = profileHighlights().filter(h=>h.items.length);
+  row.hidden = !hl.length;
+  row.innerHTML = hl.map(h=>{
+    const c = h.items[0], src = PF_PHOTO_BASE + 'post/' + c.id;
+    const cover = c.kind === 'video' ? '<video muted playsinline preload="metadata" src="' + src + '#t=0.1"></video>' : '<img alt="" loading="lazy" src="' + src + '">';
+    return '<button class="pf-hl" data-pf="hl-open" data-id="' + escText(h.id) + '"><span class="pf-hl-c">' + cover + '</span><span class="pf-hl-n">' + escText(h.name) + '</span></button>';
+  }).join('');
+}
+window.addEventListener('storage', e=>{ if(e.key === 'story-highlights') renderHighlights(); });
 // ---- Messages list (STORY's own end-to-end encrypted messages) ----
 // Chats live on the phone (localStorage 'story-messages', already unlocked); the message server fills it.
 // Each chat: { id, kind:'chat'|'group', groupType:'public'|'private', name, username, photo, archived, request,
@@ -5639,10 +5847,19 @@ function renderMsgList(){
 // Android asks once to let STORY see the pictures; if that's refused, the phone's own picker is used instead.
 const PF_PHOTO_BASE = 'https://appassets.androidplatform.net/story-photo/';
 let pfPhotoIds = [], pfPhotoShown = 0;
+// The grid serves Edit profile (pictures, for your profile picture) and Create's + (pictures and videos).
+let pfGridFor = 'avatar';
 function openPhotoGrid(access){
   const el = document.getElementById('story-profile'); if(!el) return;
   const panel = el.querySelector('.pf-photos'), grid = panel.querySelector('.pf-photo-grid');
-  try{ pfPhotoIds = JSON.parse(window.StoryNative.listPhotos() || '[]'); }catch(e){ pfPhotoIds = []; }
+  if(pfGridFor === 'create'){
+    try{ pfPhotoIds = JSON.parse(window.StoryNative.listMedia() || '[]'); }catch(e){ pfPhotoIds = []; }
+    if(crMode === 'video') pfPhotoIds = pfPhotoIds.filter(m=>m.v);  // Video: only videos
+  } else {
+    try{ pfPhotoIds = JSON.parse(window.StoryNative.listPhotos() || '[]').map(id=>({ id, v:0 })); }catch(e){ pfPhotoIds = []; }
+  }
+  panel.querySelector('.pf-ed-title').textContent = pfGridFor === 'create' ? (crMode === 'video' ? 'Choose a video' : 'Choose a picture or video') : 'Choose a picture';
+  el.classList.remove('pf-creating'); el.querySelector('.pf-create').hidden = true;
   grid.innerHTML = access === 'partial' ? '<button class="pf-photo-more" data-pf="photos-more">+<span>More pictures</span></button>' : '';
   pfPhotoShown = 0; morePhotos();
   panel.querySelector('.pf-photos-empty').hidden = pfPhotoIds.length > 0 || access === 'partial';
@@ -5653,13 +5870,15 @@ function morePhotos(){
   const grid = el.querySelector('.pf-photo-grid');
   const next = pfPhotoIds.slice(pfPhotoShown, pfPhotoShown + 90);
   pfPhotoShown += next.length;
-  grid.insertAdjacentHTML('beforeend', next.map(id=>'<button class="pf-photo" data-pf="photos-pick" data-id="' + id + '"><img alt="" loading="lazy" decoding="async" src="' + PF_PHOTO_BASE + 'thumb/' + id + '"></button>').join(''));
+  grid.insertAdjacentHTML('beforeend', next.map(m=>'<button class="pf-photo" data-pf="photos-pick" data-id="' + m.id + '" data-v="' + (m.v ? 1 : 0) + '"><img alt="" loading="lazy" decoding="async" src="' + PF_PHOTO_BASE + (m.v ? 'thumbv/' : 'thumb/') + m.id + '">' + (m.v ? '<span class="pf-photo-v">▶</span>' : '') + '</button>').join(''));
 }
 window.storyPhotoAccessDone = function(access){
-  if(access === 'none') window.StoryNative.pickProfilePhoto();  // not allowed: the phone's own picker instead
-  else openPhotoGrid(access);
+  if(access !== 'none') openPhotoGrid(access);
+  else if(pfGridFor === 'create') showToast('STORY isn’t allowed to see your pictures');
+  else window.StoryNative.pickProfilePhoto();  // not allowed: the phone's own picker instead
 };
 function pickProfilePhoto(){
+  pfGridFor = 'avatar';
   if(NATIVE && window.StoryNative.photoAccess){
     const access = window.StoryNative.photoAccess();
     if(access === 'none') window.StoryNative.requestPhotoAccess();  // asks once; then it's instant every time
@@ -5693,6 +5912,7 @@ window.storyProfileGeom = function(){
   line.style.width = (barW + 2) + 'px';
   line.style.height = (barH + 2) + 'px';
   el.querySelectorAll('.pf-scroll').forEach(sc=>{ sc.style.top = (top + 16) + 'px'; sc.style.bottom = '16px'; });
+  el.style.setProperty('--pf-top', top + 'px');
   const gap = el.querySelector('.pf-gap');
   gap.style.width = barW + 'px';
   gap.style.height = barH + 'px';
@@ -9326,7 +9546,7 @@ function attachHandlers(){
           break;
         }
         case 'station3-new-contact': showToast('Create new contact — coming soon'); break;
-        case 'station3-create-post': showToast('Create & post — coming soon'); break;
+        case 'station3-create-post': if(NATIVE && window.StoryNative.toggleCreate){ window.StoryNative.toggleCreate(); } else { showToast('Create & post — coming soon'); } break;
         case 'station3-call-history': showToast('Call history — coming soon'); break;
         case 'station3-messages': if(NATIVE && window.StoryNative.toggleMessages){ window.StoryNative.toggleMessages(); } else { showToast('Messages — coming soon'); } break;
         case 'station3-profile': if(NATIVE && window.StoryNative.toggleProfile){ window.StoryNative.toggleProfile(); } else { showToast('Profile — coming soon'); } break;

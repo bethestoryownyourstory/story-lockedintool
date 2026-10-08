@@ -17,6 +17,11 @@
     <!-- Edit profile > Change photo: STORY shows your pictures itself (instant), after you allow it once. -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <!-- Station 3 > Create: the camera (pictures, video) and the microphone (video sound). -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-feature android:name="android.hardware.camera.any" android:required="false" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
 
     <application
@@ -52,6 +57,16 @@
             android:excludeFromRecents="true"
             android:taskAffinity=""
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <!-- Station 3 > Create: the real camera, full screen under STORY's Create window. -->
+        <activity
+            android:name=".CreateCameraActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:launchMode="singleTask"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.Story" />
 
         <!-- STORY's Always On Display: a dim always-on screen with Station 3 when the screen would turn off. -->
         <activity
