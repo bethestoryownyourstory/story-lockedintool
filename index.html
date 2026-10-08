@@ -1684,6 +1684,8 @@
   html.focus .row-sub, html.focus .notif-time{ color:#5f5f66; }
   html.focus .row-amt, html.focus .notif-amt{ text-shadow:none !important; filter:none !important; font-weight:600; font-variant-numeric:tabular-nums; }
   html.focus .notif-source{ color:#5f5f66; font-weight:600; letter-spacing:1px; }
+  /* Payment amounts: the same crisp number type as every other amount in STORY (mono, tabular, bold). */
+  html.focus .notif-amt{ font-family:var(--font-mono); font-weight:700; font-size:13px; letter-spacing:-0.2px; -webkit-font-smoothing:antialiased; }
   html.focus .notif-label{ font-weight:500; color:#dcdbd6; }
     
   html.focus .page-title{ font-weight:600; letter-spacing:0.3px; }
