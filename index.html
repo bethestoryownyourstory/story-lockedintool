@@ -5287,7 +5287,7 @@ function checkProfileField(){
   if(k === 'username'){ const low = inp.value.toLowerCase().replace(/\s+/g, ''); if(low !== inp.value) inp.value = low; }
   const v = inp.value.trim();
   const problem = k === 'name' ? (v ? '' : 'Your name can’t be empty.') : usernameProblem(v);
-  f.querySelector('.pf-field-msg').textContent = v ? problem : (k === 'name' ? 'This is how you show on STORY.' : 'Your @ on STORY.');
+  f.querySelector('.pf-field-msg').textContent = v ? problem : (k === 'name' ? '' : 'Your @ on STORY.');
   f.querySelector('.pf-field-msg').classList.toggle('bad', !!(v && problem));
   f.querySelector('[data-pf="field-save"]').disabled = !!problem;
   return !problem;
