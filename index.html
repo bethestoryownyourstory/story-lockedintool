@@ -5199,10 +5199,12 @@ const PF_STATS_KEY = 'story-profile-stats';
 function profileStats(){
   let st = {};
   try{ st = JSON.parse(localStorage.getItem(PF_STATS_KEY) || '{}') || {}; }catch(e){}
-  return { following: +st.following || 0, followers: +st.followers || 0, posts: +st.posts || 0 };
+  // Posts = pictures posted on your profile (owner). Posting to the profile isn't built yet, so it's 0 until then;
+  // when it is, it calls bumpProfileStat('posts', ...) (v2 drops any count left from the old Community rule).
+  return { following: +st.following || 0, followers: +st.followers || 0, posts: st.v === 2 ? (+st.posts || 0) : 0 };
 }
 function bumpProfileStat(k, by){
-  const st = profileStats(); st[k] = Math.max(0, st[k] + by);
+  const st = profileStats(); st[k] = Math.max(0, st[k] + by); st.v = 2;
   try{ localStorage.setItem(PF_STATS_KEY, JSON.stringify(st)); }catch(e){}
 }
 // 1234 -> 1.2k, 100000 -> 100k, 2500000 -> 2.5M
@@ -9722,7 +9724,6 @@ function attachHandlers(){
               showToast('That post isn’t allowed under STORY’s content policy.');
               break;
             }
-            bumpProfileStat('posts', 1);  // a real post: Profile's Posts count goes up
             g.posts = [{ id:'cp'+Date.now(), authorName:'You', timestamp:'Just now', type:'note', textContent:text.slice(0,600), caption:'', imageDataUrl:null, likes:0, likedByMe:false, shares:0, comments:[] }, ...g.posts];
           }
           break;
