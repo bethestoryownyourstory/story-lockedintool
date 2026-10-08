@@ -15,7 +15,7 @@ import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 
 /** What the overlay panel (which shows the STORY screens) can ask the phone to do. JS name: window.StoryNative */
-class StoryBridge(private val ctx: Context, private val host: Host, private val station3: Boolean = false, private val dial: Boolean = false) {
+class StoryBridge(private val ctx: Context, private val host: Host, private val station3: Boolean = false, private val dial: Boolean = false, private val profile: Boolean = false) {
 
     interface Host {
         fun hidePanel()
@@ -27,6 +27,8 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         fun setBarWidth(w: Double)
         fun setTyping(on: Boolean)
         fun showToast(msg: String)
+        fun toggleProfile()
+        fun closeProfile()
     }
 
     /** The phone's real launchable apps, with their real icons -- kept ready, so the Apps area opens instantly. */
@@ -77,6 +79,13 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
     /** Station 3's dial pad button: show / hide the dial pad's own window (it never moves Station 3). */
     @JavascriptInterface
     fun toggleDialpad() { if (station3) host.toggleDialpad() }
+
+    /** Station 3's profile button: Profile opens attached to Station 3 (tap again to close it). */
+    @JavascriptInterface
+    fun toggleProfile() { if (station3) host.toggleProfile() }
+
+    @JavascriptInterface
+    fun closeProfile() { if (station3) host.closeProfile() }
 
     /** The X beside the dial pad. */
     @JavascriptInterface
