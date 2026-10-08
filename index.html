@@ -9966,14 +9966,19 @@ function buildNeighbor(pg){
 let neighborTimer = null, neighborsFor = null;
 function refreshNeighbors(force){
   if(state.device !== 'phone' || !PAGES.includes(state.current)) return;
-  if(!force && neighborsFor === state.current) return;
   clearTimeout(neighborTimer);
-  neighborTimer = setTimeout(()=>{
+  // One missing neighbour at a time, each in its own quiet moment, so a swipe is never held up.
+  const step = ()=>{
     if(pageSwipeAnimating || !PAGES.includes(state.current)) return;
     const idx = PAGES.indexOf(state.current);
-    [idx - 1, idx + 1].forEach(i=>{ if(i >= 0 && i < PAGES.length) try{ buildNeighbor(PAGES[i]); }catch(e){} });
-    neighborsFor = state.current;
-  }, 120);
+    const want = [idx - 1, idx + 1].filter(i=>i >= 0 && i < PAGES.length).map(i=>PAGES[i]);
+    const missing = want.filter(pg=>!NEIGHBORS[pg] || !NEIGHBORS[pg].host.parentNode || force);
+    if(!missing.length){ neighborsFor = state.current; return; }
+    try{ buildNeighbor(missing[0]); }catch(e){}
+    force = false;
+    neighborTimer = setTimeout(step, 60);
+  };
+  neighborTimer = setTimeout(step, 60);
 }
 function beginPageSlide(next){
   const idx = PAGES.indexOf(state.current);
@@ -10040,8 +10045,10 @@ function setPageSlide(sl, dx){
   sl.oldFrame.style.transform = 'translate3d(' + d + 'px,0,0)';
 }
 // Finish the slide: commit = go to the new page; otherwise slide back to where it was.
+let currentSlide = null;
 function endPageSlide(sl, commit){
   if(!sl || sl.done) return;
+  sl.ending = true; currentSlide = sl;
   const ease = 'transform 0.19s cubic-bezier(.22,.9,.24,1)';
   sl.newFrame.style.transition = sl.oldFrame.style.transition = ease;
   setPageSlide(sl, commit ? -sl.dir * sl.w : 0);
@@ -10050,6 +10057,21 @@ function endPageSlide(sl, commit){
     if(finished) return; finished = true; sl.done = true;
     document.body.classList.remove('page-sliding');
     if(commit){
+      // The page you came from is kept, ready, as the neighbour for swiping straight back.
+      const fromPage = state.current;
+      if(sl.fixedBack && sl.fixedBack.parentNode) sl.fixedBack.parentNode.removeChild(sl.fixedBack);
+      sl.oldFrame.style.transition = sl.oldFrame.style.transform = sl.oldFrame.style.willChange = '';
+      Object.assign(sl.oldFrame.style, { position:'', left:'', top:'', width:'', height:'', margin:'', pointerEvents:'' });
+      if(sl.liveBack) sl.liveBack.style.visibility = '';
+      const keep = document.createElement('div');
+      keep.className = 'device-wrap'; keep.setAttribute('aria-hidden', 'true');
+      keep.style.cssText = 'position:fixed;left:0;top:0;width:' + sl.w + 'px;height:' + sl.wrap.getBoundingClientRect().height + 'px;visibility:hidden;pointer-events:none;z-index:-1;';
+      const scroll = (sl.oldFrame.querySelector('#content-area') || {}).scrollTop || 0;
+      keep.appendChild(sl.oldFrame);
+      document.body.appendChild(keep);
+      const ka = sl.oldFrame.querySelector('#content-area'); if(ka) ka.scrollTop = scroll;
+      if(NEIGHBORS[fromPage] && NEIGHBORS[fromPage].host.parentNode) NEIGHBORS[fromPage].host.remove();
+      NEIGHBORS[fromPage] = { host:keep, w:sl.w, h:sl.wrap.getBoundingClientRect().height };
       // The new page becomes the live one -- drawn exactly as the ready-made copy already shows it.
       state.current = PAGES[sl.next];
       state.lastPage = state.current;
@@ -10064,8 +10086,9 @@ function endPageSlide(sl, commit){
       sl.wrap.style.position = sl.prev.pos; sl.wrap.style.overflow = sl.prev.overflow;
       pageSwipeAnimating = false;
     }
-    refreshNeighbors(true);
+    refreshNeighbors();
   };
+  sl.finishNow = ()=>{ sl.newFrame.style.transition = sl.oldFrame.style.transition = 'none'; finish(); };
   requestAnimationFrame(()=>{ sl.newFrame.addEventListener('transitionend', finish, { once:true }); setTimeout(finish, 260); });
 }
 function goToPageIndex(next){
@@ -10178,6 +10201,7 @@ function attachSwipe(){
   // The pages follow the finger: drag left for the page on the right, right for the page on the left.
   // Let go past a quarter of the screen (or with a quick flick) and it finishes; otherwise it slides back.
   shell.addEventListener('pointerdown', e=>{
+    if(pageSwipeAnimating && currentSlide && currentSlide.ending) currentSlide.finishNow();
     if(pageSwipeAnimating) return;
     const startX = e.clientX, startY = e.clientY, pid = e.pointerId;
     let sl = null, gaveUp = false, lastX = startX, lastT = performance.now(), vx = 0;
@@ -10186,7 +10210,7 @@ function attachSwipe(){
       const dx = ev.clientX - startX, dy = ev.clientY - startY;
       if(!sl){
         if(Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)){ gaveUp = true; return; }   // scrolling up/down
-        if(Math.abs(dx) < 10 || Math.abs(dx) < Math.abs(dy) * 1.2) return;
+        if(Math.abs(dx) < 6 || Math.abs(dx) < Math.abs(dy) * 1.2) return;
         const idx = PAGES.indexOf(state.current);
         sl = beginPageSlide(idx + (dx < 0 ? 1 : -1));
         if(!sl){ gaveUp = true; return; }
