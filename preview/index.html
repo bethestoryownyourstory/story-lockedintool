@@ -1737,6 +1737,14 @@
   #story-profile .pf-ed-row:last-child{ border-bottom:1px solid var(--pf-hair); }
   #story-profile .pf-ed-val{ color:var(--pf-muted); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   #story-profile .pf-ed-back:active, #story-profile .pf-ed-row:active, #story-profile .pf-ed-remove:active{ opacity:0.6; }
+  /* Choose a picture: the phone's pictures, newest first, 3 across. */
+  #story-profile .pf-photo-grid{ display:grid; grid-template-columns:repeat(3, 1fr); gap:3px; }
+  #story-profile .pf-photo, #story-profile .pf-photo-more{ aspect-ratio:1/1; border:none; padding:0; margin:0; background:var(--pf-hair); overflow:hidden; border-radius:4px; }
+  #story-profile .pf-photo img{ width:100%; height:100%; object-fit:cover; display:block; }
+  #story-profile .pf-photo:active{ opacity:0.6; }
+  #story-profile .pf-photo-more{ color:var(--pf-fg); font-size:26px; font-family:inherit; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; }
+  #story-profile .pf-photo-more span{ font-size:11px; font-weight:600; color:var(--pf-muted); }
+  #story-profile .pf-photos-empty{ text-align:center; color:var(--pf-muted); font-size:14px; padding:40px 0; }
   /* Tapping the picture: just look at it. Tap anywhere to close. */
   #story-profile .pf-viewer{ position:fixed; inset:0; z-index:5; background:var(--pf-bg); display:flex; align-items:center; justify-content:center; }
   #story-profile .pf-viewer img{ width:min(84vw, 84vh); height:min(84vw, 84vh); border-radius:50%; object-fit:cover; }
@@ -5254,6 +5262,11 @@ window.storyProfileOnly = function(){
       <div class="pf-ed-row" data-pf="ed-username"><span>Username</span><span class="pf-ed-val">@${escText(p.username)}</span></div>
       <div class="pf-ed-row" data-pf="ed-bio"><span>Bio</span><span class="pf-ed-val">${p.bio ? escText(p.bio) : 'Nothing here yet.'}</span></div>
     </div>
+    <div class="pf-scroll pf-photos" hidden>
+      <div class="pf-ed-head"><button class="pf-ed-back" data-pf="photos-back" aria-label="Back">‹</button><div class="pf-ed-title">Choose a picture</div></div>
+      <div class="pf-photo-grid"></div>
+      <div class="pf-photos-empty" hidden>No pictures on this phone yet.</div>
+    </div>
     <div class="pf-viewer" data-pf="viewer-close" hidden><img alt="Profile picture"></div>
     <div class="pf-gap"><div class="pf-gap-clip"><svg></svg></div></div>
     <div class="pf-line"></div>`;
@@ -5273,6 +5286,17 @@ window.storyProfileOnly = function(){
     else if(k === 'edit'){ main.hidden = true; ed.hidden = false; ed.scrollTop = 0; }
     else if(k === 'edit-back'){ ed.hidden = true; main.hidden = false; }
     else if(k === 'photo-change') pickProfilePhoto();
+    else if(k === 'photos-back'){ el.querySelector('.pf-photos').hidden = true; ed.hidden = false; }
+    else if(k === 'photos-more') window.StoryNative.requestPhotoAccess();
+    else if(k === 'photos-pick'){
+      // Instant: Profile shows the picture now; the app saves the sharp copy in the background.
+      const id = b.getAttribute('data-id');
+      window.StoryNative.useProfilePhoto(id);
+      pfPhotoCache = PF_PHOTO_BASE + 'thumb/' + id;
+      el.querySelectorAll('.pf-avatar').forEach(a=>{ a.innerHTML = '<img alt="" src="' + pfPhotoCache + '">'; a.classList.add('has-photo'); });
+      el.querySelector('.pf-ed-remove').hidden = false;
+      el.querySelector('.pf-photos').hidden = true; ed.hidden = false;
+    }
     else if(k === 'photo-remove'){
       if(NATIVE && window.StoryNative.removeProfilePhoto) window.StoryNative.removeProfilePhoto();
       else { try{ localStorage.removeItem('story-profile-photo'); }catch(err){} window.storyProfilePhotoChanged(); }
@@ -5280,6 +5304,10 @@ window.storyProfileOnly = function(){
     else if(k === 'ed-name' || k === 'ed-username' || k === 'ed-bio') showToast({ 'ed-name':'Name', 'ed-username':'Username', 'ed-bio':'Bio' }[k] + ' — coming soon');
     else showToast('Profile menu — coming soon');
   });
+  el.querySelector('.pf-photos').addEventListener('scroll', e=>{
+    const sc = e.currentTarget;
+    if(sc.scrollTop + sc.clientHeight > sc.scrollHeight - 600 && pfPhotoShown < pfPhotoIds.length) morePhotos();
+  }, { passive:true });
   window.storyProfilePhotoChanged();
   window.storyProfileGeom();
 };
@@ -5303,10 +5331,40 @@ window.storyProfilePhotoChanged = function(){
 // Profile closed: next time it opens on the profile itself (not Edit profile or the picture).
 window.storyProfileReset = function(){
   const el = document.getElementById('story-profile'); if(!el || PF_GAP_WINDOW) return;
-  el.querySelector('.pf-editor').hidden = true; el.querySelector('.pf-viewer').hidden = true;
+  el.querySelector('.pf-editor').hidden = true; el.querySelector('.pf-viewer').hidden = true; el.querySelector('.pf-photos').hidden = true;
   const main = el.querySelector('.pf-scroll:not(.pf-editor)'); main.hidden = false; main.scrollTop = 0;
 };
+// STORY's own picture grid: the phone's pictures right inside Edit profile, so choosing is instant (no app switch).
+// Android asks once to let STORY see the pictures; if that's refused, the phone's own picker is used instead.
+const PF_PHOTO_BASE = 'https://appassets.androidplatform.net/story-photo/';
+let pfPhotoIds = [], pfPhotoShown = 0;
+function openPhotoGrid(access){
+  const el = document.getElementById('story-profile'); if(!el) return;
+  const panel = el.querySelector('.pf-photos'), grid = panel.querySelector('.pf-photo-grid');
+  try{ pfPhotoIds = JSON.parse(window.StoryNative.listPhotos() || '[]'); }catch(e){ pfPhotoIds = []; }
+  grid.innerHTML = access === 'partial' ? '<button class="pf-photo-more" data-pf="photos-more">+<span>More pictures</span></button>' : '';
+  pfPhotoShown = 0; morePhotos();
+  panel.querySelector('.pf-photos-empty').hidden = pfPhotoIds.length > 0 || access === 'partial';
+  el.querySelector('.pf-editor').hidden = true; panel.hidden = false; panel.scrollTop = 0;
+}
+function morePhotos(){
+  const el = document.getElementById('story-profile'); if(!el) return;
+  const grid = el.querySelector('.pf-photo-grid');
+  const next = pfPhotoIds.slice(pfPhotoShown, pfPhotoShown + 90);
+  pfPhotoShown += next.length;
+  grid.insertAdjacentHTML('beforeend', next.map(id=>'<button class="pf-photo" data-pf="photos-pick" data-id="' + id + '"><img alt="" loading="lazy" decoding="async" src="' + PF_PHOTO_BASE + 'thumb/' + id + '"></button>').join(''));
+}
+window.storyPhotoAccessDone = function(access){
+  if(access === 'none') window.StoryNative.pickProfilePhoto();  // not allowed: the phone's own picker instead
+  else openPhotoGrid(access);
+};
 function pickProfilePhoto(){
+  if(NATIVE && window.StoryNative.photoAccess){
+    const access = window.StoryNative.photoAccess();
+    if(access === 'none') window.StoryNative.requestPhotoAccess();  // asks once; then it's instant every time
+    else openPhotoGrid(access);
+    return;
+  }
   if(NATIVE && window.StoryNative.pickProfilePhoto){ window.StoryNative.pickProfilePhoto(); return; }
   if(NATIVE){ showToast('Update STORY to change your photo'); return; }  // this phone's STORY predates the photo picker
   // Browser: pick a file, keep a 512px square of it.
