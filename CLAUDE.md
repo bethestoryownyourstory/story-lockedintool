@@ -5,6 +5,7 @@
 - **No scrollbar lines anywhere in STORY** (no grey/white line down the side of a page). The only exception is the Payments scroll indicator the owner asked for.
 - **Pages never zoom in/out on their own.** A page's fitted size is worked out once per screen size (FIT_CACHE) and kept; live changes (prices, profit/loss flips, rows appearing) must not rescale it. Keep layouts the same height in every state (e.g. hidden placeholders).
 - **Finish everything, perfectly, before saying it is done.** Every change is complete across every page and state it touches, checked (rendered and tested on all affected pages, Station 3 included), and pushed with a green build. No half-done work, no leftovers for later.
+- **The phone's own panel always works on the Pages (owner's call).** The Pages sit in the normal overlay layer under the phone's status bar (clock/battery strip stays visible); never move them above it again, or the notification panel and keyboard break.
 - **Change only what the owner asks for.** Every design in STORY stays exactly as it is unless the owner says to change it - no "improvements", no side changes. If the owner says something is wrong but not where or how it should be, ASK before changing anything. Only fix directly when it's clear what is wrong and how it should look.
 
 - All source files live in the repo root, flat (no folders). `.github/workflows/android.yml` turns them into an Android project at build time; `android.yml` / `screens.yml` / `deploy-worker.yml` in the root are copies of the workflows - keep them identical.
