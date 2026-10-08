@@ -1781,8 +1781,6 @@
   #story-profile .msg-read{ color:var(--pf-fg); }
   #story-profile .pf-msgs-menu{ position:fixed; left:20px; right:20px; bottom:80px; z-index:6; }
   #story-profile .pf-msgs-menu button{ width:100%; padding:14px 0; border-radius:12px; border:1px solid var(--pf-fg); background:var(--pf-bg); color:var(--pf-fg); font-size:15px; font-weight:700; font-family:inherit; }
-  #story-profile .pf-msgs-new{ margin-left:auto; width:38px; height:38px; border:none; background:transparent; color:var(--pf-fg); display:flex; align-items:center; justify-content:center; padding:0; }
-  #story-profile .pf-msgs-new:active{ opacity:0.6; }
   #story-profile .pf-msgs-empty{ text-align:center; padding-top:26vh; }
   #story-profile .pf-msgs-empty-t{ font-size:15px; font-weight:600; }
   #story-profile .pf-msgs-lock{ display:inline-flex; align-items:center; gap:5px; margin-top:8px; font-size:12px; color:var(--pf-muted); }
@@ -5419,7 +5417,6 @@ window.storyProfileOnly = function(){
     <div class="pf-scroll pf-msgs" hidden>
       <div class="pf-msgs-top">
         <label class="pf-msgs-search"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="search" placeholder="Search" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="search"></label>
-        <button class="pf-msgs-new" data-pf="msg-new" aria-label="New message"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
       </div>
       <div class="pf-msgs-filters">
         <button class="pf-mf" data-pf="mf" data-f="chats">Chats</button>
@@ -5478,7 +5475,6 @@ window.storyProfileOnly = function(){
     else if(k === 'field-back') closeProfileField();
     else if(k === 'field-save') saveProfileField();
     else if(k === 'ed-bio') openProfileField('bio');
-    else if(k === 'msg-new') showToast('New message — coming soon');
     else if(k === 'mf'){ msgView.filter = b.getAttribute('data-f'); msgView.sub = null; renderMsgList(); }
     else if(k === 'mf-sub'){ const f = b.getAttribute('data-f'); msgView.sub = msgView.sub === f ? null : f; renderMsgList(); }
     else if(k === 'msg-open') showToast('Chat — coming soon');
