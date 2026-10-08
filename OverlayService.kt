@@ -160,6 +160,7 @@ class OverlayService : Service(), StoryBridge.Host {
         runCatching { unregisterReceiver(unlocked) }
         runCatching { unregisterReceiver(screenOff) }
         runCatching { unregisterReceiver(appsChanged) }
+        ui.removeCallbacks(hideToast); hideToast.run()
         runCatching { getSystemService(android.hardware.display.DisplayManager::class.java).unregisterDisplayListener(displayWatch) }
         ui.removeCallbacks(aodSwap)
         bar?.let { runCatching { (barWm ?: wm).removeView(it) } }
@@ -202,7 +203,7 @@ class OverlayService : Service(), StoryBridge.Host {
             ui.post {
                 val before = screensSeen
                 screensSeen = v
-                if (before != null && before != v) for (p in listOfNotNull(s3Pane, pagesPane)) { if (p.shown) p.stale = true else reload(p) }
+                if (before != null && before != v) for (p in listOfNotNull(s3Pane, pagesPane, dialPane)) { if (p.shown) p.stale = true else reload(p) }  // every STORY window, the dial pad included
             }
         }.start()
     }
@@ -779,6 +780,27 @@ class OverlayService : Service(), StoryBridge.Host {
         raiseBubble()
         addBar()
     }
+
+    // ---- STORY's message bubble: one look everywhere (Pages, Station 3, over apps), above everything ----
+    private var toastView: View? = null
+    private var toastWm: WindowManager? = null
+    private val hideToast = Runnable { toastView?.let { runCatching { (toastWm ?: wm).removeView(it) } }; toastView = null }
+    override fun showToast(msg: String) { ui.post {
+        ui.removeCallbacks(hideToast); hideToast.run()
+        val tv = TextView(this).apply {
+            text = msg; setTextColor(Color.parseColor("#F3F2EE")); textSize = 11.5f
+            typeface = android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD)
+            gravity = Gravity.CENTER; maxWidth = (resources.displayMetrics.widthPixels * 0.82f).toInt()
+            setPadding((16 * dp).toInt(), (10 * dp).toInt(), (16 * dp).toInt(), (10 * dp).toInt())
+            background = GradientDrawable().apply { cornerRadius = 20 * dp; setColor(Color.parseColor("#232326")); setStroke(maxOf(1, dp.toInt()), Color.parseColor("#24FFFFFF")) }
+        }
+        val lp = overlayParams(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL, 0, (84 * dp).toInt())
+        lp.flags = lp.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+        lp.type = layerType
+        toastWm = layerWm
+        runCatching { layerWm.addView(tv, lp); toastView = tv }
+        ui.postDelayed(hideToast, 2200)
+    } }
 
     override fun closeDialpad() { ui.post { dialPane?.takeIf { it.shown }?.let { hideOne(it) } } }
 

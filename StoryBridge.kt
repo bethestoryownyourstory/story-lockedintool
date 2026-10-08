@@ -26,6 +26,7 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         fun setDialSize(w: Int, h: Int)
         fun setBarWidth(w: Double)
         fun setTyping(on: Boolean)
+        fun showToast(msg: String)
     }
 
     /** The phone's real launchable apps, with their real icons -- kept ready, so the Apps area opens instantly. */
@@ -54,6 +55,10 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
     /** The Pages report when a text box is being typed in (so the keyboard can show above them). */
     @JavascriptInterface
     fun setTyping(on: Boolean) { if (!station3) host.setTyping(on) }
+
+    /** STORY's one message bubble ("... - coming soon"), the same on the Pages, Station 3 and over apps. */
+    @JavascriptInterface
+    fun toast(msg: String) { host.showToast(msg) }
 
     @JavascriptInterface
     fun openRecents() {

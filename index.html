@@ -4939,6 +4939,34 @@ window.storyAppsChanged = function(){
   loadNativeApps();
   if(state.current === 'apps' && !state.appMenuId) renderDevice();
 };
+// Anything that isn't built yet tells you so when tapped ("... — coming soon"), everywhere in STORY.
+const COMING_SOON = [
+  ['[data-dash]', el=>el.textContent.trim()],
+  ['.search-row', ()=>'Search'],
+  ['[data-action="add-card"], .avatar-add', ()=>'Add card'],
+  ['.btn-row-action', el=>el.textContent.trim()],
+  ['.tab:not(.active)', el=>el.textContent.trim() + ' chart'],
+  ['.btn-buy', ()=>'Buy'],
+  ['.btn-sell', ()=>'Sell'],
+  ['[data-action="notes-unavailable"]', el=>el.textContent.trim()],
+  ['.app-row:not([data-native-pkg]):not([data-nav]):not([data-app-launchpopup]):not([data-app-locked]):not([data-app-toast])', el=>(el.querySelector('.row-name')||el).textContent.trim()],
+  ['.notif-card', ()=>'Payment details'],
+];
+let comingSoonDown = null;
+document.addEventListener('pointerdown', e=>{ comingSoonDown = { x:e.clientX, y:e.clientY }; }, true);
+document.addEventListener('click', e=>{
+  if(!e.target.closest || e.target.closest('.station3-region')) return;
+  if(comingSoonDown && Math.hypot(e.clientX - comingSoonDown.x, e.clientY - comingSoonDown.y) > 10) return;  // a swipe, not a tap
+  for(const [sel, name] of COMING_SOON){
+    const el = e.target.closest(sel);
+    if(el && el.closest('#device-wrap')){
+      e.stopPropagation(); e.preventDefault();
+      const n = (name(el) || '').replace(/\s+/g, ' ');
+      showToast((n ? n + ' — ' : '') + 'coming soon');
+      return;
+    }
+  }
+}, true);
 window.storyGoHome = function(){ state.recentsOpen=false; state.homePickerOpen=false; state.appMenuId=null; state.current = state.homeScreen || 'wallet'; renderDevice(); };
 document.addEventListener('click', (e)=>{
   const el = e.target.closest && e.target.closest('[data-native-pkg]');
@@ -8442,7 +8470,7 @@ function attachHandlers(){
         case 'station3-dial-backspace': state.station3DialInput = state.station3DialInput.slice(0, -1); break;
         case 'station3-call': {
           if(state.station3DialInput.trim()){
-            showToast('Calling ' + state.station3DialInput + '… (needs real phone/carrier access)');
+            showToast('Calling — coming soon');
             state.station3DialInput = '';
             state.station3DialpadOpen = false;
           }
@@ -9840,6 +9868,9 @@ function toastTemplate(){
 }
 let toastTimer = null;
 function showToast(msg){
+  // In the app the message is STORY's own (drawn by the app), identical on the Pages, on Station 3 and
+  // over other apps -- one thing everywhere.
+  if(NATIVE && window.StoryNative && window.StoryNative.toast){ try{ window.StoryNative.toast(String(msg)); return; }catch(e){} }
   state.toastMessage = msg;
   if(toastTimer) clearTimeout(toastTimer);
   toastTimer = setTimeout(()=>{ state.toastMessage = null; renderDevice(); }, 2200);
