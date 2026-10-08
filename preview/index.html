@@ -1740,6 +1740,7 @@
   #story-profile .pf-gap-clip svg{ position:absolute; left:0; top:0; width:100%; height:100%; overflow:visible; }
   /* Profile's background, with Station 3's gap cut clean out of it: a real gap, whatever is behind shows through. */
   #story-profile .pf-bg{ position:absolute; inset:0; background:var(--pf-bg); }
+  #story-profile.pf-main .pf-gap, #story-profile.pf-main .pf-line, #story-profile.pf-gap-only .pf-scroll{ display:none; }
   /* A hairline halo so the little men stay visible on whatever shows through the gap. */
   #story-profile .pf-gap-clip svg{ filter:drop-shadow(0 0 0.8px var(--pf-bg)) drop-shadow(0 0 0.8px var(--pf-bg)); }
   #story-profile .pf-line{ position:fixed; right:0; bottom:0; box-sizing:border-box; pointer-events:none;
@@ -5171,11 +5172,15 @@ document.addEventListener('click', e=>{
   }
 }, true);
 // Profile (its own window, ?s3=1&profile=1): drawn once, then only re-measured around Station 3's bar.
+const PF_GAP_WINDOW = /[?&]gap=1/.test(location.search);
 window.storyProfileOnly = function(){
   if(document.getElementById('story-profile')) return;
   const p = state.profile || (state.profile = { name:'NAME', username:'username', following:'7', followers:'100k', posts:'3', bio:'' });
   const el = document.createElement('div');
   el.id = 'story-profile';
+  // Two windows draw Profile: the main one (everything above the gap's line) and the gap's own (?gap=1: the
+  // line and the little men; touches go straight through it to whatever is behind).
+  el.className = PF_GAP_WINDOW ? 'pf-gap-only' : 'pf-main';
   el.innerHTML = `
     <div class="pf-bg"></div>
     <div class="pf-scroll">
@@ -5212,12 +5217,12 @@ window.storyProfileGeom = function(){
   line.style.width = (barW + 2) + 'px';
   line.style.height = (barH + 2) + 'px';
   sc.style.top = (top + 16) + 'px';
-  sc.style.bottom = (barH + 18) + 'px';
+  sc.style.bottom = '16px';
   const gap = el.querySelector('.pf-gap');
   gap.style.width = barW + 'px';
   gap.style.height = barH + 'px';
   const w = window.innerWidth, h = window.innerHeight, r = 20, gx = w - barW, gy = h - barH;
-  el.querySelector('.pf-bg').style.clipPath = `path(evenodd, 'M0 0 H${w} V${h} H0 Z M${gx} ${h} V${gy + r} A${r} ${r} 0 0 1 ${gx + r} ${gy} H${w} V${h} Z')`;
+  if(PF_GAP_WINDOW) el.querySelector('.pf-bg').style.clipPath = `path(evenodd, 'M0 0 H${w} V${h} H0 Z M${gx} ${h} V${gy + r} A${r} ${r} 0 0 1 ${gx + r} ${gy} H${w} V${h} Z')`;
 };
 // Station 3 closed while Profile stays open: its gap stays, and two little men walk up to the Station 3 button,
 // grab it with a rope and try to pull Station 3 back out -- until the boss storms in, angry, points at them (no words),
