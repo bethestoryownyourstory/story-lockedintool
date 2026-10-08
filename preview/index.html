@@ -1768,6 +1768,11 @@
   #story-profile .msg-mid{ flex:1; min-width:0; display:flex; flex-direction:column; gap:3px; }
   #story-profile .msg-who{ font-size:15px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   #story-profile .msg-last{ font-size:13px; color:var(--pf-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #story-profile .msg-typing{ color:var(--pf-fg); font-weight:600; }
+  #story-profile .msg-typing i{ display:inline-block; width:3px; height:3px; margin-left:2px; border-radius:50%; background:currentColor; vertical-align:middle; animation:msgDot 1.2s infinite ease-in-out; }
+  #story-profile .msg-typing i:nth-child(2){ animation-delay:0.2s; }
+  #story-profile .msg-typing i:nth-child(3){ animation-delay:0.4s; }
+  @keyframes msgDot{ 0%, 60%, 100%{ opacity:0.25; } 30%{ opacity:1; } }
   #story-profile .msg-end{ flex-shrink:0; display:flex; flex-direction:column; align-items:flex-end; gap:4px; }
   #story-profile .msg-time{ font-size:11px; color:var(--pf-muted); }
   #story-profile .msg-status{ font-size:11px; font-weight:700; }
@@ -5557,6 +5562,12 @@ window.storyS3Page = function(which){
 // typing), read (saw it and tapped the keyboard).
 const MSG_KEY = 'story-messages';
 const msgView = { filter:'chats', sub:null, q:'', menuFor:null };
+let msgTypingTimer = 0;
+// The message server calls this the moment someone starts / keeps typing to you.
+window.storyMsgTyping = function(chatId, who){
+  const c = msgChats().find(x=>x.id === chatId); if(!c) return;
+  c.typing = { at: Date.now(), who: who || '' }; renderMsgList();
+};
 let msgChatsCache = null;
 function msgChats(){
   if(!msgChatsCache){ try{ msgChatsCache = JSON.parse(localStorage.getItem(MSG_KEY) || '[]') || []; }catch(e){ msgChatsCache = []; } }
@@ -5603,12 +5614,20 @@ function renderMsgList(){
     const who = c.name || (c.username ? '@' + c.username : '');
     const pic = c.photo ? '<img alt="" src="' + escText(c.photo) + '">' : PF_PHOTO_PLACEHOLDER;
     const mine = last.from === 'me' && STATUS[last.status];
+    // Live typing: the server marks typing:{ at, who } while they type; it fades out 6s after the last keystroke.
+    const typing = !q && c.typing && Date.now() - (c.typing.at || 0) < 6000;
+    const lastHtml = typing
+      ? '<span class="msg-typing">' + (c.kind === 'group' && c.typing.who ? escText(c.typing.who) + ' is typing' : 'typing') + '<i></i><i></i><i></i></span>'
+      : (last.from === 'me' ? 'You: ' : '') + escText(last.text || '');
     return '<button class="msg-row" data-pf="msg-open" data-id="' + escText(c.id) + '">' +
       '<span class="msg-pic">' + pic + '</span>' +
-      '<span class="msg-mid"><span class="msg-who">' + escText(who) + '</span><span class="msg-last">' + (last.from === 'me' ? 'You: ' : '') + escText(last.text || '') + '</span></span>' +
+      '<span class="msg-mid"><span class="msg-who">' + escText(who) + '</span><span class="msg-last">' + lastHtml + '</span></span>' +
       '<span class="msg-end"><span class="msg-time">' + msgTime(last.at) + '</span>' + (mine ? '<span class="msg-status msg-' + last.status + '">' + STATUS[last.status] + '</span>' : '') + '</span>' +
     '</button>';
   }).join('');
+  // While anyone is typing, look again shortly so "typing" goes away on its own when they stop.
+  clearTimeout(msgTypingTimer);
+  if(list.some(c=>c.typing && Date.now() - (c.typing.at || 0) < 6000)) msgTypingTimer = setTimeout(renderMsgList, 1000);
   const empty = box.querySelector('.pf-msgs-empty');
   empty.hidden = list.length > 0;
   empty.querySelector('.pf-msgs-empty-t').textContent = q ? 'No results' : msgView.filter === 'archive' ? 'Nothing archived' : msgView.filter === 'requests' ? 'No requests' : msgView.filter === 'groups' ? 'No groups yet' : 'No messages yet';
