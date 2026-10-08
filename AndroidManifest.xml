@@ -41,6 +41,14 @@
             android:taskAffinity=""
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
+        <!-- Edit profile > Change photo: see-through, opens the phone's own photo picker. -->
+        <activity
+            android:name=".ProfilePhotoActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
         <!-- STORY's Always On Display: a dim always-on screen with Station 3 when the screen would turn off. -->
         <activity
             android:name=".AodActivity"

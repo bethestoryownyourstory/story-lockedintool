@@ -656,7 +656,7 @@ class OverlayService : Service(), StoryBridge.Host {
         // again changes nothing on screen (no re-layout, no resize, no jump).
         if (!p.small) p.web.evaluateJavascript("window.storyReset&&window.storyReset()", null)
         setShown(p, false)
-        if (p === profilePane) profileGapPane?.takeIf { it.stale }?.let { reload(it) }
+        if (p === profilePane) { p.web.evaluateJavascript("window.storyProfileReset&&window.storyProfileReset()", null); profileGapPane?.takeIf { it.stale }?.let { reload(it) } }
         // New screens were published: pick them up in the background. Station 3 / the dial pad only reload
         // then (never on a timer), so tapping them open is always instant.
         if (p.stale || (!p.small && System.currentTimeMillis() - p.loadedAt > 5 * 60_000)) reload(p)
@@ -858,6 +858,26 @@ class OverlayService : Service(), StoryBridge.Host {
         if (profilePane?.shown != true) return
         profileGapPane?.web?.evaluateJavascript("window.storyProfileS3&&window.storyProfileS3(${s3Pane?.shown == true})", null)
     }
+    // ---- Profile picture: Edit profile > Change photo opens the phone's own photo picker. STORY's windows sit
+    //      above every app, so Profile (and the Pages, if open) step aside while you pick, then come straight back. ----
+    private var pickerHid = listOf<Pane>()
+    override fun pickProfilePhoto() { ui.post {
+        if (pickerHid.isNotEmpty()) return@post
+        pickerHid = listOfNotNull(profilePane, pagesPane).filter { it.shown }
+        for (p in pickerHid) setShown(p, false)
+        runCatching { startActivity(Intent(this, ProfilePhotoActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)) }
+            .onFailure { profilePhotoPicked(false) }
+    } }
+    fun profilePhotoPicked(changed: Boolean) { ui.post {
+        val back = pickerHid; pickerHid = listOf()
+        for (p in back) if (!p.shown) setShown(p, true)
+        if (profilePane in back) tellProfileStation3()
+        if (changed) profilePane?.web?.evaluateJavascript("window.storyProfilePhotoChanged&&window.storyProfilePhotoChanged()", null)
+    } }
+    override fun removeProfilePhoto() { ui.post {
+        runCatching { ProfilePhotoActivity.file(this).delete() }
+        profilePane?.web?.evaluateJavascript("window.storyProfilePhotoChanged&&window.storyProfilePhotoChanged()", null)
+    } }
     override fun closeProfile() { ui.post { profilePane?.takeIf { it.shown }?.let { hideOne(it) } } }
 
     /** Where Station 3's white bar is (in the page's px), so Profile's line traces it exactly; plus the status bar. */

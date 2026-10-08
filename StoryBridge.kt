@@ -30,6 +30,8 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         fun toggleProfile()
         fun closeProfile()
         fun setTheme(t: String)
+        fun pickProfilePhoto()
+        fun removeProfilePhoto()
     }
 
     /** The phone's real launchable apps, with their real icons -- kept ready, so the Apps area opens instantly. */
@@ -69,6 +71,16 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
 
     @JavascriptInterface
     fun setTheme(t: String) { host.setTheme(if (t == "white") "white" else "black") }
+
+    /** Profile picture: the saved one (data URL, "" = none); Edit profile > Change photo / Remove photo. */
+    @JavascriptInterface
+    fun getProfilePhoto(): String = runCatching { ProfilePhotoActivity.dataUrl(ctx) }.getOrDefault("")
+
+    @JavascriptInterface
+    fun pickProfilePhoto() { if (profile) host.pickProfilePhoto() }
+
+    @JavascriptInterface
+    fun removeProfilePhoto() { if (profile) host.removeProfilePhoto() }
 
     @JavascriptInterface
     fun openRecents() {
