@@ -1800,6 +1800,7 @@
   #story-profile .pf-user{ font-size:13px; color:var(--pf-muted); margin-top:2px; }
   #story-profile .pf-more{ width:36px; height:36px; border-radius:50%; border:none; background:transparent; color:var(--pf-fg);
     font-size:22px; line-height:1; display:flex; align-items:center; justify-content:center; align-self:flex-start; }
+  #story-profile .pf-head-btns{ display:flex; flex-direction:column; align-items:center; align-self:flex-start; gap:2px; }
   #story-profile .pf-stats{ display:flex; margin:22px 0 18px; }
   #story-profile .pf-stat{ flex:1; text-align:center; }
   #story-profile .pf-stat-n{ font-family:var(--font-mono); font-size:20px; font-weight:700; font-variant-numeric:tabular-nums; }
@@ -5383,7 +5384,10 @@ window.storyProfileOnly = function(){
       <div class="pf-head">
         <div class="pf-avatar" data-pf="photo" aria-label="Profile picture"></div>
         <div class="pf-names"><div class="pf-name">${escText(p.name)}</div><div class="pf-user">@${escText(p.username)}</div></div>
-        <button class="pf-more" data-pf="menu" aria-label="More">⋮</button>
+        <div class="pf-head-btns">
+          <button class="pf-more" data-pf="menu" aria-label="More">⋮</button>
+          <button class="pf-more pf-edit-btn" data-pf="edit" aria-label="Edit profile"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+        </div>
       </div>
       <div class="pf-stats">
         <div class="pf-stat"><div class="pf-stat-n" data-pf-stat="following">${fmtCount(st.following)}</div><div class="pf-stat-l">Following</div></div>
@@ -5391,7 +5395,6 @@ window.storyProfileOnly = function(){
         <div class="pf-stat"><div class="pf-stat-n" data-pf-stat="posts">${fmtCount(st.posts)}</div><div class="pf-stat-l">Posts</div></div>
       </div>
       <div class="pf-bio"><div class="pf-bio-l">BIO</div><div class="pf-bio-t">${p.bio ? escText(p.bio) : '<span style="color:var(--pf-muted)">Nothing here yet.</span>'}</div></div>
-      <button class="pf-edit" data-pf="edit">Edit profile</button>
     </div>
     <div class="pf-scroll pf-editor" hidden>
       <div class="pf-ed-head"><button class="pf-ed-back" data-pf="edit-back" aria-label="Back">‹</button><div class="pf-ed-title">Edit profile</div></div>
