@@ -1720,6 +1720,26 @@
   #story-profile .pf-head{ display:flex; align-items:center; gap:14px; }
   #story-profile .pf-avatar{ width:64px; height:64px; border-radius:50%; flex-shrink:0; border:1.5px solid var(--pf-fg);
     display:flex; align-items:center; justify-content:center; overflow:hidden; color:var(--pf-fg); }
+  #story-profile .pf-avatar img{ width:100%; height:100%; object-fit:cover; display:block; }
+  #story-profile .pf-avatar.has-photo{ border:none; }
+  #story-profile .pf-avatar[data-pf="photo"]:active{ opacity:0.7; }
+  #story-profile [hidden]{ display:none !important; }
+  /* Edit profile: everything to do with editing the profile lives here. */
+  #story-profile .pf-ed-head{ display:flex; align-items:center; gap:6px; margin-bottom:18px; }
+  #story-profile .pf-ed-back{ width:36px; height:36px; border:none; background:transparent; color:var(--pf-fg); font-size:28px; line-height:1; padding:0 0 3px; margin-left:-8px; }
+  #story-profile .pf-ed-title{ font-size:18px; font-weight:700; }
+  #story-profile .pf-ed-photo{ display:flex; flex-direction:column; align-items:center; gap:10px; margin-bottom:22px; }
+  #story-profile .pf-avatar-lg{ width:112px; height:112px; margin-bottom:6px; }
+  #story-profile .pf-avatar-lg svg{ width:58px; height:58px; }
+  #story-profile .pf-ed-photo .pf-edit{ margin-top:0; }
+  #story-profile .pf-ed-remove{ width:100%; padding:11px 0; border-radius:12px; border:none; background:transparent; color:var(--pf-muted); font-size:13px; font-weight:600; font-family:inherit; }
+  #story-profile .pf-ed-row{ display:flex; justify-content:space-between; gap:16px; padding:14px 2px; border-top:1px solid var(--pf-hair); font-size:14px; }
+  #story-profile .pf-ed-row:last-child{ border-bottom:1px solid var(--pf-hair); }
+  #story-profile .pf-ed-val{ color:var(--pf-muted); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #story-profile .pf-ed-back:active, #story-profile .pf-ed-row:active, #story-profile .pf-ed-remove:active{ opacity:0.6; }
+  /* Tapping the picture: just look at it. Tap anywhere to close. */
+  #story-profile .pf-viewer{ position:fixed; inset:0; z-index:5; background:var(--pf-bg); display:flex; align-items:center; justify-content:center; }
+  #story-profile .pf-viewer img{ width:min(84vw, 84vh); height:min(84vw, 84vh); border-radius:50%; object-fit:cover; }
   #story-profile .pf-names{ flex:1; min-width:0; }
   #story-profile .pf-name{ font-size:20px; font-weight:700; letter-spacing:-0.2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   #story-profile .pf-user{ font-size:13px; color:var(--pf-muted); margin-top:2px; }
@@ -5209,7 +5229,7 @@ window.storyProfileOnly = function(){
     <div class="pf-bg"></div>
     <div class="pf-scroll">
       <div class="pf-head">
-        <div class="pf-avatar" data-pf="photo" aria-label="Profile picture"><svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="8.5" r="4"/><path d="M4 20.5c1.2-4 4.3-6 8-6s6.8 2 8 6"/></svg></div>
+        <div class="pf-avatar" data-pf="photo" aria-label="Profile picture"></div>
         <div class="pf-names"><div class="pf-name">${escText(p.name)}</div><div class="pf-user">@${escText(p.username)}</div></div>
         <button class="pf-more" data-pf="menu" aria-label="More">⋮</button>
       </div>
@@ -5221,6 +5241,18 @@ window.storyProfileOnly = function(){
       <div class="pf-bio"><div class="pf-bio-l">BIO</div>${p.bio ? escText(p.bio) : '<span style="color:var(--pf-muted)">Nothing here yet.</span>'}</div>
       <button class="pf-edit" data-pf="edit">Edit profile</button>
     </div>
+    <div class="pf-scroll pf-editor" hidden>
+      <div class="pf-ed-head"><button class="pf-ed-back" data-pf="edit-back" aria-label="Back">‹</button><div class="pf-ed-title">Edit profile</div></div>
+      <div class="pf-ed-photo">
+        <div class="pf-avatar pf-avatar-lg"></div>
+        <button class="pf-edit" data-pf="photo-change">Change photo</button>
+        <button class="pf-ed-remove" data-pf="photo-remove">Remove photo</button>
+      </div>
+      <div class="pf-ed-row" data-pf="ed-name"><span>Name</span><span class="pf-ed-val">${escText(p.name)}</span></div>
+      <div class="pf-ed-row" data-pf="ed-username"><span>Username</span><span class="pf-ed-val">@${escText(p.username)}</span></div>
+      <div class="pf-ed-row" data-pf="ed-bio"><span>Bio</span><span class="pf-ed-val">${p.bio ? escText(p.bio) : 'Nothing here yet.'}</span></div>
+    </div>
+    <div class="pf-viewer" data-pf="viewer-close" hidden><img alt="Profile picture"></div>
     <div class="pf-gap"><div class="pf-gap-clip"><svg></svg></div></div>
     <div class="pf-line"></div>`;
   document.body.appendChild(el);
@@ -5228,20 +5260,77 @@ window.storyProfileOnly = function(){
     const b = e.target.closest('[data-pf]');
     if(!b) return;
     const k = b.getAttribute('data-pf');
-    showToast((k === 'edit' ? 'Edit profile' : k === 'photo' ? 'Profile picture' : 'Profile menu') + ' — coming soon');
+    const main = el.querySelector('.pf-scroll:not(.pf-editor)'), ed = el.querySelector('.pf-editor'), viewer = el.querySelector('.pf-viewer');
+    if(k === 'photo'){
+      // Tapping the picture only shows it -- changing it lives in Edit profile.
+      const src = profilePhoto();
+      if(!src){ showToast('No profile picture yet'); return; }
+      viewer.querySelector('img').src = src; viewer.hidden = false;
+    }
+    else if(k === 'viewer-close') viewer.hidden = true;
+    else if(k === 'edit'){ main.hidden = true; ed.hidden = false; ed.scrollTop = 0; }
+    else if(k === 'edit-back'){ ed.hidden = true; main.hidden = false; }
+    else if(k === 'photo-change') pickProfilePhoto();
+    else if(k === 'photo-remove'){
+      if(NATIVE && window.StoryNative.removeProfilePhoto) window.StoryNative.removeProfilePhoto();
+      else { try{ localStorage.removeItem('story-profile-photo'); }catch(err){} window.storyProfilePhotoChanged(); }
+    }
+    else if(k === 'ed-name' || k === 'ed-username' || k === 'ed-bio') showToast({ 'ed-name':'Name', 'ed-username':'Username', 'ed-bio':'Bio' }[k] + ' — coming soon');
+    else showToast('Profile menu — coming soon');
   });
+  window.storyProfilePhotoChanged();
   window.storyProfileGeom();
 };
+// ---- Profile picture: any picture you pick (Edit profile > Change photo), kept on the phone. ----
+const PF_PHOTO_PLACEHOLDER = '<svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="8.5" r="4"/><path d="M4 20.5c1.2-4 4.3-6 8-6s6.8 2 8 6"/></svg>';
+let pfPhotoCache = null;
+function profilePhoto(){
+  if(pfPhotoCache === null){
+    try{ pfPhotoCache = (NATIVE && window.StoryNative.getProfilePhoto) ? (window.StoryNative.getProfilePhoto() || '') : (localStorage.getItem('story-profile-photo') || ''); }
+    catch(e){ pfPhotoCache = ''; }
+  }
+  return pfPhotoCache;
+}
+window.storyProfilePhotoChanged = function(){
+  pfPhotoCache = null;
+  const el = document.getElementById('story-profile'); if(!el || PF_GAP_WINDOW) return;
+  const src = profilePhoto();
+  el.querySelectorAll('.pf-avatar').forEach(a=>{ a.innerHTML = src ? '<img alt="" src="' + src + '">' : PF_PHOTO_PLACEHOLDER; a.classList.toggle('has-photo', !!src); });
+  el.querySelector('.pf-ed-remove').hidden = !src;
+};
+// Profile closed: next time it opens on the profile itself (not Edit profile or the picture).
+window.storyProfileReset = function(){
+  const el = document.getElementById('story-profile'); if(!el || PF_GAP_WINDOW) return;
+  el.querySelector('.pf-editor').hidden = true; el.querySelector('.pf-viewer').hidden = true;
+  const main = el.querySelector('.pf-scroll:not(.pf-editor)'); main.hidden = false; main.scrollTop = 0;
+};
+function pickProfilePhoto(){
+  if(NATIVE && window.StoryNative.pickProfilePhoto){ window.StoryNative.pickProfilePhoto(); return; }
+  // Browser: pick a file, keep a 512px square of it.
+  const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*';
+  inp.onchange = ()=>{
+    const f = inp.files && inp.files[0]; if(!f) return;
+    const img = new Image();
+    img.onload = ()=>{
+      const side = Math.min(img.naturalWidth, img.naturalHeight), n = Math.min(512, side);
+      const c = document.createElement('canvas'); c.width = c.height = n;
+      c.getContext('2d').drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, n, n);
+      try{ localStorage.setItem('story-profile-photo', c.toDataURL('image/jpeg', 0.9)); }catch(err){}
+      URL.revokeObjectURL(img.src); window.storyProfilePhotoChanged();
+    };
+    img.src = URL.createObjectURL(f);
+  };
+  inp.click();
+}
 window.storyProfileGeom = function(){
   const el = document.getElementById('story-profile');
   if(!el) return;
   const barW = window.__pfBarW || 220, barH = window.__pfBarH || 40, top = window.__pfTop || 24;
-  const line = el.querySelector('.pf-line'), sc = el.querySelector('.pf-scroll');
+  const line = el.querySelector('.pf-line');
   // The line hugs the outside of Station 3's bar: along its top edge and down its rounded left end.
   line.style.width = (barW + 2) + 'px';
   line.style.height = (barH + 2) + 'px';
-  sc.style.top = (top + 16) + 'px';
-  sc.style.bottom = '16px';
+  el.querySelectorAll('.pf-scroll').forEach(sc=>{ sc.style.top = (top + 16) + 'px'; sc.style.bottom = '16px'; });
   const gap = el.querySelector('.pf-gap');
   gap.style.width = barW + 'px';
   gap.style.height = barH + 'px';
