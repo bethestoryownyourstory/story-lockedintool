@@ -395,17 +395,23 @@ class OverlayService : Service(), StoryBridge.Host {
     private fun buildPane(small: Boolean, dial: Boolean = false): Pane {
         val themed = ContextThemeWrapper(this, R.style.Theme_Story)
         // The Pages cover the phone's status bar, so a swipe down from the top edge is caught here and opens
-        // the phone's own notification panel (the Pages step below it so it shows on top).
+        // the phone's own notification panel (the Pages step aside so it shows).
         val frame = if (small) FrameLayout(themed) else object : FrameLayout(themed) {
-            private var downY = -1f; private var fired = false
-            override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
+            // Watched here (before the page gets it), because the page can keep a swipe to itself.
+            private var downX = 0f; private var downY = -1f
+            override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
                 when (ev.actionMasked) {
-                    MotionEvent.ACTION_DOWN -> { downY = if (ev.rawY <= statusBarHeightPx() + 12 * dp) ev.rawY else -1f; fired = false }
-                    MotionEvent.ACTION_MOVE -> if (downY >= 0 && !fired && ev.rawY - downY > 24 * dp) { fired = true; openPhonePanel(); return true }
+                    MotionEvent.ACTION_DOWN -> { downX = ev.rawX; downY = if (ev.rawY <= statusBarHeightPx() + 12 * dp) ev.rawY else -1f }
+                    MotionEvent.ACTION_UP -> {
+                        val dy = ev.rawY - downY; val dx = Math.abs(ev.rawX - downX)
+                        // A real swipe down from the top edge (not a tap): far enough, and mostly downwards.
+                        if (downY >= 0 && dy > 60 * dp && dy > dx * 1.5f) { downY = -1f; ui.postDelayed({ openPhonePanel() }, 60) }
+                        downY = -1f
+                    }
+                    MotionEvent.ACTION_CANCEL -> downY = -1f
                 }
-                return false
+                return super.dispatchTouchEvent(ev)
             }
-            override fun onTouchEvent(ev: MotionEvent): Boolean = fired || super.onTouchEvent(ev)
         }
         val wv = WebView(themed).apply {
             setBackgroundColor(if (small) Color.TRANSPARENT else Color.BLACK)
