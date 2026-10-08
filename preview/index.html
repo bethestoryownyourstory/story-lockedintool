@@ -1734,6 +1734,13 @@
   #story-profile .pf-edit{ display:block; width:100%; margin-top:14px; padding:12px 0; border-radius:12px; border:1px solid var(--pf-fg);
     background:transparent; color:var(--pf-fg); font-size:14px; font-weight:700; font-family:inherit; }
   #story-profile .pf-edit:active, #story-profile .pf-more:active{ opacity:0.6; }
+  /* Station 3's gap (Profile open, Station 3 closed): the little scene plays in it. */
+  #story-profile .pf-gap{ position:fixed; right:0; bottom:0; pointer-events:none; color:var(--pf-fg); }
+  #story-profile .pf-gap-clip{ position:absolute; inset:0; overflow:hidden; border-top-left-radius:20px; }
+  #story-profile .pf-gap svg{ position:absolute; left:0; top:0; width:100%; height:100%; overflow:visible; }
+  #story-profile .pf-shout{ position:absolute; bottom:100%; margin-bottom:6px; transform:translateX(-50%); white-space:nowrap;
+    background:var(--pf-fg); color:var(--pf-bg); font-size:12px; font-weight:800; letter-spacing:0.2px; padding:5px 10px; border-radius:10px; display:none; }
+  #story-profile .pf-shout::after{ content:''; position:absolute; left:50%; top:100%; margin-left:-5px; border:5px solid transparent; border-top-color:var(--pf-fg); }
   #story-profile .pf-line{ position:fixed; right:0; bottom:0; box-sizing:border-box; pointer-events:none;
     border-top:2px solid var(--pf-line); border-left:2px solid var(--pf-line); border-top-left-radius:22px; }
   /* Settings > System theme: Black | White */
@@ -5183,6 +5190,7 @@ window.storyProfileOnly = function(){
       <div class="pf-bio"><div class="pf-bio-l">BIO</div>${p.bio ? escText(p.bio) : '<span style="color:var(--pf-muted)">Nothing here yet.</span>'}</div>
       <button class="pf-edit" data-pf="edit">Edit profile</button>
     </div>
+    <div class="pf-gap"><div class="pf-gap-clip"><svg></svg></div><svg class="pf-gap-over"></svg><div class="pf-shout">Leave that alone!!</div></div>
     <div class="pf-line"></div>`;
   document.body.appendChild(el);
   el.addEventListener('click', e=>{
@@ -5203,7 +5211,118 @@ window.storyProfileGeom = function(){
   line.style.height = (barH + 2) + 'px';
   sc.style.top = (top + 16) + 'px';
   sc.style.bottom = (barH + 18) + 'px';
+  const gap = el.querySelector('.pf-gap');
+  gap.style.width = barW + 'px';
+  gap.style.height = barH + 'px';
 };
+// Station 3 closed while Profile stays open: its gap stays, and two little men walk up to the Station 3 button,
+// grab it with a rope and try to pull Station 3 back out -- until the boss storms in, shouts "Leave that alone!!",
+// and leaves, the two following him. Plays once each time Station 3 closes; the button itself never moves.
+(function(){
+  const NS = 'http://www.w3.org/2000/svg';
+  let raf = 0, t0 = 0, figs = null, rope = null;
+  const mk = (tag, attrs, parent)=>{ const e = document.createElementNS(NS, tag); for(const k in attrs) e.setAttribute(k, attrs[k]); parent && parent.appendChild(e); return e; };
+  function figure(svg, h, boss, over){
+    const g = mk('g', {}, svg);
+    const st = { stroke:'currentColor', 'stroke-width': boss ? 2.2 : 1.7, 'stroke-linecap':'round', fill:'none' };
+    const f = { g, h, boss,
+      head: mk('circle', Object.assign({ r: h*0.15 }, st), g),
+      body: mk('line', st, g), armL: mk('polyline', st, g), armR: mk('polyline', st, g), legL: mk('polyline', st, g), legR: mk('polyline', st, g) };
+    if(boss){
+      f.tie = mk('path', { fill:'currentColor' }, g);
+      f.brow = mk('path', Object.assign({}, st, { 'stroke-width':1.2 }), g);
+      // The angry mark over his head.
+      f.mad = mk('path', { stroke:'#e63946', 'stroke-width':1.6, 'stroke-linecap':'round', fill:'none',
+        d:'M-3,-1.2 Q-1.2,-1.2 -1.2,-3 M1.2,-3 Q1.2,-1.2 3,-1.2 M3,1.2 Q1.2,1.2 1.2,3 M-1.2,3 Q-1.2,1.2 -3,1.2' }, over);
+    }
+    return f;
+  }
+  // Pose: x (feet), dir 1 = facing right, walk phase, lean (deg, + = toward facing), arms 'down'|'pull'|'reach'|'up', hop.
+  function pose(f, x, base, o){
+    const h = f.h, dir = o.dir || 1, ph = o.walk || 0, hop = o.hop || 0;
+    f.g.setAttribute('transform', `translate(${x.toFixed(1)},${(base - hop).toFixed(1)}) scale(${dir},1) rotate(${o.lean || 0})`);
+    const hipY = -h*0.42, shY = -h*0.74, headY = -h + h*0.15;
+    f.head.setAttribute('cx', 0); f.head.setAttribute('cy', headY.toFixed(1));
+    f.body.setAttribute('x1', 0); f.body.setAttribute('y1', (-h*0.70).toFixed(1)); f.body.setAttribute('x2', 0); f.body.setAttribute('y2', hipY.toFixed(1));
+    const sw = o.walk != null ? Math.sin(ph) * 0.55 : 0.2;
+    const leg = (a)=>`0,${hipY.toFixed(1)} ${(Math.sin(a)*h*0.42*0.6).toFixed(1)},${(hipY*0.45).toFixed(1)} ${(Math.sin(a)*h*0.42).toFixed(1)},0`;
+    f.legL.setAttribute('points', leg(o.brace ? -0.45 : sw)); f.legR.setAttribute('points', leg(o.brace ? 0.35 : -sw));
+    const L = h*0.34; let a1, a2;
+    if(o.arms === 'pull'){ a1 = [L*0.9, shY + 2]; a2 = [L*0.95, shY + 3.5]; }
+    else if(o.arms === 'reach'){ a1 = [L, shY - 1]; a2 = [L*0.95, shY]; }
+    else if(o.arms === 'up'){ a1 = [L*0.45, shY - L*0.85]; a2 = [-L*0.45, shY - L*0.85]; }
+    else if(o.arms === 'point'){ const w = Math.sin(o.shake || 0) * 1.6; a1 = [L*1.1, shY - 2 + w]; a2 = [L*0.35, hipY + 1]; }
+    else { const s2 = Math.sin(ph) * 0.5; a1 = [Math.sin(s2)*L*0.5, shY + L]; a2 = [-Math.sin(s2)*L*0.5, shY + L]; }
+    f.armL.setAttribute('points', `0,${shY.toFixed(1)} ${(a1[0]*0.55).toFixed(1)},${((shY + a1[1])/2 + 1).toFixed(1)} ${a1[0].toFixed(1)},${a1[1].toFixed(1)}`);
+    f.armR.setAttribute('points', `0,${shY.toFixed(1)} ${(a2[0]*0.55).toFixed(1)},${((shY + a2[1])/2 + 1).toFixed(1)} ${a2[0].toFixed(1)},${a2[1].toFixed(1)}`);
+    if(f.boss){
+      f.tie.setAttribute('d', `M-1,${(-h*0.70).toFixed(1)} L1,${(-h*0.70).toFixed(1)} L1.6,${(-h*0.52).toFixed(1)} L0,${(-h*0.46).toFixed(1)} L-1.6,${(-h*0.52).toFixed(1)} Z`);
+      f.brow.setAttribute('d', `M${(h*0.02).toFixed(1)},${(headY - 1.6).toFixed(1)} L${(h*0.14).toFixed(1)},${(headY - 0.4).toFixed(1)}`);
+      const pulse = 1 + Math.abs(Math.sin((o.t || 0) / 140)) * 0.35;
+      // Above his head, outside the gap (its own layer, so the gap's edge never cuts it); hidden until he's inside.
+      f.mad.style.display = x > 8 ? '' : 'none';
+      f.mad.setAttribute('transform', `translate(${(x + dir*h*0.1).toFixed(1)},${(base - hop + headY - h*0.3).toFixed(1)}) scale(${pulse.toFixed(2)})`);
+    }
+    return { handX: x + dir * (o.arms === 'pull' ? L*0.92 : L), handY: base - hop + shY + 2.5 };
+  }
+  const lerp = (a, b, k)=>a + (b - a) * Math.max(0, Math.min(1, k));
+  function stop(){
+    cancelAnimationFrame(raf); raf = 0;
+    const el = document.getElementById('story-profile'); if(!el) return;
+    el.querySelector('.pf-gap-clip svg').innerHTML = ''; el.querySelector('.pf-gap-over').innerHTML = ''; el.querySelector('.pf-shout').style.display = 'none';
+    figs = null; rope = null;
+  }
+  function frame(now){
+    const el = document.getElementById('story-profile'); if(!el){ stop(); return; }
+    const t = now - t0;
+    const W = window.__pfBarW || 220, H = window.__pfBarH || 40;
+    const btn = W - 40, base = H - 3;
+    const [a, b, boss] = figs;
+    const ax = btn - 11, bx = btn - 37;
+    let xa, xb, xs, oa, ob, os, shout = false, showRope = false;
+    // 0-1.6s the two walk in; 1.6-2.1s the first ties the rope to the button; then they pull.
+    if(t < 1600){ xa = lerp(-14, ax, t/1600); xb = lerp(-40, bx, t/1600); oa = { walk:t/90 }; ob = { walk:t/90 + 1.4 }; }
+    else if(t < 2100){ xa = ax; xb = bx; oa = { arms:'reach' }; ob = { arms:'reach' }; showRope = t > 1850; }
+    else if(t < 5000){
+      const tug = Math.max(0, Math.sin((t - 2100) / 170)) * 2.2;
+      xa = ax - tug; xb = bx - tug; oa = { arms:'pull', lean:-20, brace:true }; ob = { arms:'pull', lean:-24, brace:true }; showRope = true;
+    }else if(t < 6700){
+      // Caught: they jump and turn to face the boss.
+      const k = (t - 5000) / 250; const hop = t < 5250 ? Math.sin(Math.PI * k) * 4 : 0;
+      xa = ax - 1; xb = bx - 1; oa = { dir:-1, hop, arms:'up' }; ob = { dir:-1, hop, arms:'up' };
+    }else{
+      // They follow him out, a step behind.
+      const k = (t - 7000) / 2000;
+      xa = t < 7000 ? ax - 1 : lerp(ax - 1, -60, k); xb = t < 7000 ? bx - 1 : lerp(bx - 1, -80, k);
+      oa = { dir:-1, walk: t/110 }; ob = { dir:-1, walk: t/110 + 1.4 };
+      if(t < 7000){ oa = { dir:-1 }; ob = { dir:-1 }; }
+    }
+    // The boss: storms in from 3.2s, shouts 5.0-6.7s, then walks off.
+    const bossAt = bx - 36;
+    if(t < 3200){ xs = -60; os = { t }; }
+    else if(t < 5000){ xs = lerp(-30, bossAt, (t - 3200) / 1800); os = { walk:t/70, lean:6, t }; }
+    else if(t < 6700){ xs = bossAt; os = { arms:'point', shake:t/40, lean:4, t }; shout = true; }
+    else { xs = lerp(bossAt, -60, (t - 6700) / 1600); os = { dir:-1, walk:t/70, t }; }
+    const ha = pose(a, xa, base, oa); const hb = pose(b, xb, base, ob); pose(boss, xs, base, os);
+    rope.style.display = showRope ? '' : 'none';
+    if(showRope) rope.setAttribute('points', `${hb.handX.toFixed(1)},${hb.handY.toFixed(1)} ${ha.handX.toFixed(1)},${ha.handY.toFixed(1)} ${btn},${(H/2 + 2).toFixed(1)}`);
+    const sh = el.querySelector('.pf-shout');
+    sh.style.display = shout ? 'block' : 'none';
+    if(shout){ sh.style.left = Math.max(70, xs) + 'px'; }
+    if(t > 9200){ stop(); return; }
+    raf = requestAnimationFrame(frame);
+  }
+  window.storyProfileS3 = function(open){
+    stop();
+    if(open) return;
+    const el = document.getElementById('story-profile'); if(!el) return;
+    const svg = el.querySelector('.pf-gap-clip svg'), over = el.querySelector('.pf-gap-over');
+    rope = mk('polyline', { stroke:'currentColor', 'stroke-width':1, fill:'none', 'stroke-linecap':'round' }, svg);
+    figs = [figure(svg, 27, false), figure(svg, 27, false), figure(svg, 33, true, over)];
+    t0 = performance.now();
+    raf = requestAnimationFrame(frame);
+  };
+})();
 window.storyGoHome = function(){ state.recentsOpen=false; state.homePickerOpen=false; state.appMenuId=null; state.current = state.homeScreen || 'wallet'; renderDevice(); };
 document.addEventListener('click', (e)=>{
   const el = e.target.closest && e.target.closest('[data-native-pkg]');
