@@ -457,7 +457,11 @@ class OverlayService : Service(), StoryBridge.Host {
                 ui.post { rebuildLayer() }
                 return true
             }
-            override fun shouldInterceptRequest(v: WebView, r: WebResourceRequest): WebResourceResponse? = loader.shouldInterceptRequest(r.url)
+            override fun shouldInterceptRequest(v: WebView, r: WebResourceRequest): WebResourceResponse? {
+                val u = r.url.toString()
+                if (u.startsWith(ProfilePhotoActivity.PHOTO_BASE)) return photoResponse(r.url)
+                return loader.shouldInterceptRequest(r.url)
+            }
             // STORY pages only: never navigate this window to any other site.
             override fun shouldOverrideUrlLoading(v: WebView, r: WebResourceRequest): Boolean {
                 val u = r.url.toString(); return !(u.startsWith(REMOTE) || u.startsWith(LOCAL))
@@ -862,19 +866,60 @@ class OverlayService : Service(), StoryBridge.Host {
     //      above every app, so Profile (and the Pages, if open) step aside while you pick, then come straight back. ----
     private var pickerHid = listOf<Pane>()
     override fun pickProfilePhoto() { ui.post {
-        if (pickerHid.isNotEmpty()) return@post
-        pickerHid = listOfNotNull(profilePane, pagesPane).filter { it.shown }
-        for (p in pickerHid) setShown(p, false)
+        if (!stepAsideForSystem()) return@post
         runCatching { startActivity(Intent(this, ProfilePhotoActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)) }
             .onFailure { profilePhotoPicked(false, true) }
     } }
     fun profilePhotoPicked(changed: Boolean, failed: Boolean) { ui.post {
-        val back = pickerHid; pickerHid = listOf()
+        comeBackFromSystem()
         if (failed) showToast("Couldn't use that picture - try another one")
-        for (p in back) if (!p.shown) setShown(p, true)
-        if (profilePane in back) tellProfileStation3()
         if (changed) profilePane?.web?.evaluateJavascript("window.storyProfilePhotoChanged&&window.storyProfilePhotoChanged()", null)
     } }
+    /** One time: Android's own "allow STORY to see your photos" (it sits under STORY's windows, so they step aside). */
+    override fun requestPhotoAccess() { ui.post {
+        if (!stepAsideForSystem()) return@post
+        runCatching { startActivity(Intent(this, ProfilePhotoActivity::class.java).putExtra(ProfilePhotoActivity.EXTRA_ACCESS, true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)) }
+            .onFailure { photoAccessDone(ProfilePhotoActivity.photoAccess(this)) }
+    } }
+    fun photoAccessDone(access: String) { ui.post {
+        comeBackFromSystem()
+        profilePane?.web?.evaluateJavascript("window.storyPhotoAccessDone&&window.storyPhotoAccessDone('$access')", null)
+    } }
+    /** A picture tapped in STORY's own grid: saved in the background, Profile shows it already. */
+    override fun useProfilePhoto(id: Long) {
+        Thread {
+            val ok = ProfilePhotoActivity.saveFromPhone(this, id)
+            ui.post {
+                if (!ok) showToast("Couldn't use that picture - try another one")
+                profilePane?.web?.evaluateJavascript("window.storyProfilePhotoChanged&&window.storyProfilePhotoChanged()", null)
+            }
+        }.start()
+    }
+    /** Pictures for the Profile windows, straight from the phone: the saved profile picture and the grid's previews. */
+    private fun photoResponse(url: android.net.Uri): WebResourceResponse {
+        val seg = url.pathSegments  // story-photo / profile | thumb / <id>
+        val bytes = runCatching {
+            when (seg.getOrNull(1)) {
+                "profile" -> ProfilePhotoActivity.file(this).takeIf { it.exists() }?.readBytes()
+                "thumb" -> seg.getOrNull(2)?.toLongOrNull()?.let { ProfilePhotoActivity.thumbBytes(this, it) }
+                else -> null
+            }
+        }.getOrNull()
+        return if (bytes != null) WebResourceResponse("image/jpeg", null, java.io.ByteArrayInputStream(bytes)).apply {
+            responseHeaders = mapOf("Cache-Control" to "max-age=86400", "Access-Control-Allow-Origin" to "*")
+        } else WebResourceResponse("image/jpeg", null, 404, "Not Found", mapOf(), java.io.ByteArrayInputStream(ByteArray(0)))
+    }
+    private fun stepAsideForSystem(): Boolean {
+        if (pickerHid.isNotEmpty()) return false
+        pickerHid = listOfNotNull(profilePane, pagesPane).filter { it.shown }
+        for (p in pickerHid) setShown(p, false)
+        return true
+    }
+    private fun comeBackFromSystem() {
+        val back = pickerHid; pickerHid = listOf()
+        for (p in back) if (!p.shown) setShown(p, true)
+        if (profilePane in back) tellProfileStation3()
+    }
     override fun removeProfilePhoto() { ui.post {
         runCatching { ProfilePhotoActivity.file(this).delete() }
         profilePane?.web?.evaluateJavascript("window.storyProfilePhotoChanged&&window.storyProfilePhotoChanged()", null)

@@ -32,6 +32,8 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         fun setTheme(t: String)
         fun pickProfilePhoto()
         fun removeProfilePhoto()
+        fun requestPhotoAccess()
+        fun useProfilePhoto(id: Long)
     }
 
     /** The phone's real launchable apps, with their real icons -- kept ready, so the Apps area opens instantly. */
@@ -74,7 +76,21 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
 
     /** Profile picture: the saved one (data URL, "" = none); Edit profile > Change photo / Remove photo. */
     @JavascriptInterface
-    fun getProfilePhoto(): String = runCatching { ProfilePhotoActivity.dataUrl(ctx) }.getOrDefault("")
+    fun getProfilePhoto(): String = runCatching { ProfilePhotoActivity.photoUrl(ctx) }.getOrDefault("")
+
+    /** STORY's own photo grid (instant, no app switch): "full" / "partial" / "none", the pictures (newest first),
+     *  asking once for access, and using the one you tap. Thumbnails load from ProfilePhotoActivity.PHOTO_BASE. */
+    @JavascriptInterface
+    fun photoAccess(): String = ProfilePhotoActivity.photoAccess(ctx)
+
+    @JavascriptInterface
+    fun listPhotos(): String = ProfilePhotoActivity.listPhotos(ctx)
+
+    @JavascriptInterface
+    fun requestPhotoAccess() { if (profile) host.requestPhotoAccess() }
+
+    @JavascriptInterface
+    fun useProfilePhoto(id: String) { if (profile) id.toLongOrNull()?.let { host.useProfilePhoto(it) } }
 
     @JavascriptInterface
     fun pickProfilePhoto() { if (profile) host.pickProfilePhoto() }

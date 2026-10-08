@@ -10,16 +10,22 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
-import android.util.Base64
 import java.io.File
 
 /** Edit profile > Change photo: opens the phone's own photo picker (any picture you want) and saves the one you
  *  pick as STORY's profile picture. See-through, so you only ever see the picker itself. */
 class ProfilePhotoActivity : Activity() {
 
+    private val accessMode get() = intent.getBooleanExtra(EXTRA_ACCESS, false)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (savedInstanceState != null) return  // the picker is already up
+        if (accessMode) {
+            // One time only: let STORY see the phone's pictures, so Change photo shows them instantly in STORY itself.
+            requestPermissions(accessPermissions(), 2)
+            return
+        }
         val pick = if (Build.VERSION.SDK_INT >= 33) Intent(MediaStore.ACTION_PICK_IMAGES)
             else Intent(Intent.ACTION_GET_CONTENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE)
         runCatching { startActivityForResult(pick, 1) }.onFailure {
@@ -38,6 +44,13 @@ class ProfilePhotoActivity : Activity() {
         }.start()
     }
 
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (!reported) { reported = true; OverlayService.instance?.photoAccessDone(photoAccess(this)) }
+        finish()
+        overridePendingTransition(0, 0)
+    }
+
     private var reported = false
     private fun done(changed: Boolean, failed: Boolean = false) {
         if (!reported) { reported = true; OverlayService.instance?.profilePhotoPicked(changed, failed) }
@@ -47,21 +60,68 @@ class ProfilePhotoActivity : Activity() {
 
     // Closed any other way (the phone took it away): Profile still comes back.
     override fun onDestroy() {
-        if (!reported && isFinishing) { reported = true; OverlayService.instance?.profilePhotoPicked(false, false) }
+        if (!reported && isFinishing) {
+            reported = true
+            if (accessMode) OverlayService.instance?.photoAccessDone(photoAccess(this)) else OverlayService.instance?.profilePhotoPicked(false, false)
+        }
         super.onDestroy()
     }
 
     companion object {
         private const val SIZE = 1080  // saved square, sharp enough to view full screen
+        const val EXTRA_ACCESS = "access"
+        /** STORY's own address for pictures on the phone (served straight from the phone by the STORY windows). */
+        const val PHOTO_BASE = "https://appassets.androidplatform.net/story-photo/"
 
         fun file(c: Context) = File(c.filesDir, "profile_photo.jpg")
 
-        /** The saved picture as a data URL for the page, or "" when there is none. */
-        fun dataUrl(c: Context): String {
+        /** Where the page loads the saved picture from ("" when there is none). */
+        fun photoUrl(c: Context): String {
             val f = file(c)
-            if (!f.exists()) return ""
-            return "data:image/jpeg;base64," + Base64.encodeToString(f.readBytes(), Base64.NO_WRAP)
+            return if (f.exists()) PHOTO_BASE + "profile?v=" + f.lastModified() else ""
         }
+
+        private fun accessPermissions(): Array<String> = when {
+            Build.VERSION.SDK_INT >= 34 -> arrayOf(android.Manifest.permission.READ_MEDIA_IMAGES, android.Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
+            Build.VERSION.SDK_INT >= 33 -> arrayOf(android.Manifest.permission.READ_MEDIA_IMAGES)
+            else -> arrayOf(android.Manifest.permission.READ_EXTERNAL_STORAGE)
+        }
+        private fun has(c: Context, p: String) = c.checkSelfPermission(p) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+        /** "full" (every picture), "partial" (only the ones you chose to share, Android 14+) or "none". */
+        fun photoAccess(c: Context): String = when {
+            Build.VERSION.SDK_INT >= 33 && has(c, android.Manifest.permission.READ_MEDIA_IMAGES) -> "full"
+            Build.VERSION.SDK_INT >= 34 && has(c, android.Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED) -> "partial"
+            Build.VERSION.SDK_INT < 33 && has(c, android.Manifest.permission.READ_EXTERNAL_STORAGE) -> "full"
+            else -> "none"
+        }
+
+        /** The phone's pictures, newest first, as a JSON list of ids. */
+        fun listPhotos(c: Context): String {
+            val ids = org.json.JSONArray()
+            if (photoAccess(c) == "none") return ids.toString()
+            runCatching {
+                c.contentResolver.query(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, arrayOf(MediaStore.Images.Media._ID), null, null,
+                    MediaStore.Images.Media.DATE_ADDED + " DESC")?.use { cur ->
+                    while (cur.moveToNext() && ids.length() < 5000) ids.put(cur.getLong(0))
+                }
+            }
+            return ids.toString()
+        }
+
+        private fun photoUri(id: Long) = android.content.ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id)
+
+        /** A small square preview of one picture, JPEG bytes (for the grid). */
+        fun thumbBytes(c: Context, id: Long): ByteArray? = runCatching {
+            val bmp = if (Build.VERSION.SDK_INT >= 29) c.contentResolver.loadThumbnail(photoUri(id), android.util.Size(256, 256), null)
+                else MediaStore.Images.Thumbnails.getThumbnail(c.contentResolver, id, MediaStore.Images.Thumbnails.MINI_KIND, null)
+            val out = java.io.ByteArrayOutputStream()
+            bmp?.compress(Bitmap.CompressFormat.JPEG, 82, out) ?: return@runCatching null
+            out.toByteArray()
+        }.getOrNull()
+
+        /** Uses a picture from the phone's own pictures (STORY's grid) as the profile picture. */
+        fun saveFromPhone(c: Context, id: Long): Boolean = runCatching { save(c, photoUri(id)) }.getOrDefault(false)
 
         /** Decodes the picked picture upright, cuts the middle square out of it and saves it. */
         private fun save(c: Context, uri: Uri): Boolean {
