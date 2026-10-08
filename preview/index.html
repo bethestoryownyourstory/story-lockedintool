@@ -10029,11 +10029,10 @@ function refreshNeighbors(force){
     const want = [idx - 1, idx + 1].filter(i=>i >= 0 && i < PAGES.length).map(i=>PAGES[i]);
     const missing = want.filter(pg=>!NEIGHBORS[pg] || !NEIGHBORS[pg].host.parentNode || force);
     if(!missing.length){ neighborsFor = state.current; return; }
-    try{ buildNeighbor(missing[0]); }catch(e){}
-    force = false;
-    neighborTimer = setTimeout(step, 60);
+    const build = ()=>{ if(pageSwipeAnimating) return; try{ buildNeighbor(missing[0]); }catch(e){} force = false; neighborTimer = setTimeout(step, 80); };
+    if(window.requestIdleCallback) requestIdleCallback(build, { timeout:600 }); else build();
   };
-  neighborTimer = setTimeout(step, 60);
+  neighborTimer = setTimeout(step, 350);
 }
 function beginPageSlide(next){
   const idx = PAGES.indexOf(state.current);
@@ -10108,6 +10107,27 @@ function setPageSlide(sl, dx){
   }
 }
 // Finish the slide: commit = go to the new page; otherwise slide back to where it was.
+function adoptSlidFrame(sl){
+  const f = sl.newFrame;
+  [...sl.wrap.children].forEach(c=>{ if(c !== f) c.remove(); });
+  f.style.transition = f.style.transform = f.style.willChange = '';
+  Object.assign(f.style, { position:'', left:'', top:'', width:'', height:'', margin:'', pointerEvents:'' });
+  f.querySelectorAll('.dash-back, .page-dots').forEach(e=>{ e.style.visibility = ''; });
+  try{
+    trackRecent();
+    lastScreenKey = currentScreenKey();
+    attachHandlers();
+    setupCircleAndWheelDrag();
+    attachSwipe();
+    applyBrightness();
+    positionStation3();
+    attachPayScroll();
+    if(typeof updatePhoneStatusClock === 'function') updatePhoneStatusClock();
+    updateScrollHint();
+    updateScrollbarThumb();
+  }catch(e){ renderDevice(); return; }
+  refreshNeighbors();
+}
 let currentSlide = null;
 function endPageSlide(sl, commit){
   if(!sl || sl.done) return;
@@ -10136,12 +10156,13 @@ function endPageSlide(sl, commit){
       const ka = sl.oldFrame.querySelector('#content-area'); if(ka) ka.scrollTop = scroll;
       if(NEIGHBORS[fromPage] && NEIGHBORS[fromPage].host.parentNode) NEIGHBORS[fromPage].host.remove();
       NEIGHBORS[fromPage] = { host:keep, w:sl.w, h:sl.wrap.getBoundingClientRect().height };
-      // The new page becomes the live one -- drawn exactly as the ready-made copy already shows it.
+      // The new page becomes the live one as it already is on screen -- nothing is redrawn, so the
+      // landing has no stutter. It just gets its buttons wired up.
       state.current = PAGES[sl.next];
       state.lastPage = state.current;
       sl.wrap.style.position = sl.prev.pos; sl.wrap.style.overflow = sl.prev.overflow;
       pageSwipeAnimating = false;
-      renderDevice();
+      adoptSlidFrame(sl);
     } else {
       if(sl.newFrame.parentNode) sl.newFrame.parentNode.removeChild(sl.newFrame);
       if(sl.fixedBack && sl.fixedBack.parentNode) sl.fixedBack.parentNode.removeChild(sl.fixedBack);
@@ -10269,7 +10290,7 @@ function attachSwipe(){
     if(pageSwipeAnimating && currentSlide && currentSlide.ending) currentSlide.finishNow();
     if(pageSwipeAnimating) return;
     const startX = e.clientX, startY = e.clientY, pid = e.pointerId;
-    let sl = null, gaveUp = false, lastX = startX, lastT = performance.now(), vx = 0;
+    let sl = null, gaveUp = false, lastX = startX, lastT = performance.now(), vx = 0, pendingDx = 0, rafPending = false;
     const move = ev=>{
       if(ev.pointerId !== pid || gaveUp) return;
       const dx = ev.clientX - startX, dy = ev.clientY - startY;
@@ -10282,7 +10303,8 @@ function attachSwipe(){
       }
       const now = performance.now();
       if(now > lastT){ vx = (ev.clientX - lastX) / (now - lastT); lastX = ev.clientX; lastT = now; }
-      setPageSlide(sl, dx);
+      pendingDx = dx;
+      if(!rafPending){ rafPending = true; requestAnimationFrame(()=>{ rafPending = false; if(sl && !sl.ending) setPageSlide(sl, pendingDx); }); }
     };
     const up = ev=>{
       if(ev.pointerId !== pid) return;
