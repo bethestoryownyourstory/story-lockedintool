@@ -1713,7 +1713,7 @@
   html.profile-early, html.profile-early body{ background:transparent !important; }
   html.profile-early body > *:not(#story-profile){ display:none !important; }
   #story-profile{ --pf-bg:#000; --pf-fg:#fff; --pf-line:#fff; --pf-muted:rgba(255,255,255,0.55); --pf-hair:rgba(255,255,255,0.12);
-    position:fixed; inset:0; background:var(--pf-bg); color:var(--pf-fg); font-family:var(--font-body);
+    position:fixed; inset:0; color:var(--pf-fg); font-family:var(--font-body);
     -webkit-user-select:none; user-select:none; -webkit-tap-highlight-color:transparent; }
   #story-profile .pf-scroll{ position:absolute; left:0; right:0; top:0; overflow-y:auto; scrollbar-width:none; padding:0 20px; box-sizing:border-box; }
   #story-profile .pf-scroll::-webkit-scrollbar{ display:none; }
@@ -1738,9 +1738,10 @@
   #story-profile .pf-gap{ position:fixed; right:0; bottom:0; pointer-events:none; color:var(--pf-fg); }
   #story-profile .pf-gap-clip{ position:absolute; inset:0; overflow:hidden; border-top-left-radius:20px; }
   #story-profile .pf-gap-clip svg{ position:absolute; left:0; top:0; width:100%; height:100%; overflow:visible; }
-  #story-profile .pf-shout{ position:absolute; top:50%; transform:translate(-100%,-50%); white-space:nowrap; text-align:center;
-    background:var(--pf-fg); color:var(--pf-bg); font-size:9px; line-height:11px; font-weight:800; letter-spacing:0.1px; padding:3px 6px; border-radius:7px; display:none; }
-  #story-profile .pf-shout::after{ content:''; position:absolute; left:100%; top:50%; margin-top:-4px; border:4px solid transparent; border-left-color:var(--pf-fg); }
+  /* Profile's background, with Station 3's gap cut clean out of it: a real gap, whatever is behind shows through. */
+  #story-profile .pf-bg{ position:absolute; inset:0; background:var(--pf-bg); }
+  /* A hairline halo so the little men stay visible on whatever shows through the gap. */
+  #story-profile .pf-gap-clip svg{ filter:drop-shadow(0 0 0.8px var(--pf-bg)) drop-shadow(0 0 0.8px var(--pf-bg)); }
   #story-profile .pf-line{ position:fixed; right:0; bottom:0; box-sizing:border-box; pointer-events:none;
     border-top:2px solid var(--pf-line); border-left:2px solid var(--pf-line); border-top-left-radius:22px; }
   /* Settings > System theme: Black | White */
@@ -5176,6 +5177,7 @@ window.storyProfileOnly = function(){
   const el = document.createElement('div');
   el.id = 'story-profile';
   el.innerHTML = `
+    <div class="pf-bg"></div>
     <div class="pf-scroll">
       <div class="pf-head">
         <div class="pf-avatar" data-pf="photo" aria-label="Profile picture"><svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="8.5" r="4"/><path d="M4 20.5c1.2-4 4.3-6 8-6s6.8 2 8 6"/></svg></div>
@@ -5190,7 +5192,7 @@ window.storyProfileOnly = function(){
       <div class="pf-bio"><div class="pf-bio-l">BIO</div>${p.bio ? escText(p.bio) : '<span style="color:var(--pf-muted)">Nothing here yet.</span>'}</div>
       <button class="pf-edit" data-pf="edit">Edit profile</button>
     </div>
-    <div class="pf-gap"><div class="pf-gap-clip"><svg></svg><div class="pf-shout">Leave that<br>alone!!</div></div></div>
+    <div class="pf-gap"><div class="pf-gap-clip"><svg></svg></div></div>
     <div class="pf-line"></div>`;
   document.body.appendChild(el);
   el.addEventListener('click', e=>{
@@ -5214,13 +5216,16 @@ window.storyProfileGeom = function(){
   const gap = el.querySelector('.pf-gap');
   gap.style.width = barW + 'px';
   gap.style.height = barH + 'px';
+  const w = window.innerWidth, h = window.innerHeight, r = 20, gx = w - barW, gy = h - barH;
+  el.querySelector('.pf-bg').style.clipPath = `path(evenodd, 'M0 0 H${w} V${h} H0 Z M${gx} ${h} V${gy + r} A${r} ${r} 0 0 1 ${gx + r} ${gy} H${w} V${h} Z')`;
 };
 // Station 3 closed while Profile stays open: its gap stays, and two little men walk up to the Station 3 button,
-// grab it with a rope and try to pull Station 3 back out -- until the boss storms in, shouts "Leave that alone!!",
+// grab it with a rope and try to pull Station 3 back out -- until the boss storms in, angry, points at them (no words),
 // and leaves, the two following him. Keeps playing for as long as the gap is there; the button itself never moves.
 (function(){
   const NS = 'http://www.w3.org/2000/svg';
   let raf = 0, t0 = 0, figs = null, rope = null;
+  const SLOW = 1.4;  // the whole scene runs at this pace (bigger = slower)
   const mk = (tag, attrs, parent)=>{ const e = document.createElementNS(NS, tag); for(const k in attrs) e.setAttribute(k, attrs[k]); parent && parent.appendChild(e); return e; };
   function figure(svg, h, boss){
     const g = mk('g', {}, svg);
@@ -5262,28 +5267,29 @@ window.storyProfileGeom = function(){
       // On top of his head, just inside the gap (the scene never leaves the gap).
       f.mad.setAttribute('transform', `translate(${(x + dir*h*0.2).toFixed(1)},${(base - hop + headY - h*0.15).toFixed(1)}) scale(${pulse.toFixed(2)})`);
     }
-    return { handX: x + dir * (o.arms === 'pull' ? L*0.92 : L), handY: base - hop + shY + 2.5 };
+    const rad = (o.lean || 0) * Math.PI / 180, c = Math.cos(rad), sn = Math.sin(rad);
+    return { handX: x + dir * (a1[0]*c - a1[1]*sn), handY: base - hop + (a1[0]*sn + a1[1]*c) };
   }
   const lerp = (a, b, k)=>a + (b - a) * Math.max(0, Math.min(1, k));
   function stop(){
     cancelAnimationFrame(raf); raf = 0;
     const el = document.getElementById('story-profile'); if(!el) return;
-    el.querySelector('.pf-gap-clip svg').innerHTML = ''; el.querySelector('.pf-shout').style.display = 'none';
+    el.querySelector('.pf-gap-clip svg').innerHTML = '';
     figs = null; rope = null;
   }
   function frame(now){
     const el = document.getElementById('story-profile'); if(!el){ stop(); return; }
     // Loops for as long as the gap is there: a short empty beat, then it all plays again.
-    if(now - t0 > 9200) t0 = now + 1200;
-    const t = now - t0;
+    if((now - t0) / SLOW > 9200) t0 = now + 1200;
+    const t = (now - t0) / SLOW;
     const svgEl = el.querySelector('.pf-gap-clip svg');
     svgEl.style.visibility = t < 0 ? 'hidden' : '';
-    if(t < 0){ el.querySelector('.pf-shout').style.display = 'none'; raf = requestAnimationFrame(frame); return; }
+    if(t < 0){ raf = requestAnimationFrame(frame); return; }
     const W = window.__pfBarW || 220, H = window.__pfBarH || 40;
     const btn = W - 40, base = H - 3;
     const [a, b, boss] = figs;
     const ax = btn - 11, bx = btn - 37;
-    let xa, xb, xs, oa, ob, os, shout = false, showRope = false;
+    let xa, xb, xs, oa, ob, os, showRope = false;
     // 0-1.6s the two walk in; 1.6-2.1s the first ties the rope to the button; then they pull.
     if(t < 1600){ xa = lerp(-14, ax, t/1600); xb = lerp(-40, bx, t/1600); oa = { walk:t/90 }; ob = { walk:t/90 + 1.4 }; }
     else if(t < 2100){ xa = ax; xb = bx; oa = { arms:'reach' }; ob = { arms:'reach' }; showRope = t > 1850; }
@@ -5305,14 +5311,12 @@ window.storyProfileGeom = function(){
     const bossAt = bx - 30;
     if(t < 3200){ xs = -60; os = { t }; }
     else if(t < 5000){ xs = lerp(-30, bossAt, (t - 3200) / 1800); os = { walk:t/70, lean:6, t }; }
-    else if(t < 6700){ xs = bossAt; os = { arms:'point', shake:t/40, lean:4, t }; shout = true; }
+    else if(t < 6700){ xs = bossAt; os = { arms:'point', shake:t/40, lean:4, t }; }
     else { xs = lerp(bossAt, -60, (t - 6700) / 1600); os = { dir:-1, walk:t/70, t }; }
     const ha = pose(a, xa, base, oa); const hb = pose(b, xb, base, ob); pose(boss, xs, base, os);
     rope.style.display = showRope ? '' : 'none';
-    if(showRope) rope.setAttribute('points', `${hb.handX.toFixed(1)},${hb.handY.toFixed(1)} ${ha.handX.toFixed(1)},${ha.handY.toFixed(1)} ${btn},${(H/2 + 2).toFixed(1)}`);
-    const sh = el.querySelector('.pf-shout');
-    sh.style.display = shout ? 'block' : 'none';
-    if(shout){ sh.style.left = (xs - 8) + 'px'; }
+    // Rope: its loose end trails on the ground behind the second man, through his hands, the first man's hands, to the button.
+    if(showRope) rope.setAttribute('points', `${(hb.handX - 9).toFixed(1)},${base.toFixed(1)} ${hb.handX.toFixed(1)},${hb.handY.toFixed(1)} ${ha.handX.toFixed(1)},${ha.handY.toFixed(1)} ${btn},${(H/2 + 2).toFixed(1)}`);
     raf = requestAnimationFrame(frame);
   }
   window.storyProfileS3 = function(open){
