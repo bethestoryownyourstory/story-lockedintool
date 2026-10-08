@@ -34,6 +34,7 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         fun createVideo(on: Boolean)
         fun createUseFromPhone(id: Long, video: Boolean)
         fun createDiscard()
+        fun createSwitchCamera()
         fun createKeep(): String
         fun closeProfile()
         fun setTheme(t: String)
@@ -157,6 +158,9 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
 
     @JavascriptInterface
     fun createDiscard() { if (profile) host.createDiscard() }
+
+    @JavascriptInterface
+    fun createSwitchCamera() { if (profile) host.createSwitchCamera() }
 
     /** Returns "<postId>:<photo|video>" ("" if nothing was made). */
     @JavascriptInterface

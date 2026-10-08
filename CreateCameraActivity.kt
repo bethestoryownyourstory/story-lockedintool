@@ -86,7 +86,7 @@ class CreateCameraActivity : AppCompatActivity() {
     private fun bindBest() {
         val p = provider ?: throw IllegalStateException("no camera")
         val pv = preview ?: throw IllegalStateException("no preview")
-        val sel = if (p.hasCamera(CameraSelector.DEFAULT_BACK_CAMERA)) CameraSelector.DEFAULT_BACK_CAMERA else CameraSelector.DEFAULT_FRONT_CAMERA
+        val sel = selector()
         var last: Throwable? = null
         for (q in listOf(Quality.FHD, Quality.HD, Quality.SD, null)) {
             val r = runCatching {
@@ -110,9 +110,21 @@ class CreateCameraActivity : AppCompatActivity() {
         if (last != null && p.availableCameraInfos.isEmpty()) throw last
     }
 
+    /** Back camera unless you switched to the front one (and the phone has the one you want). */
+    private var front = false
     private fun selector(): CameraSelector {
-        val p = provider
-        return if (p == null || p.hasCamera(CameraSelector.DEFAULT_BACK_CAMERA)) CameraSelector.DEFAULT_BACK_CAMERA else CameraSelector.DEFAULT_FRONT_CAMERA
+        val p = provider ?: return if (front) CameraSelector.DEFAULT_FRONT_CAMERA else CameraSelector.DEFAULT_BACK_CAMERA
+        val want = if (front) CameraSelector.DEFAULT_FRONT_CAMERA else CameraSelector.DEFAULT_BACK_CAMERA
+        val other = if (front) CameraSelector.DEFAULT_BACK_CAMERA else CameraSelector.DEFAULT_FRONT_CAMERA
+        return if (runCatching { p.hasCamera(want) }.getOrDefault(false)) want else other
+    }
+
+    /** Create's switch-camera button: back <-> front. */
+    fun switchCamera() {
+        if (recording != null || provider == null) return
+        front = !front
+        val err = runCatching { bindBest() }.exceptionOrNull()
+        if (err != null) { front = !front; runCatching { bindBest() }; OverlayService.instance?.createEvent("error", "switch camera: " + (err.message ?: "")) }
     }
 
     /** Shutter (tap): a picture. */

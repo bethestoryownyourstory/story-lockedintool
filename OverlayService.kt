@@ -987,6 +987,7 @@ class OverlayService : Service(), StoryBridge.Host {
             createEvent(if (!ok) "error" else if (video) "video" else "photo", "")
         }.start()
     }
+    override fun createSwitchCamera() { ui.post { CreateCameraActivity.instance?.switchCamera() } }
     override fun createDiscard() { CreateCameraActivity.clearCapture(this) }
     override fun createKeep(): String = CreateCameraActivity.keepCapture(this)
 
