@@ -5001,7 +5001,7 @@ document.addEventListener('click', e=>{
 // Profile (its own window, ?s3=1&profile=1): drawn once, then only re-measured around Station 3's bar.
 window.storyProfileOnly = function(){
   if(document.getElementById('story-profile')) return;
-  const p = state.profile || (state.profile = { name:'Your Name', username:'username', following:'7', followers:'100k', posts:'3', bio:'' });
+  const p = state.profile || (state.profile = { name:'NAME', username:'username', following:'7', followers:'100k', posts:'3', bio:'' });
   const el = document.createElement('div');
   el.id = 'story-profile';
   el.innerHTML = `
