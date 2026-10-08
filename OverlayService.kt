@@ -394,7 +394,19 @@ class OverlayService : Service(), StoryBridge.Host {
     @SuppressLint("SetJavaScriptEnabled")
     private fun buildPane(small: Boolean, dial: Boolean = false): Pane {
         val themed = ContextThemeWrapper(this, R.style.Theme_Story)
-        val frame = FrameLayout(themed)
+        // The Pages cover the phone's status bar, so a swipe down from the top edge is caught here and opens
+        // the phone's own notification panel (the Pages step below it so it shows on top).
+        val frame = if (small) FrameLayout(themed) else object : FrameLayout(themed) {
+            private var downY = -1f; private var fired = false
+            override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
+                when (ev.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> { downY = if (ev.rawY <= statusBarHeightPx() + 12 * dp) ev.rawY else -1f; fired = false }
+                    MotionEvent.ACTION_MOVE -> if (downY >= 0 && !fired && ev.rawY - downY > 24 * dp) { fired = true; openPhonePanel(); return true }
+                }
+                return false
+            }
+            override fun onTouchEvent(ev: MotionEvent): Boolean = fired || super.onTouchEvent(ev)
+        }
         val wv = WebView(themed).apply {
             setBackgroundColor(if (small) Color.TRANSPARENT else Color.BLACK)
             settings.javaScriptEnabled = true; settings.domStorageEnabled = true
@@ -732,14 +744,27 @@ class OverlayService : Service(), StoryBridge.Host {
     private var pagesTyping = false
     override fun setTyping(on: Boolean) { ui.post {
         val p = pagesPane ?: return@post
-        if (!on || pagesTyping || !p.shown || p.wm === wm) return@post
+        if (!on || !lowerPages()) return@post
+        p.web.requestFocus()
+        ui.postDelayed({ runCatching { getSystemService(android.view.inputmethod.InputMethodManager::class.java).showSoftInput(p.web, 0) } }, 120)
+    } }
+
+    /** The Pages (showing) drop to the normal overlay layer, below the keyboard and the notification panel. */
+    private fun lowerPages(): Boolean {
+        val p = pagesPane ?: return false
+        if (pagesTyping || !p.shown || p.wm === wm) return false
         runCatching { p.wm.removeView(p.frame) }
         p.lp.type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY; p.wm = wm
         runCatching { wm.addView(p.frame, p.lp) }
         pagesTyping = true
-        p.web.requestFocus()
-        ui.postDelayed({ runCatching { getSystemService(android.view.inputmethod.InputMethodManager::class.java).showSoftInput(p.web, 0) } }, 120)
-    } }
+        return true
+    }
+
+    /** Swipe down from the top over the Pages: the phone's own notification panel, as anywhere else. */
+    private fun openPhonePanel() {
+        lowerPages()
+        StoryAccessibilityService.instance?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_NOTIFICATIONS)
+    }
 
     /** The Pages (hidden now) go back to the top layer, with Station 3, the bar and the line above them. */
     private fun pagesBackToTop() {
