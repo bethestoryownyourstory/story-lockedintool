@@ -203,7 +203,7 @@ class OverlayService : Service(), StoryBridge.Host {
             ui.post {
                 val before = screensSeen
                 screensSeen = v
-                if (before != null && before != v) for (p in listOfNotNull(s3Pane, pagesPane, dialPane, profilePane)) { if (p.shown) p.stale = true else reload(p) }  // every STORY window, the dial pad included
+                if (before != null && before != v) for (p in listOfNotNull(s3Pane, pagesPane, dialPane, profilePane, profileGapPane)) { if (p.shown) p.stale = true else reload(p) }  // every STORY window, the dial pad included
             }
         }.start()
     }
@@ -211,7 +211,7 @@ class OverlayService : Service(), StoryBridge.Host {
     /** Fresh copy of the screens, skipping the website's cache. */
     private fun reload(p: Pane) {
         p.stale = false; p.loadedAt = System.currentTimeMillis()
-        p.web.loadUrl(remoteBase() + "?" + (if (p.profile) "s3=1&profile=1&" else if (p.dial) "s3=1&dial=1&" else if (p.small) "s3=1&" else "") + "v=" + System.currentTimeMillis())
+        p.web.loadUrl(remoteBase() + "?" + (if (p.gap) "s3=1&profile=1&gap=1&" else if (p.profile) "s3=1&profile=1&" else if (p.dial) "s3=1&dial=1&" else if (p.small) "s3=1&" else "") + "v=" + System.currentTimeMillis())
     }
 
     private fun rebuildLayer() {
@@ -225,6 +225,8 @@ class OverlayService : Service(), StoryBridge.Host {
         pagesPane?.let { runCatching { it.wm.removeView(it.frame) }; it.web.destroy() }; pagesPane = null
         dialPane?.let { runCatching { it.wm.removeView(it.frame) }; it.web.destroy() }; dialPane = null
         profilePane?.let { runCatching { it.wm.removeView(it.frame) }; it.web.destroy() }; profilePane = null
+        profileGapPane?.let { runCatching { it.wm.removeView(it.frame) }; it.web.destroy() }; profileGapPane = null
+        removeProfileStrip()
         pickLayer(); addBubble(); warmUp()
         if (s3WasOpen) showPanel(station3Only = true)
     }
@@ -402,7 +404,7 @@ class OverlayService : Service(), StoryBridge.Host {
     private fun hidePicker() { picker?.let { runCatching { (pickerWm ?: wm).removeView(it) } }; picker = null }
 
     // ---- STORY panes (built once, kept warm, so they open instantly) ----
-    private class Pane(val frame: FrameLayout, val web: WebView, val lp: WindowManager.LayoutParams, val small: Boolean, var wm: WindowManager, val dial: Boolean = false, val profile: Boolean = false) {
+    private class Pane(val frame: FrameLayout, val web: WebView, val lp: WindowManager.LayoutParams, val small: Boolean, var wm: WindowManager, val dial: Boolean = false, val profile: Boolean = false, val gap: Boolean = false) {
         var shown = false; var loadedAt = System.currentTimeMillis(); var stale = false
         // Station 3 only: true while its page (re)loads -- it stays invisible until it's drawn, never a white box.
         var loading = true
@@ -414,6 +416,16 @@ class OverlayService : Service(), StoryBridge.Host {
     // The dial pad's own window: sits still in the middle above Station 3, shown / hidden, never resized.
     private var dialPane: Pane? = null
     private var profilePane: Pane? = null
+    // Profile is three windows so Station 3's gap is a REAL gap (touches go straight through it to whatever is
+    // behind): Profile itself (stops just above the gap's line), the gap's own untouchable window (the line and
+    // the little men, see-through), and a plain strip in Profile's colour to the gap's left (takes touches).
+    private var profileGapPane: Pane? = null
+    private var profileStrip: View? = null
+    private var profileStripLp: WindowManager.LayoutParams? = null
+    private var profileStripWm: WindowManager? = null
+    /** The bottom band Profile leaves to the gap: Station 3's 40dp bar plus the 2dp line along its top. */
+    private fun profileBandPx() = (40 * dp).toInt() + Math.round(2 * dp)
+    private fun profileGapWPx() = (barBgLp?.width ?: getSharedPreferences("story", MODE_PRIVATE).getInt("bar_w", (220 * dp).toInt())) + Math.round(2 * dp)
 
     private fun flagsFor(small: Boolean, shown: Boolean): Int {
         val base = WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
@@ -424,16 +436,16 @@ class OverlayService : Service(), StoryBridge.Host {
     }
 
     @SuppressLint("SetJavaScriptEnabled")
-    private fun buildPane(small: Boolean, dial: Boolean = false, profile: Boolean = false): Pane {
+    private fun buildPane(small: Boolean, dial: Boolean = false, profile: Boolean = false, gap: Boolean = false): Pane {
         val themed = ContextThemeWrapper(this, R.style.Theme_Story)
         val frame = FrameLayout(themed)
         val wv = WebView(themed).apply {
             setBackgroundColor(if (small) Color.TRANSPARENT else th(Color.BLACK))
             settings.javaScriptEnabled = true; settings.domStorageEnabled = true
-            addJavascriptInterface(StoryBridge(this@OverlayService, this@OverlayService, station3 = small, dial = dial, profile = profile), "StoryNative")
+            addJavascriptInterface(StoryBridge(this@OverlayService, this@OverlayService, station3 = small, dial = dial, profile = profile || gap), "StoryNative")
         }
         val loader = WebViewAssetLoader.Builder().addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this)).build()
-        val query = if (profile) "?s3=1&profile=1" else if (dial) "?s3=1&dial=1" else if (small) "?s3=1" else ""
+        val query = if (gap) "?s3=1&profile=1&gap=1" else if (profile) "?s3=1&profile=1" else if (dial) "?s3=1&dial=1" else if (small) "?s3=1" else ""
         var paneRef: Pane? = null
         wv.webViewClient = object : WebViewClient() {
             override fun onPageStarted(v: WebView, url: String, favicon: android.graphics.Bitmap?) {
@@ -491,8 +503,12 @@ class OverlayService : Service(), StoryBridge.Host {
         })
         frame.alpha = 0f
         val lp = if (profile)
-            // Profile: the whole screen around Station 3 (it sits under Station 3's bar and button, which draw on top).
-            WindowManager.LayoutParams(-1, realHeightPx(), WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, flagsFor(true, false), PixelFormat.TRANSLUCENT).apply { gravity = Gravity.TOP or Gravity.START }
+            if (gap)
+                // Station 3's gap: bottom-right, exactly the bar plus its line; never takes a touch.
+                WindowManager.LayoutParams(profileGapWPx(), profileBandPx(), WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, flagsFor(true, false), PixelFormat.TRANSLUCENT).apply { gravity = Gravity.BOTTOM or Gravity.END }
+            else
+                // Profile: the whole screen down to just above the gap's line.
+                WindowManager.LayoutParams(-1, realHeightPx() - profileBandPx(), WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, flagsFor(true, false), PixelFormat.TRANSLUCENT).apply { gravity = Gravity.TOP or Gravity.START }
         else if (dial)
             WindowManager.LayoutParams(dialW, dialH, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, flagsFor(true, false), PixelFormat.TRANSLUCENT).apply {
                 // Middle of the screen, just above Station 3's 40dp bar (which sits on the bottom edge).
@@ -520,7 +536,7 @@ class OverlayService : Service(), StoryBridge.Host {
         // phone's status bar, notification panel and keyboard -- all of which then just work, as on any app.
         val paneWm = if (small) layerWm else wm
         if (small) lp.type = layerType
-        val p = Pane(frame, wv, lp, small, paneWm, dial, profile)
+        val p = Pane(frame, wv, lp, small, paneWm, dial, profile, gap)
         paneRef = p
         paneWm.addView(frame, lp)
         return p
@@ -540,6 +556,7 @@ class OverlayService : Service(), StoryBridge.Host {
         val fresh = s3Pane == null || dialPane == null
         if (pagesPane == null) pagesPane = buildPane(false)  // first, so Station 3 stays above the Pages
         if (profilePane == null) profilePane = buildPane(true, profile = true)  // under Station 3's bar, button and dial pad
+        if (profileGapPane == null) { profileGapPane = buildPane(true, profile = true, gap = true); addProfileStrip() }
         if (s3Pane == null) { addBarBg(); s3Pane = buildPane(true) }  // the white goes in first, so it sits under Station 3's page
         if (dialPane == null) dialPane = buildPane(true, dial = true)
         if (fresh) raiseBubble()  // done while Station 3 is still hidden, so nothing visibly changes later
@@ -548,7 +565,7 @@ class OverlayService : Service(), StoryBridge.Host {
 
     private fun setShown(p: Pane, shown: Boolean) {
         p.shown = shown
-        p.lp.flags = flagsFor(p.small, shown)
+        p.lp.flags = if (p.gap) flagsFor(true, false) else flagsFor(p.small, shown)
         // Android 12+ throws away touches that pass through another app's fully opaque window,
         // even an untouchable one. A hidden pane is fully see-through, so apps underneath get every touch.
         p.lp.alpha = if (shown) 1f else 0f
@@ -556,7 +573,11 @@ class OverlayService : Service(), StoryBridge.Host {
         p.frame.alpha = if (shown && !(p.small && p.loading)) 1f else 0f
         runCatching { p.wm.updateViewLayout(p.frame, p.lp) }
         if (p === s3Pane) { syncBarBg(); syncBarTouch(); tellProfileStation3() }
-        if (p === profilePane && !shown) p.web.evaluateJavascript("window.storyProfileS3&&window.storyProfileS3(true)", null)
+        if (p === profilePane) {
+            profileGapPane?.let { g -> if (g.shown != shown) setShown(g, shown) }
+            showProfileStrip(shown)
+            if (!shown) profileGapPane?.web?.evaluateJavascript("window.storyProfileS3&&window.storyProfileS3(true)", null)
+        }
         if (shown && !p.small) p.web.requestFocus()
         if (p === pagesPane) { quietApps(shown); updateBarLine(); if (!shown && pagesTyping) pagesBackToTop() }
     }
@@ -635,6 +656,7 @@ class OverlayService : Service(), StoryBridge.Host {
         // again changes nothing on screen (no re-layout, no resize, no jump).
         if (!p.small) p.web.evaluateJavascript("window.storyReset&&window.storyReset()", null)
         setShown(p, false)
+        if (p === profilePane) profileGapPane?.takeIf { it.stale }?.let { reload(it) }
         // New screens were published: pick them up in the background. Station 3 / the dial pad only reload
         // then (never on a timer), so tapping them open is always instant.
         if (p.stale || (!p.small && System.currentTimeMillis() - p.loadedAt > 5 * 60_000)) reload(p)
@@ -694,6 +716,7 @@ class OverlayService : Service(), StoryBridge.Host {
             lp.width = px
             getSharedPreferences("story", MODE_PRIVATE).edit().putInt("bar_w", px).apply()
             runCatching { (barBgWm ?: wm).updateViewLayout(v, lp) }
+            fitProfileGap()
         }
     }
 
@@ -727,15 +750,16 @@ class OverlayService : Service(), StoryBridge.Host {
     }
 
     private fun applyAodMask() {
-        val views = listOfNotNull(bubble, barBg, s3Pane?.frame, dialPane?.frame, profilePane?.frame)
+        val views = listOfNotNull(bubble, barBg, s3Pane?.frame, dialPane?.frame, profilePane?.frame, profileGapPane?.frame, profileStrip)
         for (v in views) v.foreground = if (aodOn) checker(aodPhase) else null
     }
 
     private fun destroyPanes() {
         quietApps(false)
         removeBarBg()
-        for (p in listOfNotNull(s3Pane, pagesPane, dialPane, profilePane)) { runCatching { p.wm.removeView(p.frame) }; p.web.destroy() }
-        s3Pane = null; pagesPane = null; dialPane = null; profilePane = null
+        for (p in listOfNotNull(s3Pane, pagesPane, dialPane, profilePane, profileGapPane)) { runCatching { p.wm.removeView(p.frame) }; p.web.destroy() }
+        s3Pane = null; pagesPane = null; dialPane = null; profilePane = null; profileGapPane = null
+        removeProfileStrip()
     }
 
     /** Gets the Pages out of the way (Home, Apps, opening an app). Station 3 is left exactly as it is. */
@@ -781,10 +805,41 @@ class OverlayService : Service(), StoryBridge.Host {
         (barBg?.background as? GradientDrawable)?.setColor(th(Color.WHITE))
         (barLine?.background as? GradientDrawable)?.setColor(th(Color.parseColor("#B3FFFFFF")))
         pagesPane?.let { it.frame.setBackgroundColor(th(Color.BLACK)); it.web.setBackgroundColor(th(Color.BLACK)) }
-        for (p in listOfNotNull(pagesPane, s3Pane, dialPane, profilePane))
+        profileStrip?.setBackgroundColor(th(Color.BLACK))
+        for (p in listOfNotNull(pagesPane, s3Pane, dialPane, profilePane, profileGapPane))
             p.web.evaluateJavascript("window.storySetTheme&&window.storySetTheme('$t')", null)
         hidePicker()
     } }
+
+    /** The plain strip to the gap's left, in Profile's colour: it takes touches, so Profile never leaks a tap there. */
+    @SuppressLint("ClickableViewAccessibility")
+    private fun addProfileStrip() {
+        removeProfileStrip()
+        val v = View(this).apply { setBackgroundColor(th(Color.BLACK)); setOnTouchListener { _, _ -> true } }
+        val lp = overlayParams(resources.displayMetrics.widthPixels - profileGapWPx(), profileBandPx(), Gravity.BOTTOM or Gravity.START, 0, 0).also {
+            it.type = layerType
+            it.flags = it.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+            it.alpha = 0f
+        }
+        v.visibility = View.INVISIBLE
+        profileStrip = v; profileStripLp = lp; profileStripWm = layerWm
+        runCatching { layerWm.addView(v, lp) }
+    }
+    private fun removeProfileStrip() { profileStrip?.let { runCatching { (profileStripWm ?: layerWm).removeView(it) } }; profileStrip = null; profileStripLp = null; profileStripWm = null }
+    private fun showProfileStrip(on: Boolean) {
+        val v = profileStrip ?: return; val lp = profileStripLp ?: return
+        v.visibility = if (on) View.VISIBLE else View.INVISIBLE
+        lp.alpha = if (on) 1f else 0f
+        lp.flags = if (on) lp.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv() else lp.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+        runCatching { (profileStripWm ?: layerWm).updateViewLayout(v, lp) }
+    }
+    /** Station 3's bar changed width: the gap window and the strip follow it exactly. */
+    private fun fitProfileGap() {
+        val gw = profileGapWPx()
+        profileGapPane?.let { g -> if (g.lp.width != gw) { g.lp.width = gw; g.openW = gw; runCatching { g.wm.updateViewLayout(g.frame, g.lp) } } }
+        profileStripLp?.let { lp -> val sw = resources.displayMetrics.widthPixels - gw; if (lp.width != sw) { lp.width = sw; runCatching { (profileStripWm ?: layerWm).updateViewLayout(profileStrip, lp) } } }
+        for (p in listOfNotNull(profilePane, profileGapPane)) p.web.evaluateJavascript(profileGeometryJs(), null)
+    }
 
     // ---- Profile: opens from Station 3's profile button, attached to Station 3 (one piece with it) ----
     override fun toggleProfile() { ui.post {
@@ -793,13 +848,14 @@ class OverlayService : Service(), StoryBridge.Host {
         if (s3Pane?.shown != true) return@post
         dialPane?.takeIf { it.shown }?.let { hideOne(it) }
         p.web.evaluateJavascript(profileGeometryJs(), null)
+        profileGapPane?.web?.evaluateJavascript(profileGeometryJs(), null)
         setShown(p, true)
         tellProfileStation3()
     } }
     /** Profile stays open when Station 3 closes (owner's call): it then shows Station 3's gap and the little scene in it. */
     private fun tellProfileStation3() {
-        val p = profilePane?.takeIf { it.shown } ?: return
-        p.web.evaluateJavascript("window.storyProfileS3&&window.storyProfileS3(${s3Pane?.shown == true})", null)
+        if (profilePane?.shown != true) return
+        profileGapPane?.web?.evaluateJavascript("window.storyProfileS3&&window.storyProfileS3(${s3Pane?.shown == true})", null)
     }
     override fun closeProfile() { ui.post { profilePane?.takeIf { it.shown }?.let { hideOne(it) } } }
 
