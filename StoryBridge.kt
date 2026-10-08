@@ -29,6 +29,7 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         fun showToast(msg: String)
         fun toggleProfile()
         fun closeProfile()
+        fun setTheme(t: String)
     }
 
     /** The phone's real launchable apps, with their real icons -- kept ready, so the Apps area opens instantly. */
@@ -61,6 +62,13 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
     /** STORY's one message bubble ("... - coming soon"), the same on the Pages, Station 3 and over apps. */
     @JavascriptInterface
     fun toast(msg: String) { host.showToast(msg) }
+
+    /** STORY's System theme (Settings): "black" (default) or "white". Only black and white swap. */
+    @JavascriptInterface
+    fun getTheme(): String = StoryTheme.get(ctx)
+
+    @JavascriptInterface
+    fun setTheme(t: String) { host.setTheme(if (t == "white") "white" else "black") }
 
     @JavascriptInterface
     fun openRecents() {

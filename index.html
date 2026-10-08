@@ -1072,7 +1072,7 @@
   .realcard-logo-visa{ color:#fff; }
   .realcard-logo-amex{ color:#67c3c0; font-style:normal; }
   .realcard-addslide{
-    background:var(--card); border:1px dashed rgba(255,255,255,0.25); cursor:pointer;
+    background:var(--card); border:1px dashed rgba(255,255,255,0.25); cursor:pointer; color:#fff;
   }
   .addslide-inner{ display:flex; flex-direction:row; align-items:center; height:100%; padding-left:16px; }
   .realcard-addslide .avatar-circle{ background:var(--card-2); font-size:22px; }
@@ -1719,7 +1719,7 @@
   #story-profile .pf-scroll::-webkit-scrollbar{ display:none; }
   #story-profile .pf-head{ display:flex; align-items:center; gap:14px; }
   #story-profile .pf-avatar{ width:64px; height:64px; border-radius:50%; flex-shrink:0; border:1.5px solid var(--pf-fg);
-    display:flex; align-items:center; justify-content:center; font-size:24px; font-weight:700; }
+    display:flex; align-items:center; justify-content:center; overflow:hidden; color:var(--pf-fg); }
   #story-profile .pf-names{ flex:1; min-width:0; }
   #story-profile .pf-name{ font-size:20px; font-weight:700; letter-spacing:-0.2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   #story-profile .pf-user{ font-size:13px; color:var(--pf-muted); margin-top:2px; }
@@ -1736,6 +1736,11 @@
   #story-profile .pf-edit:active, #story-profile .pf-more:active{ opacity:0.6; }
   #story-profile .pf-line{ position:fixed; right:0; bottom:0; box-sizing:border-box; pointer-events:none;
     border-top:2px solid var(--pf-line); border-left:2px solid var(--pf-line); border-top-left-radius:22px; }
+  /* Settings > System theme: Black | White */
+  .theme-pick{ display:flex; gap:6px; flex-shrink:0; }
+  .theme-opt{ padding:7px 14px; border-radius:10px; border:1px solid rgba(255,255,255,0.18); background:#000; color:#fff;
+    font-family:var(--font-body); font-size:12px; font-weight:700; cursor:pointer; }
+  .theme-opt.on{ background:#fff; color:#000; border-color:#fff; }
   /* Apps area: rows off screen aren't laid out or drawn until scrolled to, so it opens instantly. */
   .app-row{ content-visibility:auto; contain-intrinsic-size:auto 46px; }
   /* While pages slide under the finger, nothing gets text-selected. */
@@ -2687,6 +2692,153 @@
     z-index:90; pointer-events:none;
   }
 </style>
+<script>
+// ===== SYSTEM THEME (Settings > System theme: Black / White) =====
+// Only black and white swap: in White, everything black (or near-black) turns white and everything white
+// (or near-white) turns black -- backgrounds, text, numbers, lines, icons. Any other colour (green, red,
+// gold, blue...) is never touched. Works on STORY's own style rules (kept so Black restores them exactly),
+// on inline styles and on SVG colours as screens are drawn. Shadows/filters are left as they are.
+(function(){
+  const TOK = /#[0-9a-fA-F]{3,8}\b|rgba?\([^()]*\)|\b(?:white|black)\b/gi;
+  const SKIP = /shadow|filter/;
+  // A note's own colours (its paper, cover, ink and the swatches that pick them) are the owner's writing,
+  // not STORY's look -- they never swap (nor anything marked data-keep-color).
+  // The payment cards in Wallet are printed like the real cards, so they keep their own look too.
+  const KEEP_SEL = /\.note-(card|content|page-counter)|\.notes-(swatch|preview-page)|\.canvas-(page|swatch)|\.inline-task|\.draw-canvas|^\.realcard$|\.realcard-(chase|amex|top|brand|chip|num|bottom|label|name|logo)/;
+  const KEEP_EL = '[data-keep-color], .note-card, .note-content-wrap, .canvas-page-wrap, .notes-swatch, .canvas-swatch, .notes-preview-page, .realcard-chase, .realcard-amex';
+  function flip(t){
+    const k = t.toLowerCase();
+    if(k === 'white') return 'black';
+    if(k === 'black') return 'white';
+    let r, g, b, a = null;
+    if(k[0] === '#'){
+      let h = k.slice(1);
+      if(h.length === 3 || h.length === 4) h = h.split('').map(c=>c+c).join('');
+      if(h.length !== 6 && h.length !== 8) return t;
+      r = parseInt(h.slice(0,2),16); g = parseInt(h.slice(2,4),16); b = parseInt(h.slice(4,6),16);
+      if(h.length === 8) a = h.slice(6,8);
+      if(!neutral(r,g,b)) return t;
+      const hx = v=>(255-v).toString(16).padStart(2,'0');
+      return '#' + hx(r) + hx(g) + hx(b) + (a || '');
+    }
+    const m = k.match(/^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)\s*(?:[,/]\s*([\d.]+%?))?\s*\)$/);
+    if(!m) return t;
+    r = +m[1]; g = +m[2]; b = +m[3];
+    if(!neutral(r,g,b)) return t;
+    const inv = v=>Math.round(255 - v);
+    return m[4] != null ? `rgba(${inv(r)}, ${inv(g)}, ${inv(b)}, ${m[4]})` : `rgb(${inv(r)}, ${inv(g)}, ${inv(b)})`;
+  }
+  // Black-ish or white-ish greys only; mid greys and every real colour stay as they are.
+  function neutral(r,g,b){
+    if(Math.max(r,g,b) - Math.min(r,g,b) > 16) return false;
+    const avg = (r+g+b)/3;
+    return avg <= 56 || avg >= 200;
+  }
+  const flipValue = v=>v.replace(TOK, flip);
+  const ruleOrig = new Map();   // style rule -> its original [prop, value, priority] list
+  function rulesOf(list, out){
+    for(const r of Array.from(list || [])){
+      if(r.style && r.selectorText != null && !KEEP_SEL.test(r.selectorText)) out.push(r);
+      if(r.cssRules) rulesOf(r.cssRules, out);
+    }
+    return out;
+  }
+  function sheetRules(){
+    const out = [];
+    for(const s of Array.from(document.styleSheets)){ try{ rulesOf(s.cssRules, out); }catch(e){} }
+    return out;
+  }
+  function themeSheets(white){
+    for(const r of sheetRules()){
+      let orig = ruleOrig.get(r);
+      if(!orig){
+        if(!white) continue;
+        orig = [];
+        for(let i = 0; i < r.style.length; i++){
+          const p = r.style[i];
+          if(SKIP.test(p)) continue;
+          const v = r.style.getPropertyValue(p);
+          if(v && TOK.test(v)) orig.push([p, v, r.style.getPropertyPriority(p)]);
+          TOK.lastIndex = 0;
+        }
+        ruleOrig.set(r, orig);
+      }
+      for(const [p, v, pr] of orig) r.style.setProperty(p, white ? flipValue(v) : v, pr);
+    }
+  }
+  // Inline styles and SVG colour attributes: remember what was written, so a redraw is themed once.
+  const ATTRS = ['fill', 'stroke', 'stop-color', 'color'];
+  const elOrig = new WeakMap();
+  function themeEl(el, white){
+    if(el.nodeType !== 1 || el.closest(KEEP_EL)) return;
+    let rec = elOrig.get(el);
+    const st = el.getAttribute('style');
+    if(st != null){
+      if(!rec || st !== rec.styleOut){
+        // New or redrawn style: this is the original.
+        rec = rec || {};
+        rec.styleIn = st;
+        rec.styleOut = white ? flipStyle(st) : st;
+        elOrig.set(el, rec);
+        if(rec.styleOut !== st) el.setAttribute('style', rec.styleOut);
+      }else if(!white && rec.styleOut !== rec.styleIn){
+        rec.styleOut = rec.styleIn; el.setAttribute('style', rec.styleIn);
+      }else if(white && rec.styleOut === rec.styleIn){
+        rec.styleOut = flipStyle(rec.styleIn);
+        if(rec.styleOut !== st) el.setAttribute('style', rec.styleOut);
+      }
+    }
+    for(const a of ATTRS){
+      if(a === 'color' && !(el instanceof SVGElement)) continue;
+      const v = el.getAttribute(a);
+      if(v == null) continue;
+      rec = rec || {}; elOrig.set(el, rec);
+      rec.attrs = rec.attrs || {};
+      let ar = rec.attrs[a];
+      if(!ar || v !== ar.out) ar = rec.attrs[a] = { in: v, out: v };
+      const want = white ? flipValue(ar.in) : ar.in;
+      if(want !== v){ ar.out = want; el.setAttribute(a, want); }
+    }
+  }
+  function flipStyle(st){
+    // Leave shadow/filter declarations alone.
+    return st.split(';').map(d=>{ const i = d.indexOf(':'); if(i < 0) return d; const p = d.slice(0,i).trim().toLowerCase(); return SKIP.test(p) ? d : d.slice(0,i+1) + flipValue(d.slice(i+1)); }).join(';');
+  }
+  function themeTree(root, white){
+    if(root.nodeType !== 1) return;
+    themeEl(root, white);
+    const els = root.querySelectorAll('[style],[fill],[stroke],[stop-color],svg [color]');
+    for(let i = 0; i < els.length; i++) themeEl(els[i], white);
+  }
+  let current = 'black';
+  let observer = null;
+  window.storyTheme = ()=>current;
+  window.storySetTheme = function(t){
+    t = t === 'white' ? 'white' : 'black';
+    if(t === current && (t === 'black' || observer)) return;
+    current = t;
+    const white = t === 'white';
+    document.documentElement.classList.toggle('theme-white', white);
+    themeSheets(white);
+    themeTree(document.documentElement, white);
+    if(white && !observer){
+      observer = new MutationObserver(list=>{
+        if(current !== 'white') return;
+        for(const m of list){
+          if(m.type === 'attributes') themeEl(m.target, true);
+          else for(const n of m.addedNodes) themeTree(n, true);
+        }
+      });
+      observer.observe(document.documentElement, { subtree:true, childList:true, attributes:true, attributeFilter:['style', ...ATTRS] });
+    }
+    // Black: the observer stays but does nothing; restored elements keep their originals.
+    if(!white && observer){ /* nothing to do: originals restored above */ }
+  };
+  let saved = 'black';
+  try{ if(window.StoryNative && window.StoryNative.getTheme) saved = window.StoryNative.getTheme(); else saved = localStorage.getItem('story-theme') || 'black'; }catch(e){}
+  if(saved === 'white') window.storySetTheme('white');
+})();
+</script>
 </head>
 <body>
 
@@ -4856,6 +5008,18 @@ function settingsHubScreen(){
         <button class="toggle-switch${state.tiltEnabled?' on':''}" data-action="tilt-3d-toggle"><span class="toggle-knob"></span></button>
       </div>
     </div>
+    <div class="row-card">
+      <div class="row">
+        <div class="row-left">
+          <div class="row-name">System theme</div>
+          <div class="row-sub">Swaps STORY's black and white. Every other colour stays.</div>
+        </div>
+        <div class="theme-pick">
+          <button class="theme-opt${window.storyTheme && window.storyTheme()==='white' ? '' : ' on'}" data-action="theme-black">Black</button>
+          <button class="theme-opt${window.storyTheme && window.storyTheme()==='white' ? ' on' : ''}" data-action="theme-white">White</button>
+        </div>
+      </div>
+    </div>
     <div class="section-title">CATEGORIES</div>
     <div class="row-card" style="cursor:pointer;" data-nav="notif-settings">
       <div class="row"><div class="row-left"><div class="row-name">Notifications</div></div><span class="chev-right">›</span></div>
@@ -5007,7 +5171,7 @@ window.storyProfileOnly = function(){
   el.innerHTML = `
     <div class="pf-scroll">
       <div class="pf-head">
-        <div class="pf-avatar">${escText((p.name || '?').trim().charAt(0).toUpperCase())}</div>
+        <div class="pf-avatar" data-pf="photo" aria-label="Profile picture"><svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="8.5" r="4"/><path d="M4 20.5c1.2-4 4.3-6 8-6s6.8 2 8 6"/></svg></div>
         <div class="pf-names"><div class="pf-name">${escText(p.name)}</div><div class="pf-user">@${escText(p.username)}</div></div>
         <button class="pf-more" data-pf="menu" aria-label="More">⋮</button>
       </div>
@@ -5024,7 +5188,8 @@ window.storyProfileOnly = function(){
   el.addEventListener('click', e=>{
     const b = e.target.closest('[data-pf]');
     if(!b) return;
-    showToast((b.getAttribute('data-pf') === 'edit' ? 'Edit profile' : 'Profile menu') + ' — coming soon');
+    const k = b.getAttribute('data-pf');
+    showToast((k === 'edit' ? 'Edit profile' : k === 'photo' ? 'Profile picture' : 'Profile menu') + ' — coming soon');
   });
   window.storyProfileGeom();
 };
@@ -8478,6 +8643,12 @@ function attachHandlers(){
           state.installedApps = state.installedApps.filter(x=>x.id!==state.appMenuId);
           state.appMenuId = null;
           if(gone) showToast(gone.name + ' deleted');
+          break;
+        }
+        case 'theme-black': case 'theme-white': {
+          const t = action === 'theme-white' ? 'white' : 'black';
+          window.storySetTheme(t);
+          if(NATIVE && window.StoryNative.setTheme) window.StoryNative.setTheme(t); else { try{ localStorage.setItem('story-theme', t); }catch(err){} }
           break;
         }
         case 'tilt-3d-toggle': if(state.tiltEnabled){ disableTilt(); } else { enableTilt(); } break;

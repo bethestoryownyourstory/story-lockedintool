@@ -274,12 +274,12 @@ class OverlayService : Service(), StoryBridge.Host {
     private fun addBubble() {
         val size = (40 * dp).toInt()  // same size as Station 3's own arrow
         val v = TextView(this).apply {
-            text = "↖"; setTextColor(Color.WHITE); textSize = 18f; gravity = Gravity.CENTER
+            text = "↖"; setTextColor(th(Color.WHITE)); textSize = 18f; gravity = Gravity.CENTER
             background = GradientDrawable().apply {
                 // A corner piece: rounded only on the top-left, square into the screen corner.
                 cornerRadii = floatArrayOf(20 * dp, 20 * dp, 0f, 0f, 0f, 0f, 0f, 0f)
                 // Solid black, no outline (owner's call): nothing behind it, like Station 3's white bar, shows through.
-                setColor(Color.parseColor("#FF000000"))
+                setColor(th(Color.parseColor("#FF000000")))
             }
             // The ONE Station 3 button: it stays on screen, exactly the same, open or closed -- tap to open, tap to close.
             // It reacts the instant your finger touches it (not when you lift it), so there's no wait.
@@ -314,7 +314,7 @@ class OverlayService : Service(), StoryBridge.Host {
         // and shape of Android's own gesture line (read from the phone's System UI), so it's the same line.
         val (lineW, lineH, lineR) = phoneLineSize()
         val line = View(this).apply {
-            background = GradientDrawable().apply { cornerRadius = lineR; setColor(Color.parseColor("#B3FFFFFF")) }
+            background = GradientDrawable().apply { cornerRadius = lineR; setColor(th(Color.parseColor("#B3FFFFFF"))) }
         }
         val v: View = FrameLayout(this).apply { addView(line, FrameLayout.LayoutParams(lineW, lineH, Gravity.CENTER)) }
         barLine = line; barHasLine = hasLine
@@ -384,14 +384,14 @@ class OverlayService : Service(), StoryBridge.Host {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER
             setPadding((22 * dp).toInt(), (12 * dp).toInt(), (22 * dp).toInt(), (12 * dp).toInt())
-            background = GradientDrawable().apply { cornerRadius = 28 * dp; setColor(Color.parseColor("#F2111111")); setStroke((1 * dp).toInt(), Color.parseColor("#44FFFFFF")) }
+            background = GradientDrawable().apply { cornerRadius = 28 * dp; setColor(th(Color.parseColor("#F2111111"))); setStroke((1 * dp).toInt(), th(Color.parseColor("#44FFFFFF"))) }
         }
         fun word(t: String, onTap: () -> Unit) = TextView(this).apply {
-            text = t; setTextColor(Color.WHITE); textSize = 18f; setPadding((14 * dp).toInt(), 0, (14 * dp).toInt(), 0); setOnClickListener { hidePicker(); onTap() }
+            text = t; setTextColor(th(Color.WHITE)); textSize = 18f; setPadding((14 * dp).toInt(), 0, (14 * dp).toInt(), 0); setOnClickListener { hidePicker(); onTap() }
         }
         // Apps = straight back to whatever was underneath (the app you were on, untouched, or the home screen).
         row.addView(word("Apps") { hidePanel() })
-        row.addView(TextView(this).apply { text = "|"; setTextColor(Color.parseColor("#66FFFFFF")); textSize = 18f })
+        row.addView(TextView(this).apply { text = "|"; setTextColor(th(Color.parseColor("#66FFFFFF"))); textSize = 18f })
         row.addView(word("Pages") { showPanel(station3Only = false) })  // the only way into STORY itself
         picker = row; pickerWm = layerWm
         layerWm.addView(row, overlayParams(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL, 0, (64 * dp).toInt() + (if (phoneHasGestureLine()) 0 else navBarHeightPx())).also { it.type = layerType })
@@ -428,7 +428,7 @@ class OverlayService : Service(), StoryBridge.Host {
         val themed = ContextThemeWrapper(this, R.style.Theme_Story)
         val frame = FrameLayout(themed)
         val wv = WebView(themed).apply {
-            setBackgroundColor(if (small) Color.TRANSPARENT else Color.BLACK)
+            setBackgroundColor(if (small) Color.TRANSPARENT else th(Color.BLACK))
             settings.javaScriptEnabled = true; settings.domStorageEnabled = true
             addJavascriptInterface(StoryBridge(this@OverlayService, this@OverlayService, station3 = small, dial = dial, profile = profile), "StoryNative")
         }
@@ -510,7 +510,7 @@ class OverlayService : Service(), StoryBridge.Host {
             // everywhere else). On 3-button phones it stops above the buttons so they keep working.
             WindowManager.LayoutParams(-1, if (phoneHasGestureLine()) -1 else realHeightPx() - navBarHeightPx(), WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, flagsFor(false, false), PixelFormat.TRANSLUCENT).apply { gravity = Gravity.TOP or Gravity.START }
         // Black behind the status bar; the page itself starts right below it, flush (no extra gap).
-        if (!small) { frame.setBackgroundColor(Color.BLACK); frame.setPadding(0, statusBarHeightPx(), 0, 0) }
+        if (!small) { frame.setBackgroundColor(th(Color.BLACK)); frame.setPadding(0, statusBarHeightPx(), 0, 0) }
         // Hidden from the start, and fully see-through to Android too: on Android 12+ an untouchable
         // window that isn't see-through still swallows touches meant for the apps underneath
         // ("isn't optimised for the latest version of Android. Screen touches may be delayed...").
@@ -657,7 +657,7 @@ class OverlayService : Service(), StoryBridge.Host {
         val v = View(this).apply {
             background = GradientDrawable().apply {
                 cornerRadii = floatArrayOf(20 * dp, 20 * dp, 0f, 0f, 0f, 0f, 0f, 0f)  // like the button: rounded top-left
-                setColor(Color.WHITE)
+                setColor(th(Color.WHITE))
             }
         }
         val h = (40 * dp).toInt()  // the button's own height, same rounding
@@ -770,6 +770,21 @@ class OverlayService : Service(), StoryBridge.Host {
         if (d.shown) hideOne(d) else if (s3Pane?.shown == true) { profilePane?.takeIf { it.shown }?.let { hideOne(it) }; setShown(d, true) }
     } }
 
+    // ---- System theme (Settings): Black or White. Only black and white swap -- on the Pages, Station 3
+    //      (button, bar), the dial pad, Profile, the message bubble and the Apps | Pages switch. ----
+    private fun th(c: Int) = StoryTheme.swap(this, c)
+    override fun setTheme(t: String) { ui.post {
+        if (StoryTheme.get(this) == t) return@post
+        StoryTheme.set(this, t)
+        (bubble as? TextView)?.let { b -> b.setTextColor(th(Color.WHITE)); (b.background as? GradientDrawable)?.setColor(th(Color.parseColor("#FF000000"))) }
+        (barBg?.background as? GradientDrawable)?.setColor(th(Color.WHITE))
+        (barLine?.background as? GradientDrawable)?.setColor(th(Color.parseColor("#B3FFFFFF")))
+        pagesPane?.let { it.frame.setBackgroundColor(th(Color.BLACK)); it.web.setBackgroundColor(th(Color.BLACK)) }
+        for (p in listOfNotNull(pagesPane, s3Pane, dialPane, profilePane))
+            p.web.evaluateJavascript("window.storySetTheme&&window.storySetTheme('$t')", null)
+        hidePicker()
+    } }
+
     // ---- Profile: opens from Station 3's profile button, attached to Station 3 (one piece with it) ----
     override fun toggleProfile() { ui.post {
         val p = profilePane ?: return@post
@@ -832,11 +847,11 @@ class OverlayService : Service(), StoryBridge.Host {
     override fun showToast(msg: String) { ui.post {
         ui.removeCallbacks(hideToast); hideToast.run()
         val tv = TextView(this).apply {
-            text = msg; setTextColor(Color.parseColor("#F3F2EE")); textSize = 11.5f
+            text = msg; setTextColor(th(Color.parseColor("#F3F2EE"))); textSize = 11.5f
             typeface = android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD)
             gravity = Gravity.CENTER; maxWidth = (resources.displayMetrics.widthPixels * 0.82f).toInt()
             setPadding((16 * dp).toInt(), (10 * dp).toInt(), (16 * dp).toInt(), (10 * dp).toInt())
-            background = GradientDrawable().apply { cornerRadius = 20 * dp; setColor(Color.parseColor("#232326")); setStroke(maxOf(1, dp.toInt()), Color.parseColor("#24FFFFFF")) }
+            background = GradientDrawable().apply { cornerRadius = 20 * dp; setColor(th(Color.parseColor("#232326"))); setStroke(maxOf(1, dp.toInt()), th(Color.parseColor("#24FFFFFF"))) }
         }
         val lp = overlayParams(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL, 0, (84 * dp).toInt())
         lp.flags = lp.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE

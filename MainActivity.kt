@@ -30,8 +30,8 @@ class MainActivity : Activity() {
         KeepAlive.ensureRunning(this)   // switched on but not running (killed by the phone)? bring it back
         if (!Release.agreedAuto(this)) UpdateActivity.ask(this, force = true)  // using STORY = agreeing to automatic updates
         val pad = (24 * resources.displayMetrics.density).toInt()
-        val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Color.BLACK); setPadding(pad, pad * 2, pad, pad); gravity = Gravity.TOP }
-        fun title(t: String, size: Float = 22f) = TextView(this).apply { text = t; setTextColor(Color.WHITE); textSize = size; setPadding(0, 0, 0, pad / 2) }
+        val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(StoryTheme.swap(this@MainActivity, Color.BLACK)); setPadding(pad, pad * 2, pad, pad); gravity = Gravity.TOP }
+        fun title(t: String, size: Float = 22f) = TextView(this).apply { text = t; setTextColor(StoryTheme.swap(this@MainActivity, Color.WHITE)); textSize = size; setPadding(0, 0, 0, pad / 2) }
         fun btn(t: String, f: () -> Unit) = Button(this).apply { text = t; isAllCaps = false; setOnClickListener { f() } }
         col.addView(title("STORY", 32f))
         col.addView(title("Floats over your phone. Your home screen, lock screen and apps stay exactly as they are.", 15f))
@@ -70,7 +70,7 @@ class MainActivity : Activity() {
             setOnClickListener { prefs.edit().putBoolean("aod", !prefs.getBoolean("aod", false)).apply(); text = aodLabel() }
         })
         // Updates: what's happening, at a glance.
-        updateLine = title("", 14f).apply { setTextColor(Color.parseColor("#FFCCCCCC")); setPadding(0, pad, 0, pad / 2) }
+        updateLine = title("", 14f).apply { setTextColor(StoryTheme.swap(this@MainActivity, Color.parseColor("#FFCCCCCC"))); setPadding(0, pad, 0, pad / 2) }
         col.addView(updateLine)
         // Loading bar while an update downloads / installs.
         updateBar = android.widget.ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply { max = 100; visibility = android.view.View.GONE; setPadding(0, 0, 0, pad / 2) }
@@ -93,7 +93,7 @@ class MainActivity : Activity() {
                 if (++taps >= 7 && !Release.isOwner(this@MainActivity)) { taps = 0; askPin("Owner", "Enter your PIN.") { pin -> unlockOwner(pin) } }
             }
         })
-        setContentView(ScrollView(this).apply { setBackgroundColor(Color.BLACK); addView(col) })
+        setContentView(ScrollView(this).apply { setBackgroundColor(StoryTheme.swap(this@MainActivity, Color.BLACK)); addView(col) })
     }
 
     private fun showUpdateStatus() {
