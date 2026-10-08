@@ -103,6 +103,12 @@ class OverlayService : Service(), StoryBridge.Host {
             if (d.state == android.view.Display.STATE_OFF && !getSystemService(android.os.PowerManager::class.java).isInteractive) onScreenOff()
         }
     }
+    // An app was installed or removed: rebuild the Apps list and tell the Pages, so it's right next time.
+    private val appsChanged = object : android.content.BroadcastReceiver() {
+        override fun onReceive(c: Context, i: Intent) {
+            StoryBridge.refreshApps(c) { ui.post { pagesPane?.web?.evaluateJavascript("window.storyAppsChanged&&window.storyAppsChanged()", null) } }
+        }
+    }
     // Which version of the screens (live or Test) the panes have loaded; see checkScreens().
     @Volatile private var screensSeen: String? = null
     private val dp get() = resources.displayMetrics.density
@@ -125,6 +131,11 @@ class OverlayService : Service(), StoryBridge.Host {
         ui.post { warmUp() }  // build both panes now so Station 3 and Pages open instantly
         ui.postDelayed(updateLoop, 15_000)  // then look for a new STORY version in the background
         Updater.schedule(this)              // and keep checking every 15 minutes even if STORY is off
+        StoryBridge.refreshApps(this)  // the Apps area's list is ready before it's ever opened
+        val pkgFilter = android.content.IntentFilter().apply {
+            addAction(Intent.ACTION_PACKAGE_ADDED); addAction(Intent.ACTION_PACKAGE_REMOVED); addAction(Intent.ACTION_PACKAGE_CHANGED); addDataScheme("package")
+        }
+        if (Build.VERSION.SDK_INT >= 33) registerReceiver(appsChanged, pkgFilter, Context.RECEIVER_NOT_EXPORTED) else registerReceiver(appsChanged, pkgFilter)
         val unlockFilter = android.content.IntentFilter(Intent.ACTION_USER_PRESENT)
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(unlocked, unlockFilter, Context.RECEIVER_NOT_EXPORTED) else registerReceiver(unlocked, unlockFilter)
         val offFilter = android.content.IntentFilter(Intent.ACTION_SCREEN_OFF)
@@ -148,6 +159,7 @@ class OverlayService : Service(), StoryBridge.Host {
         ui.removeCallbacks(updateLoop); ui.removeCallbacks(resumeAfterInstall)
         runCatching { unregisterReceiver(unlocked) }
         runCatching { unregisterReceiver(screenOff) }
+        runCatching { unregisterReceiver(appsChanged) }
         runCatching { getSystemService(android.hardware.display.DisplayManager::class.java).unregisterDisplayListener(displayWatch) }
         ui.removeCallbacks(aodSwap)
         bar?.let { runCatching { (barWm ?: wm).removeView(it) } }

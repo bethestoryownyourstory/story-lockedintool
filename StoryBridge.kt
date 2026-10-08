@@ -28,30 +28,9 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         fun setTyping(on: Boolean)
     }
 
-    /** The phone's real launchable apps, with their real icons. */
+    /** The phone's real launchable apps, with their real icons -- kept ready, so the Apps area opens instantly. */
     @JavascriptInterface
-    fun getApps(): String {
-        val pm = ctx.packageManager
-        val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
-        val out = JSONArray()
-        pm.queryIntentActivities(intent, 0)
-            .filter { it.activityInfo.packageName != ctx.packageName }
-            .sortedBy { it.loadLabel(pm).toString().lowercase() }
-            .distinctBy { it.activityInfo.packageName }
-            .forEach {
-                val bmp = Bitmap.createBitmap(96, 96, Bitmap.Config.ARGB_8888)
-                val d = it.loadIcon(pm)
-                d.setBounds(0, 0, 96, 96)
-                d.draw(Canvas(bmp))
-                val bos = ByteArrayOutputStream()
-                bmp.compress(Bitmap.CompressFormat.PNG, 90, bos)
-                out.put(JSONObject()
-                    .put("pkg", it.activityInfo.packageName)
-                    .put("label", it.loadLabel(pm).toString())
-                    .put("icon", Base64.encodeToString(bos.toByteArray(), Base64.NO_WRAP)))
-            }
-        return out.toString()
-    }
+    fun getApps(): String = appsCache ?: buildApps(ctx).also { appsCache = it }
 
     /** Opens the real app exactly as the phone's own launcher would, and gets STORY out of the way. */
     @JavascriptInterface
@@ -105,4 +84,39 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
     /** The dial pad page reports its size once, so its window fits it before it's ever shown. */
     @JavascriptInterface
     fun setDialSize(w: Int, h: Int) { if (dial) host.setDialSize(w, h) }
+
+    companion object {
+        @Volatile private var appsCache: String? = null
+
+        /** Builds the app list (names + icons). Slow-ish, so it's done ahead of time, off screen. */
+        fun buildApps(ctx: Context): String {
+            val pm = ctx.packageManager
+            val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+            val out = JSONArray()
+            pm.queryIntentActivities(intent, 0)
+                .filter { it.activityInfo.packageName != ctx.packageName }
+                .map { it to it.loadLabel(pm).toString() }
+                .sortedBy { it.second.lowercase() }
+                .distinctBy { it.first.activityInfo.packageName }
+                .forEach { (info, label) ->
+                    val bmp = Bitmap.createBitmap(96, 96, Bitmap.Config.ARGB_8888)
+                    val d = info.loadIcon(pm)
+                    d.setBounds(0, 0, 96, 96)
+                    d.draw(Canvas(bmp))
+                    val bos = ByteArrayOutputStream()
+                    bmp.compress(Bitmap.CompressFormat.PNG, 90, bos)
+                    out.put(JSONObject()
+                        .put("pkg", info.activityInfo.packageName)
+                        .put("label", label)
+                        .put("icon", Base64.encodeToString(bos.toByteArray(), Base64.NO_WRAP)))
+                }
+            return out.toString()
+        }
+
+        /** Rebuilds the list in the background (at start, and whenever an app is installed or removed). */
+        fun refreshApps(ctx: Context, then: (() -> Unit)? = null) {
+            val app = ctx.applicationContext
+            Thread { runCatching { appsCache = buildApps(app) }; then?.invoke() }.start()
+        }
+    }
 }

@@ -1643,6 +1643,8 @@
   html.native:not(.s3-early) #content-area{ padding-top:0 !important; padding-bottom:0 !important; }
   html.native:not(.s3-early) .page-top{ margin-top:0 !important; }
   html.native:not(.s3-early) .phone-float-dock{ padding-bottom:0 !important; }
+  /* Apps area: rows off screen aren't laid out or drawn until scrolled to, so it opens instantly. */
+  .app-row{ content-visibility:auto; contain-intrinsic-size:auto 46px; }
   /* While pages slide under the finger, nothing gets text-selected. */
   body.page-sliding, body.page-sliding *{ -webkit-user-select:none !important; user-select:none !important; }
   html.native:not(.s3-early) .story-screen{ margin-top:0 !important; margin-bottom:0 !important; padding-bottom:0 !important; }
@@ -4781,6 +4783,7 @@ if(NATIVE && window.StoryNative.setTyping && !/[?&]s3=1/.test(location.search)){
   document.addEventListener('focusin', e=>{ if(editable(e.target)) try{ window.StoryNative.setTyping(true); }catch(err){} }, true);
 }
 function appIconHTML(a){
+  if(a && a.iconUrl) return `<img src="${a.iconUrl}" alt="" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:contain;border-radius:10px;">`;
   if(a && a.iconData) return `<img src="data:image/png;base64,${a.iconData}" alt="" style="width:100%;height:100%;object-fit:contain;border-radius:10px;">`;
   return a ? a.icon : '';
 }
@@ -4789,7 +4792,23 @@ function loadNativeApps(){
   try{
     const list = JSON.parse(window.StoryNative.getApps());
     const storyApps = state.installedApps.filter(a=>a.section==='STORY');
-    state.installedApps = storyApps.concat(list.map(a=>({ id:'pkg:'+a.pkg, pkg:a.pkg, name:a.label, icon:'📱', iconData:a.icon, section:'PHONE APPS' })));
+    // Each icon is turned into a small image once and reused, so the Apps area draws instantly every time.
+    const prev = {};
+    state.installedApps.forEach(a=>{ if(a.pkg && a.iconUrl) prev[a.pkg] = a; });
+    state.installedApps = storyApps.concat(list.map(a=>{
+      const old = prev[a.pkg];
+      let iconUrl = '';
+      if(old && old.iconSrc === a.icon){ iconUrl = old.iconUrl; delete prev[a.pkg]; }
+      else if(a.icon){
+        try{
+          const bin = atob(a.icon), bytes = new Uint8Array(bin.length);
+          for(let i=0;i<bin.length;i++) bytes[i] = bin.charCodeAt(i);
+          iconUrl = URL.createObjectURL(new Blob([bytes], { type:'image/png' }));
+        }catch(e){}
+      }
+      return { id:'pkg:'+a.pkg, pkg:a.pkg, name:a.label, icon:'📱', iconUrl, iconSrc:a.icon, section:'PHONE APPS' };
+    }));
+    Object.values(prev).forEach(a=>{ try{ URL.revokeObjectURL(a.iconUrl); }catch(e){} });
   }catch(err){ console.warn('native apps unavailable', err); }
 }
 // Called by the Android overlay: open STORY on a given page (and optionally with Station 3 open).
@@ -4846,10 +4865,15 @@ document.addEventListener('click', (e)=>{
   if(!el) return;
   e.stopPropagation(); e.preventDefault();
   state.appMenuId = null;
-  loadNativeApps();
+  if(!state.installedApps.some(a=>a.pkg)) loadNativeApps();   // normally already loaded (and kept up to date)
   state.current = 'apps';
   renderDevice();
 }, true);
+// The app tells the Pages when an app is installed or removed.
+window.storyAppsChanged = function(){
+  loadNativeApps();
+  if(state.current === 'apps' && !state.appMenuId) renderDevice();
+};
 window.storyGoHome = function(){ state.recentsOpen=false; state.homePickerOpen=false; state.appMenuId=null; state.current = state.homeScreen || 'wallet'; renderDevice(); };
 document.addEventListener('click', (e)=>{
   const el = e.target.closest && e.target.closest('[data-native-pkg]');
