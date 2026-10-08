@@ -277,7 +277,7 @@ class OverlayService : Service(), StoryBridge.Host {
                 // A corner piece: rounded only on the top-left, square into the screen corner.
                 cornerRadii = floatArrayOf(20 * dp, 20 * dp, 0f, 0f, 0f, 0f, 0f, 0f)
                 // Solid black, no outline (owner's call): nothing behind it, like Station 3's white bar, shows through.
-                setColor(Color.parseColor("#FF111111"))
+                setColor(Color.parseColor("#FF000000"))
             }
             // The ONE Station 3 button: it stays on screen, exactly the same, open or closed -- tap to open, tap to close.
             // It reacts the instant your finger touches it (not when you lift it), so there's no wait.
