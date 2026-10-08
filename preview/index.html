@@ -1749,6 +1749,13 @@
   #story-profile .pf-field-box input::placeholder{ color:var(--pf-muted); }
   #story-profile .pf-field-msg{ font-size:12px; color:var(--pf-muted); margin:8px 2px 0; min-height:16px; }
   #story-profile .pf-field-msg.bad{ color:#e63946; }
+  /* Messages (same window as Profile) */
+  #story-profile .pf-msgs-title{ font-size:20px; }
+  #story-profile .pf-msgs-new{ margin-left:auto; width:38px; height:38px; border:none; background:transparent; color:var(--pf-fg); display:flex; align-items:center; justify-content:center; padding:0; }
+  #story-profile .pf-msgs-new:active{ opacity:0.6; }
+  #story-profile .pf-msgs-empty{ text-align:center; padding-top:34vh; }
+  #story-profile .pf-msgs-empty-t{ font-size:15px; font-weight:600; }
+  #story-profile .pf-msgs-lock{ display:inline-flex; align-items:center; gap:5px; margin-top:8px; font-size:12px; color:var(--pf-muted); }
   /* Choose a picture: the phone's pictures, newest first, 3 across. */
   #story-profile .pf-photo-grid{ display:grid; grid-template-columns:repeat(3, 1fr); gap:3px; }
   #story-profile .pf-photo, #story-profile .pf-photo-more{ aspect-ratio:1/1; border:none; padding:0; margin:0; background:var(--pf-hair); overflow:hidden; border-radius:4px; }
@@ -5344,7 +5351,7 @@ window.storyProfileOnly = function(){
   el.className = PF_GAP_WINDOW ? 'pf-gap-only' : 'pf-main';
   el.innerHTML = `
     <div class="pf-bg"></div>
-    <div class="pf-scroll">
+    <div class="pf-scroll pf-home">
       <div class="pf-head">
         <div class="pf-avatar" data-pf="photo" aria-label="Profile picture"></div>
         <div class="pf-names"><div class="pf-name">${escText(p.name)}</div><div class="pf-user">@${escText(p.username)}</div></div>
@@ -5379,6 +5386,13 @@ window.storyProfileOnly = function(){
       <div class="pf-photo-grid"></div>
       <div class="pf-photos-empty" hidden>No pictures on this phone yet.</div>
     </div>
+    <div class="pf-scroll pf-msgs" hidden>
+      <div class="pf-ed-head"><div class="pf-ed-title pf-msgs-title">Messages</div><button class="pf-msgs-new" data-pf="msg-new" aria-label="New message"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button></div>
+      <div class="pf-msgs-empty">
+        <div class="pf-msgs-empty-t">No messages yet</div>
+        <div class="pf-msgs-lock"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>End-to-end encrypted</div>
+      </div>
+    </div>
     <div class="pf-viewer" data-pf="viewer-close" hidden><img alt="Profile picture"></div>
     <div class="pf-gap"><div class="pf-gap-clip"><svg></svg></div></div>
     <div class="pf-line"></div>`;
@@ -5387,7 +5401,7 @@ window.storyProfileOnly = function(){
     const b = e.target.closest('[data-pf]');
     if(!b) return;
     const k = b.getAttribute('data-pf');
-    const main = el.querySelector('.pf-scroll:not(.pf-editor)'), ed = el.querySelector('.pf-editor'), viewer = el.querySelector('.pf-viewer');
+    const main = el.querySelector('.pf-home'), ed = el.querySelector('.pf-editor'), viewer = el.querySelector('.pf-viewer');
     if(k === 'photo'){
       // Tapping the picture only shows it -- changing it lives in Edit profile.
       const src = profilePhoto();
@@ -5419,6 +5433,7 @@ window.storyProfileOnly = function(){
     else if(k === 'field-back') closeProfileField();
     else if(k === 'field-save') saveProfileField();
     else if(k === 'ed-bio') openProfileField('bio');
+    else if(k === 'msg-new') showToast('New message — coming soon');
     else showToast('Profile menu — coming soon');
   });
   const fieldInput = el.querySelector('.pf-field input'), bioBox = el.querySelector('.pf-field textarea');
@@ -5458,8 +5473,17 @@ window.storyProfilePhotoChanged = function(){
 window.storyProfileReset = function(){
   const el = document.getElementById('story-profile'); if(!el || PF_GAP_WINDOW) return;
   const ae = document.activeElement; if(ae && ae.closest && ae.closest('.pf-field')) ae.blur();
-  el.querySelector('.pf-editor').hidden = true; el.querySelector('.pf-viewer').hidden = true; el.querySelector('.pf-photos').hidden = true; el.querySelector('.pf-field').hidden = true;
-  const main = el.querySelector('.pf-scroll:not(.pf-editor)'); main.hidden = false; main.scrollTop = 0;
+  el.querySelector('.pf-editor').hidden = true; el.querySelector('.pf-viewer').hidden = true; el.querySelector('.pf-photos').hidden = true; el.querySelector('.pf-field').hidden = true; el.querySelector('.pf-msgs').hidden = true;
+  const main = el.querySelector('.pf-home'); main.hidden = false; main.scrollTop = 0;
+};
+// Profile and Messages share ONE window attached to Station 3 (same gap, line and scene): the app says which shows.
+window.storyS3Page = function(which){
+  const el = document.getElementById('story-profile'); if(!el || PF_GAP_WINDOW) return;
+  window.storyProfileReset();
+  const msgs = which === 'messages';
+  el.querySelector('.pf-home').hidden = msgs;
+  el.querySelector('.pf-msgs').hidden = !msgs;
+  if(msgs) el.querySelector('.pf-msgs').scrollTop = 0;
 };
 // STORY's own picture grid: the phone's pictures right inside Edit profile, so choosing is instant (no app switch).
 // Android asks once to let STORY see the pictures; if that's refused, the phone's own picker is used instead.
@@ -9154,7 +9178,7 @@ function attachHandlers(){
         case 'station3-new-contact': showToast('Create new contact — coming soon'); break;
         case 'station3-create-post': showToast('Create & post — coming soon'); break;
         case 'station3-call-history': showToast('Call history — coming soon'); break;
-        case 'station3-messages': showToast('Messages — coming soon'); break;
+        case 'station3-messages': if(NATIVE && window.StoryNative.toggleMessages){ window.StoryNative.toggleMessages(); } else { showToast('Messages — coming soon'); } break;
         case 'station3-profile': if(NATIVE && window.StoryNative.toggleProfile){ window.StoryNative.toggleProfile(); } else { showToast('Profile — coming soon'); } break;
 
         case 'note-delete': {
