@@ -5308,6 +5308,7 @@ window.storyProfileReset = function(){
 };
 function pickProfilePhoto(){
   if(NATIVE && window.StoryNative.pickProfilePhoto){ window.StoryNative.pickProfilePhoto(); return; }
+  if(NATIVE){ showToast('Update STORY to change your photo'); return; }  // this phone's STORY predates the photo picker
   // Browser: pick a file, keep a 512px square of it.
   const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*';
   inp.onchange = ()=>{
