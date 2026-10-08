@@ -342,7 +342,21 @@ class OverlayService : Service(), StoryBridge.Host {
         bar = v
         val bottom = if (hasLine) 0 else navBarHeightPx() + (6 * dp).toInt()
         barWm = layerWm
-        layerWm.addView(v, overlayParams(w, h, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL, 0, bottom).also { it.type = layerType })
+        barLp = overlayParams(w, h, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL, 0, bottom).also { it.type = layerType }
+        barLp!!.flags = barFlags(barLp!!.flags)
+        layerWm.addView(v, barLp)
+    }
+    private var barLp: WindowManager.LayoutParams? = null
+    // While Station 3 is open its own buttons come first: the bottom line's tap area (which sits under
+    // Station 3's bar) stops catching taps, so a tap on Station 3 is only ever Station 3's.
+    private fun barFlags(f: Int): Int {
+        val s3Open = s3Pane?.shown == true
+        return if (s3Open) f or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE else f and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+    }
+    private fun syncBarTouch() {
+        val v = bar ?: return; val lp = barLp ?: return
+        val f = barFlags(lp.flags)
+        if (f != lp.flags) { lp.flags = f; runCatching { (barWm ?: wm).updateViewLayout(v, lp) } }
     }
     private var barWm: WindowManager? = null
     private var barLine: View? = null
@@ -530,7 +544,7 @@ class OverlayService : Service(), StoryBridge.Host {
         if (p.small && shown) { p.lp.width = p.openW; p.lp.height = p.openH }
         p.frame.alpha = if (shown && !(p.small && p.loading)) 1f else 0f
         runCatching { p.wm.updateViewLayout(p.frame, p.lp) }
-        if (p === s3Pane) syncBarBg()
+        if (p === s3Pane) { syncBarBg(); syncBarTouch() }
         if (shown && !p.small) p.web.requestFocus()
         if (p === pagesPane) { quietApps(shown); updateBarLine(); if (!shown && pagesTyping) pagesBackToTop() }
     }
