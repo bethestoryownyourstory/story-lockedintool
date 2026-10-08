@@ -4838,13 +4838,17 @@ document.addEventListener('click', (e)=>{
   if(arrow){ e.stopPropagation(); e.preventDefault(); window.StoryNative.closePanel(); }
   else if(!inside){ e.stopPropagation(); e.preventDefault(); }
 }, true);
-// Dashboard "APPS" in the Android build: there is only the phone's own apps screen, so go to it.
+// Dashboard "APPS" in the Android build: STORY's own Apps area with every app on the phone
+// (fresh list each time, so newly installed / deleted apps are right).
 document.addEventListener('click', (e)=>{
   if(!NATIVE) return;
   const el = e.target.closest && e.target.closest('[data-nav="apps"]');
   if(!el) return;
   e.stopPropagation(); e.preventDefault();
-  if(window.StoryNative.showApps) window.StoryNative.showApps();
+  state.appMenuId = null;
+  loadNativeApps();
+  state.current = 'apps';
+  renderDevice();
 }, true);
 window.storyGoHome = function(){ state.recentsOpen=false; state.homePickerOpen=false; state.appMenuId=null; state.current = state.homeScreen || 'wallet'; renderDevice(); };
 document.addEventListener('click', (e)=>{
@@ -4891,9 +4895,8 @@ function appMenuTemplate(){
       <div class="confirm-sheet" onclick="event.stopPropagation()">
         <div class="confirm-title">${appIconHTML(a)} ${escText(a.name)}</div>
         <div class="confirm-btn-row">
-          <button class="btn-wide" style="margin-top:0;" data-action="app-turn-into-page">Turn app into a page</button>
-          <button class="btn-wide" style="margin-top:0;color:var(--red);" data-action="app-delete">Delete app</button>
-          <button class="btn-wide" style="margin-top:0;" data-action="app-menu-close">Cancel</button>
+          <button class="btn-wide" style="margin-top:0;" data-action="app-turn-into-page">Create into a page</button>
+          <button class="btn-wide" style="margin-top:0;color:var(--red);" data-action="app-delete">Delete App</button>
         </div>
       </div>
     </div>
@@ -9753,7 +9756,7 @@ function notePageSwipeGo(idx){
 // its layout height, so the scroll area genuinely has nothing left to scroll). The floor keeps
 // text legible; anything that would need to go below it stays scrollable. Feeds/editors that
 // are meant to scroll (Community, Notes) are left alone via NO_FIT_SCREENS.
-const NO_FIT_SCREENS = new Set(['notes-canvas','scratch-draw']);
+const NO_FIT_SCREENS = new Set(['notes-canvas','scratch-draw','apps']);  // Apps scrolls (every app on the phone), never shrinks
 const FIT_MIN_SCALE = 0.5;
 const FIT_MAX_SCALE = 1.35;
 // Each page's fitted zoom is remembered (per page and screen size), so drawing a page again --
