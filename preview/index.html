@@ -7113,6 +7113,7 @@ function renderDevice(){
   }
   positionStation3();
   attachPayScroll();
+  refreshNeighbors();
   if(typeof updatePhoneStatusClock === 'function') updatePhoneStatusClock();
   updateScrollHint();
   updateScrollbarThumb();
@@ -9931,73 +9932,102 @@ function prewarmPageFits(){
   });
 }
 setTimeout(()=>{ try{ prewarmPageFits(); }catch(e){} }, 1200);
-window.addEventListener('resize', ()=>{ setTimeout(()=>{ try{ prewarmPageFits(); }catch(e){} }, 400); });
+window.addEventListener('resize', ()=>{ setTimeout(()=>{ try{ prewarmPageFits(); refreshNeighbors(true); }catch(e){} }, 400); });
 
 let pageSwipeAnimating = false;
 let appMenuOpenedAt = 0;
-// Page-to-page slide. The new page is drawn ONCE, in its real final layout, and slides in while the
-// real, untouched old screen slides out -- nothing is redrawn or resized when the slide ends. On a
-// phone the slide follows the finger. The "‹ Dashboard" button stays in one place throughout.
+// Page-to-page slide. The pages either side of the current one are drawn AHEAD of time, off screen
+// (their real final look, same size and fit). A swipe just slides the real current screen and that
+// ready-made neighbour -- nothing is drawn while your finger moves, so it starts instantly and never
+// blends two pages. Only after it lands is the new page made live (looking exactly the same).
+// The "< Dashboard" button stays in one place throughout.
+const NEIGHBORS = {};
+function buildNeighbor(pg){
+  const live = document.getElementById('device-wrap');
+  if(!live || state.device !== 'phone') return null;
+  const r = live.getBoundingClientRect();
+  const old = NEIGHBORS[pg];
+  if(old && old.host.parentNode) old.host.remove();
+  const host = document.createElement('div');
+  host.className = 'device-wrap';
+  host.setAttribute('aria-hidden', 'true');
+  host.style.cssText = 'position:fixed;left:0;top:0;width:' + r.width + 'px;height:' + r.height + 'px;visibility:hidden;pointer-events:none;z-index:-1;';
+  const saved = state.current;
+  let frameHTML = '', contentHTML = '';
+  try{ state.current = pg; frameHTML = buildPhone(); contentHTML = renderScreenContent(); }
+  finally{ state.current = saved; }
+  host.innerHTML = frameHTML;
+  document.body.appendChild(host);
+  const area = host.querySelector('#content-area');
+  if(area){ area.innerHTML = contentHTML; try{ fitPageToScreen(area, null, pg); }catch(e){} }
+  NEIGHBORS[pg] = { host, w:r.width, h:r.height };
+  return NEIGHBORS[pg];
+}
+let neighborTimer = null, neighborsFor = null;
+function refreshNeighbors(force){
+  if(state.device !== 'phone' || !PAGES.includes(state.current)) return;
+  if(!force && neighborsFor === state.current) return;
+  clearTimeout(neighborTimer);
+  neighborTimer = setTimeout(()=>{
+    if(pageSwipeAnimating || !PAGES.includes(state.current)) return;
+    const idx = PAGES.indexOf(state.current);
+    [idx - 1, idx + 1].forEach(i=>{ if(i >= 0 && i < PAGES.length) try{ buildNeighbor(PAGES[i]); }catch(e){} });
+    neighborsFor = state.current;
+  }, 120);
+}
 function beginPageSlide(next){
   const idx = PAGES.indexOf(state.current);
   if(next===idx || next<0 || next>PAGES.length-1 || pageSwipeAnimating) return null;
   const wrap = document.getElementById('device-wrap');
-  const oldFrame = wrap && wrap.firstElementChild;
-  if(!oldFrame || state.device !== 'phone') return null;
-  const dir = next > idx ? 1 : -1; // +1: new page comes in from the right; -1: from the left
-  const oldArea = oldFrame.querySelector('#content-area');
-  const oldScroll = oldArea ? oldArea.scrollTop : 0;
+  const liveFrame = wrap && wrap.firstElementChild;
+  if(!liveFrame || state.device !== 'phone') return null;
   const wrapRect = wrap.getBoundingClientRect();
-  const r = oldFrame.getBoundingClientRect();
-  const prev = { current: state.current, lastPage: state.lastPage, pos: wrap.style.position, overflow: wrap.style.overflow, frameStyle: oldFrame.getAttribute('style') };
+  const r = liveFrame.getBoundingClientRect();
+  let nb = NEIGHBORS[PAGES[next]];
+  if(!nb || !nb.host.parentNode || Math.abs(nb.w - wrapRect.width) > 1 || Math.abs(nb.h - wrapRect.height) > 1) nb = buildNeighbor(PAGES[next]);
+  const newFrame = nb && nb.host.firstElementChild;
+  if(!newFrame) return null;
+  delete NEIGHBORS[PAGES[next]];
+  nb.host.remove();
   pageSwipeAnimating = true;
-  state.current = PAGES[next];
-  state.lastPage = state.current;
-  renderDevice();
-  const newFrame = wrap.firstElementChild;
+  const dir = next > idx ? 1 : -1; // +1: new page comes in from the right; -1: from the left
+  const prev = { pos: wrap.style.position, overflow: wrap.style.overflow };
   if(getComputedStyle(wrap).position === 'static') wrap.style.position = 'relative';
   wrap.style.overflow = 'hidden';
-  Object.assign(oldFrame.style, { position:'absolute', left:(r.left - wrapRect.left)+'px', top:(r.top - wrapRect.top)+'px',
+  Object.assign(newFrame.style, { position:'absolute', left:(r.left - wrapRect.left)+'px', top:(r.top - wrapRect.top)+'px',
     width:r.width+'px', height:r.height+'px', margin:'0', pointerEvents:'none' });
-  wrap.appendChild(oldFrame); // after the new one, so every lookup by id still finds the live page
-  const oldAreaBack = oldFrame.querySelector('#content-area');
-  if(oldAreaBack) oldAreaBack.scrollTop = oldScroll;
-  // One Dashboard button, standing still: while the pages slide, a single copy of it sits on top in
-  // exactly the same spot (both pages' own copies are hidden), so on screen it never moves.
-  const oldBack = oldFrame.querySelector('.dash-back');
+  // Same brightness dimming as the live page.
+  const liveDim = liveFrame.querySelector('#system-dimmer'), newDim = newFrame.querySelector('#system-dimmer');
+  if(liveDim && newDim) newDim.style.opacity = getComputedStyle(liveDim).opacity;
+  wrap.appendChild(newFrame);
+  // One Dashboard button, standing still: a single copy of it sits on top in exactly the same spot,
+  // drawn through the same zoom steps and dimming as the page's own (both pages' copies are hidden).
+  const liveBack = liveFrame.querySelector('.dash-back');
   const newBack = newFrame.querySelector('.dash-back');
   let fixedBack = null;
-  if(oldBack){
-    const br = oldBack.getBoundingClientRect();
-    fixedBack = oldBack.cloneNode(true);
-    Object.assign(fixedBack.style, { position:'absolute', left:(br.left - wrapRect.left)+'px', top:(br.top - wrapRect.top)+'px',
-      width:br.width+'px', height:br.height+'px', margin:'0', zIndex:'50', pointerEvents:'none', visibility:'visible', boxSizing:'border-box', whiteSpace:'nowrap' });
-    // Same look to the pixel as the page's own button (it inherits some styling from the page).
-    const cs = getComputedStyle(oldBack);
-    ['color','opacity','font','letterSpacing','textShadow','background','borderRadius','padding','boxShadow','filter','border'].forEach(k=>{ fixedBack.style[k] = cs[k]; });
-    // The page's brightness dimmer sits over the page, so the copy gets the very same dimming.
-    const dimEl = oldFrame.querySelector('#system-dimmer');
-    const dimA = dimEl ? parseFloat(getComputedStyle(dimEl).opacity) || 0 : 0;
-    if(dimA > 0) fixedBack.style.filter = 'brightness(' + (1 - dimA) + ')';
-    // Drawn through the same zoom steps as the page's own button (page zoom, then the header's
-    // counter-zoom), so its text is rasterised identically.
-    const zShell = parseFloat(getComputedStyle(oldBack.closest('.page-shell') || oldBack).zoom) || 1;
-    const zTop = parseFloat(getComputedStyle(oldBack.closest('.page-top') || oldBack).zoom) || 1;
+  if(liveBack){
+    const br = liveBack.getBoundingClientRect();
+    const copy = liveBack.cloneNode(true);
+    const cs = getComputedStyle(liveBack);
+    ['color','opacity','font','letterSpacing','textShadow','background','borderRadius','padding','boxShadow','filter','border'].forEach(k=>{ copy.style[k] = cs[k]; });
+    const dimA = liveDim ? parseFloat(getComputedStyle(liveDim).opacity) || 0 : 0;
+    if(dimA > 0) copy.style.filter = 'brightness(' + (1 - dimA) + ')';
+    const zShell = parseFloat(getComputedStyle(liveBack.closest('.page-shell') || liveBack).zoom) || 1;
+    const zTop = parseFloat(getComputedStyle(liveBack.closest('.page-top') || liveBack).zoom) || 1;
+    const z = zShell * zTop;
+    Object.assign(copy.style, { position:'absolute', left:((br.left - wrapRect.left) / z)+'px', top:((br.top - wrapRect.top) / z)+'px',
+      width:(br.width / z)+'px', height:(br.height / z)+'px', margin:'0', pointerEvents:'none', visibility:'visible', boxSizing:'border-box', whiteSpace:'nowrap' });
     const outer = document.createElement('div'), inner = document.createElement('div');
     outer.style.cssText = 'position:absolute;left:0;top:0;z-index:50;pointer-events:none;zoom:' + zShell + ';';
     inner.style.cssText = 'position:absolute;left:0;top:0;zoom:' + zTop + ';';
-    const z = zShell * zTop;
-    Object.assign(fixedBack.style, { left:((br.left - wrapRect.left) / z)+'px', top:((br.top - wrapRect.top) / z)+'px',
-      width:(br.width / z)+'px', height:(br.height / z)+'px', zIndex:'' });
-    inner.appendChild(fixedBack); outer.appendChild(inner);
-    wrap.appendChild(outer);
+    inner.appendChild(copy); outer.appendChild(inner); wrap.appendChild(outer);
     fixedBack = outer;
-    oldBack.style.visibility = 'hidden';
+    liveBack.style.visibility = 'hidden';
     if(newBack) newBack.style.visibility = 'hidden';
   }
-  newFrame.style.willChange = oldFrame.style.willChange = 'transform';
+  liveFrame.style.willChange = newFrame.style.willChange = 'transform';
   document.body.classList.add('page-sliding');
-  const sl = { dir, w:r.width, wrap, oldFrame, newFrame, newBack, oldBack, fixedBack, prev, offset:0, done:false };
+  const sl = { dir, w:r.width, wrap, oldFrame:liveFrame, newFrame, liveBack, fixedBack, prev, next, offset:0, done:false };
   setPageSlide(sl, 0);
   return sl;
 }
@@ -10006,38 +10036,35 @@ function setPageSlide(sl, dx){
   const span = -sl.dir * sl.w;                              // full drag needed to finish
   const d = sl.dir > 0 ? Math.max(span, Math.min(0, dx)) : Math.min(span, Math.max(0, dx));
   sl.offset = d;
-  const newX = sl.dir * sl.w + d;
-  sl.newFrame.style.transform = 'translate3d(' + newX + 'px,0,0)';
+  sl.newFrame.style.transform = 'translate3d(' + (sl.dir * sl.w + d) + 'px,0,0)';
   sl.oldFrame.style.transform = 'translate3d(' + d + 'px,0,0)';
 }
 // Finish the slide: commit = go to the new page; otherwise slide back to where it was.
 function endPageSlide(sl, commit){
   if(!sl || sl.done) return;
   const ease = 'transform 0.19s cubic-bezier(.22,.9,.24,1)';
-  const els = [sl.newFrame, sl.oldFrame];
-  els.forEach(e=>{ e.style.transition = ease; });
+  sl.newFrame.style.transition = sl.oldFrame.style.transition = ease;
   setPageSlide(sl, commit ? -sl.dir * sl.w : 0);
   let finished = false;
   const finish = ()=>{
     if(finished) return; finished = true; sl.done = true;
-    if(sl.fixedBack && sl.fixedBack.parentNode) sl.fixedBack.parentNode.removeChild(sl.fixedBack);
     document.body.classList.remove('page-sliding');
     if(commit){
-      if(sl.oldFrame.parentNode) sl.oldFrame.parentNode.removeChild(sl.oldFrame);
-      sl.newFrame.style.transition = sl.newFrame.style.transform = sl.newFrame.style.willChange = '';
-      if(sl.newBack) sl.newBack.style.visibility = '';
+      // The new page becomes the live one -- drawn exactly as the ready-made copy already shows it.
+      state.current = PAGES[sl.next];
+      state.lastPage = state.current;
+      sl.wrap.style.position = sl.prev.pos; sl.wrap.style.overflow = sl.prev.overflow;
+      pageSwipeAnimating = false;
+      renderDevice();
     } else {
-      // Back to the page you were on, exactly as it was (same scroll, nothing redrawn).
       if(sl.newFrame.parentNode) sl.newFrame.parentNode.removeChild(sl.newFrame);
-      const scroll = (sl.oldFrame.querySelector('#content-area') || {}).scrollTop || 0;
-      if(sl.prev.frameStyle === null) sl.oldFrame.removeAttribute('style'); else sl.oldFrame.setAttribute('style', sl.prev.frameStyle);
-      const ob = sl.oldFrame.querySelector('.dash-back'); if(ob) ob.style.visibility = '';
-      const a = sl.oldFrame.querySelector('#content-area'); if(a) a.scrollTop = scroll;
-      state.current = sl.prev.current; state.lastPage = sl.prev.lastPage;
-      lastScreenKey = currentScreenKey();
+      if(sl.fixedBack && sl.fixedBack.parentNode) sl.fixedBack.parentNode.removeChild(sl.fixedBack);
+      sl.oldFrame.style.transition = sl.oldFrame.style.transform = sl.oldFrame.style.willChange = '';
+      if(sl.liveBack) sl.liveBack.style.visibility = '';
+      sl.wrap.style.position = sl.prev.pos; sl.wrap.style.overflow = sl.prev.overflow;
+      pageSwipeAnimating = false;
     }
-    sl.wrap.style.position = sl.prev.pos; sl.wrap.style.overflow = sl.prev.overflow;
-    pageSwipeAnimating = false;
+    refreshNeighbors(true);
   };
   requestAnimationFrame(()=>{ sl.newFrame.addEventListener('transitionend', finish, { once:true }); setTimeout(finish, 260); });
 }
