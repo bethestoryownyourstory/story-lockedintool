@@ -849,11 +849,18 @@ class OverlayService : Service(), StoryBridge.Host {
         for (p in listOfNotNull(profilePane, profileGapPane)) p.web.evaluateJavascript(profileGeometryJs(), null)
     }
 
-    // ---- Profile: opens from Station 3's profile button, attached to Station 3 (one piece with it) ----
-    override fun toggleProfile() { ui.post {
+    // ---- Profile and Messages: Station 3's profile / messages buttons open them in ONE window attached to Station 3
+    //      (same gap, line and scene). Its own button closes it; the other button switches straight over. ----
+    private var s3Page = "profile"
+    override fun toggleProfile() = toggleS3Page("profile")
+    override fun toggleMessages() = toggleS3Page("messages")
+    private fun toggleS3Page(which: String) { ui.post {
         val p = profilePane ?: return@post
-        if (p.shown) { hideOne(p); return@post }
+        if (p.shown && s3Page == which) { hideOne(p); return@post }
+        if (p.shown) { s3Page = which; p.web.evaluateJavascript("window.storyS3Page&&window.storyS3Page('$which')", null); return@post }
         if (s3Pane?.shown != true) return@post
+        s3Page = which
+        p.web.evaluateJavascript("window.storyS3Page&&window.storyS3Page('$which')", null)
         dialPane?.takeIf { it.shown }?.let { hideOne(it) }
         p.web.evaluateJavascript(profileGeometryJs(), null)
         profileGapPane?.web?.evaluateJavascript(profileGeometryJs(), null)

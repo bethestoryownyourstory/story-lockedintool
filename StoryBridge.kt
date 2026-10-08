@@ -28,6 +28,7 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         fun setTyping(on: Boolean)
         fun showToast(msg: String)
         fun toggleProfile()
+        fun toggleMessages()
         fun closeProfile()
         fun setTheme(t: String)
         fun pickProfilePhoto()
@@ -123,6 +124,10 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
 
     @JavascriptInterface
     fun closeProfile() { if (station3) host.closeProfile() }
+
+    /** Station 3's messages button: Messages opens in the same window as Profile, attached to Station 3. */
+    @JavascriptInterface
+    fun toggleMessages() { if (station3) host.toggleMessages() }
 
     /** The X beside the dial pad. */
     @JavascriptInterface
