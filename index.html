@@ -20,7 +20,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="STORY">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#0a0a0c">
+<meta name="theme-color" content="#000">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -28,9 +28,9 @@
 <style>
   :root{
     --bg-page:#0d0e10;
-    --bg-app:#0a0a0c;
+    --bg-app:#000;
     --surface:#—;
-    --card:#151517;
+    --card:#000;
     --card-2:#1b1b1e;
     --line: rgba(255,255,255,0.14);
     --text:#f3f2ee;
@@ -336,14 +336,14 @@
     align-items:center;
     gap:8px;
     padding:11px 16px;
-    background:#151517;
+    background:#000;
     border-bottom:1px solid var(--line);
     flex-shrink:0;
   }
   .laptop-dot{ width:10px; height:10px; border-radius:50%; }
   .laptop-url{
     margin-left:14px;
-    background:#0a0a0c;
+    background:#000;
     border:1px solid var(--line);
     border-radius:7px;
     padding:5px 14px;
@@ -377,7 +377,7 @@
   .laptop-stand{
     width:min(920px, 92vw);
     height:16px;
-    background:linear-gradient(180deg,#1c1c1e,#0a0a0c);
+    background:linear-gradient(180deg,#1c1c1e,#000);
     border-radius:0 0 10px 10px;
     margin-top:-1px;
   }
@@ -483,7 +483,7 @@
   .notes-col-left, .notes-col-right{ min-width:0; }
   .note-card{
     border-radius:12px; padding:10px; margin-bottom:8px; cursor:pointer;
-    color:#151517; box-shadow:var(--lev1), 0 4px 10px rgba(0,0,0,0.25);
+    color:#000; box-shadow:var(--lev1), 0 4px 10px rgba(0,0,0,0.25);
     transition:transform 0.1s ease;
   }
   .note-card:active{ transform:scale(0.97); }
@@ -497,13 +497,13 @@
     background:var(--card-2); border:2px solid var(--line); color:var(--muted); font-size:13px; font-weight:800;
     line-height:1; display:inline-flex; align-items:center; justify-content:center; padding:0; font-family:var(--font-body);
   }
-  .color-plus-btn.selected{ color:#151517; }
+  .color-plus-btn.selected{ color:#000; }
   .notes-style-row{ display:flex; gap:6px; flex-wrap:wrap; }
   .notes-style-chip{
     font-size:10px; font-weight:700; padding:6px 10px; border-radius:8px; background:var(--card-2);
     border:1px solid var(--line); color:var(--muted); cursor:pointer;
   }
-  .notes-style-chip.selected{ background:#e8e6e1; color:#151517; border-color:#e8e6e1; }
+  .notes-style-chip.selected{ background:#e8e6e1; color:#000; border-color:#e8e6e1; }
   .page-style-grid{ display:grid; grid-template-columns:repeat(2, 1fr); gap:6px; }
   .page-style-grid .notes-style-chip{
     padding:8px 6px; text-align:center; display:flex; align-items:center; justify-content:center;
@@ -533,14 +533,14 @@
      controls would fight for the same tap target. */
   .notes-create-wrap{ position:relative; display:inline-flex; margin-top:6px; margin-right:6px; }
   .notes-fab{
-    width:30px; height:30px; border-radius:50%; background:#e8e6e1; color:#151517; border:3px solid #0a0a0b;
+    width:30px; height:30px; border-radius:50%; background:#e8e6e1; color:#000; border:3px solid #000;
     font-size:16px; font-weight:800; cursor:pointer; box-shadow:0 4px 10px rgba(0,0,0,0.45);
     /* Floats clearly above the pill (a real gap, not just the dark ring) and horizontally centered
        over its width via left:50%+transform, rather than pinned to one corner. */
     position:absolute; top:-20px; left:50%; transform:translateX(-50%); z-index:2; display:flex; align-items:center; justify-content:center; padding:0;
   }
   .notes-create-btn{
-    background:#151517; color:#e8e6e1; border:1px solid var(--line); border-radius:22px;
+    background:#000; color:#e8e6e1; border:1px solid var(--line); border-radius:22px;
     padding:11px 24px; font-size:12px; font-weight:700; cursor:pointer; font-family:var(--font-body);
     box-shadow:0 8px 20px rgba(0,0,0,0.4);
   }
@@ -550,7 +550,7 @@
     width:32px; height:32px; border-radius:9px; background:var(--card-2); border:1px solid var(--line);
     color:var(--text); cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0;
   }
-  .canvas-tool-btn.active{ background:#e8e6e1; color:#151517; border-color:#e8e6e1; }
+  .canvas-tool-btn.active{ background:#e8e6e1; color:#000; border-color:#e8e6e1; }
   .canvas-size-row{ display:flex; gap:5px; flex-shrink:0; }
   .canvas-size-btn{
     width:26px; height:26px; border-radius:8px; background:var(--card-2); border:1px solid var(--line);
@@ -569,7 +569,7 @@
     font-size:12px; font-weight:800; padding:8px 16px; border-radius:20px; background:var(--card-2);
     border:1px solid var(--line); color:var(--muted); cursor:pointer;
   }
-  .canvas-mode-tab.active{ background:#e8e6e1; color:#151517; border-color:#e8e6e1; }
+  .canvas-mode-tab.active{ background:#e8e6e1; color:#000; border-color:#e8e6e1; }
   .note-text-area{
     width:100%; min-height:220px; background:var(--card); border:1px solid var(--line); border-radius:12px;
     padding:12px; color:var(--text); font-size:13px; font-family:var(--font-body); resize:vertical;
@@ -580,7 +580,7 @@
   .note-task-row{ display:flex; align-items:center; gap:8px; }
   .note-task-check{
     width:20px; height:20px; border-radius:6px; border:1px solid var(--line); background:var(--card-2);
-    color:#0a0a0c; font-size:12px; font-weight:800; cursor:pointer; flex-shrink:0;
+    color:#000; font-size:12px; font-weight:800; cursor:pointer; flex-shrink:0;
     display:flex; align-items:center; justify-content:center;
   }
   .note-task-check.done{ background:#e8e6e1; border-color:#e8e6e1; }
@@ -604,7 +604,7 @@
     width:30px; height:30px; border-radius:9px; background:var(--card-2); border:1px solid var(--line);
     color:var(--text); cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0;
   }
-  .notes-icon-btn.active{ background:#e8e6e1; color:#151517; border-color:#e8e6e1; }
+  .notes-icon-btn.active{ background:#e8e6e1; color:#000; border-color:#e8e6e1; }
   .note-title-confirm{ background:#2ecc71; color:#fff; border-color:#2ecc71; }
   .highlighter-bar{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:8px; }
   .highlighter-label{ font-size:11px; font-weight:800; color:var(--muted); }
@@ -630,7 +630,7 @@
   .inline-task-checkbox{ width:14px; height:14px; vertical-align:middle; margin-right:2px; cursor:pointer; }
   .inline-task-text.done{ text-decoration:line-through; opacity:0.55; }
   .note-content-area{
-    flex:1; min-height:600px; max-height:600px; overflow-y:auto; padding:12px; color:#151517; font-size:13px; line-height:1.6; outline:none;
+    flex:1; min-height:600px; max-height:600px; overflow-y:auto; padding:12px; color:#000; font-size:13px; line-height:1.6; outline:none;
     touch-action:pan-y; background-attachment:local; background-repeat:repeat;
   }
   /* Ruling is drawn on the scrollable text box itself (not its wrapper) and positioned so each rule sits under the
@@ -733,7 +733,7 @@
     color:var(--text); font-size:12px; font-weight:800; cursor:pointer; flex-shrink:0; position:relative;
     display:flex; align-items:center; justify-content:center; font-family:var(--font-body); padding:0;
   }
-  .notes-float-btn.active{ background:#e8e6e1; color:#151517; border-color:#e8e6e1; }
+  .notes-float-btn.active{ background:#e8e6e1; color:#000; border-color:#e8e6e1; }
   .notes-float-btn-wrap{ position:relative; flex-shrink:0; }
   .float-popover{
     position:absolute; bottom:calc(100% + 10px); left:50%; transform:translateX(-50%); z-index:30;
@@ -748,7 +748,7 @@
     padding:9px 10px; border-radius:8px; font-size:12.5px; font-weight:600; color:var(--text);
     cursor:pointer; white-space:nowrap;
   }
-  .float-popover-option.selected{ background:#e8e6e1; color:#151517; }
+  .float-popover-option.selected{ background:#e8e6e1; color:#000; }
   .font-popover{ max-height:220px; overflow-y:auto; }
   .font-color-popover{ min-width:240px; position:relative; padding-top:22px; }
   .float-popover-close{
@@ -777,8 +777,8 @@
   }
   .notes-search-result-item:hover{ background:var(--card); }
   .notes-search-page-tag{ font-size:9.5px; font-weight:700; color:var(--muted); margin-right:6px; text-transform:uppercase; }
-  .notes-search-result-item mark{ background:#ffe58a; color:#151517; border-radius:2px; padding:0 1px; }
-  .notes-inline-highlight{ background:#ffe58a; color:#151517; border-radius:2px; padding:0 1px; }
+  .notes-search-result-item mark{ background:#ffe58a; color:#000; border-radius:2px; padding:0 1px; }
+  .notes-inline-highlight{ background:#ffe58a; color:#000; border-radius:2px; padding:0 1px; }
   .notes-search-empty{ font-size:11.5px; color:var(--muted); padding:4px; }
   .size-popover{ display:flex; align-items:center; gap:8px; min-width:190px; }
   .size-slider{ width:90px; flex-shrink:0; }
@@ -849,7 +849,7 @@
     padding:8px 10px; font-size:12.5px; font-family:var(--font-body); outline:none;
   }
   .colorpicker-add-btn{
-    background:#e8e6e1; color:#151517; border:none; border-radius:8px; padding:8px 14px; font-size:12px;
+    background:#e8e6e1; color:#000; border:none; border-radius:8px; padding:8px 14px; font-size:12px;
     font-weight:700; cursor:pointer; font-family:var(--font-body); flex-shrink:0;
   }
   .colorpicker-sv-row{ display:flex; gap:8px; margin-bottom:2px; }
@@ -872,7 +872,7 @@
   }
 
   .sticky-note-embed{
-    display:block; background:#fff59d; color:#151517; padding:12px; margin:10px 0; border-radius:4px;
+    display:block; background:#fff59d; color:#000; padding:12px; margin:10px 0; border-radius:4px;
     box-shadow:0 4px 10px rgba(0,0,0,0.2); font-size:12.5px; outline:none; transform:rotate(-1deg); min-height:20px;
   }
   .sticky-note-embed:empty::before{ content:attr(data-placeholder); color:rgba(0,0,0,0.4); }
@@ -889,13 +889,13 @@
   .note-table-wrap.dragging{ opacity:0.5; }
   .note-table-resize-top{
     position:absolute; top:-11px; left:50%; transform:translateX(-50%); width:36px; height:20px; border-radius:10px;
-    cursor:ns-resize; background:#151517; color:#fff; display:flex; align-items:center; justify-content:center;
+    cursor:ns-resize; background:#000; color:#fff; display:flex; align-items:center; justify-content:center;
     touch-action:none; -webkit-user-select:none; user-select:none; z-index:3; box-shadow:0 2px 6px rgba(0,0,0,0.3);
   }
   .note-table-scroll{ overflow:auto; width:100%; height:100%; border-radius:7px; }
   .note-table-resize-side{
     position:absolute; top:50%; right:-11px; transform:translateY(-50%); width:20px; height:36px; border-radius:10px;
-    cursor:ew-resize; background:#151517; color:#fff; display:flex; align-items:center; justify-content:center;
+    cursor:ew-resize; background:#000; color:#fff; display:flex; align-items:center; justify-content:center;
     touch-action:none; -webkit-user-select:none; user-select:none; z-index:3; box-shadow:0 2px 6px rgba(0,0,0,0.3);
   }
   .note-table-move-handle{
@@ -914,7 +914,7 @@
   .note-table-bottom-row{ display:flex; gap:6px; align-items:center; justify-content:center; padding:8px 8px 0; position:relative; z-index:2; }
   .note-table-adjust-btn{
     font-size:10px; font-weight:700; padding:4px 8px; border-radius:6px; background:rgba(0,0,0,0.08);
-    border:1px solid rgba(0,0,0,0.15); color:#151517; cursor:pointer; font-family:var(--font-body);
+    border:1px solid rgba(0,0,0,0.15); color:#000; cursor:pointer; font-family:var(--font-body);
   }
   .note-table-adjust-btn:disabled{ opacity:0.4; cursor:default; }
   .note-table-delete-btn{
@@ -975,7 +975,7 @@
     box-shadow:var(--lev1); transition:transform 0.1s ease, box-shadow 0.1s ease;
   }
   .tab:active{ transform:scale(0.95); box-shadow:var(--press1); }
-  .tab.active{ background:#e8e6e1; color:#111; box-shadow:var(--press1); }
+  .tab.active{ background:#e8e6e1; color:#000; box-shadow:var(--press1); }
   .btn-row{ display:flex; gap:8px; margin-top:9px; align-items:center; }
   .btn{
     position:relative; overflow:hidden;
@@ -1132,7 +1132,7 @@
   .reopen-btn:active{ transform:scale(0.98); background:rgba(255,255,255,0.04); }
   .home-badge{
     display:inline-flex; align-items:center; margin-left:7px; font-size:8.5px; font-weight:800;
-    letter-spacing:0.4px; color:#111; background:#e8e6e1;
+    letter-spacing:0.4px; color:#000; background:#e8e6e1;
     border:none; border-radius:7px; padding:3px 7px; vertical-align:middle;
     box-shadow:0 1px 3px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.35);
   }
@@ -1182,7 +1182,7 @@
   .order-corner-btn{
     position:relative; overflow:hidden;
     width:24px; height:24px; border-radius:7px; flex-shrink:0;
-    background:#111; color:#e8e6e1; border:1px solid rgba(255,255,255,0.25); font-size:13px; font-weight:900;
+    background:#000; color:#e8e6e1; border:1px solid rgba(255,255,255,0.25); font-size:13px; font-weight:900;
     display:flex; align-items:center; justify-content:center; cursor:pointer;
     box-shadow:var(--lev1); font-family:var(--font-body);
     transition:transform 0.1s ease, box-shadow 0.1s ease;
@@ -1224,7 +1224,7 @@
     transition:transform 0.1s ease, box-shadow 0.1s ease;
   }
   .btn-wide:active{ transform:scale(0.97); background:rgba(255,255,255,0.04); }
-  .btn-wide.btn-primary{ background:#e8e6e1; color:#111; border:none; box-shadow:var(--lev1); }
+  .btn-wide.btn-primary{ background:#e8e6e1; color:#000; border:none; box-shadow:var(--lev1); }
   .btn-wide.btn-primary:active{ box-shadow:var(--press1); background:#d8d6d1; }
   .btn-wide-fillword{
     display:inline-block; white-space:nowrap;
@@ -1311,8 +1311,8 @@
     0%, 100% { opacity:1; }
     45%, 60% { opacity:0.8; }
   }
-  .swipe-confirm-primary{ background:#e8e6e1; color:#111; border:none; box-shadow:var(--lev1); }
-  .swipe-confirm-primary .swipe-confirm-thumb{ background:rgba(0,0,0,0.1); border-color:rgba(0,0,0,0.22); color:#111; }
+  .swipe-confirm-primary{ background:#e8e6e1; color:#000; border:none; box-shadow:var(--lev1); }
+  .swipe-confirm-primary .swipe-confirm-thumb{ background:rgba(0,0,0,0.1); border-color:rgba(0,0,0,0.22); color:#000; }
   .swipe-confirm-primary .swipe-confirm-fill{ background:rgba(0,0,0,0.08); }
   .close-combo{
     border:1px solid rgba(255,255,255,0.25); border-radius:12px; padding:8px 10px 9px;
@@ -1383,7 +1383,7 @@
     box-shadow:var(--lev1); transition:transform 0.1s ease, box-shadow 0.1s ease;
   }
   .order-type-btn:active{ transform:scale(0.97); }
-  .order-type-btn.active{ background:#e8e6e1; color:#111; border-color:#e8e6e1; box-shadow:var(--press1); }
+  .order-type-btn.active{ background:#e8e6e1; color:#000; border-color:#e8e6e1; box-shadow:var(--press1); }
   .field-input{
     width:100%; background:var(--card); border:1px solid var(--line); border-radius:11px;
     padding:10px 12px; color:var(--text); font-family:var(--font-mono); font-size:13px; margin-top:4px;
@@ -1467,7 +1467,7 @@
   .analytics-label{ font-size:9px; color:var(--muted); margin-top:6px; }
   .analytics-subtitle{ font-size:9px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.4px; margin-bottom:8px; }
   .big-x-btn{
-    width:32px; height:32px; border-radius:10px; background:#111; color:#e8e6e1;
+    width:32px; height:32px; border-radius:10px; background:#000; color:#e8e6e1;
     border:1px solid rgba(255,255,255,0.25); font-size:16px; font-weight:900; cursor:pointer;
     display:flex; align-items:center; justify-content:center; font-family:var(--font-body);
     box-shadow:var(--lev1); transition:transform 0.1s ease;
@@ -1485,7 +1485,7 @@
 
   .savings-chart{ position:relative; padding:10px 4px 4px; }
   .savings-peak{
-    position:absolute; top:-2px; right:8px; background:#b19cd9; color:#151517;
+    position:absolute; top:-2px; right:8px; background:#b19cd9; color:#000;
     font-size:10px; font-weight:800; padding:3px 8px; border-radius:8px;
   }
   .limit-bar-track{ height:8px; border-radius:4px; background:var(--card-2); margin-top:10px; overflow:hidden; }
@@ -1624,7 +1624,7 @@
      so no ^ inside. */
   body.s3-only .station3-dialpad-float .station3-dialpad-close{ display:none !important; }
   .station3-dialpad-side-x{ position:absolute; left:calc(100% + 12px); top:50%; transform:translateY(-50%); width:38px; height:38px;
-    display:flex; align-items:center; justify-content:center; border:none; border-radius:50%; background:#fff; color:#111;
+    display:flex; align-items:center; justify-content:center; border:none; border-radius:50%; background:#fff; color:#000;
     box-shadow:0 4px 14px rgba(0,0,0,0.35); pointer-events:auto; }
   .station3-dialpad-side-x:active{ background:#e9e9e9; }
   /* The corner button looks exactly the same open or closed -- the same black button the app shows
@@ -1662,21 +1662,31 @@
   html.focus{ --bg-app:#000; }
   html.focus, html.focus body, html.focus .stage, html.focus .device-wrap{ background:#000 !important; }
   html.focus .phone-screen, html.focus .phone-frame, html.focus .phone-content, html.focus .page-shell, html.focus .story-screen{ background:#000 !important; background-image:none !important; }
+  /* Everything that was a near-black grey is real black now; a hairline keeps each piece's shape visible. */
+  html.focus{ --card:#000; --bg-page:#000; }
+  /* Colour swatches (a black one included) keep a thin ring so every option is visible on black. */
+  html.focus .notes-swatch{ outline:1px solid rgba(255,255,255,0.22); outline-offset:-1px; }
+  html.focus :is(.layouts-btn, .arrow-btn, .dash-back, .order-corner-btn, .notif-icon-wrap, .close-filter-btn, .avatar-add,
+    .mt5-corner-btn, .lot-setter, .lot-btn, .notes-style-chip:not(.selected), .notes-create-btn, .color-plus-btn, .toggle-switch:not(.on),
+    .community-head-icon-btn, .community-filter-tab2:not(.active), .community-group-card2:not(.community-group-card2-add), .community-view-more-btn, .community-post-text,
+    .community-post-image-wrap, .realcard-addslide){
+    background:#000 !important; outline:1px solid rgba(255,255,255,0.1); outline-offset:-1px;
+  }
   html.focus .phone-screen::before, html.focus .phone-screen::after{ display:none !important; }
   /* Crisp text: no glow or blur around any letters or numbers. */
   html.focus .phone-screen *:not(.community-trend-name2){ text-shadow:none !important; }
   html.focus .row-amt, html.focus .notif-amt, html.focus .big-num{ filter:none !important; }
   /* Quiet surfaces: hairline border, faint lift, soft shadow -- every card and panel the same. */
   html.focus :is(.row-card, .notif-card, .search-row, .story-sidebar, .sidebar-item, .quotes-card, .media-card,
-    .brightness-card, .spotify-card, .controls-card, .membership, .note-card, .community-post, .close-combo, .tab:not(.active)){
+    .brightness-card, .spotify-card, .controls-card, .membership, .community-post, .close-combo, .tab:not(.active)){
     background:#000 !important; border:1px solid rgba(255,255,255,0.075) !important;
     box-shadow:inset 0 1px 0 rgba(255,255,255,0.035), 0 10px 30px rgba(0,0,0,0.35) !important;
     -webkit-backdrop-filter:none !important; backdrop-filter:none !important;
   }
   html.focus :is(.row-card, .notif-card, .search-row, .story-sidebar, .sidebar-item, .quotes-card, .media-card,
-    .brightness-card, .spotify-card, .controls-card, .membership, .note-card, .community-post, .close-combo)::before,
+    .brightness-card, .spotify-card, .controls-card, .membership, .community-post, .close-combo)::before,
   html.focus :is(.row-card, .notif-card, .search-row, .story-sidebar, .sidebar-item, .quotes-card, .media-card,
-    .brightness-card, .spotify-card, .controls-card, .membership, .note-card, .community-post, .close-combo)::after{ display:none !important; }
+    .brightness-card, .spotify-card, .controls-card, .membership, .community-post, .close-combo)::after{ display:none !important; }
   /* Coloured buttons keep their colour, without the blurry glow around them. */
   html.focus :is(.wfab, .btn-buy, .btn-sell, .swipe-confirm, .money-transfer-fab, .btn-row-action, .mt5-corner-btn, .dash-back, .layouts-btn, .arrow-btn){
     box-shadow:inset 0 1px 0 rgba(255,255,255,0.06), 0 6px 18px rgba(0,0,0,0.35) !important;
@@ -1723,7 +1733,7 @@
      (bottom-right), so the union of all three pieces reads as a single continuous button. */
   .station3-corner-arrow-open{
     transform:rotate(180deg);
-    background:#ffffff; color:#111;
+    background:#ffffff; color:#000;
     /* No border and no shadow of its own anymore -- merged into the group, it would
        otherwise draw a visible seam line exactly where it touches the quick-row (top) and
        the bar (left), since both of those are its own border/shadow bleeding onto the
@@ -1778,10 +1788,10 @@
     width:44px; height:44px; border-radius:15px; border:none; padding:0;
     display:flex; align-items:center; justify-content:center;
     background:transparent; border:none;
-    color:#111; transition:background 0.15s ease;
+    color:#000; transition:background 0.15s ease;
   }
   .station3-quick-btn:active{ background:rgba(0,0,0,0.08); }
-  .station3-quick-btn-active{ background:#111; color:#fff; }
+  .station3-quick-btn-active{ background:#000; color:#fff; }
   /* The bar (call/dial/post/message/profile) and its buttons were designed light-on-dark,
      for their own separate translucent card -- now that everything sits on ONE bright white
      merged shape, every piece here flips to dark-on-light instead so it stays legible. Sits
@@ -1807,7 +1817,7 @@
   }
   .station3-btn{
     width:42px; height:42px; border-radius:50%; flex-shrink:0;
-    display:flex; align-items:center; justify-content:center; color:#111;
+    display:flex; align-items:center; justify-content:center; color:#000;
     background:rgba(0,0,0,0.05); border:1px solid rgba(0,0,0,0.08);
     transition:background 0.15s ease;
   }
@@ -1817,7 +1827,7 @@
   .station3-btn-plus{
     width:54px; height:54px; border-radius:50%; flex-shrink:0; color:#fff;
     display:flex; align-items:center; justify-content:center;
-    background:#111; border:1px solid #111;
+    background:#000; border:1px solid #000;
     box-shadow:0 4px 14px rgba(0,0,0,0.25);
     transition:background 0.15s ease;
   }
@@ -1833,11 +1843,11 @@
     width:28px; height:28px; border-radius:50%; color:rgba(0,0,0,0.55);
     display:flex; align-items:center; justify-content:center; background:transparent; border:none;
   }
-  .station3-dialpad-display{ font-family:var(--font-display); font-size:19px; color:#111; letter-spacing:1px; min-height:23px; }
+  .station3-dialpad-display{ font-family:var(--font-display); font-size:19px; color:#000; letter-spacing:1px; min-height:23px; }
   .station3-dialpad-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:9px; width:100%; }
   .station3-dialpad-key{
     aspect-ratio:1; border-radius:50%; display:flex; flex-direction:column; align-items:center; justify-content:center;
-    background:rgba(0,0,0,0.05); border:1px solid rgba(0,0,0,0.08); color:#111;
+    background:rgba(0,0,0,0.05); border:1px solid rgba(0,0,0,0.08); color:#000;
     font-size:15px; font-weight:600; font-family:var(--font-body);
   }
   .station3-dialpad-key:active{ background:rgba(0,0,0,0.14); }
@@ -1846,9 +1856,9 @@
   .station3-newcontact{ display:flex; flex-direction:column; align-items:center; gap:3px; background:none; border:none; }
   .station3-newcontact-btn{
     width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center;
-    background:rgba(0,0,0,0.06); border:1px solid rgba(0,0,0,0.12); color:#111; flex-shrink:0;
+    background:rgba(0,0,0,0.06); border:1px solid rgba(0,0,0,0.12); color:#000; flex-shrink:0;
   }
-  .station3-newcontact-label{ font-size:8px; color:#111; opacity:.75; white-space:nowrap; }
+  .station3-newcontact-label{ font-size:8px; color:#000; opacity:.75; white-space:nowrap; }
   .station3-call-btn{
     width:52px; height:52px; border-radius:50%; display:flex; align-items:center; justify-content:center;
     background:var(--green); color:#08150b; box-shadow:0 4px 16px rgba(62,207,106,.35); flex-shrink:0; border:none;
@@ -2088,7 +2098,7 @@
     width:170px; height:170px; margin:0 auto; background:#fff; border-radius:10px;
     display:grid; grid-template-columns:repeat(7,1fr); grid-template-rows:repeat(7,1fr); padding:10px; gap:2px;
   }
-  .qr-cell{ background:#111; border-radius:1px; }
+  .qr-cell{ background:#000; border-radius:1px; }
   .subnav-row{ display:flex; justify-content:flex-start; margin:-8px 0 12px; }
 
   .tx-balance-card{
@@ -2234,7 +2244,7 @@
     background:var(--card); border:1px solid var(--line); font-size:10px; font-weight:800;
     display:flex; align-items:center; justify-content:center; color:var(--muted);
   }
-  .ctl-tile.on .ctl-tile-check{ background:#e8e6e1; border-color:#e8e6e1; color:#0a0a0c; }
+  .ctl-tile.on .ctl-tile-check{ background:#e8e6e1; border-color:#e8e6e1; color:#000; }
   .ctl-tile-dot{
     position:absolute; top:8px; right:8px; width:7px; height:7px; border-radius:50%; background:#e8e6e1;
   }
@@ -2427,7 +2437,7 @@
     border:1px solid var(--line); border-radius:12px; padding:9px 11px; margin-bottom:7px; cursor:pointer;
   }
   .community-builtin-tag{
-    font-size:8.5px; font-weight:800; letter-spacing:0.3px; color:#151517; background:#e8e6e1;
+    font-size:8.5px; font-weight:800; letter-spacing:0.3px; color:#000; background:#e8e6e1;
     border-radius:5px; padding:1px 5px; margin-left:4px; vertical-align:middle;
   }
   .community-create-group-btn{
@@ -2448,7 +2458,7 @@
   .community-group-badge.member{ color:#e8e6e1; border-color:#e8e6e1; }
   .community-group-badge.warn{ color:#e63946; border-color:rgba(230,57,70,0.5); }
   .community-join-btn{
-    background:#e8e6e1; border:none; border-radius:8px; color:#151517; font-size:10.5px; font-weight:800;
+    background:#e8e6e1; border:none; border-radius:8px; color:#000; font-size:10.5px; font-weight:800;
     padding:6px 10px; cursor:pointer; font-family:var(--font-body); white-space:nowrap;
   }
   .community-group-head{ margin-bottom:6px; }
@@ -2471,7 +2481,7 @@
     border:1px solid var(--line); border-radius:10px; color:var(--muted); font-size:11px; font-weight:700;
     padding:8px 6px; cursor:pointer; font-family:var(--font-body);
   }
-  .community-filter-tab.active{ background:#e8e6e1; color:#151517; border-color:#e8e6e1; }
+  .community-filter-tab.active{ background:#e8e6e1; color:#000; border-color:#e8e6e1; }
   .community-group-chip-tag{
     align-self:flex-start; font-size:8.5px; font-weight:800; letter-spacing:0.3px; color:var(--muted);
     background:var(--card-2); border:1px solid var(--line); border-radius:6px; padding:2px 6px;
@@ -3270,7 +3280,7 @@ function buildBuiltinCommunityGroups(){
       pendingRequests:[], liveDataKind:null,
       posts:[
         {id:'p-story1', authorName:'Thah', timestamp:'11:59', type:'note', textContent:'Finally mapped out the Q4 roadmap on paper before touching a doc. Slower, but so much clearer once it was all in front of me.', caption:'', imageDataUrl:null, likes:52000, commentCount:25000, shares:31000, likedByMe:false, comments:[{author:'Devon', text:'This is such a good habit, doing this from now on.', timestamp:'1h ago'}]},
-        {id:'p-story2', authorName:'Pretty', timestamp:'09:14', type:'drawing', textContent:'', imageDataUrl: communitySeedSketch('#151517', '#f4d35e'), caption:'Warming up before the real sketch', likes:44000, commentCount:19000, shares:23000, likedByMe:false, comments:[]},
+        {id:'p-story2', authorName:'Pretty', timestamp:'09:14', type:'drawing', textContent:'', imageDataUrl: communitySeedSketch('#000', '#f4d35e'), caption:'Warming up before the real sketch', likes:44000, commentCount:19000, shares:23000, likedByMe:false, comments:[]},
         {id:'p-story3', authorName:'Priya S.', timestamp:'Yesterday', type:'note', textContent:'Wrote out my whole morning routine last night and I have actually stuck to it for a week now. Small wins add up.', caption:'', imageDataUrl:null, likes:22, shares:4, likedByMe:true, comments:[{author:'Sam', text:'Love this, sharing it with my team.', timestamp:'20h ago'},{author:'Ana', text:'What time do you start?', timestamp:'18h ago'}]},
         {id:'p-story4', authorName:'Jordan B.', timestamp:'2d ago', type:'drawing', textContent:'', imageDataUrl: communitySeedSketch('#457b9d', '#eaf4ff'), caption:'', likes:5, shares:1, likedByMe:false, comments:[]},
         {id:'p-story5', authorName:'Nina F.', timestamp:'3d ago', type:'note', textContent:'Brainstormed three names for the side project. Going with "Northline" I think -- advice welcome.', caption:'', imageDataUrl:null, likes:11, shares:2, likedByMe:false, comments:[{author:'Marcus', text:'Northline is clean, good pick.', timestamp:'2d ago'}]},
@@ -3464,7 +3474,7 @@ let state = {
   stickyNoteColor:'#fff59d',
   suppressNoteAutoSave:false,
   currentPageIndex:0,
-  noteCoverOptions:['#f4d35e','#8ecae6','#f4a6c6','#a3d9a5','#e8e6e1','#151517'],
+  noteCoverOptions:['#f4d35e','#8ecae6','#f4a6c6','#a3d9a5','#e8e6e1','#000'],
   notePageStyleOptions:['blank','lined','lined-wide','lined-narrow','square','square-wide','square-narrow','dotted','dotted-wide','dotted-narrow','oxford'],
   noteTemplateGroups:[
     {group:'Productivity', items:[{id:'tasklist', label:'Task List'}]},
@@ -3488,7 +3498,7 @@ let state = {
   canvasColor:'#ffffff',
   canvasPageStyle:'blank',
   canvasLineColor:'auto',
-  canvasPenColor:'#151517',
+  canvasPenColor:'#000',
   canvasPenSize:3,
   canvasTool:'pen',
   canvasSnapshot:null,
@@ -3947,7 +3957,7 @@ function controlsExpandedTemplate(){
           <button class="modal-close" data-action="controls-expand-close">×</button>
           <span class="modal-title">Controls — Edit</span>
           <button class="ctl-pencil-btn confirm" data-action="controls-edit-toggle" title="Done">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0a0a0c" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
           </button>
         </div>
         <div class="confirm-sub" style="text-align:left;margin:-4px 0 10px;">Drag ☰ to reorder — the top ${MAX_DISPLAYED_CONTROLS} show on your dashboard.</div>
@@ -4624,7 +4634,7 @@ function walletOverviewScreen(){
     <div class="big-num" style="font-size:32px;margin-top:2px;">$24,850<span style="font-size:16px;color:var(--muted);">.00</span></div>
     <div class="btn-row" style="margin-top:14px;">
       <button class="btn" style="background:#b6f27a;color:#0a2a05;" data-action="send-open">↗ Send</button>
-      <button class="btn" style="background:#e8e6e1;color:#111;" data-nav="wallet">⧉ Scan</button>
+      <button class="btn" style="background:#e8e6e1;color:#000;" data-nav="wallet">⧉ Scan</button>
       <button class="btn" style="background:#b6f27a;color:#0a2a05;" data-action="receive-open">↙ Receive</button>
     </div>
     <div class="section-title">RECENTS</div>
@@ -5019,7 +5029,7 @@ function contrastLineColor(hex){
   return lum > 0.55 ? 'rgba(0,0,0,0.42)' : 'rgba(255,255,255,0.55)';
 }
 // 'auto' keeps the old adaptive black/white behavior (contrastLineColor); any other value is a color the user picked explicitly.
-const NOTE_LINE_COLOR_OPTIONS = ['auto','#151517','#1d3557','#e63946','#2a9d8f','#6d4c41'];
+const NOTE_LINE_COLOR_OPTIONS = ['auto','#000','#1d3557','#e63946','#2a9d8f','#6d4c41'];
 const NOTE_FONT_OPTIONS = [
   {label:'Default', value:'inherit'},
   {label:'Sans', value:'Arial, Helvetica, sans-serif'},
@@ -5450,8 +5460,8 @@ function hexToHsv(hex){
 function colorPickerCurrentHex(target){
   switch(target){
     case 'cover': return state.selectedCover;
-    case 'linehub': return state.selectedLineColor === 'auto' ? '#151517' : state.selectedLineColor;
-    case 'linecanvas': return state.canvasLineColor === 'auto' ? '#151517' : state.canvasLineColor;
+    case 'linehub': return state.selectedLineColor === 'auto' ? '#000' : state.selectedLineColor;
+    case 'linecanvas': return state.canvasLineColor === 'auto' ? '#000' : state.canvasLineColor;
     case 'canvascolor': case 'drawpagecolor': return state.canvasColor;
     case 'highlight': { const hl = ['rainbow','#fff176','#a5d8ff','#ffb3c1','#b2f2bb','#ffd8a8']; return hl.includes(state.highlighterColor) ? '#ffeb3b' : state.highlighterColor; }
     case 'fontcolor': return state.fontColor;
@@ -5516,7 +5526,7 @@ function notesScreen(){
         <div class="section-title">LINE COLOR</div>
         <div class="notes-swatch-row">
           ${NOTE_LINE_COLOR_OPTIONS.map(c=>c==='auto'
-            ? `<span class="notes-swatch${state.selectedLineColor==='auto'?' selected':''}" style="background:conic-gradient(#151517 0deg 180deg, #fff 180deg 360deg);" title="Auto — adapts to the page color" data-setlinecolor="auto"></span>`
+            ? `<span class="notes-swatch${state.selectedLineColor==='auto'?' selected':''}" style="background:conic-gradient(#000 0deg 180deg, #fff 180deg 360deg);" title="Auto — adapts to the page color" data-setlinecolor="auto"></span>`
             : `<span class="notes-swatch${state.selectedLineColor===c?' selected':''}" style="background:${c};" data-setlinecolor="${c}"></span>`
           ).join('')}
           <button class="notes-swatch color-plus-btn" data-openpicker="linehub" title="Custom color">+</button>
@@ -5708,7 +5718,7 @@ function fontColorPopoverHTML(){
   `;
 }
 function inlineDrawPopoverHTML(showCloseButton){
-  const penColors = ['#151517','#e63946','#2a9d8f','#457b9d','#f4a261','#e8e6e1'];
+  const penColors = ['#000','#e63946','#2a9d8f','#457b9d','#f4a261','#e8e6e1'];
   return `
     <div class="float-popover inline-draw-popover${showCloseButton?' has-close':''}" onclick="event.stopPropagation()">
       ${showCloseButton ? `<button class="float-popover-close" data-action="note-inlinedraw-close" title="Stop drawing">×</button>` : ''}
@@ -5733,7 +5743,7 @@ function inlineDrawPopoverHTML(showCloseButton){
   `;
 }
 function drawPagePopoverHTML(){
-  const bgColors = ['#ffffff','#fef9e7','#eaf4ff','#fdeef2','#151517'];
+  const bgColors = ['#ffffff','#fef9e7','#eaf4ff','#fdeef2','#000'];
   return `
     <div class="float-popover draw-page-popover" onclick="event.stopPropagation()">
       <div class="section-title" style="margin-top:0;">PAGE COLOR</div>
@@ -5851,8 +5861,8 @@ function scratchDrawScreen(){
   `;
 }
 function notesCanvasScreen(){
-  const penColors = ['#151517','#e63946','#2a9d8f','#457b9d','#f4a261','#e8e6e1'];
-  const bgColors = ['#ffffff','#fef9e7','#eaf4ff','#fdeef2','#151517'];
+  const penColors = ['#000','#e63946','#2a9d8f','#457b9d','#f4a261','#e8e6e1'];
+  const bgColors = ['#ffffff','#fef9e7','#eaf4ff','#fdeef2','#000'];
   const highlightColors = ['rainbow','#fff176','#a5d8ff','#ffb3c1','#b2f2bb','#ffd8a8'];
   const esc = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const isDraw = state.canvasMode === 'draw';
@@ -6027,7 +6037,7 @@ function moreMenuTemplate(){
           </div>
           <div class="section-title" style="margin-top:14px;">BACKGROUND</div>
           <div class="canvas-swatch-row">
-            ${['#ffffff','#fef9e7','#eaf4ff','#fdeef2','#151517'].map(c=>`<span class="canvas-swatch${state.canvasColor===c?' selected':''}" style="background:${c};border:1px solid var(--line);" data-setcanvascolor="${c}"></span>`).join('')}
+            ${['#ffffff','#fef9e7','#eaf4ff','#fdeef2','#000'].map(c=>`<span class="canvas-swatch${state.canvasColor===c?' selected':''}" style="background:${c};border:1px solid var(--line);" data-setcanvascolor="${c}"></span>`).join('')}
             <button class="canvas-swatch color-plus-btn" data-openpicker="canvascolor" title="Custom color">+</button>
           </div>
           <div class="section-title">PAGE SCROLL DIRECTION</div>
@@ -6045,7 +6055,7 @@ function moreMenuTemplate(){
           <div class="section-title">LINE COLOR</div>
           <div class="notes-swatch-row">
             ${NOTE_LINE_COLOR_OPTIONS.map(c=>c==='auto'
-              ? `<span class="notes-swatch${state.canvasLineColor==='auto'?' selected':''}" style="background:conic-gradient(#151517 0deg 180deg, #fff 180deg 360deg);" title="Auto — adapts to the page color" data-setcanvaslinecolor="auto"></span>`
+              ? `<span class="notes-swatch${state.canvasLineColor==='auto'?' selected':''}" style="background:conic-gradient(#000 0deg 180deg, #fff 180deg 360deg);" title="Auto — adapts to the page color" data-setcanvaslinecolor="auto"></span>`
               : `<span class="notes-swatch${state.canvasLineColor===c?' selected':''}" style="background:${c};" data-setcanvaslinecolor="${c}"></span>`
             ).join('')}
             <button class="notes-swatch color-plus-btn" data-openpicker="linecanvas" title="Custom color">+</button>
