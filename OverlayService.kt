@@ -849,6 +849,7 @@ class OverlayService : Service(), StoryBridge.Host {
         dialPane?.takeIf { it.shown }?.let { hideOne(it) }
         p.web.evaluateJavascript(profileGeometryJs(), null)
         profileGapPane?.web?.evaluateJavascript(profileGeometryJs(), null)
+        p.web.evaluateJavascript("window.storyProfileRefresh&&window.storyProfileRefresh()", null)  // always the latest real numbers
         setShown(p, true)
         tellProfileStation3()
     } }

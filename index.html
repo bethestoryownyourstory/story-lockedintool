@@ -5173,9 +5173,33 @@ document.addEventListener('click', e=>{
 }, true);
 // Profile (its own window, ?s3=1&profile=1): drawn once, then only re-measured around Station 3's bar.
 const PF_GAP_WINDOW = /[?&]gap=1/.test(location.search);
+// Profile's numbers are real, never made up. They live in the phone's STORY storage (shared by every STORY window),
+// so Profile shows them the moment they change. Following / Followers stay 0 until STORY has accounts to follow.
+const PF_STATS_KEY = 'story-profile-stats';
+function profileStats(){
+  let st = {};
+  try{ st = JSON.parse(localStorage.getItem(PF_STATS_KEY) || '{}') || {}; }catch(e){}
+  return { following: +st.following || 0, followers: +st.followers || 0, posts: +st.posts || 0 };
+}
+function bumpProfileStat(k, by){
+  const st = profileStats(); st[k] = Math.max(0, st[k] + by);
+  try{ localStorage.setItem(PF_STATS_KEY, JSON.stringify(st)); }catch(e){}
+}
+// 1234 -> 1.2k, 100000 -> 100k, 2500000 -> 2.5M
+function fmtCount(n){
+  const f = (v, u)=>(v >= 100 ? Math.floor(v) : Math.floor(v * 10) / 10) + u;
+  return n < 1000 ? String(n) : n < 1e6 ? f(n / 1e3, 'k') : n < 1e9 ? f(n / 1e6, 'M') : f(n / 1e9, 'B');
+}
+window.storyProfileRefresh = function(){
+  const el = document.getElementById('story-profile'); if(!el) return;
+  const st = profileStats();
+  for(const k of ['following', 'followers', 'posts']){ const n = el.querySelector('[data-pf-stat="' + k + '"]'); if(n) n.textContent = fmtCount(st[k]); }
+};
+window.addEventListener('storage', e=>{ if(e.key === PF_STATS_KEY) window.storyProfileRefresh(); });
 window.storyProfileOnly = function(){
   if(document.getElementById('story-profile')) return;
-  const p = state.profile || (state.profile = { name:'NAME', username:'username', following:'7', followers:'100k', posts:'3', bio:'' });
+  const p = state.profile || (state.profile = { name:'NAME', username:'username', bio:'' });
+  const st = profileStats();
   const el = document.createElement('div');
   el.id = 'story-profile';
   // Two windows draw Profile: the main one (everything above the gap's line) and the gap's own (?gap=1: the
@@ -5190,9 +5214,9 @@ window.storyProfileOnly = function(){
         <button class="pf-more" data-pf="menu" aria-label="More">⋮</button>
       </div>
       <div class="pf-stats">
-        <div class="pf-stat"><div class="pf-stat-n">${escText(p.following)}</div><div class="pf-stat-l">Following</div></div>
-        <div class="pf-stat"><div class="pf-stat-n">${escText(p.followers)}</div><div class="pf-stat-l">Followers</div></div>
-        <div class="pf-stat"><div class="pf-stat-n">${escText(p.posts)}</div><div class="pf-stat-l">Posts</div></div>
+        <div class="pf-stat"><div class="pf-stat-n" data-pf-stat="following">${fmtCount(st.following)}</div><div class="pf-stat-l">Following</div></div>
+        <div class="pf-stat"><div class="pf-stat-n" data-pf-stat="followers">${fmtCount(st.followers)}</div><div class="pf-stat-l">Followers</div></div>
+        <div class="pf-stat"><div class="pf-stat-n" data-pf-stat="posts">${fmtCount(st.posts)}</div><div class="pf-stat-l">Posts</div></div>
       </div>
       <div class="pf-bio"><div class="pf-bio-l">BIO</div>${p.bio ? escText(p.bio) : '<span style="color:var(--pf-muted)">Nothing here yet.</span>'}</div>
       <button class="pf-edit" data-pf="edit">Edit profile</button>
@@ -9609,6 +9633,7 @@ function attachHandlers(){
               showToast('That post isn’t allowed under STORY’s content policy.');
               break;
             }
+            bumpProfileStat('posts', 1);  // a real post: Profile's Posts count goes up
             g.posts = [{ id:'cp'+Date.now(), authorName:'You', timestamp:'Just now', type:'note', textContent:text.slice(0,600), caption:'', imageDataUrl:null, likes:0, likedByMe:false, shares:0, comments:[] }, ...g.posts];
           }
           break;
