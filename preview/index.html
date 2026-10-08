@@ -5243,7 +5243,10 @@ const PF_DATA_KEY = 'story-profile';
 function profileData(){
   let d = {};
   try{ d = JSON.parse(localStorage.getItem(PF_DATA_KEY) || '{}') || {}; }catch(e){}
-  return { name: d.name || 'NAME', username: d.username || 'username', bio: d.bio || '' };
+  // Name and username are each optional (owner: some want only one). 'NAME' / 'username' were the old
+  // placeholders, never real values -- an old save may have stored them, so they count as empty.
+  const name = d.name === 'NAME' ? '' : (d.name || ''), username = d.username === 'username' ? '' : (d.username || '');
+  return { name, username, bio: d.bio || '' };
 }
 function saveProfileData(patch){
   const d = Object.assign(profileData(), patch);
@@ -5254,11 +5257,17 @@ function saveProfileData(patch){
 window.storyProfileText = function(){
   const el = document.getElementById('story-profile'); if(!el || PF_GAP_WINDOW) return;
   const p = state.profile = profileData();
-  el.querySelector('.pf-name').textContent = p.name;
-  el.querySelector('.pf-user').textContent = '@' + p.username;
+  // Viewing a profile never shows the words "name" / "username": whatever isn't set simply isn't there.
+  // Only a username: it takes the name's place.
+  const nameEl = el.querySelector('.pf-name'), userEl = el.querySelector('.pf-user');
+  nameEl.textContent = p.name || (p.username ? '@' + p.username : '');
+  userEl.textContent = p.name && p.username ? '@' + p.username : '';
+  nameEl.hidden = !nameEl.textContent; userEl.hidden = !userEl.textContent;
   el.querySelector('[data-pf="ed-name"] .pf-ed-val').textContent = p.name;
-  el.querySelector('[data-pf="ed-username"] .pf-ed-val').textContent = '@' + p.username;
-  el.querySelector('[data-pf="ed-bio"] .pf-ed-val').textContent = p.bio || 'Nothing here yet.';
+  el.querySelector('[data-pf="ed-username"] .pf-ed-val').textContent = p.username ? '@' + p.username : '';
+  el.querySelector('[data-pf="ed-bio"] .pf-ed-val').textContent = p.bio;
+  // Bio: the word "BIO" shows only while it's empty; once there's text, only the text shows.
+  el.querySelector('.pf-bio-l').hidden = !!p.bio;
   el.querySelector('.pf-bio-t').innerHTML = p.bio ? escText(p.bio) : '<span style="color:var(--pf-muted)">Nothing here yet.</span>';
 };
 window.addEventListener('storage', e=>{ if(e.key === PF_DATA_KEY) window.storyProfileText(); });
@@ -5283,7 +5292,7 @@ function openProfileField(k){
   if(k === 'bio'){ inp.value = p.bio; inp.placeholder = 'Tell your story'; }
   else {
     inp.maxLength = 30;
-    inp.value = k === 'name' ? (p.name === 'NAME' ? '' : p.name) : (p.username === 'username' ? '' : p.username);
+    inp.value = k === 'name' ? p.name : p.username;
     inp.placeholder = k === 'name' ? 'Your name' : 'username';
     inp.autocapitalize = k === 'name' ? 'words' : 'none';
   }
@@ -5304,9 +5313,11 @@ function checkProfileField(){
   const inp = profileFieldBox(), k = f.getAttribute('data-field');
   if(k === 'username'){ const low = inp.value.toLowerCase().replace(/\s+/g, ''); if(low !== inp.value) inp.value = low; }
   const v = inp.value.trim();
-  const problem = k === 'name' ? (v ? '' : 'Your name can’t be empty.') : k === 'username' ? usernameProblem(v) : '';
-  f.querySelector('.pf-field-msg').textContent = k === 'bio' ? inp.value.length + ' / 150' : v ? problem : (k === 'name' ? '' : 'Your @ on STORY.');
-  f.querySelector('.pf-field-msg').classList.toggle('bad', !!(v && problem));
+  // Either can be left empty -- but not both (a profile always has a name or a username).
+  const other = k === 'name' ? profileData().username : k === 'username' ? profileData().name : 'x';
+  const problem = k === 'bio' ? '' : !v ? (other ? '' : 'Add a name or a username.') : k === 'username' ? usernameProblem(v) : '';
+  f.querySelector('.pf-field-msg').textContent = k === 'bio' ? inp.value.length + ' / 150' : problem || (k === 'username' && !v ? 'Your @ on STORY.' : '');
+  f.querySelector('.pf-field-msg').classList.toggle('bad', !!problem);
   f.querySelector('[data-pf="field-save"]').disabled = !!problem;
   return !problem;
 }
@@ -5423,6 +5434,7 @@ window.storyProfileOnly = function(){
     if(sc.scrollTop + sc.clientHeight > sc.scrollHeight - 600 && pfPhotoShown < pfPhotoIds.length) morePhotos();
   }, { passive:true });
   window.storyProfilePhotoChanged();
+  window.storyProfileText();
   window.storyProfileGeom();
 };
 // ---- Profile picture: any picture you pick (Edit profile > Change photo), kept on the phone. ----
