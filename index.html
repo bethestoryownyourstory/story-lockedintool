@@ -9950,7 +9950,7 @@ function fitPageToScreen(area, el, pageKey){
 // Works out every swipe page's fit ahead of time, off screen, so even the first swipe to a page
 // doesn't stall while it's measured.
 function prewarmPageFits(){
-  if(state.device !== 'phone') return;
+  if(IN_STATION3_WINDOW || state.device !== 'phone') return;
   const live = document.getElementById('device-wrap');
   if(!live) return;
   const r = live.getBoundingClientRect();
@@ -9983,6 +9983,7 @@ let appMenuOpenedAt = 0;
 // The "< Dashboard" button stays in one place throughout.
 const NEIGHBORS = {};
 function buildNeighbor(pg){
+  if(IN_STATION3_WINDOW) return null;
   const live = document.getElementById('device-wrap');
   if(!live || state.device !== 'phone') return null;
   const r = live.getBoundingClientRect();
@@ -10004,8 +10005,11 @@ function buildNeighbor(pg){
   return NEIGHBORS[pg];
 }
 let neighborTimer = null, neighborsFor = null;
+// Station 3's own windows (?s3=1) never build these: its locked CSS makes every Station 3 piece visible,
+// which would show a hidden copy's icons as a ghost.
+const IN_STATION3_WINDOW = /[?&]s3=1/.test(location.search);
 function refreshNeighbors(force){
-  if(state.device !== 'phone' || !PAGES.includes(state.current)) return;
+  if(IN_STATION3_WINDOW || state.device !== 'phone' || !PAGES.includes(state.current)) return;
   clearTimeout(neighborTimer);
   // One missing neighbour at a time, each in its own quiet moment, so a swipe is never held up.
   const step = ()=>{
