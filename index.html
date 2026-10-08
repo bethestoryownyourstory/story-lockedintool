@@ -1658,8 +1658,10 @@
      one confident hero number, labels stepped back so the numbers lead. Layout and functions unchanged. */
   html.focus .big-num{ font-size:30px; font-weight:600; letter-spacing:-0.6px; text-shadow:none; font-variant-numeric:tabular-nums; }
   html.focus .section-title{ font-size:9.5px; font-weight:600; letter-spacing:1.6px; color:#5c5c63; margin:12px 0 6px; }
-  /* One clean, even black behind everything -- no lighter patch, no haze. */
-  html.focus .phone-screen, html.focus .phone-frame, html.focus .phone-content{ background:var(--bg-app) !important; background-image:none !important; }
+  /* One clean, pitch black (#000) behind everything -- no grey, no lighter patch, no haze. */
+  html.focus{ --bg-app:#000; }
+  html.focus, html.focus body, html.focus .stage, html.focus .device-wrap{ background:#000 !important; }
+  html.focus .phone-screen, html.focus .phone-frame, html.focus .phone-content, html.focus .page-shell, html.focus .story-screen{ background:#000 !important; background-image:none !important; }
   html.focus .phone-screen::before, html.focus .phone-screen::after{ display:none !important; }
   /* Crisp text: no glow or blur around any letters or numbers. */
   html.focus .phone-screen *:not(.community-trend-name2){ text-shadow:none !important; }
@@ -1667,7 +1669,7 @@
   /* Quiet surfaces: hairline border, faint lift, soft shadow -- every card and panel the same. */
   html.focus :is(.row-card, .notif-card, .search-row, .story-sidebar, .sidebar-item, .quotes-card, .media-card,
     .brightness-card, .spotify-card, .controls-card, .membership, .note-card, .community-post, .close-combo, .tab:not(.active)){
-    background:rgba(255,255,255,0.022) !important; border:1px solid rgba(255,255,255,0.065) !important;
+    background:#000 !important; border:1px solid rgba(255,255,255,0.075) !important;
     box-shadow:inset 0 1px 0 rgba(255,255,255,0.035), 0 10px 30px rgba(0,0,0,0.35) !important;
     -webkit-backdrop-filter:none !important; backdrop-filter:none !important;
   }
