@@ -1737,6 +1737,15 @@
   #story-profile .pf-ed-row:last-child{ border-bottom:1px solid var(--pf-hair); }
   #story-profile .pf-ed-val{ color:var(--pf-muted); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   #story-profile .pf-ed-back:active, #story-profile .pf-ed-row:active, #story-profile .pf-ed-remove:active{ opacity:0.6; }
+  /* Name / Username */
+  #story-profile .pf-field-save{ margin-left:auto; border:none; background:transparent; color:var(--pf-fg); font-size:15px; font-weight:700; font-family:inherit; padding:8px 4px; }
+  #story-profile .pf-field-save:disabled{ opacity:0.3; }
+  #story-profile .pf-field-box{ display:flex; align-items:center; gap:2px; border:1px solid var(--pf-fg); border-radius:12px; padding:0 14px; }
+  #story-profile .pf-field-at{ font-size:16px; color:var(--pf-muted); }
+  #story-profile .pf-field-box input{ flex:1; min-width:0; border:none; outline:none; background:transparent; color:var(--pf-fg); font-size:16px; font-family:inherit; padding:13px 0; caret-color:var(--pf-fg); -webkit-user-select:text; user-select:text; }
+  #story-profile .pf-field-box input::placeholder{ color:var(--pf-muted); }
+  #story-profile .pf-field-msg{ font-size:12px; color:var(--pf-muted); margin:8px 2px 0; min-height:16px; }
+  #story-profile .pf-field-msg.bad{ color:#e63946; }
   /* Choose a picture: the phone's pictures, newest first, 3 across. */
   #story-profile .pf-photo-grid{ display:grid; grid-template-columns:repeat(3, 1fr); gap:3px; }
   #story-profile .pf-photo, #story-profile .pf-photo-more{ aspect-ratio:1/1; border:none; padding:0; margin:0; background:var(--pf-hair); overflow:hidden; border-radius:4px; }
@@ -5226,9 +5235,78 @@ window.storyProfileRefresh = function(){
   for(const k of ['following', 'followers', 'posts']){ const n = el.querySelector('[data-pf-stat="' + k + '"]'); if(n) n.textContent = fmtCount(st[k]); }
 };
 window.addEventListener('storage', e=>{ if(e.key === PF_STATS_KEY) window.storyProfileRefresh(); });
+// Name / username: yours, kept in the phone's STORY storage (shared by every STORY window).
+const PF_DATA_KEY = 'story-profile';
+function profileData(){
+  let d = {};
+  try{ d = JSON.parse(localStorage.getItem(PF_DATA_KEY) || '{}') || {}; }catch(e){}
+  return { name: d.name || 'NAME', username: d.username || 'username', bio: d.bio || '' };
+}
+function saveProfileData(patch){
+  const d = Object.assign(profileData(), patch);
+  try{ localStorage.setItem(PF_DATA_KEY, JSON.stringify(d)); }catch(e){}
+  state.profile = d;
+  window.storyProfileText();
+}
+window.storyProfileText = function(){
+  const el = document.getElementById('story-profile'); if(!el || PF_GAP_WINDOW) return;
+  const p = state.profile = profileData();
+  el.querySelector('.pf-name').textContent = p.name;
+  el.querySelector('.pf-user').textContent = '@' + p.username;
+  el.querySelector('[data-pf="ed-name"] .pf-ed-val').textContent = p.name;
+  el.querySelector('[data-pf="ed-username"] .pf-ed-val').textContent = '@' + p.username;
+};
+window.addEventListener('storage', e=>{ if(e.key === PF_DATA_KEY) window.storyProfileText(); });
+// Usernames: 3-30 of a-z, 0-9, _ and . (no dot at the start or end, no two dots in a row).
+function usernameProblem(u){
+  if(u.length < 3) return 'At least 3 characters.';
+  if(u.length > 30) return '30 characters at most.';
+  if(!/^[a-z0-9._]+$/.test(u)) return 'Only letters, numbers, _ and .';
+  if(/^\.|\.$/.test(u)) return "Can't start or end with a dot.";
+  if(/\.\./.test(u)) return "Can't have two dots in a row.";
+  return '';
+}
+function openProfileField(k){
+  const el = document.getElementById('story-profile'); if(!el) return;
+  const p = profileData();
+  const f = el.querySelector('.pf-field'), inp = f.querySelector('input');
+  f.setAttribute('data-field', k);
+  f.querySelector('.pf-ed-title').textContent = k === 'name' ? 'Name' : 'Username';
+  f.querySelector('.pf-field-at').hidden = k !== 'username';
+  inp.maxLength = 30;
+  inp.value = k === 'name' ? (p.name === 'NAME' ? '' : p.name) : (p.username === 'username' ? '' : p.username);
+  inp.placeholder = k === 'name' ? 'Your name' : 'username';
+  inp.autocapitalize = k === 'name' ? 'words' : 'none';
+  checkProfileField();
+  el.querySelector('.pf-editor').hidden = true; f.hidden = false;
+  inp.focus();
+}
+function checkProfileField(){
+  const f = document.querySelector('#story-profile .pf-field'); if(!f) return false;
+  const inp = f.querySelector('input'), k = f.getAttribute('data-field');
+  if(k === 'username'){ const low = inp.value.toLowerCase().replace(/\s+/g, ''); if(low !== inp.value) inp.value = low; }
+  const v = inp.value.trim();
+  const problem = k === 'name' ? (v ? '' : 'Your name can’t be empty.') : usernameProblem(v);
+  f.querySelector('.pf-field-msg').textContent = v ? problem : (k === 'name' ? 'This is how you show on STORY.' : 'Your @ on STORY.');
+  f.querySelector('.pf-field-msg').classList.toggle('bad', !!(v && problem));
+  f.querySelector('[data-pf="field-save"]').disabled = !!problem;
+  return !problem;
+}
+function saveProfileField(){
+  const f = document.querySelector('#story-profile .pf-field'); if(!f || !checkProfileField()) return;
+  const k = f.getAttribute('data-field'), v = f.querySelector('input').value.trim();
+  saveProfileData(k === 'name' ? { name: v } : { username: v });
+  closeProfileField();
+}
+function closeProfileField(){
+  const el = document.getElementById('story-profile'); if(!el) return;
+  const f = el.querySelector('.pf-field');
+  f.querySelector('input').blur();
+  f.hidden = true; el.querySelector('.pf-editor').hidden = false;
+}
 window.storyProfileOnly = function(){
   if(document.getElementById('story-profile')) return;
-  const p = state.profile || (state.profile = { name:'NAME', username:'username', bio:'' });
+  const p = state.profile = profileData();
   const st = profileStats();
   const el = document.createElement('div');
   el.id = 'story-profile';
@@ -5261,6 +5339,11 @@ window.storyProfileOnly = function(){
       <div class="pf-ed-row" data-pf="ed-name"><span>Name</span><span class="pf-ed-val">${escText(p.name)}</span></div>
       <div class="pf-ed-row" data-pf="ed-username"><span>Username</span><span class="pf-ed-val">@${escText(p.username)}</span></div>
       <div class="pf-ed-row" data-pf="ed-bio"><span>Bio</span><span class="pf-ed-val">${p.bio ? escText(p.bio) : 'Nothing here yet.'}</span></div>
+    </div>
+    <div class="pf-scroll pf-field" hidden>
+      <div class="pf-ed-head"><button class="pf-ed-back" data-pf="field-back" aria-label="Back">‹</button><div class="pf-ed-title">Name</div><button class="pf-field-save" data-pf="field-save">Save</button></div>
+      <label class="pf-field-box"><span class="pf-field-at">@</span><input type="text" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="done"></label>
+      <div class="pf-field-msg"></div>
     </div>
     <div class="pf-scroll pf-photos" hidden>
       <div class="pf-ed-head"><button class="pf-ed-back" data-pf="photos-back" aria-label="Back">‹</button><div class="pf-ed-title">Choose a picture</div></div>
@@ -5301,9 +5384,19 @@ window.storyProfileOnly = function(){
       if(NATIVE && window.StoryNative.removeProfilePhoto) window.StoryNative.removeProfilePhoto();
       else { try{ localStorage.removeItem('story-profile-photo'); }catch(err){} window.storyProfilePhotoChanged(); }
     }
-    else if(k === 'ed-name' || k === 'ed-username' || k === 'ed-bio') showToast({ 'ed-name':'Name', 'ed-username':'Username', 'ed-bio':'Bio' }[k] + ' — coming soon');
+    else if(k === 'ed-name') openProfileField('name');
+    else if(k === 'ed-username') openProfileField('username');
+    else if(k === 'field-back') closeProfileField();
+    else if(k === 'field-save') saveProfileField();
+    else if(k === 'ed-bio') showToast('Bio — coming soon');
     else showToast('Profile menu — coming soon');
   });
+  const fieldInput = el.querySelector('.pf-field input');
+  fieldInput.addEventListener('input', checkProfileField);
+  fieldInput.addEventListener('keydown', e=>{ if(e.key === 'Enter'){ e.preventDefault(); saveProfileField(); } });
+  // The app gives Profile the keyboard only while a box is being typed in.
+  fieldInput.addEventListener('focus', ()=>{ if(NATIVE && window.StoryNative.setTyping) try{ window.StoryNative.setTyping(true); }catch(err){} });
+  fieldInput.addEventListener('blur', ()=>{ if(NATIVE && window.StoryNative.setTyping) try{ window.StoryNative.setTyping(false); }catch(err){} });
   el.querySelector('.pf-photos').addEventListener('scroll', e=>{
     const sc = e.currentTarget;
     if(sc.scrollTop + sc.clientHeight > sc.scrollHeight - 600 && pfPhotoShown < pfPhotoIds.length) morePhotos();
@@ -5331,7 +5424,8 @@ window.storyProfilePhotoChanged = function(){
 // Profile closed: next time it opens on the profile itself (not Edit profile or the picture).
 window.storyProfileReset = function(){
   const el = document.getElementById('story-profile'); if(!el || PF_GAP_WINDOW) return;
-  el.querySelector('.pf-editor').hidden = true; el.querySelector('.pf-viewer').hidden = true; el.querySelector('.pf-photos').hidden = true;
+  const fi = el.querySelector('.pf-field input'); if(document.activeElement === fi) fi.blur();
+  el.querySelector('.pf-editor').hidden = true; el.querySelector('.pf-viewer').hidden = true; el.querySelector('.pf-photos').hidden = true; el.querySelector('.pf-field').hidden = true;
   const main = el.querySelector('.pf-scroll:not(.pf-editor)'); main.hidden = false; main.scrollTop = 0;
 };
 // STORY's own picture grid: the phone's pictures right inside Edit profile, so choosing is instant (no app switch).

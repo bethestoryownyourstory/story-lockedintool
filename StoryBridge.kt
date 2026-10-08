@@ -34,6 +34,7 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         fun removeProfilePhoto()
         fun requestPhotoAccess()
         fun useProfilePhoto(id: Long)
+        fun profileTyping(on: Boolean)
     }
 
     /** The phone's real launchable apps, with their real icons -- kept ready, so the Apps area opens instantly. */
@@ -61,7 +62,7 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
 
     /** The Pages report when a text box is being typed in (so the keyboard can show above them). */
     @JavascriptInterface
-    fun setTyping(on: Boolean) { if (!station3) host.setTyping(on) }
+    fun setTyping(on: Boolean) { if (profile) host.profileTyping(on) else if (!station3) host.setTyping(on) }
 
     /** STORY's one message bubble ("... - coming soon"), the same on the Pages, Station 3 and over apps. */
     @JavascriptInterface

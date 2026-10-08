@@ -538,8 +538,11 @@ class OverlayService : Service(), StoryBridge.Host {
         pinToScreen(lp)  // Station 3's window sits exactly on the corner, like the button
         // Station 3's windows sit in STORY's top layer; the Pages sit in the normal overlay layer under the
         // phone's status bar, notification panel and keyboard -- all of which then just work, as on any app.
-        val paneWm = if (small) layerWm else wm
-        if (small) lp.type = layerType
+        // Profile's main window sits in the Pages' layer (under the status bar, like the Pages) so the keyboard can
+        // show above it when you type your name / username; Station 3, the gap and the strip stay in the top layer.
+        val inLayer = small && !(profile && !gap)
+        val paneWm = if (inLayer) layerWm else wm
+        if (inLayer) lp.type = layerType
         val p = Pane(frame, wv, lp, small, paneWm, dial, profile, gap)
         paneRef = p
         paneWm.addView(frame, lp)
@@ -923,6 +926,18 @@ class OverlayService : Service(), StoryBridge.Host {
     override fun removeProfilePhoto() { ui.post {
         runCatching { ProfilePhotoActivity.file(this).delete() }
         profilePane?.web?.evaluateJavascript("window.storyProfilePhotoChanged&&window.storyProfilePhotoChanged()", null)
+    } }
+    /** Typing in Profile (Edit profile > Name / Username): its window takes the keyboard only while you type. */
+    override fun profileTyping(on: Boolean) { ui.post {
+        val p = profilePane?.takeIf { it.shown } ?: return@post
+        val nf = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+        p.lp.flags = if (on) p.lp.flags and nf.inv() else p.lp.flags or nf
+        runCatching { p.wm.updateViewLayout(p.frame, p.lp) }
+        val imm = getSystemService(android.view.inputmethod.InputMethodManager::class.java)
+        if (on) {
+            p.web.requestFocus()
+            ui.postDelayed({ runCatching { imm.showSoftInput(p.web, 0) } }, 60)
+        } else runCatching { imm.hideSoftInputFromWindow(p.web.windowToken, 0) }
     } }
     override fun closeProfile() { ui.post { profilePane?.takeIf { it.shown }?.let { hideOne(it) } } }
 
