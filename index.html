@@ -5217,7 +5217,7 @@ window.storyProfileGeom = function(){
 };
 // Station 3 closed while Profile stays open: its gap stays, and two little men walk up to the Station 3 button,
 // grab it with a rope and try to pull Station 3 back out -- until the boss storms in, shouts "Leave that alone!!",
-// and leaves, the two following him. Plays once each time Station 3 closes; the button itself never moves.
+// and leaves, the two following him. Keeps playing for as long as the gap is there; the button itself never moves.
 (function(){
   const NS = 'http://www.w3.org/2000/svg';
   let raf = 0, t0 = 0, figs = null, rope = null;
@@ -5273,7 +5273,12 @@ window.storyProfileGeom = function(){
   }
   function frame(now){
     const el = document.getElementById('story-profile'); if(!el){ stop(); return; }
+    // Loops for as long as the gap is there: a short empty beat, then it all plays again.
+    if(now - t0 > 9200) t0 = now + 1200;
     const t = now - t0;
+    const svgEl = el.querySelector('.pf-gap-clip svg');
+    svgEl.style.visibility = t < 0 ? 'hidden' : '';
+    if(t < 0){ el.querySelector('.pf-shout').style.display = 'none'; raf = requestAnimationFrame(frame); return; }
     const W = window.__pfBarW || 220, H = window.__pfBarH || 40;
     const btn = W - 40, base = H - 3;
     const [a, b, boss] = figs;
@@ -5308,7 +5313,6 @@ window.storyProfileGeom = function(){
     const sh = el.querySelector('.pf-shout');
     sh.style.display = shout ? 'block' : 'none';
     if(shout){ sh.style.left = (xs - 8) + 'px'; }
-    if(t > 9200){ stop(); return; }
     raf = requestAnimationFrame(frame);
   }
   window.storyProfileS3 = function(open){
