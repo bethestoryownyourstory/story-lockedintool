@@ -555,7 +555,8 @@ class OverlayService : Service(), StoryBridge.Host {
         if (p.small && shown) { p.lp.width = p.openW; p.lp.height = p.openH }
         p.frame.alpha = if (shown && !(p.small && p.loading)) 1f else 0f
         runCatching { p.wm.updateViewLayout(p.frame, p.lp) }
-        if (p === s3Pane) { syncBarBg(); syncBarTouch() }
+        if (p === s3Pane) { syncBarBg(); syncBarTouch(); tellProfileStation3() }
+        if (p === profilePane && !shown) p.web.evaluateJavascript("window.storyProfileS3&&window.storyProfileS3(true)", null)
         if (shown && !p.small) p.web.requestFocus()
         if (p === pagesPane) { quietApps(shown); updateBarLine(); if (!shown && pagesTyping) pagesBackToTop() }
     }
@@ -763,7 +764,7 @@ class OverlayService : Service(), StoryBridge.Host {
     override fun closeStation3() { ui.post { closeStation3Now() } }
 
     /** Closes Station 3 (and its dial pad) right now, on the spot. */
-    private fun closeStation3Now() { profilePane?.takeIf { it.shown }?.let { hideOne(it) }; dialPane?.takeIf { it.shown }?.let { hideOne(it) }; s3Pane?.takeIf { it.shown }?.let { hideOne(it) }; updateBubble() }
+    private fun closeStation3Now() { dialPane?.takeIf { it.shown }?.let { hideOne(it) }; s3Pane?.takeIf { it.shown }?.let { hideOne(it) }; updateBubble() }
 
     override fun toggleDialpad() { ui.post {
         val d = dialPane ?: return@post
@@ -793,7 +794,13 @@ class OverlayService : Service(), StoryBridge.Host {
         dialPane?.takeIf { it.shown }?.let { hideOne(it) }
         p.web.evaluateJavascript(profileGeometryJs(), null)
         setShown(p, true)
+        tellProfileStation3()
     } }
+    /** Profile stays open when Station 3 closes (owner's call): it then shows Station 3's gap and the little scene in it. */
+    private fun tellProfileStation3() {
+        val p = profilePane?.takeIf { it.shown } ?: return
+        p.web.evaluateJavascript("window.storyProfileS3&&window.storyProfileS3(${s3Pane?.shown == true})", null)
+    }
     override fun closeProfile() { ui.post { profilePane?.takeIf { it.shown }?.let { hideOne(it) } } }
 
     /** Where Station 3's white bar is (in the page's px), so Profile's line traces it exactly; plus the status bar. */
