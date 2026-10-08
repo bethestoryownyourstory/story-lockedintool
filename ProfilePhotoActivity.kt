@@ -82,8 +82,8 @@ class ProfilePhotoActivity : Activity() {
         }
 
         private fun accessPermissions(): Array<String> = when {
-            Build.VERSION.SDK_INT >= 34 -> arrayOf(android.Manifest.permission.READ_MEDIA_IMAGES, android.Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
-            Build.VERSION.SDK_INT >= 33 -> arrayOf(android.Manifest.permission.READ_MEDIA_IMAGES)
+            Build.VERSION.SDK_INT >= 34 -> arrayOf(android.Manifest.permission.READ_MEDIA_IMAGES, android.Manifest.permission.READ_MEDIA_VIDEO, android.Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
+            Build.VERSION.SDK_INT >= 33 -> arrayOf(android.Manifest.permission.READ_MEDIA_IMAGES, android.Manifest.permission.READ_MEDIA_VIDEO)
             else -> arrayOf(android.Manifest.permission.READ_EXTERNAL_STORAGE)
         }
         private fun has(c: Context, p: String) = c.checkSelfPermission(p) == android.content.pm.PackageManager.PERMISSION_GRANTED
@@ -108,6 +108,44 @@ class ProfilePhotoActivity : Activity() {
             }
             return ids.toString()
         }
+
+        /** Pictures AND videos, newest first: [{id, v}] (v = 1 for a video). For Create's + button. */
+        fun listMedia(c: Context): String {
+            val out = org.json.JSONArray()
+            if (photoAccess(c) == "none") return out.toString()
+            val all = ArrayList<Triple<Long, Long, Int>>()
+            fun q(uri: android.net.Uri, v: Int) = runCatching {
+                c.contentResolver.query(uri, arrayOf(MediaStore.MediaColumns._ID, MediaStore.MediaColumns.DATE_ADDED), null, null,
+                    MediaStore.MediaColumns.DATE_ADDED + " DESC")?.use { cur ->
+                    var n = 0
+                    while (cur.moveToNext() && n++ < 5000) all.add(Triple(cur.getLong(0), cur.getLong(1), v))
+                }
+            }
+            q(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, 0)
+            q(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, 1)
+            all.sortByDescending { it.second }
+            for (t in all.take(5000)) out.put(org.json.JSONObject().put("id", t.first).put("v", t.third))
+            return out.toString()
+        }
+
+        /** A video's preview frame, JPEG bytes. */
+        fun videoThumbBytes(c: Context, id: Long): ByteArray? = runCatching {
+            val uri = android.content.ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, id)
+            val bmp = if (Build.VERSION.SDK_INT >= 29) c.contentResolver.loadThumbnail(uri, android.util.Size(256, 256), null)
+                else MediaStore.Video.Thumbnails.getThumbnail(c.contentResolver, id, MediaStore.Video.Thumbnails.MINI_KIND, null)
+            val out = java.io.ByteArrayOutputStream()
+            bmp?.compress(Bitmap.CompressFormat.JPEG, 82, out) ?: return@runCatching null
+            out.toByteArray()
+        }.getOrNull()
+
+        /** Any picture the phone can show, upright, at most `max` px on its long side. */
+        fun decodeUpright(c: Context, uri: Uri, max: Int): Bitmap? = runCatching {
+            if (Build.VERSION.SDK_INT >= 28) android.graphics.ImageDecoder.decodeBitmap(android.graphics.ImageDecoder.createSource(c.contentResolver, uri)) { d, info, _ ->
+                val w = info.size.width; val h = info.size.height; val big = maxOf(w, h)
+                if (big > max) d.setTargetSize(maxOf(1, w * max / big), maxOf(1, h * max / big))
+                d.allocator = android.graphics.ImageDecoder.ALLOCATOR_SOFTWARE
+            } else decodeOld(c, uri)
+        }.getOrNull()
 
         private fun photoUri(id: Long) = android.content.ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id)
 

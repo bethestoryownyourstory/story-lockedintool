@@ -29,6 +29,12 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         fun showToast(msg: String)
         fun toggleProfile()
         fun toggleMessages()
+        fun toggleCreate()
+        fun createShutter()
+        fun createVideo(on: Boolean)
+        fun createUseFromPhone(id: Long, video: Boolean)
+        fun createDiscard()
+        fun createKeep(): String
         fun closeProfile()
         fun setTheme(t: String)
         fun pickProfilePhoto()
@@ -128,6 +134,30 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
     /** Station 3's messages button: Messages opens in the same window as Profile, attached to Station 3. */
     @JavascriptInterface
     fun toggleMessages() { if (station3) host.toggleMessages() }
+
+    /** Station 3's + (Create & post): Create opens in the same window, the real camera underneath it. */
+    @JavascriptInterface
+    fun toggleCreate() { if (station3) host.toggleCreate() }
+
+    /** Create: shutter (picture), video on / off, + (from the phone), throw away, ✓ keep as a post. */
+    @JavascriptInterface
+    fun createShutter() { if (profile) host.createShutter() }
+
+    @JavascriptInterface
+    fun createVideo(on: Boolean) { if (profile) host.createVideo(on) }
+
+    @JavascriptInterface
+    fun listMedia(): String = ProfilePhotoActivity.listMedia(ctx)
+
+    @JavascriptInterface
+    fun createUseFromPhone(id: String, video: Boolean) { if (profile) id.toLongOrNull()?.let { host.createUseFromPhone(it, video) } }
+
+    @JavascriptInterface
+    fun createDiscard() { if (profile) host.createDiscard() }
+
+    /** Returns "<postId>:<photo|video>" ("" if nothing was made). */
+    @JavascriptInterface
+    fun createKeep(): String = if (profile) host.createKeep() else ""
 
     /** The X beside the dial pad. */
     @JavascriptInterface

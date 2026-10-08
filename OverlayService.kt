@@ -459,7 +459,7 @@ class OverlayService : Service(), StoryBridge.Host {
             }
             override fun shouldInterceptRequest(v: WebView, r: WebResourceRequest): WebResourceResponse? {
                 val u = r.url.toString()
-                if (u.startsWith(ProfilePhotoActivity.PHOTO_BASE)) return photoResponse(r.url)
+                if (u.startsWith(ProfilePhotoActivity.PHOTO_BASE)) return photoResponse(r)
                 return loader.shouldInterceptRequest(r.url)
             }
             // STORY pages only: never navigate this window to any other site.
@@ -582,6 +582,7 @@ class OverlayService : Service(), StoryBridge.Host {
         runCatching { p.wm.updateViewLayout(p.frame, p.lp) }
         if (p === s3Pane) { syncBarBg(); syncBarTouch(); tellProfileStation3() }
         if (p === profilePane) {
+            syncCreate()
             profileGapPane?.let { g -> if (g.shown != shown) setShown(g, shown) }
             showProfileStrip(shown)
             if (!shown) profileGapPane?.web?.evaluateJavascript("window.storyProfileS3&&window.storyProfileS3(true)", null)
@@ -854,10 +855,11 @@ class OverlayService : Service(), StoryBridge.Host {
     private var s3Page = "profile"
     override fun toggleProfile() = toggleS3Page("profile")
     override fun toggleMessages() = toggleS3Page("messages")
+    override fun toggleCreate() = toggleS3Page("create")
     private fun toggleS3Page(which: String) { ui.post {
         val p = profilePane ?: return@post
         if (p.shown && s3Page == which) { hideOne(p); return@post }
-        if (p.shown) { s3Page = which; p.web.evaluateJavascript("window.storyS3Page&&window.storyS3Page('$which')", null); return@post }
+        if (p.shown) { s3Page = which; p.web.evaluateJavascript("window.storyS3Page&&window.storyS3Page('$which')", null); syncCreate(); return@post }
         if (s3Pane?.shown != true) return@post
         s3Page = which
         p.web.evaluateJavascript("window.storyS3Page&&window.storyS3Page('$which')", null)
@@ -907,12 +909,20 @@ class OverlayService : Service(), StoryBridge.Host {
         }.start()
     }
     /** Pictures for the Profile windows, straight from the phone: the saved profile picture and the grid's previews. */
-    private fun photoResponse(url: android.net.Uri): WebResourceResponse {
-        val seg = url.pathSegments  // story-photo / profile | thumb / <id>
+    private fun photoResponse(r: WebResourceRequest): WebResourceResponse {
+        val seg = r.url.pathSegments  // story-photo / profile | thumb / <id> | thumbv / <id> | capture | post / <id>
+        // Pictures / videos kept as files (what Create made, your posts): videos are served in pieces so they play.
+        val file = when (seg.getOrNull(1)) {
+            "capture" -> CreateCameraActivity.currentCapture(this)
+            "post" -> seg.getOrNull(2)?.let { CreateCameraActivity.postFile(this, it) }
+            else -> null
+        }
+        if (file != null) return fileResponse(file, r.requestHeaders)
         val bytes = runCatching {
             when (seg.getOrNull(1)) {
                 "profile" -> ProfilePhotoActivity.file(this).takeIf { it.exists() }?.readBytes()
                 "thumb" -> seg.getOrNull(2)?.toLongOrNull()?.let { ProfilePhotoActivity.thumbBytes(this, it) }
+                "thumbv" -> seg.getOrNull(2)?.toLongOrNull()?.let { ProfilePhotoActivity.videoThumbBytes(this, it) }
                 else -> null
             }
         }.getOrNull()
@@ -920,6 +930,66 @@ class OverlayService : Service(), StoryBridge.Host {
             responseHeaders = mapOf("Cache-Control" to "max-age=86400", "Access-Control-Allow-Origin" to "*")
         } else WebResourceResponse("image/jpeg", null, 404, "Not Found", mapOf(), java.io.ByteArrayInputStream(ByteArray(0)))
     }
+    private fun fileResponse(f: java.io.File, headers: Map<String, String>): WebResourceResponse {
+        val mime = if (f.extension == "mp4") "video/mp4" else "image/jpeg"
+        val len = f.length()
+        val range = headers.entries.firstOrNull { it.key.equals("Range", true) }?.value
+        val m = range?.let { Regex("bytes=(\\d*)-(\\d*)").find(it) }
+        if (m != null && len > 0) {
+            val start = m.groupValues[1].toLongOrNull() ?: 0L
+            val end = (m.groupValues[2].toLongOrNull() ?: (len - 1)).coerceAtMost(len - 1)
+            if (start <= end) {
+                val input = java.io.FileInputStream(f).apply { skip(start) }
+                val part = object : java.io.FilterInputStream(input) {
+                    var left = end - start + 1
+                    override fun read(): Int { if (left <= 0) return -1; val b = super.read(); if (b >= 0) left--; return b }
+                    override fun read(b: ByteArray, off: Int, n: Int): Int { if (left <= 0) return -1; val k = super.read(b, off, minOf(n.toLong(), left).toInt()); if (k > 0) left -= k; return k }
+                }
+                return WebResourceResponse(mime, null, 206, "Partial Content", mapOf(
+                    "Content-Range" to "bytes $start-$end/$len", "Content-Length" to (end - start + 1).toString(),
+                    "Accept-Ranges" to "bytes", "Access-Control-Allow-Origin" to "*", "Cache-Control" to "no-store"), part)
+            }
+        }
+        return WebResourceResponse(mime, null, 200, "OK", mapOf("Content-Length" to len.toString(), "Accept-Ranges" to "bytes",
+            "Access-Control-Allow-Origin" to "*", "Cache-Control" to "no-store"), java.io.FileInputStream(f))
+    }
+
+    // ---- Create (Station 3's + button): the same window as Profile / Messages; the real camera runs underneath
+    //      (CreateCameraActivity) while Create shows, and the Pages step aside so the camera is what you see. ----
+    private var createActive = false
+    private var pagesHiddenForCreate = false
+    private fun syncCreate() {
+        if (pickerHid.isNotEmpty()) return  // a system screen is up for a moment; Create carries on after
+        val want = profilePane?.shown == true && s3Page == "create"
+        if (want == createActive) return
+        createActive = want
+        if (want) {
+            pagesHiddenForCreate = pagesPane?.shown == true
+            pagesPane?.takeIf { it.shown }?.let { setShown(it, false) }
+            runCatching { startActivity(Intent(this, CreateCameraActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)) }
+        } else {
+            CreateCameraActivity.instance?.let { it.finish(); it.overridePendingTransition(0, 0) }
+            if (pagesHiddenForCreate) { pagesHiddenForCreate = false; pagesPane?.takeIf { !it.shown }?.let { setShown(it, true) } }
+        }
+    }
+    fun stepAsideForCamera() { ui.post { stepAsideForSystem() } }
+    fun comeBackFromCamera() { ui.post { comeBackFromSystem() } }
+    fun closeS3WindowFromCamera() { ui.post { profilePane?.takeIf { it.shown }?.let { hideOne(it) } } }
+    /** The camera tells Create what happened: ready / recording / photo / video / denied / error. */
+    fun createEvent(kind: String, extra: String) { ui.post {
+        profilePane?.web?.evaluateJavascript("window.storyCreateEvent&&window.storyCreateEvent('$kind')", null)
+    } }
+    override fun createShutter() { ui.post { CreateCameraActivity.instance?.takePhoto() ?: createEvent("error", "") } }
+    override fun createVideo(on: Boolean) { ui.post { if (on) CreateCameraActivity.instance?.startVideo() ?: createEvent("error", "") else CreateCameraActivity.instance?.stopVideo() } }
+    override fun createUseFromPhone(id: Long, video: Boolean) {
+        Thread {
+            val ok = CreateCameraActivity.useFromPhone(this, id, video)
+            createEvent(if (!ok) "error" else if (video) "video" else "photo", "")
+        }.start()
+    }
+    override fun createDiscard() { CreateCameraActivity.clearCapture(this) }
+    override fun createKeep(): String = CreateCameraActivity.keepCapture(this)
+
     private fun stepAsideForSystem(): Boolean {
         if (pickerHid.isNotEmpty()) return false
         pickerHid = listOfNotNull(profilePane, pagesPane).filter { it.shown }
