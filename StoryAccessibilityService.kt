@@ -18,7 +18,6 @@ class StoryAccessibilityService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         val e = event ?: return
         val pkg = e.packageName?.toString() ?: return
-        if (e.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED) { checkPhonePanel(); return }
         when (e.eventType) {
             // Which app is on screen (so music playing in the background can be told apart from it).
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
@@ -37,20 +36,6 @@ class StoryAccessibilityService : AccessibilityService() {
     }
     override fun onInterrupt() {}
 
-    // Is the phone's notification panel pulled down? (It's a big System UI window on screen.)
-    private var panelOpen = false
-    private fun checkPhonePanel() {
-        val h = resources.displayMetrics.heightPixels
-        val open = runCatching {
-            windows.any { w ->
-                if (w.type != android.view.accessibility.AccessibilityWindowInfo.TYPE_SYSTEM) return@any false
-                val title = w.title?.toString()?.lowercase() ?: ""
-                val r = android.graphics.Rect(); w.getBoundsInScreen(r)
-                title.contains("notification") || title.contains("shade") || (r.height() > h / 3 && w.root?.packageName == "com.android.systemui")
-            }
-        }.getOrDefault(false)
-        if (open != panelOpen) { panelOpen = open; OverlayService.instance?.onPhonePanel(open) }
-    }
     override fun onUnbind(intent: Intent?): Boolean { instance = null; refreshOverlay(); return super.onUnbind(intent) }
 
     // Station 3 moves into / out of the lock-screen-capable layer when this service turns on / off.

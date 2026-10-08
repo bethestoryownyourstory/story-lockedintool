@@ -394,25 +394,7 @@ class OverlayService : Service(), StoryBridge.Host {
     @SuppressLint("SetJavaScriptEnabled")
     private fun buildPane(small: Boolean, dial: Boolean = false): Pane {
         val themed = ContextThemeWrapper(this, R.style.Theme_Story)
-        // The Pages cover the phone's status bar, so a swipe down from the top edge is caught here and opens
-        // the phone's own notification panel (the Pages step aside so it shows).
-        val frame = if (small) FrameLayout(themed) else object : FrameLayout(themed) {
-            // Watched here (before the page gets it), because the page can keep a swipe to itself.
-            private var downX = 0f; private var downY = -1f
-            override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
-                when (ev.actionMasked) {
-                    MotionEvent.ACTION_DOWN -> { downX = ev.rawX; downY = if (ev.rawY <= statusBarHeightPx() + 12 * dp) ev.rawY else -1f }
-                    MotionEvent.ACTION_UP -> {
-                        val dy = ev.rawY - downY; val dx = Math.abs(ev.rawX - downX)
-                        // A real swipe down from the top edge (not a tap): far enough, and mostly downwards.
-                        if (downY >= 0 && dy > 60 * dp && dy > dx * 1.5f) { downY = -1f; ui.postDelayed({ openPhonePanel() }, 60) }
-                        downY = -1f
-                    }
-                    MotionEvent.ACTION_CANCEL -> downY = -1f
-                }
-                return super.dispatchTouchEvent(ev)
-            }
-        }
+        val frame = FrameLayout(themed)
         val wv = WebView(themed).apply {
             setBackgroundColor(if (small) Color.TRANSPARENT else Color.BLACK)
             settings.javaScriptEnabled = true; settings.domStorageEnabled = true
@@ -484,18 +466,20 @@ class OverlayService : Service(), StoryBridge.Host {
                 gravity = Gravity.BOTTOM or Gravity.END; x = -(10 * dp).toInt(); y = -(10 * dp).toInt()
             }
         else
-            // Full screen: over the status bar too. On 3-button phones it stops above the buttons so they keep working.
+            // The whole screen, under the phone's own status bar (so its notification panel works exactly as
+            // everywhere else). On 3-button phones it stops above the buttons so they keep working.
             WindowManager.LayoutParams(-1, if (phoneHasGestureLine()) -1 else realHeightPx() - navBarHeightPx(), WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, flagsFor(false, false), PixelFormat.TRANSLUCENT).apply { gravity = Gravity.TOP or Gravity.START }
-        if (!small) frame.setBackgroundColor(Color.BLACK)
+        // Black behind the status bar; the page itself starts right below it, flush (no extra gap).
+        if (!small) { frame.setBackgroundColor(Color.BLACK); frame.setPadding(0, statusBarHeightPx(), 0, 0) }
         // Hidden from the start, and fully see-through to Android too: on Android 12+ an untouchable
         // window that isn't see-through still swallows touches meant for the apps underneath
         // ("isn't optimised for the latest version of Android. Screen touches may be delayed...").
         lp.alpha = 0f
         pinToScreen(lp)  // Station 3's window sits exactly on the corner, like the button
-        // Everything sits in STORY's top layer (above the status bar); the Pages are built first, so
-        // Station 3's windows always stay above them.
-        val paneWm = layerWm
-        lp.type = layerType
+        // Station 3's windows sit in STORY's top layer; the Pages sit in the normal overlay layer under the
+        // phone's status bar, notification panel and keyboard -- all of which then just work, as on any app.
+        val paneWm = if (small) layerWm else wm
+        if (small) lp.type = layerType
         val p = Pane(frame, wv, lp, small, paneWm, dial)
         paneRef = p
         paneWm.addView(frame, lp)
@@ -767,26 +751,6 @@ class OverlayService : Service(), StoryBridge.Host {
     }
 
     /** Swipe down from the top over the Pages: the phone's own notification panel, as anywhere else. */
-    // The Pages sit above the phone's notification panel, so while it's down they step out of the way
-    // (hidden, not reloaded), and come straight back when it's pushed up again -- unless something
-    // in the panel opened another app.
-    private var pagesAwayForPanel = false
-    private var panelFromPkg: String? = null
-    private fun openPhonePanel() {
-        val p = pagesPane ?: return
-        if (p.shown) { setShown(p, false); pagesAwayForPanel = true; panelFromPkg = StoryAccessibilityService.foregroundPkg; updateBubble() }
-        StoryAccessibilityService.instance?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_NOTIFICATIONS)
-    }
-    fun onPhonePanel(open: Boolean) { ui.post {
-        if (open || !pagesAwayForPanel) return@post
-        ui.postDelayed({
-            if (!pagesAwayForPanel) return@postDelayed
-            pagesAwayForPanel = false
-            val p = pagesPane ?: return@postDelayed
-            if (!p.shown && StoryAccessibilityService.foregroundPkg == panelFromPkg) { setShown(p, true); updateBubble(); addBar() }
-        }, 250)
-    } }
-
     /** The Pages (hidden now) go back to the top layer, with Station 3, the bar and the line above them. */
     private fun pagesBackToTop() {
         val p = pagesPane ?: return
