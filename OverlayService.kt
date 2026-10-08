@@ -849,7 +849,7 @@ class OverlayService : Service(), StoryBridge.Host {
         dialPane?.takeIf { it.shown }?.let { hideOne(it) }
         p.web.evaluateJavascript(profileGeometryJs(), null)
         profileGapPane?.web?.evaluateJavascript(profileGeometryJs(), null)
-        p.web.evaluateJavascript("window.storyProfileRefresh&&window.storyProfileRefresh()", null)  // always the latest real numbers
+        p.web.evaluateJavascript("window.storyProfileRefresh&&window.storyProfileRefresh();window.storyProfilePhotoChanged&&window.storyProfilePhotoChanged()", null)  // always the latest real numbers and picture
         setShown(p, true)
         tellProfileStation3()
     } }
@@ -866,10 +866,11 @@ class OverlayService : Service(), StoryBridge.Host {
         pickerHid = listOfNotNull(profilePane, pagesPane).filter { it.shown }
         for (p in pickerHid) setShown(p, false)
         runCatching { startActivity(Intent(this, ProfilePhotoActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)) }
-            .onFailure { profilePhotoPicked(false) }
+            .onFailure { profilePhotoPicked(false, true) }
     } }
-    fun profilePhotoPicked(changed: Boolean) { ui.post {
+    fun profilePhotoPicked(changed: Boolean, failed: Boolean) { ui.post {
         val back = pickerHid; pickerHid = listOf()
+        if (failed) showToast("Couldn't use that picture - try another one")
         for (p in back) if (!p.shown) setShown(p, true)
         if (profilePane in back) tellProfileStation3()
         if (changed) profilePane?.web?.evaluateJavascript("window.storyProfilePhotoChanged&&window.storyProfilePhotoChanged()", null)
