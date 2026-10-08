@@ -1743,6 +1743,9 @@
   #story-profile .pf-field-box{ display:flex; align-items:center; gap:2px; border:1px solid var(--pf-fg); border-radius:12px; padding:0 14px; }
   #story-profile .pf-field-at{ font-size:16px; color:var(--pf-muted); }
   #story-profile .pf-field-box input{ flex:1; min-width:0; border:none; outline:none; background:transparent; color:var(--pf-fg); font-size:16px; font-family:inherit; padding:13px 0; caret-color:var(--pf-fg); -webkit-user-select:text; user-select:text; }
+  #story-profile .pf-field-box textarea{ flex:1; min-width:0; border:none; outline:none; background:transparent; color:var(--pf-fg); font-size:15px; line-height:1.45; font-family:inherit; padding:12px 0; resize:none; caret-color:var(--pf-fg); -webkit-user-select:text; user-select:text; }
+  #story-profile .pf-field-box textarea::placeholder{ color:var(--pf-muted); }
+  #story-profile .pf-bio-t{ white-space:pre-wrap; overflow-wrap:anywhere; }
   #story-profile .pf-field-box input::placeholder{ color:var(--pf-muted); }
   #story-profile .pf-field-msg{ font-size:12px; color:var(--pf-muted); margin:8px 2px 0; min-height:16px; }
   #story-profile .pf-field-msg.bad{ color:#e63946; }
@@ -5255,6 +5258,8 @@ window.storyProfileText = function(){
   el.querySelector('.pf-user').textContent = '@' + p.username;
   el.querySelector('[data-pf="ed-name"] .pf-ed-val').textContent = p.name;
   el.querySelector('[data-pf="ed-username"] .pf-ed-val').textContent = '@' + p.username;
+  el.querySelector('[data-pf="ed-bio"] .pf-ed-val').textContent = p.bio || 'Nothing here yet.';
+  el.querySelector('.pf-bio-t').innerHTML = p.bio ? escText(p.bio) : '<span style="color:var(--pf-muted)">Nothing here yet.</span>';
 };
 window.addEventListener('storage', e=>{ if(e.key === PF_DATA_KEY) window.storyProfileText(); });
 // Usernames: 3-30 of a-z, 0-9, _ and . (no dot at the start or end, no two dots in a row).
@@ -5269,39 +5274,52 @@ function usernameProblem(u){
 function openProfileField(k){
   const el = document.getElementById('story-profile'); if(!el) return;
   const p = profileData();
-  const f = el.querySelector('.pf-field'), inp = f.querySelector('input');
+  const f = el.querySelector('.pf-field');
   f.setAttribute('data-field', k);
-  f.querySelector('.pf-ed-title').textContent = k === 'name' ? 'Name' : 'Username';
+  f.querySelector('.pf-ed-title').textContent = k === 'name' ? 'Name' : k === 'username' ? 'Username' : 'Bio';
   f.querySelector('.pf-field-at').hidden = k !== 'username';
-  inp.maxLength = 30;
-  inp.value = k === 'name' ? (p.name === 'NAME' ? '' : p.name) : (p.username === 'username' ? '' : p.username);
-  inp.placeholder = k === 'name' ? 'Your name' : 'username';
-  inp.autocapitalize = k === 'name' ? 'words' : 'none';
+  f.querySelector('input').hidden = k === 'bio'; f.querySelector('textarea').hidden = k !== 'bio';
+  const inp = profileFieldBox();
+  if(k === 'bio'){ inp.value = p.bio; inp.placeholder = 'Tell your story'; }
+  else {
+    inp.maxLength = 30;
+    inp.value = k === 'name' ? (p.name === 'NAME' ? '' : p.name) : (p.username === 'username' ? '' : p.username);
+    inp.placeholder = k === 'name' ? 'Your name' : 'username';
+    inp.autocapitalize = k === 'name' ? 'words' : 'none';
+  }
   checkProfileField();
   el.querySelector('.pf-editor').hidden = true; f.hidden = false;
+  profileTypingOn();
   inp.focus();
+  if(k === 'bio') inp.setSelectionRange(inp.value.length, inp.value.length);
 }
+function profileFieldBox(){
+  const f = document.querySelector('#story-profile .pf-field'); if(!f) return null;
+  return f.getAttribute('data-field') === 'bio' ? f.querySelector('textarea') : f.querySelector('input');
+}
+// Ask the app for the keyboard (as the box opens and whenever it's tapped).
+function profileTypingOn(){ if(NATIVE && window.StoryNative.setTyping) try{ window.StoryNative.setTyping(true); }catch(err){} }
 function checkProfileField(){
   const f = document.querySelector('#story-profile .pf-field'); if(!f) return false;
-  const inp = f.querySelector('input'), k = f.getAttribute('data-field');
+  const inp = profileFieldBox(), k = f.getAttribute('data-field');
   if(k === 'username'){ const low = inp.value.toLowerCase().replace(/\s+/g, ''); if(low !== inp.value) inp.value = low; }
   const v = inp.value.trim();
-  const problem = k === 'name' ? (v ? '' : 'Your name can’t be empty.') : usernameProblem(v);
-  f.querySelector('.pf-field-msg').textContent = v ? problem : (k === 'name' ? '' : 'Your @ on STORY.');
+  const problem = k === 'name' ? (v ? '' : 'Your name can’t be empty.') : k === 'username' ? usernameProblem(v) : '';
+  f.querySelector('.pf-field-msg').textContent = k === 'bio' ? inp.value.length + ' / 150' : v ? problem : (k === 'name' ? '' : 'Your @ on STORY.');
   f.querySelector('.pf-field-msg').classList.toggle('bad', !!(v && problem));
   f.querySelector('[data-pf="field-save"]').disabled = !!problem;
   return !problem;
 }
 function saveProfileField(){
   const f = document.querySelector('#story-profile .pf-field'); if(!f || !checkProfileField()) return;
-  const k = f.getAttribute('data-field'), v = f.querySelector('input').value.trim();
-  saveProfileData(k === 'name' ? { name: v } : { username: v });
+  const k = f.getAttribute('data-field'), v = profileFieldBox().value.trim();
+  saveProfileData(k === 'name' ? { name: v } : k === 'username' ? { username: v } : { bio: v.replace(/\n{3,}/g, '\n\n') });
   closeProfileField();
 }
 function closeProfileField(){
   const el = document.getElementById('story-profile'); if(!el) return;
   const f = el.querySelector('.pf-field');
-  f.querySelector('input').blur();
+  const box = profileFieldBox(); if(box) box.blur();
   f.hidden = true; el.querySelector('.pf-editor').hidden = false;
 }
 window.storyProfileOnly = function(){
@@ -5326,7 +5344,7 @@ window.storyProfileOnly = function(){
         <div class="pf-stat"><div class="pf-stat-n" data-pf-stat="followers">${fmtCount(st.followers)}</div><div class="pf-stat-l">Followers</div></div>
         <div class="pf-stat"><div class="pf-stat-n" data-pf-stat="posts">${fmtCount(st.posts)}</div><div class="pf-stat-l">Posts</div></div>
       </div>
-      <div class="pf-bio"><div class="pf-bio-l">BIO</div>${p.bio ? escText(p.bio) : '<span style="color:var(--pf-muted)">Nothing here yet.</span>'}</div>
+      <div class="pf-bio"><div class="pf-bio-l">BIO</div><div class="pf-bio-t">${p.bio ? escText(p.bio) : '<span style="color:var(--pf-muted)">Nothing here yet.</span>'}</div></div>
       <button class="pf-edit" data-pf="edit">Edit profile</button>
     </div>
     <div class="pf-scroll pf-editor" hidden>
@@ -5342,7 +5360,7 @@ window.storyProfileOnly = function(){
     </div>
     <div class="pf-scroll pf-field" hidden>
       <div class="pf-ed-head"><button class="pf-ed-back" data-pf="field-back" aria-label="Back">‹</button><div class="pf-ed-title">Name</div><button class="pf-field-save" data-pf="field-save">Save</button></div>
-      <label class="pf-field-box"><span class="pf-field-at">@</span><input type="text" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="done"></label>
+      <div class="pf-field-box" data-pf="field-box"><span class="pf-field-at">@</span><input type="text" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="done"><textarea rows="5" maxlength="150"></textarea></div>
       <div class="pf-field-msg"></div>
     </div>
     <div class="pf-scroll pf-photos" hidden>
@@ -5386,17 +5404,20 @@ window.storyProfileOnly = function(){
     }
     else if(k === 'ed-name') openProfileField('name');
     else if(k === 'ed-username') openProfileField('username');
+    else if(k === 'field-box'){ const box = profileFieldBox(); profileTypingOn(); if(box && document.activeElement !== box) box.focus(); }
     else if(k === 'field-back') closeProfileField();
     else if(k === 'field-save') saveProfileField();
-    else if(k === 'ed-bio') showToast('Bio — coming soon');
+    else if(k === 'ed-bio') openProfileField('bio');
     else showToast('Profile menu — coming soon');
   });
-  const fieldInput = el.querySelector('.pf-field input');
-  fieldInput.addEventListener('input', checkProfileField);
+  const fieldInput = el.querySelector('.pf-field input'), bioBox = el.querySelector('.pf-field textarea');
   fieldInput.addEventListener('keydown', e=>{ if(e.key === 'Enter'){ e.preventDefault(); saveProfileField(); } });
-  // The app gives Profile the keyboard only while a box is being typed in.
-  fieldInput.addEventListener('focus', ()=>{ if(NATIVE && window.StoryNative.setTyping) try{ window.StoryNative.setTyping(true); }catch(err){} });
-  fieldInput.addEventListener('blur', ()=>{ if(NATIVE && window.StoryNative.setTyping) try{ window.StoryNative.setTyping(false); }catch(err){} });
+  for(const box of [fieldInput, bioBox]){
+    box.addEventListener('input', checkProfileField);
+    box.addEventListener('pointerdown', profileTypingOn);
+    box.addEventListener('focus', profileTypingOn);
+    box.addEventListener('blur', ()=>{ if(NATIVE && window.StoryNative.setTyping) try{ window.StoryNative.setTyping(false); }catch(err){} });
+  }
   el.querySelector('.pf-photos').addEventListener('scroll', e=>{
     const sc = e.currentTarget;
     if(sc.scrollTop + sc.clientHeight > sc.scrollHeight - 600 && pfPhotoShown < pfPhotoIds.length) morePhotos();
@@ -5424,7 +5445,7 @@ window.storyProfilePhotoChanged = function(){
 // Profile closed: next time it opens on the profile itself (not Edit profile or the picture).
 window.storyProfileReset = function(){
   const el = document.getElementById('story-profile'); if(!el || PF_GAP_WINDOW) return;
-  const fi = el.querySelector('.pf-field input'); if(document.activeElement === fi) fi.blur();
+  const ae = document.activeElement; if(ae && ae.closest && ae.closest('.pf-field')) ae.blur();
   el.querySelector('.pf-editor').hidden = true; el.querySelector('.pf-viewer').hidden = true; el.querySelector('.pf-photos').hidden = true; el.querySelector('.pf-field').hidden = true;
   const main = el.querySelector('.pf-scroll:not(.pf-editor)'); main.hidden = false; main.scrollTop = 0;
 };

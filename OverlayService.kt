@@ -572,7 +572,8 @@ class OverlayService : Service(), StoryBridge.Host {
 
     private fun setShown(p: Pane, shown: Boolean) {
         p.shown = shown
-        p.lp.flags = if (p.gap) flagsFor(true, false) else flagsFor(p.small, shown)
+        // Profile's main window takes the keyboard like the Pages do (so typing a name / username / bio just works).
+        p.lp.flags = if (p.gap) flagsFor(true, false) else if (p.profile) flagsFor(false, shown) else flagsFor(p.small, shown)
         // Android 12+ throws away touches that pass through another app's fully opaque window,
         // even an untouchable one. A hidden pane is fully see-through, so apps underneath get every touch.
         p.lp.alpha = if (shown) 1f else 0f
@@ -585,7 +586,7 @@ class OverlayService : Service(), StoryBridge.Host {
             showProfileStrip(shown)
             if (!shown) profileGapPane?.web?.evaluateJavascript("window.storyProfileS3&&window.storyProfileS3(true)", null)
         }
-        if (shown && !p.small) p.web.requestFocus()
+        if (shown && (!p.small || (p.profile && !p.gap))) p.web.requestFocus()
         if (p === pagesPane) { quietApps(shown); updateBarLine(); if (!shown && pagesTyping) pagesBackToTop() }
     }
 
@@ -927,12 +928,9 @@ class OverlayService : Service(), StoryBridge.Host {
         runCatching { ProfilePhotoActivity.file(this).delete() }
         profilePane?.web?.evaluateJavascript("window.storyProfilePhotoChanged&&window.storyProfilePhotoChanged()", null)
     } }
-    /** Typing in Profile (Edit profile > Name / Username): its window takes the keyboard only while you type. */
+    /** Typing in Profile (Edit profile > Name / Username / Bio): the keyboard comes up as the box opens. */
     override fun profileTyping(on: Boolean) { ui.post {
         val p = profilePane?.takeIf { it.shown } ?: return@post
-        val nf = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-        p.lp.flags = if (on) p.lp.flags and nf.inv() else p.lp.flags or nf
-        runCatching { p.wm.updateViewLayout(p.frame, p.lp) }
         val imm = getSystemService(android.view.inputmethod.InputMethodManager::class.java)
         if (on) {
             p.web.requestFocus()
