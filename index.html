@@ -2153,7 +2153,7 @@
 
   /* Flat Circle -- real 2D positions computed in JS (setupCircleAndWheelDrag), drag
      follows 1:1, no momentum. */
-  .pswitch-circle2d{ position:relative; height:340px; touch-action:none; user-select:none; }
+  .pswitch-circle2d{ position:relative; height:300px; touch-action:none; user-select:none; }
   .pswitch-circle2d-item{
     position:absolute; left:50%; top:50%; width:118px; height:150px; margin:-75px 0 0 -59px;
     --mscale:0.34; box-shadow:0 10px 24px rgba(0,0,0,0.4);
@@ -2169,7 +2169,7 @@
     pointer-events:none;
   }
   /* The ring is exactly the path the cards' centres travel (RADIUS_X / RADIUS_Y in setupCircleAndWheelDrag). */
-  .pswitch-circle2d .circle-track-ring{ width:264px; height:240px; margin:-120px 0 0 -132px; clip-path:inset(50% -4px -4px -4px); }
+  .pswitch-circle2d .circle-track-ring{ width:280px; height:92px; margin:-46px 0 0 -140px; z-index:0; }
 
   /* 3D Circle (wheel) -- a real perspective cylinder. Each page is cut into thin vertical
      strips (.curve-slice, generated in pswitchWheel3dHTML) that are each rotated a fraction
@@ -3249,7 +3249,7 @@ function pswitchCircle2dHTML(navAttr){
     <div class="pswitch-circle2d" data-circle2d>
       <div class="circle-track-ring"></div>
       ${PAGE_SWITCH_ITEMS.map((item,i)=>`
-        <div class="pswitch-tile pswitch-circle2d-item" data-${navAttr}="${item.key}" data-baseangle="${90 - (i - (PAGE_SWITCH_ITEMS.length - 1) / 2) * 34}">
+        <div class="pswitch-tile pswitch-circle2d-item" data-${navAttr}="${item.key}" data-baseangle="${90 - (i - Math.floor(PAGE_SWITCH_ITEMS.length / 2)) * 360 / PAGE_SWITCH_ITEMS.length}">
           ${miniPagePreviewHTML(item.key)}
           ${tileLabelHTML(item, navAttr)}
         </div>
@@ -8349,29 +8349,30 @@ function setupCircleAndWheelDrag(){
   const circleEl = document.querySelector('[data-circle2d]');
   if(circleEl){
     const items = [...circleEl.querySelectorAll('.pswitch-circle2d-item')];
-    const RADIUS_X = 132, RADIUS_Y = 120;  // = the ring's size (.pswitch-circle2d .circle-track-ring), so the cards sit on it
-    // Owner: a real circle whose top isn't visible - the pages stand straight in a line across it (only their size
-    // and order change as it turns), the front half of the ring showing underneath; swipe to bring each page to
-    // the front (it settles one page at a time).
-    const STEP = 34, n = items.length, LIMIT = (n - 1) / 2 * STEP;
+    const RADIUS_X = 140, RADIUS_Y = 46;  // = the ring's size (.pswitch-circle2d .circle-track-ring): a flat circle, the cards stand on it
+    // Owner: the circle lies FLAT (like a turntable seen from the front) - a wide, flat ring; the row's pages stand
+    // straight on it, spread evenly all the way round (row order, the middle one in front). Pages going round the
+    // back get smaller and disappear behind; swipe turns it one page at a time, round and round.
+    const STEP = 360 / Math.max(1, items.length);
     const layout = (rotDeg)=>{
       items.forEach(el=>{
         const base = parseFloat(el.getAttribute('data-baseangle')) || 0;
         const angle = (base + rotDeg) * Math.PI / 180;
         const x = Math.cos(angle) * RADIUS_X;
-        const depth = Math.max(0, Math.sin(angle)); // 1 = in front
-        el.style.transform = `translate(${x}px, 0px) scale(${(0.78 + depth*0.22).toFixed(3)})`;
-        el.style.zIndex = String(Math.round(depth*100));
-        el.style.opacity = String(Math.max(0, Math.min(1, (depth - 0.35) / 0.4)).toFixed(2));
+        const y = Math.sin(angle) * RADIUS_Y;
+        const depth = (Math.sin(angle) + 1) / 2; // 0 = at the back .. 1 = in front
+        el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) scale(${(0.62 + depth*0.38).toFixed(3)})`;
+        el.style.zIndex = String(10 + Math.round(depth*100));
+        el.style.opacity = String(Math.max(0, Math.min(1, (depth - 0.12) / 0.3)).toFixed(2));
       });
     };
     const settle = ()=>{
-      state.circleRotDeg = Math.max(-LIMIT, Math.min(LIMIT, Math.round(state.circleRotDeg / STEP) * STEP));
-      items.forEach(el=>{ el.style.transition = 'transform 0.25s ease, opacity 0.25s ease'; });
+      state.circleRotDeg = Math.round(state.circleRotDeg / STEP) * STEP;
+      items.forEach(el=>{ el.style.transition = 'transform 0.3s ease, opacity 0.3s ease'; });
       layout(state.circleRotDeg);
-      setTimeout(()=>items.forEach(el=>{ el.style.transition = ''; }), 260);
+      setTimeout(()=>items.forEach(el=>{ el.style.transition = ''; }), 320);
     };
-    state.circleRotDeg = Math.max(-LIMIT, Math.min(LIMIT, Math.round((state.circleRotDeg || 0) / STEP) * STEP));
+    state.circleRotDeg = Math.round((state.circleRotDeg || 0) / STEP) * STEP;
     layout(state.circleRotDeg);
     // The cards sit exactly in the middle of the screen (owner), whatever is above them.
     circleEl.style.transform = '';
@@ -8391,7 +8392,7 @@ function setupCircleAndWheelDrag(){
       const dx = e.clientX - startX;
       if(Math.abs(dx) > 5) dragged = true;
       // Swipe left -> the page on the right comes to the front.
-      state.circleRotDeg = Math.max(-LIMIT - 12, Math.min(LIMIT + 12, startRot - dx * 0.35));
+      state.circleRotDeg = startRot - dx * 0.5;
       layout(state.circleRotDeg);
       e.stopPropagation();
     });
