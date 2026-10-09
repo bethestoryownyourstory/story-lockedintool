@@ -1764,6 +1764,8 @@
   #story-profile .cr-btn{ width:46px; height:46px; border-radius:50%; border:none; background:rgba(0,0,0,0.35); color:#fff; display:flex; align-items:center; justify-content:center; padding:0; }
   #story-profile .cr-btn:active{ opacity:0.6; }
   #story-profile .cr-btn.dim{ opacity:0.45; }
+  #story-profile .cr-shot.see-through{ background:transparent; }
+  #story-profile .cr-status{ position:absolute; left:50%; transform:translateX(-50%); top:calc(var(--pf-top, 24px) + 22px); max-width:60%; text-align:center; font-size:12px; font-weight:600; color:#fff; background:rgba(0,0,0,0.5); padding:6px 10px; border-radius:10px; }
   #story-profile .cr-del{ position:absolute; left:16px; top:calc(var(--pf-top, 24px) + 12px); }
   #story-profile .cr-btn-space{ width:46px; height:46px; }
   #story-profile .cr-side{ position:absolute; right:16px; display:flex; flex-direction:column; gap:12px; top:calc(var(--pf-top, 24px) + 12px); }
@@ -5480,6 +5482,7 @@ window.storyProfileOnly = function(){
     </div>
     <div class="pf-create" hidden>
       <div class="cr-shot" hidden><img alt="" hidden><video playsinline loop hidden></video></div>
+      <div class="cr-status" hidden></div>
       <button class="cr-btn cr-del" data-pf="cr-delete" aria-label="Delete" hidden><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>
       <div class="cr-side">
         <button class="cr-btn" data-pf="cr-post" aria-label="Post"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>
@@ -5651,7 +5654,7 @@ window.storyProfileReset = function(){
   const ms = el.querySelector('.pf-msgs-search input'); if(ms){ ms.value = ''; } msgView.q = ''; msgView.menuFor = null;
   if(crRecording && NATIVE && window.StoryNative.createVideo) window.StoryNative.createVideo(false);
   if(crHas && NATIVE && window.StoryNative.createDiscard) window.StoryNative.createDiscard();
-  crRecording = false; crClear(); el.querySelector('.cr-sheet').hidden = true; crCameraReady = false; clearTimeout(crWatch); crMode = null;
+  crRecording = false; crClear(); el.querySelector('.cr-sheet').hidden = true; crCameraReady = false; clearTimeout(crWatch); crMode = null; crStatus('');
   el.classList.remove('pf-creating'); el.querySelector('.pf-create').hidden = true;
   const main = el.querySelector('.pf-home'); main.hidden = false; main.scrollTop = 0;
 };
@@ -5689,7 +5692,10 @@ function crRender(){
   cr.querySelector('.cr-shutter').classList.toggle('vid', crMode === 'video');
   const shot = cr.querySelector('.cr-shot'), img = shot.querySelector('img'), vid = shot.querySelector('video');
   shot.hidden = !crHas;
-  img.hidden = crHas !== 'photo'; vid.hidden = crHas !== 'video';
+  // In the app a video plays on the phone's own player underneath (see-through here); the browser plays it itself.
+  const nativeVid = NATIVE && crHas === 'video';
+  shot.classList.toggle('see-through', nativeVid);
+  img.hidden = crHas !== 'photo'; vid.hidden = crHas !== 'video' || nativeVid;
   cr.querySelector('[data-pf="cr-post"]').classList.toggle('dim', !crHas);
   cr.querySelector('.cr-del').hidden = !crHas;
 }
@@ -5700,9 +5706,18 @@ function crClear(){
   crHas = ''; crRender();
 }
 // What the camera / phone reports back.
+// Until the camera picture is flowing, a small line says which step the camera is on (so a problem is never silent).
+const CR_STEPS = { launching:'Camera: opening…', opened:'Camera: starting…', asking:'Camera: waiting for your OK…', ready:'Camera: connecting…' };
+function crStatus(t){
+  const el = document.getElementById('story-profile'); if(!el) return;
+  const st = el.querySelector('.cr-status'); st.textContent = t || ''; st.hidden = !t;
+}
 window.storyCreateEvent = function(kind, why){
   const el = document.getElementById('story-profile'); if(!el) return;
-  if(kind === 'ready'){ crCameraReady = true; clearTimeout(crWatch); return; }
+  if(kind === 'streaming'){ crCameraReady = true; clearTimeout(crWatch); crStatus(''); return; }
+  if(CR_STEPS[kind] && !crCameraReady) crStatus(CR_STEPS[kind]);
+  if(kind === 'launching' || kind === 'opened') return;
+  if(kind === 'ready'){ clearTimeout(crWatch); return; }
   if(kind === 'asking'){ clearTimeout(crWatch); return; }  // Android is asking for the camera (first time only)
   if(kind === 'recording'){ crRecording = true; crRender(); return; }
   if(kind === 'photo' || kind === 'video'){
@@ -5710,19 +5725,22 @@ window.storyCreateEvent = function(kind, why){
     const url = PF_PHOTO_BASE + 'capture?v=' + Date.now();
     const shot = el.querySelector('.cr-shot');
     if(kind === 'photo') shot.querySelector('img').src = url;
-    else { const v = shot.querySelector('video'); v.src = url; v.play().catch(()=>{}); }
+    else if(!NATIVE){ const v = shot.querySelector('video'); v.src = url; v.play().catch(()=>{}); }
     crHas = kind; crRender(); return;
   }
   crRecording = false; crRender();
   if(kind === 'denied') showToast('STORY isn’t allowed to use the camera');
-  else if(kind === 'error'){ clearTimeout(crWatch); showToast('Camera problem' + (why ? ': ' + why : ' — try again')); }
+  else if(kind === 'error'){
+    clearTimeout(crWatch); showToast('Camera problem' + (why ? ': ' + why : ' — try again'));
+    if(!crCameraReady) crStatus('Camera problem' + (why ? ': ' + why : ''));
+  }
 };
 // If the camera hasn't opened a few seconds after Create opens, say so (instead of a silent blank screen).
 let crWatch = 0;
 function crWatchCamera(){
   clearTimeout(crWatch);
   if(!NATIVE) return;
-  crWatch = setTimeout(()=>{ const el = document.getElementById('story-profile'); if(el && !el.querySelector('.pf-create').hidden) showToast('The camera didn’t open — close Create and open it again'); }, 6000);
+  crWatch = setTimeout(()=>{ const el = document.getElementById('story-profile'); if(el && !el.querySelector('.pf-create').hidden && !crCameraReady){ showToast('The camera didn’t open — close Create and open it again'); crStatus((el.querySelector('.cr-status').textContent || 'Camera') + ' (stuck)'); } }, 6000);
 }
 function crShutterDown(){
   if(crHas){ crHoldT = 0; return; }  // looking at what you made: delete it (bin, top left) or post it (✓)
@@ -5774,8 +5792,8 @@ function renderHighlights(){
   const hl = profileHighlights().filter(h=>h.items.length);
   row.hidden = !hl.length;
   row.innerHTML = hl.map(h=>{
-    const c = h.items[0], src = PF_PHOTO_BASE + 'post/' + c.id;
-    const cover = c.kind === 'video' ? '<video muted playsinline preload="metadata" src="' + src + '#t=0.1"></video>' : '<img alt="" loading="lazy" src="' + src + '">';
+    const c = h.items[0];
+    const cover = '<img alt="" loading="lazy" src="' + PF_PHOTO_BASE + (c.kind === 'video' ? 'postthumb/' : 'post/') + c.id + '">';
     return '<button class="pf-hl" data-pf="hl-open" data-id="' + escText(h.id) + '"><span class="pf-hl-c">' + cover + '</span><span class="pf-hl-n">' + escText(h.name) + '</span></button>';
   }).join('');
 }
