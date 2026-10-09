@@ -23,6 +23,9 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- Settings > QUICK ACCESS: the dial pad's call button calls straight away (lock screen too). -->
     <uses-permission android:name="android.permission.CALL_PHONE" />
+    <!-- Station 3 > Call history: when each call made from STORY ended and how long it lasted; contact names. -->
+    <uses-permission android:name="android.permission.READ_CALL_LOG" />
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
     <uses-feature android:name="android.hardware.telephony" android:required="false" />
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />

@@ -170,6 +170,8 @@ class OverlayService : Service(), StoryBridge.Host {
         runCatching { getSystemService(android.hardware.display.DisplayManager::class.java).registerDisplayListener(displayWatch, ui) }
         val onFilter = android.content.IntentFilter(Intent.ACTION_SCREEN_ON)
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(screenOn, onFilter, Context.RECEIVER_NOT_EXPORTED) else registerReceiver(screenOn, onFilter)
+        runCatching { contentResolver.registerContentObserver(android.provider.CallLog.Calls.CONTENT_URI, true, callLogWatch) }
+        Thread { if (CallHistory.finishFromLog(this)) ui.post { tellCalls() } }.start()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -188,6 +190,7 @@ class OverlayService : Service(), StoryBridge.Host {
         ui.removeCallbacks(updateLoop); ui.removeCallbacks(resumeAfterInstall)
         runCatching { unregisterReceiver(unlocked) }
         runCatching { unregisterReceiver(screenOn) }
+        runCatching { contentResolver.unregisterContentObserver(callLogWatch) }
         runCatching { unregisterReceiver(screenOff) }
         runCatching { unregisterReceiver(appsChanged) }
         ui.removeCallbacks(hideToast); hideToast.run()
@@ -1033,6 +1036,7 @@ class OverlayService : Service(), StoryBridge.Host {
         val n = number.filter { it.isDigit() || it in "+*#" }
         if (n.isEmpty()) return@post
         val uri = android.net.Uri.fromParts("tel", n, null)
+        CallHistory.placed(this, n); tellCalls()  // Call history: every call made from STORY
         val allowed = checkSelfPermission(android.Manifest.permission.CALL_PHONE) == android.content.pm.PackageManager.PERMISSION_GRANTED
         val ok = allowed && runCatching { getSystemService(android.telecom.TelecomManager::class.java).placeCall(uri, android.os.Bundle()) }.isSuccess
         if (!ok) {
@@ -1055,7 +1059,7 @@ class OverlayService : Service(), StoryBridge.Host {
         runCatching { startActivity(Intent(this, AskActivity::class.java).putExtra(AskActivity.EXTRA_PERMS, perms).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)) }
             .onFailure { comeBackFromSystem() }
     }
-    fun permissionsDone() { ui.post { comeBackFromSystem() } }
+    fun permissionsDone() { ui.post { comeBackFromSystem(); Thread { CallHistory.finishFromLog(this); ui.post { tellCalls() } }.start() } }
 
     // ---- Profile and Messages: Station 3's profile / messages buttons open them in ONE window attached to Station 3
     //      (same gap, line and scene). Its own button closes it; the other button switches straight over. ----
@@ -1063,6 +1067,25 @@ class OverlayService : Service(), StoryBridge.Host {
     override fun toggleProfile() = toggleS3Page("profile")
     override fun toggleMessages() = toggleS3Page("messages")
     override fun toggleCreate() = toggleS3Page("create")
+    /** Station 3's call history button: Call history in the same window. The first time, ask once to read the
+     *  phone's call log (for when each STORY call ended and how long it lasted) and contacts (names). */
+    override fun toggleCalls() {
+        toggleS3Page("calls")
+        val perms = arrayOf(android.Manifest.permission.READ_CALL_LOG, android.Manifest.permission.READ_CONTACTS)
+        val prefs = getSharedPreferences("story", MODE_PRIVATE)
+        if (!prefs.getBoolean("calls_asked", false) && perms.any { checkSelfPermission(it) != android.content.pm.PackageManager.PERMISSION_GRANTED }) {
+            prefs.edit().putBoolean("calls_asked", true).apply()
+            ui.postDelayed({ askPermissions(perms) }, 300)
+        }
+    }
+    override fun getCalls(): String = CallHistory.json(this)
+    private fun tellCalls() { profilePane?.web?.evaluateJavascript("window.storyCallsChanged&&window.storyCallsChanged()", null) }
+    // A call ended (the phone's call log changed): fill in the STORY calls that were waiting for it.
+    private val callLogWatch = object : android.database.ContentObserver(ui) {
+        override fun onChange(selfChange: Boolean) {
+            Thread { if (CallHistory.finishFromLog(this@OverlayService)) ui.post { tellCalls() } }.start()
+        }
+    }
     private fun toggleS3Page(which: String) { ui.post {
         val p = profilePane ?: return@post
         if (p.shown && s3Page == which) { hideOne(p); return@post }

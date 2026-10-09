@@ -33,6 +33,8 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         fun callNumber(number: String)
         fun setQuickAccess(json: String)
         fun toggleCreate()
+        fun toggleCalls()
+        fun getCalls(): String
         fun createShutter()
         fun createVideo(on: Boolean)
         fun createUseFromPhone(id: Long, video: Boolean)
@@ -142,6 +144,13 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
     /** Station 3's + (Create & post): Create opens in the same window, the real camera underneath it. */
     @JavascriptInterface
     fun toggleCreate() { if (station3) host.toggleCreate() }
+
+    /** Station 3's call history button: Call history in the same window; its list (every call made from STORY). */
+    @JavascriptInterface
+    fun toggleCalls() { if (station3) host.toggleCalls() }
+
+    @JavascriptInterface
+    fun getCalls(): String = if (profile) host.getCalls() else "[]"
 
     /** Create: shutter (picture), video on / off, + (from the phone), throw away, ✓ keep as a post. */
     @JavascriptInterface
