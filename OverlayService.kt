@@ -915,6 +915,7 @@ class OverlayService : Service(), StoryBridge.Host {
         val file = when (seg.getOrNull(1)) {
             "capture" -> CreateCameraActivity.currentCapture(this)
             "post" -> seg.getOrNull(2)?.let { CreateCameraActivity.postFile(this, it) }
+            "postthumb" -> seg.getOrNull(2)?.let { CreateCameraActivity.postThumb(this, it) }
             else -> null
         }
         if (file != null) return fileResponse(file, r.requestHeaders)
@@ -966,7 +967,19 @@ class OverlayService : Service(), StoryBridge.Host {
         if (want) {
             pagesHiddenForCreate = pagesPane?.shown == true
             pagesPane?.takeIf { it.shown }?.let { setShown(it, false) }
-            runCatching { startActivity(Intent(this, CreateCameraActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)) }
+            createEvent("launching", "")
+            val i = Intent(this, CreateCameraActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
+            runCatching { startActivity(i) }.onFailure { createEvent("error", "camera screen: " + (it.message ?: "")) }
+            // Some phones quietly block an app from opening its own screen from the background: ask again the
+            // way Android 14+ allows explicitly, and if it still hasn't opened, say so.
+            ui.postDelayed({
+                if (createActive && CreateCameraActivity.instance == null) runCatching {
+                    val pi = android.app.PendingIntent.getActivity(this, 7, i, android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT)
+                    if (Build.VERSION.SDK_INT >= 34) pi.send(android.app.ActivityOptions.makeBasic().setPendingIntentBackgroundActivityStartMode(android.app.ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED).toBundle())
+                    else pi.send()
+                }
+            }, 1500)
+            ui.postDelayed({ if (createActive && CreateCameraActivity.instance == null) createEvent("error", "the phone didn't let STORY open its camera screen") }, 4500)
         } else {
             CreateCameraActivity.instance?.let { it.finish(); it.overridePendingTransition(0, 0) }
             if (pagesHiddenForCreate) { pagesHiddenForCreate = false; pagesPane?.takeIf { !it.shown }?.let { setShown(it, true) } }
@@ -977,6 +990,9 @@ class OverlayService : Service(), StoryBridge.Host {
     fun closeS3WindowFromCamera() { ui.post { profilePane?.takeIf { it.shown }?.let { hideOne(it) } } }
     /** The camera tells Create what happened: ready / recording / photo / video / denied / error. */
     fun createEvent(kind: String, extra: String) { ui.post {
+        // A video plays on the phone's own player under Create; anything else stops it.
+        if (kind == "video") CreateCameraActivity.instance?.playCapture()
+        else if (kind == "photo") CreateCameraActivity.instance?.stopPlayback()
         profilePane?.web?.evaluateJavascript("window.storyCreateEvent&&window.storyCreateEvent('$kind'," + org.json.JSONObject.quote(extra) + ")", null)
     } }
     override fun createShutter() { ui.post { CreateCameraActivity.instance?.takePhoto() ?: createEvent("error", "") } }
@@ -988,8 +1004,8 @@ class OverlayService : Service(), StoryBridge.Host {
         }.start()
     }
     override fun createSwitchCamera() { ui.post { CreateCameraActivity.instance?.switchCamera() } }
-    override fun createDiscard() { CreateCameraActivity.clearCapture(this) }
-    override fun createKeep(): String = CreateCameraActivity.keepCapture(this)
+    override fun createDiscard() { ui.post { CreateCameraActivity.instance?.stopPlayback() }; CreateCameraActivity.clearCapture(this) }
+    override fun createKeep(): String { ui.post { CreateCameraActivity.instance?.stopPlayback() }; return CreateCameraActivity.keepCapture(this) }
 
     private fun stepAsideForSystem(): Boolean {
         if (pickerHid.isNotEmpty()) return false

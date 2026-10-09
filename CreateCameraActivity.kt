@@ -41,8 +41,17 @@ class CreateCameraActivity : AppCompatActivity() {
             scaleType = PreviewView.ScaleType.FILL_CENTER; setBackgroundColor(Color.BLACK)
             implementationMode = PreviewView.ImplementationMode.COMPATIBLE  // drawn like a normal view, under STORY's window
         }
-        setContentView(FrameLayout(this).apply { setBackgroundColor(Color.BLACK); addView(preview, FrameLayout.LayoutParams(-1, -1)) })
-        previewView = preview
+        // The video you just made plays here, on the phone's own player (full screen, looping, with sound).
+        val player = android.widget.VideoView(this).apply { visibility = android.view.View.GONE }
+        setContentView(FrameLayout(this).apply {
+            setBackgroundColor(Color.BLACK)
+            addView(preview, FrameLayout.LayoutParams(-1, -1))
+            addView(player, FrameLayout.LayoutParams(-1, -1, android.view.Gravity.CENTER))
+        })
+        previewView = preview; videoPlayer = player
+        OverlayService.instance?.createEvent("opened", "")
+        // The camera picture actually flowing = the camera works (Create hides its status line then).
+        preview.previewStreamState.observe(this) { st -> if (st == PreviewView.StreamState.STREAMING) OverlayService.instance?.createEvent("streaming", "") }
         val need = arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO).filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
         if (need.isEmpty()) startCamera()
         else {
@@ -54,6 +63,18 @@ class CreateCameraActivity : AppCompatActivity() {
     }
 
     private var previewView: PreviewView? = null
+    private var videoPlayer: android.widget.VideoView? = null
+
+    /** Plays what was just made (a video) under Create, looping, with sound. */
+    fun playCapture() {
+        val f = currentCapture(this)?.takeIf { it.extension == "mp4" } ?: return
+        val v = videoPlayer ?: return
+        v.setOnPreparedListener { mp -> mp.isLooping = true; v.start() }
+        v.setOnErrorListener { _, what, extra -> OverlayService.instance?.createEvent("error", "playback $what/$extra"); true }
+        v.setVideoPath(f.absolutePath)
+        v.visibility = android.view.View.VISIBLE
+    }
+    fun stopPlayback() { videoPlayer?.let { runCatching { it.stopPlayback() }; it.visibility = android.view.View.GONE } }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
@@ -199,6 +220,7 @@ class CreateCameraActivity : AppCompatActivity() {
 
         /** Your posts and highlight items, kept on the phone. */
         fun postsDir(c: android.content.Context) = File(c.filesDir, "posts").apply { mkdirs() }
+        fun postThumb(c: android.content.Context, id: String): File? = File(postsDir(c), "${id}_t.jpg").takeIf { it.exists() }
         fun postFile(c: android.content.Context, id: String): File? =
             listOf("jpg", "mp4").map { File(postsDir(c), "$id.$it") }.firstOrNull { it.exists() }
 
@@ -209,6 +231,12 @@ class CreateCameraActivity : AppCompatActivity() {
             val kind = if (f.extension == "mp4") "video" else "photo"
             val to = File(postsDir(c), "$id.${f.extension}")
             if (!f.renameTo(to)) { f.copyTo(to, true); f.delete() }
+            if (kind == "video") runCatching {
+                // A still frame from the video, for covers (e.g. a highlight circle).
+                val r = android.media.MediaMetadataRetriever(); r.setDataSource(to.absolutePath)
+                val frame = r.getFrameAtTime(100_000); r.release()
+                frame?.let { b -> File(postsDir(c), "${id}_t.jpg").outputStream().use { b.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, it) } }
+            }
             return "$id:$kind"
         }
 
