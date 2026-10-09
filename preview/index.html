@@ -1857,6 +1857,13 @@
   #story-profile .pf-chat-send{ width:44px; height:44px; border-radius:50%; border:none; background:var(--pf-fg); color:var(--pf-bg); display:flex; align-items:center; justify-content:center; padding:0; flex-shrink:0; }
   #story-profile .pf-chat-send:disabled{ opacity:0.3; }
   #story-profile .pf-chat-send:not(:disabled):active{ opacity:0.6; }
+  /* Call history (Station 3's call history button, same window): every call made from STORY. */
+  #story-profile .call-row{ display:flex; align-items:center; gap:12px; padding:10px 0; }
+  #story-profile .call-dir{ display:inline-flex; vertical-align:-2px; margin-right:4px; }
+  #story-profile .call-row.missed .msg-who, #story-profile .call-row.missed .call-dir{ color:#e63946; }
+  #story-profile .call-end{ flex-shrink:0; display:flex; flex-direction:column; align-items:flex-end; gap:4px; font-size:12px; font-variant-numeric:tabular-nums; }
+  #story-profile .call-span{ color:var(--pf-fg); font-weight:600; }
+  #story-profile .call-day{ color:var(--pf-muted); font-size:11px; }
   /* Choose a picture: the phone's pictures, newest first, 3 across. */
   #story-profile .pf-photo-grid{ display:grid; grid-template-columns:repeat(3, 1fr); gap:3px; }
   #story-profile .pf-photo, #story-profile .pf-photo-more{ aspect-ratio:1/1; border:none; padding:0; margin:0; background:var(--pf-hair); overflow:hidden; border-radius:4px; }
@@ -5564,6 +5571,10 @@ window.storyProfileOnly = function(){
         <div class="pf-msgs-lock"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>End-to-end encrypted</div>
       </div>
     </div>
+    <div class="pf-scroll pf-calls" hidden>
+      <div class="pf-calls-list"></div>
+      <div class="pf-msgs-empty pf-calls-empty"><div class="pf-msgs-empty-t">No calls yet</div></div>
+    </div>
     <div class="pf-scroll pf-chat" hidden>
       <div class="pf-chat-head">
         <button class="pf-ed-back" data-pf="chat-back" aria-label="Back">‹</button>
@@ -5754,7 +5765,7 @@ window.storyProfileReset = function(){
   const el = document.getElementById('story-profile'); if(!el || PF_GAP_WINDOW) return;
   const ae = document.activeElement; if(ae && ae.closest && ae.closest('.pf-field')) ae.blur();
   el.querySelector('.pf-editor').hidden = true; el.querySelector('.pf-viewer').hidden = true; el.querySelector('.pf-photos').hidden = true; el.querySelector('.pf-field').hidden = true; el.querySelector('.pf-msgs').hidden = true;
-  closeChat(true);
+  closeChat(true); el.querySelector('.pf-calls').hidden = true;
   const ms = el.querySelector('.pf-msgs-search input'); if(ms){ ms.value = ''; } msgView.q = ''; msgView.menuFor = null;
   if(crRecording && NATIVE && window.StoryNative.createVideo) window.StoryNative.createVideo(false);
   if(crHas && NATIVE && window.StoryNative.createDiscard) window.StoryNative.createDiscard();
@@ -5767,6 +5778,7 @@ window.storyS3Page = function(which){
   const el = document.getElementById('story-profile'); if(!el || PF_GAP_WINDOW) return;
   window.storyProfileReset();
   if(which === 'create'){ el.querySelector('.pf-home').hidden = true; crShow(); return; }
+  if(which === 'calls'){ el.querySelector('.pf-home').hidden = true; el.querySelector('.pf-calls').hidden = false; el.querySelector('.pf-calls').scrollTop = 0; renderCalls(); return; }
   const msgs = which === 'messages';
   el.querySelector('.pf-home').hidden = msgs;
   el.querySelector('.pf-msgs').hidden = !msgs;
@@ -6057,6 +6069,55 @@ window.storyImeInset = function(dp){
   el.style.setProperty('--pf-ime', Math.max(0, dp || 0) + 'px');
   const list = el.querySelector('.pf-chat-list'); if(list && msgView.chat) requestAnimationFrame(()=>{ list.scrollTop = list.scrollHeight; });
 };
+// ---- Call history (owner): every call made from STORY - the dial pad's (kept by the app) and STORY-to-STORY calls
+// and video calls once they're built (localStorage 'story-calls'). Each: who, voice / video, made / got / missed, how
+// long it lasted, when it started and when it ended. Entry: { id, number, name, photo, kind:'voice'|'video',
+// dir:'out'|'in'|'missed', start, end, duration (seconds) }. ----
+function storyCalls(){
+  let a = [], b = [];
+  try{ if(NATIVE && window.StoryNative.getCalls) a = JSON.parse(window.StoryNative.getCalls() || '[]') || []; }catch(e){}
+  try{ b = JSON.parse(localStorage.getItem('story-calls') || '[]') || []; }catch(e){}
+  return a.concat(b).sort((x, y)=>(y.start || 0) - (x.start || 0));
+}
+function callLen(s){
+  s = Math.max(0, Math.round(s || 0));
+  const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), r = s % 60, two = n=>String(n).padStart(2, '0');
+  return s < 60 ? s + 's' : h ? h + ':' + two(m) + ':' + two(r) : m + ':' + two(r);
+}
+function callClock(at){ return at ? new Date(at).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' }) : '—'; }
+function callDay(at){
+  if(!at) return '';
+  const d = new Date(at), now = new Date(), y = new Date(now); y.setDate(now.getDate() - 1);
+  if(d.toDateString() === now.toDateString()) return 'Today';
+  if(d.toDateString() === y.toDateString()) return 'Yesterday';
+  return Math.floor((now - d) / 864e5) < 7 ? d.toLocaleDateString([], { weekday:'long' }) : d.toLocaleDateString([], { day:'numeric', month:'short', year: d.getFullYear() === now.getFullYear() ? undefined : 'numeric' });
+}
+const CALL_DIR = {
+  out: { t:'Made', svg:'<path d="M7 17 17 7M9 7h8v8"/>' },
+  in: { t:'Got', svg:'<path d="M17 7 7 17M15 17H7V9"/>' },
+  missed: { t:'Missed', svg:'<path d="M17 7 7 17M15 17H7V9"/>' },
+};
+function renderCalls(){
+  const el = document.getElementById('story-profile'); if(!el || PF_GAP_WINDOW) return;
+  const box = el.querySelector('.pf-calls'); if(!box || box.hidden) return;
+  const list = storyCalls();
+  box.querySelector('.pf-calls-list').innerHTML = list.map(c=>{
+    const dir = CALL_DIR[c.dir] || CALL_DIR.out;
+    const who = c.name || (c.username ? '@' + c.username : '') || c.number || '';
+    const pic = c.photo ? '<img alt="" src="' + escText(c.photo) + '">' : PF_PHOTO_PLACEHOLDER;
+    const kind = c.kind === 'video' ? 'Video' : 'Voice';
+    const len = c.dir === 'missed' ? '' : c.end ? ' · ' + callLen(c.duration != null ? c.duration : (c.end - c.start) / 1000) : '';
+    return '<div class="call-row' + (c.dir === 'missed' ? ' missed' : '') + '">' +
+      '<span class="msg-pic">' + pic + '</span>' +
+      '<span class="msg-mid"><span class="msg-who">' + escText(who) + '</span>' +
+        '<span class="msg-last"><span class="call-dir"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">' + dir.svg + '</svg></span>' + dir.t + ' · ' + kind + len + '</span></span>' +
+      '<span class="call-end"><span class="call-span">' + callClock(c.start) + (c.dir === 'missed' || !c.end ? '' : ' – ' + callClock(c.end)) + '</span><span class="call-day">' + callDay(c.start) + '</span></span>' +
+    '</div>';
+  }).join('');
+  box.querySelector('.pf-calls-empty').hidden = list.length > 0;
+}
+window.storyCallsChanged = renderCalls;
+window.addEventListener('storage', e=>{ if(e.key === 'story-calls') renderCalls(); });
 // STORY's own picture grid: the phone's pictures right inside Edit profile, so choosing is instant (no app switch).
 // Android asks once to let STORY see the pictures; if that's refused, the phone's own picker is used instead.
 const PF_PHOTO_BASE = 'https://appassets.androidplatform.net/story-photo/';
@@ -9785,7 +9846,7 @@ function attachHandlers(){
         }
         case 'station3-new-contact': showToast('Create new contact — coming soon'); break;
         case 'station3-create-post': if(NATIVE && window.StoryNative.toggleCreate){ window.StoryNative.toggleCreate(); } else { showToast('Create & post — coming soon'); } break;
-        case 'station3-call-history': showToast('Call history — coming soon'); break;
+        case 'station3-call-history': if(NATIVE && window.StoryNative.toggleCalls){ window.StoryNative.toggleCalls(); } else { showToast('Call history — coming soon'); } break;
         case 'station3-messages': if(NATIVE && window.StoryNative.toggleMessages){ window.StoryNative.toggleMessages(); } else { showToast('Messages — coming soon'); } break;
         case 'station3-profile': if(NATIVE && window.StoryNative.toggleProfile){ window.StoryNative.toggleProfile(); } else { showToast('Profile — coming soon'); } break;
 
