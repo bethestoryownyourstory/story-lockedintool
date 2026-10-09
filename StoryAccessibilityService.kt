@@ -18,6 +18,9 @@ class StoryAccessibilityService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         val e = event ?: return
         val pkg = e.packageName?.toString() ?: return
+        // The lock screen asks for your PIN / password / pattern: STORY's lock screen dial pad gets out of the way
+        // at once, so it can never cover it (owner: never get locked out of your own phone).
+        if (pkg == "com.android.systemui" && looksLikeUnlockEntry(e)) OverlayService.instance?.lockBouncerShown()
         when (e.eventType) {
             // Which app is on screen (so music playing in the background can be told apart from it).
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
@@ -33,6 +36,11 @@ class StoryAccessibilityService : AccessibilityService() {
                 if (token != null) mediaSessions[pkg] = token
             }
         }
+    }
+    private fun looksLikeUnlockEntry(e: AccessibilityEvent): Boolean {
+        if (e.isPassword) return true
+        val cls = e.className?.toString() ?: ""
+        return Regex("Keyguard.*(PIN|Pin|Password|Pattern|Sim|Puk)|PasswordTextView|PinView|PatternView|NumPadKey|Bouncer").containsMatchIn(cls)
     }
     override fun onInterrupt() {}
 

@@ -75,7 +75,7 @@ class OverlayService : Service(), StoryBridge.Host {
     // Always On Display: when the screen goes off, STORY's dim always-on screen comes up instead
     // (if switched on). Pressing power while it's up turns the screen truly off.
     private val screenOff = object : android.content.BroadcastReceiver() {
-        override fun onReceive(c: Context, i: Intent) { screenOffAt = System.currentTimeMillis(); onScreenOff(); ui.post { syncLockDial() } }
+        override fun onReceive(c: Context, i: Intent) { screenOffAt = System.currentTimeMillis(); lockDialAway = false; onScreenOff(); ui.post { syncLockDial() } }
     }
     // Screen on: the lock screen may be showing -> the lock screen dial pad (Settings > QUICK ACCESS).
     private val screenOn = object : android.content.BroadcastReceiver() {
@@ -582,7 +582,14 @@ class OverlayService : Service(), StoryBridge.Host {
         if (profilePane == null) profilePane = buildPane(true, profile = true)  // under Station 3's bar, button and dial pad
         if (profileGapPane == null) { profileGapPane = buildPane(true, profile = true, gap = true); addProfileStrip() }
         // The lock screen dial pad sits UNDER Station 3's windows: Station 3, extended, goes on top of it (owner).
-        if (lockDialPane == null) lockDialPane = buildPane(true, dial = true, lock = true)
+        if (lockDialPane == null) lockDialPane = buildPane(true, dial = true, lock = true).also { lp ->
+            lp.frame.setOnTouchListener { _, e ->
+                // Android zeroes the position of touches in other apps' / the system's windows; STORY's own windows
+                // (Station 3, the Always On Display) report a real one - those never send the dial pad away.
+                if (e.actionMasked == MotionEvent.ACTION_OUTSIDE && e.x == 0f && e.y == 0f) { lockDialAway = true; syncLockDial() }
+                false
+            }
+        }
         if (s3Pane == null) { addBarBg(); s3Pane = buildPane(true) }  // the white goes in first, so it sits under Station 3's page
         if (dialPane == null) dialPane = buildPane(true, dial = true)
         if (fresh) raiseBubble()  // done while Station 3 is still hidden, so nothing visibly changes later
@@ -593,6 +600,8 @@ class OverlayService : Service(), StoryBridge.Host {
         p.shown = shown
         // Profile's main window takes the keyboard like the Pages do (so typing a name / username / bio just works).
         p.lp.flags = if (p.gap) flagsFor(true, false) else if (p.profile) flagsFor(false, shown) else flagsFor(p.small, shown)
+        // Lock screen dial pad: hear touches anywhere else on the lock screen (swipe up to unlock...) to step away.
+        if (p.lock && shown) p.lp.flags = p.lp.flags or WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
         // Android 12+ throws away touches that pass through another app's fully opaque window,
         // even an untouchable one. A hidden pane is fully see-through, so apps underneath get every touch.
         p.lp.alpha = if (shown) 1f else 0f
@@ -916,6 +925,11 @@ class OverlayService : Service(), StoryBridge.Host {
         return false
     }
     private val lockWatch = object : Runnable { override fun run() { syncLockDial() } }
+    /** The lock screen dial pad steps away (until the screen next goes off) the moment you touch the lock screen
+     *  anywhere else (e.g. swipe up to unlock) or the phone asks for your PIN / password / pattern. It must
+     *  NEVER sit over the phone's own PIN pad. */
+    @Volatile private var lockDialAway = false
+    fun lockBouncerShown() { ui.post { if (lockDialPane?.shown == true || keyguardLocked()) { lockDialAway = true; syncLockDial() } } }
     private var lastLocked: Boolean? = null
     private fun syncLockDial() {
         ui.removeCallbacks(lockWatch)
@@ -929,7 +943,7 @@ class OverlayService : Service(), StoryBridge.Host {
         }
         val p = lockDialPane ?: return
         val aodUp = aodShowing()
-        val want = QuickAccess.lockDial(this) && locked &&
+        val want = QuickAccess.lockDial(this) && locked && !lockDialAway &&
             (if (aodUp) QuickAccess.dialAod(this) else getSystemService(android.os.PowerManager::class.java).isInteractive)
         if (want != p.shown) {
             if (!want) p.web.evaluateJavascript("window.storyDialClear&&window.storyDialClear()", null)
