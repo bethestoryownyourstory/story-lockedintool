@@ -5577,7 +5577,7 @@ window.storyProfileOnly = function(){
         <label class="pf-msgs-search"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="search" placeholder="Search" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="search"></label>
       </div>
       <div class="pf-calls-list"></div>
-      <div class="pf-msgs-empty pf-calls-empty"><div class="pf-msgs-empty-t">No calls yet</div></div>
+      <div class="pf-msgs-empty pf-calls-empty"><div class="pf-msgs-empty-t">No call history yet</div></div>
     </div>
     <div class="pf-scroll pf-chat" hidden>
       <div class="pf-chat-head">
@@ -6132,7 +6132,7 @@ function renderCalls(){
     '</div>';
   }).join('');
   box.querySelector('.pf-calls-empty').hidden = list.length > 0;
-  box.querySelector('.pf-calls-empty .pf-msgs-empty-t').textContent = q ? 'No results' : 'No calls yet';
+  box.querySelector('.pf-calls-empty .pf-msgs-empty-t').textContent = q ? 'No results' : 'No call history yet';
 }
 window.storyCallsChanged = renderCalls;
 window.addEventListener('storage', e=>{ if(e.key === 'story-calls') renderCalls(); });
