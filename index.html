@@ -3238,6 +3238,9 @@ function pswitchVStackHTML(horiz){
     </div>
   `;
 }
+// Flat Circle: the row's pages sit stacked side by side at the FRONT of the ring (owner's drawing - bunched together,
+// overlapping, in row order left to right, the middle one in front), the ring arcing behind them; drag turns them
+// along it.
 // Flat Circle: 3 real tiles positioned around an ellipse by angle. Drag rotates them --
 // no momentum, they simply stay wherever released (state.circleRotDeg holds the angle;
 // attachHandlers() wires the actual drag).
@@ -3246,7 +3249,7 @@ function pswitchCircle2dHTML(navAttr){
     <div class="pswitch-circle2d" data-circle2d>
       <div class="circle-track-ring"></div>
       ${PAGE_SWITCH_ITEMS.map((item,i)=>`
-        <div class="pswitch-tile pswitch-circle2d-item" data-${navAttr}="${item.key}" data-baseangle="${i*120}">
+        <div class="pswitch-tile pswitch-circle2d-item" data-${navAttr}="${item.key}" data-baseangle="${90 - (i - (PAGE_SWITCH_ITEMS.length - 1) / 2) * 34}">
           ${miniPagePreviewHTML(item.key)}
           ${tileLabelHTML(item, navAttr)}
         </div>
