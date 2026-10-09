@@ -91,10 +91,11 @@ class OverlayService : Service(), StoryBridge.Host {
         aodStartedAt = now
         val aod = AodActivity.instance
         if (aod != null && !aod.isFinishing) {
-            // Always on (owner): the screen went off with the Always On Display up (power pressed, or the phone
-            // switched it off) - it comes straight back. Double-tap it for the lock screen.
-            if (AodActivity.enabled(this)) { wakeForAod(); return }
-            aod.finish(); return
+            // Power pressed on the Always On Display (owner): the screen comes straight back on the lock screen,
+            // with Station 3 and the lock screen dial pad. Press power there and the Always On Display returns.
+            aod.finish(); aod.overridePendingTransition(0, 0)
+            if (AodActivity.enabled(this)) wakeForAod()
+            return
         }
         if (!AodActivity.enabled(this)) return
         // Wake the screen right now, in parallel with the black screen starting (not after it).

@@ -14,8 +14,8 @@ import android.view.WindowManager
 /**
  * STORY's Always On Display: when the screen would turn off, a black screen stays on with
  * Station 3 in its exact spot, at the phone's own brightness (the overlay windows sit on top of it, unchanged). Station 3 works as
- * always -- tap it and it extends. Double-tap anywhere else for the normal lock screen. It is ALWAYS on
- * (owner): pressing power while it's up brings it straight back. While it's up, Station 3's pixels take turns (see OverlayService.setAod)
+ * always -- tap it and it extends. Double-tap anywhere else, or press power, for the lock screen (owner) -
+ * Station 3 and the dial pad stay there too; press power on the lock screen and this comes back. While it's up, Station 3's pixels take turns (see OverlayService.setAod)
  * so nothing burns into the screen, without Station 3 moving at all.
  */
 class AodActivity : Activity() {
