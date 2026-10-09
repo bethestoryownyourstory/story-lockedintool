@@ -531,13 +531,13 @@
   .notes-fab-stack{ position:relative; display:flex; flex-direction:column; align-items:flex-end; gap:12px; margin-top:auto; padding-top:24px; margin-right:6px; margin-bottom:22px; }
   /* Notes fills the screen: Create sits at the bottom when there's room (owner), always clear of the preview. */
   .page-shell.notes-shell{ display:flex; flex-direction:column; min-height:100%; box-sizing:border-box; }
-  /* The Style Preview grows to fill the space down to just above New note / Create (owner: no empty gap). */
+  /* The right side fills the column top to bottom with its sections evenly spaced (owner: no empty gap), the
+     Style Preview a fixed, shorter box at the bottom, just above New note / Create. */
   .notes-shell .notes-hub{ flex:1 0 auto; }
-  .notes-shell .notes-col-right{ display:flex; flex-direction:column; }
-  .notes-shell .notes-preview-box{ flex:1 0 auto; display:flex; min-height:90px; }
-  .notes-shell .notes-preview-page{ flex:1; height:auto; min-height:90px; }
-  /* Its top sits lower (owner: shorter from the top; the bottom stays put). */
-  .notes-shell .notes-preview-title{ margin-top:64px; }
+  .notes-shell .notes-col-right{ display:flex; flex-direction:column; justify-content:space-between; }
+  .notes-shell .notes-sec > .section-title{ margin-top:0; }
+  .notes-shell .notes-sec + .notes-sec{ margin-top:18px; }
+  .notes-shell .notes-preview-page{ height:150px; }
   /* "+" (new text note) reads as a small badge sitting on the corner of "Create" (new drawing) --
      one combined control, two separate destinations, like a notification badge on a button --
      rather than sitting dead-center where it would hide the Create label entirely and both
@@ -6960,15 +6960,20 @@ function notesScreen(){
         `).join('')}
       </div>
       <div class="notes-col-right">
+        <div class="notes-sec">
         <div class="section-title" style="margin-top:0;">BACKGROUND COLOR</div>
         <div class="notes-swatch-row">
           ${state.noteCoverOptions.map(c=>`<span class="notes-swatch${state.selectedCover===c?' selected':''}" style="background:${c};" data-setcover="${c}"></span>`).join('')}
           <button class="notes-swatch color-plus-btn" data-openpicker="cover" title="Custom color">+</button>
         </div>
+        </div>
+        <div class="notes-sec">
         <div class="section-title">PAGE STYLES</div>
         <div class="page-style-grid">
           ${state.notePageStyleOptions.map(s=>`<div class="notes-style-chip${state.selectedPageStyle===s?' selected':''}" data-setpagestyle="${s}">${s.split('-').map(w=>w[0].toUpperCase()+w.slice(1)).join(' ')}</div>`).join('')}
         </div>
+        </div>
+        <div class="notes-sec">
         <div class="section-title">LINE COLOR</div>
         <div class="notes-swatch-row">
           ${NOTE_LINE_COLOR_OPTIONS.map(c=>c==='auto'
@@ -6977,9 +6982,12 @@ function notesScreen(){
           ).join('')}
           <button class="notes-swatch color-plus-btn" data-openpicker="linehub" title="Custom color">+</button>
         </div>
+        </div>
+        <div class="notes-sec">
         <div class="section-title notes-preview-title">STYLE PREVIEW</div>
         <div class="notes-preview-box">
           <div class="notes-preview-page notes-style-${state.selectedPageStyle}" style="background-color:${state.selectedCover}; --note-line-color:${resolveLineColor(state.selectedCover, state.selectedLineColor)};"></div>
+        </div>
         </div>
       </div>
     </div>
