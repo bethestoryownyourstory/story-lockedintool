@@ -70,7 +70,27 @@ class StoryAccessibilityService : AccessibilityService() {
         /** Is the phone's own PIN / password / pattern page on screen RIGHT NOW? Looks at what SystemUI is
          *  actually showing. true / false, or null when it can't tell (no window access) - then the old
          *  event-based guard is used instead. */
-        fun unlockEntryShowing(): Boolean? {
+        fun unlockEntryShowing(): Boolean? = systemUiShows { n ->
+            n.isPassword || (n.viewIdResourceName ?: "").let { it.isNotEmpty() && ENTRY_ID.containsMatchIn(it) } ||
+                ENTRY_TREE_CLASS.containsMatchIn(n.className?.toString() ?: "")
+        }
+
+        // The phone's own quick settings / notification panel pulled down (its tiles, brightness slider...).
+        private val SHADE_ID = Regex("/(quick_settings_panel|quick_qs_panel|qs_panel|qs_tile.*|tile_label|brightness.*|qs_brightness.*)$")
+        private val SHADE_CLASS = Regex("QSTile|QSPanel|BrightnessSlider|ToggleSlider")
+        // Quick settings tiles you can tap (Wi-Fi, Bluetooth...) - never on a lock screen at rest (its status icons
+        // say "Bluetooth on" too, but can't be tapped).
+        private val SHADE_WORDS = Regex("^(wi-?fi|bluetooth|internet|mobile data|airplane|aeroplane|brightness|open settings|settings)\\b")
+        /** Is the phone's quick settings panel pulled down right now? (null = can't tell) */
+        fun shadeShowing(): Boolean? = systemUiShows { n ->
+            if ((n.viewIdResourceName ?: "").let { it.isNotEmpty() && SHADE_ID.containsMatchIn(it) }) return@systemUiShows true
+            if (SHADE_CLASS.containsMatchIn(n.className?.toString() ?: "")) return@systemUiShows true
+            val said = ((n.contentDescription ?: n.text ?: "").toString()).trim().lowercase()
+            said.isNotEmpty() && SHADE_WORDS.containsMatchIn(said) && (n.isClickable || (n.className?.toString() ?: "").endsWith("SeekBar"))
+        }
+
+        /** Does any visible part of SystemUI's windows match? true / false, or null when STORY can't see them. */
+        private fun systemUiShows(match: (android.view.accessibility.AccessibilityNodeInfo) -> Boolean): Boolean? {
             val s = instance ?: return null
             val ws = runCatching { s.windows }.getOrNull() ?: return null
             var looked = false
@@ -78,20 +98,18 @@ class StoryAccessibilityService : AccessibilityService() {
                 val r = runCatching { w.root }.getOrNull() ?: continue
                 if (r.packageName?.toString() != "com.android.systemui") continue
                 looked = true
-                if (findEntry(r, 0, intArrayOf(0))) return true
+                if (find(r, 0, intArrayOf(0), match)) return true
             }
             return if (looked) false else null
         }
-        private fun findEntry(n: android.view.accessibility.AccessibilityNodeInfo, depth: Int, count: IntArray): Boolean {
+        private fun find(n: android.view.accessibility.AccessibilityNodeInfo, depth: Int, count: IntArray,
+                         match: (android.view.accessibility.AccessibilityNodeInfo) -> Boolean): Boolean {
             if (depth > 40 || ++count[0] > 1500) return false
             if (!n.isVisibleToUser) return false
-            if (n.isPassword) return true
-            val id = n.viewIdResourceName ?: ""
-            if (id.isNotEmpty() && ENTRY_ID.containsMatchIn(id)) return true
-            if (ENTRY_TREE_CLASS.containsMatchIn(n.className?.toString() ?: "")) return true
+            if (match(n)) return true
             for (i in 0 until n.childCount) {
                 val c = runCatching { n.getChild(i) }.getOrNull() ?: continue
-                if (findEntry(c, depth + 1, count)) return true
+                if (find(c, depth + 1, count, match)) return true
             }
             return false
         }

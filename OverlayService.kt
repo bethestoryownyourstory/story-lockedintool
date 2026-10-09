@@ -990,10 +990,12 @@ class OverlayService : Service(), StoryBridge.Host {
         // The phone's own PIN / password / pattern page is on screen right now: never on top of it.
         val awake = getSystemService(android.os.PowerManager::class.java).isInteractive
         val entry = if (QuickAccess.lockDial(this) && locked && awake) StoryAccessibilityService.unlockEntryShowing() else null
+        // The phone's own quick settings / notifications pulled down over the lock screen: out of the way (owner).
+        val shade = if (QuickAccess.lockDial(this) && locked && awake && entry != true) StoryAccessibilityService.shadeShowing() == true else false
         // It never moves (owner): it simply stays put through screen off / Always On Display / lock screen, so it's
         // already there the instant anything shows. Only hidden on the Always On Display if that's switched off for it.
         val onAod = aodUp || (!awake && AodActivity.enabled(this))
-        val want = QuickAccess.lockDial(this) && locked && !lockDialAway && !lockDialPeek && entry != true &&
+        val want = QuickAccess.lockDial(this) && locked && !lockDialAway && !lockDialPeek && entry != true && !shade &&
             (if (onAod) QuickAccess.dialAod(this) else true)
         if (want != p.shown) {
             if (!want) p.web.evaluateJavascript("window.storyDialClear&&window.storyDialClear()", null)
@@ -1002,7 +1004,7 @@ class OverlayService : Service(), StoryBridge.Host {
         }
         // While it's up, keep checking: the moment the phone unlocks (by any route) it goes.
         // (and while the PIN page is up, it comes back as soon as you drag that away).
-        if (awake && (want || aodOn || entry == true)) ui.postDelayed(lockWatch, 1000)
+        if (awake && (want || aodOn || entry == true || shade)) ui.postDelayed(lockWatch, if (shade) 400L else 1000L)
     }
     override fun setLockDialSize(w: Int, h: Int) { ui.post {
         val p = lockDialPane ?: return@post
