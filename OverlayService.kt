@@ -492,7 +492,7 @@ class OverlayService : Service(), StoryBridge.Host {
                     ui.postDelayed({ paneRef?.let { it.loading = false; if (it.shown) it.frame.alpha = 1f }; syncBarBg() }, 200)
                 } else if (small) {
                     v.evaluateJavascript(exactGeometryJs(), null)
-                    v.evaluateJavascript("window.storyStation3Only&&window.storyStation3Only()", null); v.evaluateJavascript(S3_JS, null)
+                    v.evaluateJavascript("window.__storyLocked=${keyguardLocked()};window.storyStation3Only&&window.storyStation3Only()", null); v.evaluateJavascript(S3_JS, null)
                     // Show it again once Station 3 has actually drawn (a moment after the page is ready).
                     ui.postDelayed({ paneRef?.let { it.loading = false; if (it.shown) it.frame.alpha = 1f }; syncBarBg() }, 200)
                 }
@@ -889,7 +889,15 @@ class OverlayService : Service(), StoryBridge.Host {
     private var lockGapLp: WindowManager.LayoutParams? = null
     private var lockGapWm: WindowManager? = null
     private fun keyguardLocked() = getSystemService(android.app.KeyguardManager::class.java)?.isKeyguardLocked == true
+    private var lastLocked: Boolean? = null
     private fun syncLockDial() {
+        // Station 3's dial pad button (dial pad separate): only while unlocked. Locked, the dial pad closes too.
+        val locked = keyguardLocked()
+        if (locked != lastLocked) {
+            lastLocked = locked
+            s3Pane?.web?.evaluateJavascript("window.storyLockState&&window.storyLockState($locked)", null)
+            if (locked && QuickAccess.mode(this) == "separate") dialPane?.takeIf { it.shown }?.let { hideOne(it) }
+        }
         val p = lockDialPane ?: return
         val aodUp = AodActivity.instance != null
         val want = QuickAccess.lockDial(this) && keyguardLocked() &&
