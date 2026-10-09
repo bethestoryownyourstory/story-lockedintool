@@ -1858,6 +1858,7 @@
   #story-profile .pf-chat-send:disabled{ opacity:0.3; }
   #story-profile .pf-chat-send:not(:disabled):active{ opacity:0.6; }
   /* Call history (Station 3's call history button, same window): every call made from STORY. */
+  #story-profile .pf-calls-list{ margin-top:10px; }
   #story-profile .call-row{ display:flex; align-items:center; gap:12px; padding:10px 0; }
   #story-profile .call-dir{ display:inline-flex; vertical-align:-2px; margin-right:4px; }
   #story-profile .call-row.missed .msg-who, #story-profile .call-row.missed .call-dir{ color:#e63946; }
@@ -5572,6 +5573,9 @@ window.storyProfileOnly = function(){
       </div>
     </div>
     <div class="pf-scroll pf-calls" hidden>
+      <div class="pf-msgs-top">
+        <label class="pf-msgs-search"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="search" placeholder="Search" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="search"></label>
+      </div>
       <div class="pf-calls-list"></div>
       <div class="pf-msgs-empty pf-calls-empty"><div class="pf-msgs-empty-t">No calls yet</div></div>
     </div>
@@ -5707,7 +5711,7 @@ window.storyProfileOnly = function(){
   hlName.addEventListener('pointerdown', profileTypingOn); hlName.addEventListener('focus', profileTypingOn);
   hlName.addEventListener('keydown', e=>{ if(e.key === 'Enter'){ e.preventDefault(); el.querySelector('[data-pf="cr-hl-new"]').click(); } });
   renderHighlights();
-  const msgSearch = el.querySelector('.pf-msgs-search input');
+  const msgSearch = el.querySelector('.pf-msgs .pf-msgs-search input');
   msgSearch.addEventListener('input', ()=>{ msgView.q = msgSearch.value; renderMsgList(); });
   msgSearch.addEventListener('pointerdown', profileTypingOn);
   msgSearch.addEventListener('focus', profileTypingOn);
@@ -5722,6 +5726,11 @@ window.storyProfileOnly = function(){
   ['pointerup', 'pointercancel', 'pointerleave'].forEach(t=>el.querySelector('.pf-msgs-list').addEventListener(t, ()=>clearTimeout(holdT)));
   el.querySelector('.pf-msgs-list').addEventListener('click', e=>{ if(held){ e.stopPropagation(); held = false; } }, true);
   el.querySelector('.pf-msgs').addEventListener('click', e=>{ if(msgView.menuFor && !e.target.closest('.pf-msgs-menu') && !e.target.closest('.msg-row')){ msgView.menuFor = null; renderMsgList(); } });
+  const callSearch = el.querySelector('.pf-calls .pf-msgs-search input');
+  callSearch.addEventListener('input', renderCalls);
+  callSearch.addEventListener('pointerdown', profileTypingOn);
+  callSearch.addEventListener('focus', profileTypingOn);
+  callSearch.addEventListener('blur', ()=>{ if(NATIVE && window.StoryNative.setTyping) try{ window.StoryNative.setTyping(false); }catch(err){} });
   const chatBox = el.querySelector('.pf-chat-box textarea');
   chatBox.addEventListener('input', ()=>{ fitChatBox(); el.querySelector('.pf-chat-send').disabled = !chatBox.value.trim(); msgTypingOut(); });
   chatBox.addEventListener('pointerdown', ()=>{ profileTypingOn(); msgReadOut(); });
@@ -5765,8 +5774,8 @@ window.storyProfileReset = function(){
   const el = document.getElementById('story-profile'); if(!el || PF_GAP_WINDOW) return;
   const ae = document.activeElement; if(ae && ae.closest && ae.closest('.pf-field')) ae.blur();
   el.querySelector('.pf-editor').hidden = true; el.querySelector('.pf-viewer').hidden = true; el.querySelector('.pf-photos').hidden = true; el.querySelector('.pf-field').hidden = true; el.querySelector('.pf-msgs').hidden = true;
-  closeChat(true); el.querySelector('.pf-calls').hidden = true;
-  const ms = el.querySelector('.pf-msgs-search input'); if(ms){ ms.value = ''; } msgView.q = ''; msgView.menuFor = null;
+  closeChat(true); el.querySelector('.pf-calls').hidden = true; el.querySelector('.pf-calls .pf-msgs-search input').value = '';
+  const ms = el.querySelector('.pf-msgs .pf-msgs-search input'); if(ms){ ms.value = ''; } msgView.q = ''; msgView.menuFor = null;
   if(crRecording && NATIVE && window.StoryNative.createVideo) window.StoryNative.createVideo(false);
   if(crHas && NATIVE && window.StoryNative.createDiscard) window.StoryNative.createDiscard();
   crRecording = false; crClear(); el.querySelector('.cr-sheet').hidden = true; crCameraReady = false; clearTimeout(crWatch); crMode = null; crStatus('');
@@ -6097,10 +6106,18 @@ const CALL_DIR = {
   in: { t:'Got', svg:'<path d="M17 7 7 17M15 17H7V9"/>' },
   missed: { t:'Missed', svg:'<path d="M17 7 7 17M15 17H7V9"/>' },
 };
+// 0831... finds +27831... and the other way round (a local number's leading 0 is the country code's place).
+function callDigitsMatch(number, qd){
+  const d = (number || '').replace(/\D/g, '');
+  return d.includes(qd) || (qd[0] === '0' && qd.length > 2 && d.includes(qd.slice(1))) || (d[0] === '0' && qd.includes(d.slice(1)));
+}
 function renderCalls(){
   const el = document.getElementById('story-profile'); if(!el || PF_GAP_WINDOW) return;
   const box = el.querySelector('.pf-calls'); if(!box || box.hidden) return;
-  const list = storyCalls();
+  // Search: name, @username or number (digits match however the number is written).
+  const q = (box.querySelector('.pf-msgs-search input').value || '').trim().toLowerCase(), qd = q.replace(/\D/g, '');
+  const list = storyCalls().filter(c=>!q || (c.name || '').toLowerCase().includes(q) || (c.username || '').toLowerCase().includes(q.replace(/^@/, '')) ||
+    (c.number || '').toLowerCase().includes(q) || (qd.length >= 2 && callDigitsMatch(c.number, qd)));
   box.querySelector('.pf-calls-list').innerHTML = list.map(c=>{
     const dir = CALL_DIR[c.dir] || CALL_DIR.out;
     const who = c.name || (c.username ? '@' + c.username : '') || c.number || '';
@@ -6115,6 +6132,7 @@ function renderCalls(){
     '</div>';
   }).join('');
   box.querySelector('.pf-calls-empty').hidden = list.length > 0;
+  box.querySelector('.pf-calls-empty .pf-msgs-empty-t').textContent = q ? 'No results' : 'No calls yet';
 }
 window.storyCallsChanged = renderCalls;
 window.addEventListener('storage', e=>{ if(e.key === 'story-calls') renderCalls(); });
