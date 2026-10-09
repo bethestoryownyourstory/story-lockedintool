@@ -38,15 +38,22 @@ class CreateCameraActivity : AppCompatActivity() {
         instance = this
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         val preview = PreviewView(this).apply {
-            scaleType = PreviewView.ScaleType.FILL_CENTER; setBackgroundColor(Color.BLACK)
+            // The same frame as the picture / video you get (4:3), shown whole - what you see is what you get.
+            scaleType = PreviewView.ScaleType.FIT_CENTER; setBackgroundColor(Color.BLACK)
             implementationMode = PreviewView.ImplementationMode.COMPATIBLE  // drawn like a normal view, under STORY's window
         }
         // The video you just made plays here, on the phone's own player (full screen, looping, with sound).
         val player = android.widget.VideoView(this).apply { visibility = android.view.View.GONE }
+        // Same area as Create's window above it (which stops at Station 3's band), so the camera, a video and a
+        // picture all sit in exactly the same box.
+        val dp = resources.displayMetrics.density
+        val band = (40 * dp).toInt() + Math.round(2 * dp)
         setContentView(FrameLayout(this).apply {
             setBackgroundColor(Color.BLACK)
-            addView(preview, FrameLayout.LayoutParams(-1, -1))
-            addView(player, FrameLayout.LayoutParams(-1, -1, android.view.Gravity.CENTER))
+            addView(FrameLayout(this@CreateCameraActivity).apply {
+                addView(preview, FrameLayout.LayoutParams(-1, -1))
+                addView(player, FrameLayout.LayoutParams(-1, -2, android.view.Gravity.CENTER))
+            }, FrameLayout.LayoutParams(-1, -1).apply { bottomMargin = band })
         })
         previewView = preview; videoPlayer = player
         OverlayService.instance?.createEvent("opened", "")
@@ -91,7 +98,7 @@ class CreateCameraActivity : AppCompatActivity() {
         future.addListener({
             val err = runCatching {
                 provider = future.get()
-                preview = Preview.Builder().build().also { it.setSurfaceProvider(previewView?.surfaceProvider) }
+                preview = Preview.Builder().setTargetAspectRatio(androidx.camera.core.AspectRatio.RATIO_4_3).build().also { it.setSurfaceProvider(previewView?.surfaceProvider) }
                 bindBest()
             }.exceptionOrNull()
             if (err != null) OverlayService.instance?.createEvent("error", "camera: " + (err.message ?: err.javaClass.simpleName))
@@ -100,6 +107,7 @@ class CreateCameraActivity : AppCompatActivity() {
     }
 
     private fun recorder(q: Quality) = VideoCapture.withOutput(Recorder.Builder()
+        .setAspectRatio(androidx.camera.core.AspectRatio.RATIO_4_3)  // videos in the same frame as pictures
         .setQualitySelector(QualitySelector.from(q, FallbackStrategy.lowerQualityOrHigherThan(Quality.SD))).build())
 
     /** Not every phone can run preview + pictures + video at once: try the best set first, then step down.
@@ -112,7 +120,8 @@ class CreateCameraActivity : AppCompatActivity() {
         for (q in listOf(Quality.FHD, Quality.HD, Quality.SD, null)) {
             val r = runCatching {
                 p.unbindAll()
-                val ic = ImageCapture.Builder().setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY).build()
+                @Suppress("DEPRECATION")
+                val ic = ImageCapture.Builder().setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY).setTargetAspectRatio(androidx.camera.core.AspectRatio.RATIO_4_3).build()
                 if (q != null) {
                     val vc = recorder(q)
                     p.bindToLifecycle(this, sel, pv, ic, vc)
