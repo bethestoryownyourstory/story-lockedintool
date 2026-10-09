@@ -534,6 +534,14 @@
   /* The rest of the Saved Notes column fills with faint empty note shapes (owner: feel full, hint that more notes go
      here, show nothing) - tap one for a new note. Real notes take their place as they're added. */
   .notes-shell .notes-col-left{ display:flex; flex-direction:column; }
+  /* Box 1 Saved notes / Box 2 Drawings (owner): switch the list under them. */
+  .notes-tabs{ display:flex; gap:6px; margin-bottom:10px; }
+  .notes-tab{ flex:1; padding:8px 0; border-radius:10px; border:1px solid var(--line); background:transparent; color:var(--text); opacity:0.7;
+    font-size:11px; font-weight:800; letter-spacing:0.3px; font-family:var(--font-body); cursor:pointer; }
+  .notes-tab.on{ background:#e8e6e1; color:#000; border-color:#e8e6e1; opacity:1; }
+  .drawing-card{ position:relative; height:120px; padding:0; overflow:hidden; display:flex; align-items:flex-end; }
+  .drawing-card img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:top; }
+  .drawing-card .note-card-date{ position:relative; margin:0 0 8px 10px; }
   .notes-ghosts{ flex:1 1 0; min-height:0; overflow:hidden; display:flex; flex-direction:column; gap:8px;
     -webkit-mask-image:linear-gradient(to bottom, #000 45%, transparent); mask-image:linear-gradient(to bottom, #000 45%, transparent); }
   .note-ghost{ flex:0 0 auto; height:82px; border-radius:12px; border:1.5px dashed rgba(255,255,255,0.09); cursor:pointer; }
@@ -3927,6 +3935,9 @@ let state = {
   // decoupled from the Notes system (state.notes/currentPages/canvasPages). It never creates,
   // updates or appears as a note; "+" (new note) never opens it either.
   scratchPages:[null],
+  drawings:[],          // Notes > Drawings: every drawing made with Create { id, pages:[dataURL|null], date } (newest first)
+  scratchId:null,       // the drawing open in the drawing space
+  notesTab:'notes',     // Notes left column: 'notes' (Saved notes) or 'drawings'
   scratchPageIndex:0,
   // Community: groups-first, per the user's own spec -- posts live INSIDE a group (group.posts),
   // never in one flat feed. A handful of groups ship with the app and can't be deleted (builtin:
@@ -6951,21 +6962,36 @@ function colorPickerTemplate(){
     </div>
   `;
 }
+// Notes > Drawings: each drawing as a card showing its first page (on its page colour), newest first.
+function notesDrawingsListHTML(){
+  return state.drawings.map(d=>{
+    const first = d.pages.find(Boolean);
+    return `<div class="note-card drawing-card" data-opendrawing="${d.id}" style="background:${state.canvasColor};">
+      ${first ? `<img alt="" src="${first}">` : ''}
+      <div class="note-card-date">${d.pages.length > 1 ? d.pages.length + ' pages · ' : ''}${d.date}</div>
+    </div>`;
+  }).join('');
+}
 function notesScreen(){
+  // A drawing you opened with Create but never drew on isn't kept.
+  if(state.current === 'notes') state.drawings = state.drawings.filter(d=>d.pages.some(Boolean));
   return `
     <div class="page-shell notes-shell">
     ${topBar('Notes', false)}
     <div class="notes-hub">
       <div class="notes-col-left">
-        <div class="section-title" style="margin-top:0;">SAVED NOTES</div>
-        ${state.notes.map(n=>`
+        <div class="notes-tabs">
+          <button class="notes-tab${state.notesTab !== 'drawings' ? ' on' : ''}" data-notestab="notes">Saved notes</button>
+          <button class="notes-tab${state.notesTab === 'drawings' ? ' on' : ''}" data-notestab="drawings">Drawings</button>
+        </div>
+        ${state.notesTab === 'drawings' ? notesDrawingsListHTML() : state.notes.map(n=>`
           <div class="note-card" data-opennote="${n.id}" data-holdnote="${n.id}" style="background:${n.cover};">
             <div class="note-card-title">${n.title}</div>
             <div class="note-card-preview">${n.preview}</div>
             <div class="note-card-date">${n.date}</div>
           </div>
         `).join('')}
-        <div class="notes-ghosts">${'<div class="note-ghost" data-action="notes-new"></div>'.repeat(8)}</div>
+        <div class="notes-ghosts">${('<div class="note-ghost" data-action="' + (state.notesTab === 'drawings' ? 'scratch-new' : 'notes-new') + '"></div>').repeat(8)}</div>
       </div>
       <div class="notes-col-right">
         <div class="notes-sec">
@@ -8555,7 +8581,9 @@ function renderDevice(){
   const oldScratchCanvas = document.getElementById('scratch-draw-canvas');
   if(oldScratchCanvas){
     const scratchFlushIdx = pendingScratchFlushIndex !== null ? pendingScratchFlushIndex : state.scratchPageIndex;
-    const dataURL = oldScratchCanvas.toDataURL();
+    // A page with nothing drawn on it stays empty (null), so an untouched drawing isn't kept in Notes > Drawings.
+    const blank = (()=>{ try{ const ctx = oldScratchCanvas.getContext('2d'); const d = ctx.getImageData(0, 0, oldScratchCanvas.width, oldScratchCanvas.height).data; for(let i = 3; i < d.length; i += 4) if(d[i]) return false; return true; }catch(e){ return false; } })();
+    const dataURL = blank ? null : oldScratchCanvas.toDataURL();
     if(scratchFlushIdx >= 0 && scratchFlushIdx < state.scratchPages.length) state.scratchPages[scratchFlushIdx] = dataURL;
   }
   pendingScratchFlushIndex = null;
@@ -9771,6 +9799,16 @@ function attachHandlers(){
     el.addEventListener('click', ()=>{ state.scrollDirection = el.getAttribute('data-setscrolldir'); renderDevice(); });
   });
 
+  document.querySelectorAll('[data-notestab]').forEach(el=>{
+    el.addEventListener('click', ()=>{ state.notesTab = el.getAttribute('data-notestab'); renderDevice(); });
+  });
+  document.querySelectorAll('[data-opendrawing]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const d = state.drawings.find(x=>x.id === el.getAttribute('data-opendrawing')); if(!d) return;
+      state.scratchId = d.id; state.scratchPages = d.pages; state.scratchPageIndex = 0;
+      resetScratchUndoStack(); state.current = 'scratch-draw'; renderDevice();
+    });
+  });
   document.querySelectorAll('[data-opennote]').forEach(el=>{
     el.addEventListener('click', ()=>{
       const id = el.getAttribute('data-opennote');
@@ -10043,12 +10081,17 @@ function attachHandlers(){
           state.canvasMode = 'write';
           state.current = 'notes-canvas';
           break;
-        case 'scratch-new':
+        case 'scratch-new': {
           // "Create" opens the separate pure-drawing space -- it never touches state.notes,
           // state.currentNoteId, currentPages or canvasPages, and never creates a note.
+          // Each Create is a NEW drawing, kept in Notes > Drawings (an empty one is dropped when you leave).
+          const d = { id: 'd' + Date.now(), pages: [null], date: 'Just now' };
+          state.drawings.unshift(d);
+          state.scratchId = d.id; state.scratchPages = d.pages; state.scratchPageIndex = 0;
           resetScratchUndoStack();
           state.current = 'scratch-draw';
           break;
+        }
         case 'scratch-page-prev':
         case 'scratch-page-next': {
           pendingScratchFlushIndex = state.scratchPageIndex;
