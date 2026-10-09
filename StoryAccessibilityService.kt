@@ -40,7 +40,11 @@ class StoryAccessibilityService : AccessibilityService() {
     private fun looksLikeUnlockEntry(e: AccessibilityEvent): Boolean {
         if (e.isPassword) return true
         val cls = e.className?.toString() ?: ""
-        return Regex("Keyguard.*(PIN|Pin|Password|Pattern|Sim|Puk)|PasswordTextView|PinView|PatternView|NumPadKey|Bouncer").containsMatchIn(cls)
+        if (Regex("Keyguard.*(PIN|Pin|Password|Pattern|Sim|Puk)|PasswordTextView|PinView|PatternView|NumPadKey|Bouncer").containsMatchIn(cls)) return true
+        // What the lock screen announces when it asks (e.g. "PIN area", "Enter PIN", "Draw your pattern").
+        val said = (e.text.joinToString(" ") + " " + (e.contentDescription ?: "")).lowercase()
+        return e.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
+            Regex("\\bpin\\b|password|pattern|enter.*code").containsMatchIn(said)
     }
     override fun onInterrupt() {}
 

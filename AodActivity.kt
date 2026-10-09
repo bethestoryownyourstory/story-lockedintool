@@ -40,9 +40,24 @@ class AodActivity : Activity() {
         }
         instance = this
         OverlayService.instance?.setAod(true)
+        handler.post(unlockWatch)
+    }
+
+    // Unlocked (fingerprint, face...) while this is up: Android unlocks the phone but leaves this black screen on
+    // top of it. Watch for the lock going away and step aside at once - you land straight in the phone.
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var wasLocked = false
+    private val unlockWatch = object : Runnable {
+        override fun run() {
+            val locked = getSystemService(android.app.KeyguardManager::class.java)?.isKeyguardLocked == true
+            if (locked) wasLocked = true
+            else if (wasLocked) { finish(); overridePendingTransition(0, 0); return }
+            handler.postDelayed(this, 200)
+        }
     }
 
     override fun onDestroy() {
+        handler.removeCallbacks(unlockWatch)
         if (instance === this) instance = null
         OverlayService.instance?.setAod(false)
         super.onDestroy()

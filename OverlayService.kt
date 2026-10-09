@@ -75,7 +75,7 @@ class OverlayService : Service(), StoryBridge.Host {
     // Always On Display: when the screen goes off, STORY's dim always-on screen comes up instead
     // (if switched on). Pressing power while it's up turns the screen truly off.
     private val screenOff = object : android.content.BroadcastReceiver() {
-        override fun onReceive(c: Context, i: Intent) { screenOffAt = System.currentTimeMillis(); lockDialAway = false; onScreenOff(); ui.post { syncLockDial() } }
+        override fun onReceive(c: Context, i: Intent) { screenOffAt = System.currentTimeMillis(); lockDialAway = false; lockDialPeek = false; lockDialBackAt = 0L; onScreenOff(); ui.post { syncLockDial() } }
     }
     // Screen on: the lock screen may be showing -> the lock screen dial pad (Settings > QUICK ACCESS).
     private val screenOn = object : android.content.BroadcastReceiver() {
@@ -585,8 +585,8 @@ class OverlayService : Service(), StoryBridge.Host {
         if (lockDialPane == null) lockDialPane = buildPane(true, dial = true, lock = true).also { lp ->
             lp.frame.setOnTouchListener { _, e ->
                 // Android zeroes the position of touches in other apps' / the system's windows; STORY's own windows
-                // (Station 3, the Always On Display) report a real one - those never send the dial pad away.
-                if (e.actionMasked == MotionEvent.ACTION_OUTSIDE && e.x == 0f && e.y == 0f) { lockDialAway = true; syncLockDial() }
+                // (Station 3, the Always On Display) report a real one - those never move the dial pad.
+                if (e.actionMasked == MotionEvent.ACTION_OUTSIDE && e.x == 0f && e.y == 0f) lockScreenTouched()
                 false
             }
         }
@@ -929,7 +929,20 @@ class OverlayService : Service(), StoryBridge.Host {
      *  anywhere else (e.g. swipe up to unlock) or the phone asks for your PIN / password / pattern. It must
      *  NEVER sit over the phone's own PIN pad. */
     @Volatile private var lockDialAway = false
-    fun lockBouncerShown() { ui.post { if (lockDialPane?.shown == true || keyguardLocked()) { lockDialAway = true; syncLockDial() } } }
+    fun lockBouncerShown() { ui.post { if (lockDialPane?.shown == true || keyguardLocked()) { lockDialAway = true; lockDialPeek = false; syncLockDial() } } }
+    /** A touch on the lock screen (e.g. starting to swipe up): the dial pad steps aside for that moment and comes
+     *  back if the PIN page didn't show (you let go, or dragged back down). If the PIN page shows, it stays away.
+     *  Touching again soon after it came back means you're heading for the PIN page: it stays away too. */
+    @Volatile private var lockDialPeek = false
+    private var lockDialBackAt = 0L
+    private val lockDialBack = Runnable {
+        if (lockDialPeek && !lockDialAway) { lockDialPeek = false; lockDialBackAt = System.currentTimeMillis(); syncLockDial() }
+    }
+    private fun lockScreenTouched() {
+        if (System.currentTimeMillis() - lockDialBackAt < 6000) { lockDialAway = true; lockDialPeek = false; syncLockDial(); return }
+        lockDialPeek = true; syncLockDial()
+        ui.removeCallbacks(lockDialBack); ui.postDelayed(lockDialBack, 1500)
+    }
     private var lastLocked: Boolean? = null
     private fun syncLockDial() {
         ui.removeCallbacks(lockWatch)
@@ -943,7 +956,7 @@ class OverlayService : Service(), StoryBridge.Host {
         }
         val p = lockDialPane ?: return
         val aodUp = aodShowing()
-        val want = QuickAccess.lockDial(this) && locked && !lockDialAway &&
+        val want = QuickAccess.lockDial(this) && locked && !lockDialAway && !lockDialPeek &&
             (if (aodUp) QuickAccess.dialAod(this) else getSystemService(android.os.PowerManager::class.java).isInteractive)
         if (want != p.shown) {
             if (!want) p.web.evaluateJavascript("window.storyDialClear&&window.storyDialClear()", null)
