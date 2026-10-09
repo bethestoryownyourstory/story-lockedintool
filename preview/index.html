@@ -527,7 +527,8 @@
       repeating-linear-gradient(to bottom, transparent, transparent 23px, var(--note-line-color, #d8d8d8) 24px),
       linear-gradient(to right, transparent 0, transparent 30px, #e76f51 30px, #e76f51 31px, transparent 31px);
   }
-  .notes-fab-stack{ position:sticky; bottom:8px; display:flex; flex-direction:column; align-items:flex-end; gap:8px; margin-top:28px; margin-right:6px; }
+  /* Create (+ new note on top) sits under the style preview, never touching or floating over it (owner). */
+  .notes-fab-stack{ position:relative; display:flex; flex-direction:column; align-items:flex-end; gap:8px; margin-top:44px; margin-right:6px; margin-bottom:12px; }
   /* "+" (new text note) reads as a small badge sitting on the corner of "Create" (new drawing) --
      one combined control, two separate destinations, like a notification badge on a button --
      rather than sitting dead-center where it would hide the Create label entirely and both
