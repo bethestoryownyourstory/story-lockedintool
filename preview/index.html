@@ -2153,7 +2153,7 @@
 
   /* Flat Circle -- real 2D positions computed in JS (setupCircleAndWheelDrag), drag
      follows 1:1, no momentum. */
-  .pswitch-circle2d{ position:relative; height:440px; touch-action:none; user-select:none; }
+  .pswitch-circle2d{ position:relative; height:340px; touch-action:none; user-select:none; }
   .pswitch-circle2d-item{
     position:absolute; left:50%; top:50%; width:118px; height:150px; margin:-75px 0 0 -59px;
     --mscale:0.34; box-shadow:0 10px 24px rgba(0,0,0,0.4);
@@ -2169,7 +2169,7 @@
     pointer-events:none;
   }
   /* The ring is exactly the path the cards' centres travel (RADIUS_X / RADIUS_Y in setupCircleAndWheelDrag). */
-  .pswitch-circle2d .circle-track-ring{ width:264px; height:240px; margin:-120px 0 0 -132px; }
+  .pswitch-circle2d .circle-track-ring{ width:264px; height:240px; margin:-120px 0 0 -132px; clip-path:inset(50% -4px -4px -4px); }
 
   /* 3D Circle (wheel) -- a real perspective cylinder. Each page is cut into thin vertical
      strips (.curve-slice, generated in pswitchWheel3dHTML) that are each rotated a fraction
@@ -8350,23 +8350,34 @@ function setupCircleAndWheelDrag(){
   if(circleEl){
     const items = [...circleEl.querySelectorAll('.pswitch-circle2d-item')];
     const RADIUS_X = 132, RADIUS_Y = 120;  // = the ring's size (.pswitch-circle2d .circle-track-ring), so the cards sit on it
+    // Owner: a real circle whose top isn't visible - the pages stand straight in a line across it (only their size
+    // and order change as it turns), the front half of the ring showing underneath; swipe to bring each page to
+    // the front (it settles one page at a time).
+    const STEP = 34, n = items.length, LIMIT = (n - 1) / 2 * STEP;
     const layout = (rotDeg)=>{
       items.forEach(el=>{
         const base = parseFloat(el.getAttribute('data-baseangle')) || 0;
         const angle = (base + rotDeg) * Math.PI / 180;
         const x = Math.cos(angle) * RADIUS_X;
-        const y = Math.sin(angle) * RADIUS_Y;
-        const depth = (Math.sin(angle) + 1) / 2; // 0 (back) .. 1 (front)
-        el.style.transform = `translate(${x}px, ${y}px) scale(${(0.8 + depth*0.2).toFixed(3)})`;
+        const depth = Math.max(0, Math.sin(angle)); // 1 = in front
+        el.style.transform = `translate(${x}px, 0px) scale(${(0.78 + depth*0.22).toFixed(3)})`;
         el.style.zIndex = String(Math.round(depth*100));
-        el.style.opacity = String((0.7 + depth*0.3).toFixed(2));
+        el.style.opacity = String(Math.max(0, Math.min(1, (depth - 0.35) / 0.4)).toFixed(2));
       });
     };
+    const settle = ()=>{
+      state.circleRotDeg = Math.max(-LIMIT, Math.min(LIMIT, Math.round(state.circleRotDeg / STEP) * STEP));
+      items.forEach(el=>{ el.style.transition = 'transform 0.25s ease, opacity 0.25s ease'; });
+      layout(state.circleRotDeg);
+      setTimeout(()=>items.forEach(el=>{ el.style.transition = ''; }), 260);
+    };
+    state.circleRotDeg = Math.max(-LIMIT, Math.min(LIMIT, Math.round((state.circleRotDeg || 0) / STEP) * STEP));
     layout(state.circleRotDeg);
     let dragging = false, startX = 0, startRot = 0, dragged = false, downInfo = null;
     circleEl.addEventListener('pointerdown', (e)=>{
       dragging = true; startX = e.clientX; startRot = state.circleRotDeg; dragged = false;
       downInfo = navFromEl(e.target);
+      items.forEach(el=>{ el.style.transition = ''; });
       if(circleEl.setPointerCapture){ try{ circleEl.setPointerCapture(e.pointerId); }catch(err){} }
       e.stopPropagation(); // Row 1's own swipe-between-pages gesture also listens on an
                             // ancestor -- without this, a drag here doubles as a page swipe.
@@ -8375,7 +8386,8 @@ function setupCircleAndWheelDrag(){
       if(!dragging) return;
       const dx = e.clientX - startX;
       if(Math.abs(dx) > 5) dragged = true;
-      state.circleRotDeg = startRot + dx * 0.6;
+      // Swipe left -> the page on the right comes to the front.
+      state.circleRotDeg = Math.max(-LIMIT - 12, Math.min(LIMIT + 12, startRot - dx * 0.35));
       layout(state.circleRotDeg);
       e.stopPropagation();
     });
@@ -8383,7 +8395,7 @@ function setupCircleAndWheelDrag(){
       if(!dragging){ e.stopPropagation(); return; }
       dragging = false;
       e.stopPropagation();
-      if(!dragged && downInfo) runNav(downInfo);
+      if(!dragged && downInfo) runNav(downInfo); else settle();
     };
     circleEl.addEventListener('pointerup', endCircleDrag);
     circleEl.addEventListener('pointercancel', endCircleDrag);
