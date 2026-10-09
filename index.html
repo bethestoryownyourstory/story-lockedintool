@@ -2884,7 +2884,7 @@
   }
   // The dial pad is the one thing that FOLLOWS the theme instead of opposing it (owner): its own colours are the
   // reverse of what it's drawn with - black dial pad in Black, white dial pad in White (the green call stays green).
-  const FOLLOW_SEL = /station3-(dialpad|call-btn|newcontact)/;
+  const FOLLOW_SEL = /station3-(dialpad|call-btn|newcontact|backspace-btn)/;
   function themeSheets(white){
     for(const r of sheetRules()){
       const flipIt = FOLLOW_SEL.test(r.selectorText) ? !white : white;
