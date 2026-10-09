@@ -2113,6 +2113,9 @@
     height:calc(var(--card-h) + (var(--n) - 1) * var(--step)); }
   .pswitch-vcard{ position:absolute; left:0; top:calc(var(--i) * var(--step)); width:var(--card-w); height:var(--card-h); --mscale:0.68;
     transform:scale(calc(1 - var(--b) * 0.06)); transform-origin:50% 0; box-shadow:0 -6px 22px rgba(0,0,0,0.55); transition:opacity 0.2s ease; }
+  /* Horizontal: the same stack sideways - home in front on the right, the others peeking out to its left. */
+  .pswitch-hstack{ --card-w:260px; --card-h:420px; --step:56px; width:calc(var(--card-w) + (var(--n) - 1) * var(--step)); height:var(--card-h); }
+  .pswitch-hstack .pswitch-vcard{ top:0; left:calc(var(--i) * var(--step)); --mscale:0.63; transform-origin:0 50%; box-shadow:-6px 0 22px rgba(0,0,0,0.55); }
   .pswitch-vcard.picked{ opacity:0.25; }
   .pswitch-vfloat{ position:fixed; inset:0; z-index:40; background:rgba(0,0,0,0.6); }
   /* Exactly the size of the whole stack, right where the stack is (owner). */
@@ -3213,15 +3216,16 @@ function tileLabelHTML(item, navAttr){
 // Vertical (owner's drawing): the pages of the row you're in, stacked and overlapping - the row's home page in front,
 // the others peeking out ABOVE it (never below), spaced just enough to see them, always stacked. Tap one: it pops
 // out and floats in the middle, exactly the size of the whole stack; tap it again to go to that page; tap anywhere
-// else and it goes back into the stack.
-function pswitchVStackHTML(){
+// else and it goes back into the stack. Horizontal (owner: "same thing, just horizontal"): the same stack sideways -
+// home in front on the right, the others peeking out to its LEFT.
+function pswitchVStackHTML(horiz){
   const items = PAGE_SWITCH_ITEMS, n = items.length;
   const home = Math.max(0, items.findIndex(it=>it.key === state.homeScreen || it.key === 'wallet'));
   // Back to front: the other pages in row order, the home page last (in front, at the bottom of the stack).
   const order = items.filter((it, i)=>i !== home).concat([items[home]]);
   const pick = state.vstackPick && items.find(it=>it.key === state.vstackPick);
   return `
-    <div class="pswitch-vstack" style="--n:${n}">
+    <div class="pswitch-vstack${horiz ? ' pswitch-hstack' : ''}" style="--n:${n}">
       ${order.map((item, i)=>{ const back = n - 1 - i; return `
         <div class="pswitch-tile pswitch-vcard${pick && pick.key === item.key ? ' picked' : ''}" data-vpick="${item.key}" style="--i:${i}; --b:${back}; z-index:${i + 1};">
           ${miniPagePreviewHTML(item.key)}
@@ -3384,7 +3388,7 @@ function wheelPageDividersHTML(totalH){
   return out;
 }
 function pswitchBodyHTML(style, navAttr){
-  if(style==='vertical' && navAttr === 'pagestyle-nav') return pswitchVStackHTML();
+  if((style==='vertical' || style==='horizontal') && navAttr === 'pagestyle-nav') return pswitchVStackHTML(style === 'horizontal');
   if(style==='circle') return pswitchCircle2dHTML(navAttr);
   if(style==='wheel') return pswitchWheel3dHTML(navAttr);
   return `<div class="pswitch-${style}">${PAGE_SWITCH_ITEMS.map(item=>pswitchTileHTML(item, navAttr)).join('')}</div>`;
