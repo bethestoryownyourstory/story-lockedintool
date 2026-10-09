@@ -2188,8 +2188,10 @@
      180deg in place. Only ever one of a slice's two faces is actually facing the camera at
      a time, so the page reads correctly from the front and from the back at every angle,
      without the "wrong page bleeding through" glitch a single un-culled slice caused. */
-  .curve-slice{ position:absolute; top:0; left:0; overflow:hidden; cursor:pointer; transform-style:preserve-3d; }
-  .curve-face{ position:absolute; inset:0; backface-visibility:hidden; overflow:hidden; }
+  /* (No overflow:hidden here - it fights preserve-3d and made the faces flicker; each face clips itself. Slices are
+     0.8px wider than their step so neighbours overlap and no hairline gap flashes while it turns.) */
+  .curve-slice{ position:absolute; top:0; left:0; cursor:pointer; transform-style:preserve-3d; }
+  .curve-face{ position:absolute; inset:0; -webkit-backface-visibility:hidden; backface-visibility:hidden; overflow:hidden; }
   .curve-face-back{ transform:rotateY(180deg); }
   .curve-slice-inner{ position:absolute; top:0; width:182px; height:238px; --mscale:0.476; }
   /* Fills the gap above/below a shorter page's real content, up to the shared rim height --
@@ -3346,7 +3348,7 @@ function pswitchWheel3dHTML(navAttr){
             const mirroredCropLeft = -((WHEEL_SLICES-1-k)*WHEEL_SLICE_W).toFixed(2);
             const marginLeft = (-WHEEL_SLICE_W/2).toFixed(2);
             slices += `
-              <div class="curve-slice" data-angle="${angle.toFixed(2)}" style="width:${WHEEL_SLICE_W.toFixed(2)}px;height:${h}px;margin:${-h/2}px 0 0 ${marginLeft}px;transform:rotateY(${angle.toFixed(2)}deg) translateZ(${WHEEL_RADIUS.toFixed(2)}px);">
+              <div class="curve-slice" data-angle="${angle.toFixed(2)}" style="width:${(WHEEL_SLICE_W + 0.8).toFixed(2)}px;height:${h}px;margin:${-h/2}px 0 0 ${marginLeft}px;transform:rotateY(${angle.toFixed(2)}deg) translateZ(${WHEEL_RADIUS.toFixed(2)}px);">
                 <div class="curve-face curve-face-front">
                   <div class="curve-slice-inner" style="left:${cropLeft}px;height:${h}px;">${miniPagePreviewHTML(item.key)}</div>
                 </div>
@@ -12322,6 +12324,8 @@ document.addEventListener('pointercancel', endRecentDrag, true);
 
 setInterval(()=>{
   if(state.current !== 'trading' || pageSwipeAnimating) return;
+  // Page Styles / Rows on screen: don't rebuild them every tick (that made 3D Circle flash).
+  if((state.pageStyleOn && state.pageStyleViewOpen) || state.rowsViewOpen) return;
   const active = document.activeElement;
   if(active && (active.tagName === 'INPUT')) return;
   if(!state.positions.length) return;
@@ -12343,6 +12347,7 @@ setInterval(()=>{
 // needing some other interaction to happen to trigger it first.
 setInterval(()=>{
   if(state.current !== 'wallet' || pageSwipeAnimating) return;
+  if((state.pageStyleOn && state.pageStyleViewOpen) || state.rowsViewOpen) return;
   const active = document.activeElement;
   if(active && (active.tagName === 'INPUT')) return;
   renderDevice();
