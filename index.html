@@ -2882,11 +2882,15 @@
     for(const s of Array.from(document.styleSheets)){ try{ rulesOf(s.cssRules, out); }catch(e){} }
     return out;
   }
+  // The dial pad is the one thing that FOLLOWS the theme instead of opposing it (owner): its own colours are the
+  // reverse of what it's drawn with - black dial pad in Black, white dial pad in White (the green call stays green).
+  const FOLLOW_SEL = /station3-(dialpad|call-btn|newcontact)/;
   function themeSheets(white){
     for(const r of sheetRules()){
+      const flipIt = FOLLOW_SEL.test(r.selectorText) ? !white : white;
       let orig = ruleOrig.get(r);
       if(!orig){
-        if(!white) continue;
+        if(!flipIt) continue;
         orig = [];
         for(let i = 0; i < r.style.length; i++){
           const p = r.style[i];
@@ -2897,7 +2901,7 @@
         }
         ruleOrig.set(r, orig);
       }
-      for(const [p, v, pr] of orig) r.style.setProperty(p, white ? flipValue(v) : v, pr);
+      for(const [p, v, pr] of orig) r.style.setProperty(p, flipIt ? flipValue(v) : v, pr);
     }
   }
   // Inline styles and SVG colour attributes: remember what was written, so a redraw is themed once.
@@ -2971,6 +2975,7 @@
   let saved = 'black';
   try{ if(window.StoryNative && window.StoryNative.getTheme) saved = window.StoryNative.getTheme(); else saved = localStorage.getItem('story-theme') || 'black'; }catch(e){}
   if(saved === 'white') window.storySetTheme('white');
+  else themeSheets(false);  // Black: the dial pad still gets its own (black) colours
 })();
 </script>
 </head>

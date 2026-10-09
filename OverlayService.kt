@@ -75,7 +75,7 @@ class OverlayService : Service(), StoryBridge.Host {
     // Always On Display: when the screen goes off, STORY's dim always-on screen comes up instead
     // (if switched on). Pressing power while it's up turns the screen truly off.
     private val screenOff = object : android.content.BroadcastReceiver() {
-        override fun onReceive(c: Context, i: Intent) { onScreenOff(); ui.post { syncLockDial() } }
+        override fun onReceive(c: Context, i: Intent) { screenOffAt = System.currentTimeMillis(); onScreenOff(); ui.post { syncLockDial() } }
     }
     // Screen on: the lock screen may be showing -> the lock screen dial pad (Settings > QUICK ACCESS).
     private val screenOn = object : android.content.BroadcastReceiver() {
@@ -887,7 +887,11 @@ class OverlayService : Service(), StoryBridge.Host {
     // ---- Settings > QUICK ACCESS: the lock screen dial pad (always open, flush to the bottom, centred), with
     //      Station 3's gap line around the button when Station 3 is there too; on the Always On Display too if set. ----
     private var lockDialPane: Pane? = null
-    private fun keyguardLocked() = getSystemService(android.app.KeyguardManager::class.java)?.isKeyguardLocked == true
+    /** Locked = Android says so AND you haven't unlocked since the screen last went off (some phones keep saying
+     *  "locked" for a while after you unlock - your unlock wins until the screen goes off again). */
+    @Volatile private var screenOffAt = 0L
+    private fun keyguardLocked() = getSystemService(android.app.KeyguardManager::class.java)?.isKeyguardLocked == true &&
+        !(userPresentAt > screenOffAt)
     /** STORY's Always On Display is up only while the phone is really locked. If it's somehow still around
      *  after you unlock, it's ended right here (it must never hide Station 3 or grey anything on an unlocked phone). */
     @Volatile private var userPresentAt = 0L
