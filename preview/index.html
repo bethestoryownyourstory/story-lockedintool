@@ -3249,7 +3249,7 @@ function pswitchCircle2dHTML(navAttr){
     <div class="pswitch-circle2d" data-circle2d>
       <div class="circle-track-ring"></div>
       ${PAGE_SWITCH_ITEMS.map((item,i)=>`
-        <div class="pswitch-tile pswitch-circle2d-item" data-${navAttr}="${item.key}" data-baseangle="${90 - (i - Math.floor(PAGE_SWITCH_ITEMS.length / 2)) * 360 / PAGE_SWITCH_ITEMS.length}">
+        <div class="pswitch-tile pswitch-circle2d-item" data-${navAttr}="${item.key}" data-baseangle="${90 - (i - Math.floor(PAGE_SWITCH_ITEMS.length / 2)) * 36}">
           ${miniPagePreviewHTML(item.key)}
           ${tileLabelHTML(item, navAttr)}
         </div>
@@ -8353,7 +8353,9 @@ function setupCircleAndWheelDrag(){
     // Owner: the circle lies FLAT (like a turntable seen from the front) - a wide, flat ring; the row's pages stand
     // straight on it, spread evenly all the way round (row order, the middle one in front). Pages going round the
     // back get smaller and disappear behind; swipe turns it one page at a time, round and round.
-    const STEP = 360 / Math.max(1, items.length);
+    // Close together at the front (owner: not far apart), 36deg apart; swiping stops at the first / last page.
+    const STEP = 36, LIMIT = Math.floor(items.length / 2) * STEP, LIMIT_HI = (items.length - 1 - Math.floor(items.length / 2)) * STEP;
+    const clampRot = r=>Math.max(-LIMIT_HI, Math.min(LIMIT, r));
     const layout = (rotDeg)=>{
       items.forEach(el=>{
         const base = parseFloat(el.getAttribute('data-baseangle')) || 0;
@@ -8367,12 +8369,12 @@ function setupCircleAndWheelDrag(){
       });
     };
     const settle = ()=>{
-      state.circleRotDeg = Math.round(state.circleRotDeg / STEP) * STEP;
+      state.circleRotDeg = clampRot(Math.round(state.circleRotDeg / STEP) * STEP);
       items.forEach(el=>{ el.style.transition = 'transform 0.3s ease, opacity 0.3s ease'; });
       layout(state.circleRotDeg);
       setTimeout(()=>items.forEach(el=>{ el.style.transition = ''; }), 320);
     };
-    state.circleRotDeg = Math.round((state.circleRotDeg || 0) / STEP) * STEP;
+    state.circleRotDeg = clampRot(Math.round((state.circleRotDeg || 0) / STEP) * STEP);
     layout(state.circleRotDeg);
     // The cards sit exactly in the middle of the screen (owner), whatever is above them.
     circleEl.style.transform = '';
@@ -8392,7 +8394,7 @@ function setupCircleAndWheelDrag(){
       const dx = e.clientX - startX;
       if(Math.abs(dx) > 5) dragged = true;
       // Swipe left -> the page on the right comes to the front.
-      state.circleRotDeg = startRot - dx * 0.5;
+      state.circleRotDeg = Math.max(-LIMIT_HI - 12, Math.min(LIMIT + 12, startRot - dx * 0.35));
       layout(state.circleRotDeg);
       e.stopPropagation();
     });
