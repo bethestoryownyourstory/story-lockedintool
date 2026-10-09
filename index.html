@@ -528,9 +528,14 @@
       linear-gradient(to right, transparent 0, transparent 30px, #e76f51 30px, #e76f51 31px, transparent 31px);
   }
   /* Create (+ new note on top) sits under the style preview, never touching or floating over it (owner). */
-  .notes-fab-stack{ position:relative; display:flex; flex-direction:column; align-items:flex-end; gap:12px; margin-top:auto; padding-top:44px; margin-right:6px; margin-bottom:22px; }
+  .notes-fab-stack{ position:relative; display:flex; flex-direction:column; align-items:flex-end; gap:12px; margin-top:auto; padding-top:24px; margin-right:6px; margin-bottom:22px; }
   /* Notes fills the screen: Create sits at the bottom when there's room (owner), always clear of the preview. */
   .page-shell.notes-shell{ display:flex; flex-direction:column; min-height:100%; box-sizing:border-box; }
+  /* The Style Preview grows to fill the space down to just above New note / Create (owner: no empty gap). */
+  .notes-shell .notes-hub{ flex:1 0 auto; }
+  .notes-shell .notes-col-right{ display:flex; flex-direction:column; }
+  .notes-shell .notes-preview-box{ flex:1 0 auto; display:flex; min-height:90px; }
+  .notes-shell .notes-preview-page{ flex:1; height:auto; min-height:90px; }
   /* "+" (new text note) reads as a small badge sitting on the corner of "Create" (new drawing) --
      one combined control, two separate destinations, like a notification badge on a button --
      rather than sitting dead-center where it would hide the Create label entirely and both
