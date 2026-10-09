@@ -478,6 +478,17 @@ class OverlayService : Service(), StoryBridge.Host {
         val loader = WebViewAssetLoader.Builder().addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this)).build()
         val query = if (lock) "?s3=1&dial=1&lock=1" else if (gap) "?s3=1&profile=1&gap=1" else if (profile) "?s3=1&profile=1" else if (dial) "?s3=1&dial=1" else if (small) "?s3=1" else ""
         var paneRef: Pane? = null
+        // Profile / Messages: tell the page how much of it the keyboard covers, so a chat's typing box sits on top
+        // of the keyboard (these windows don't shrink for it on their own).
+        if (profile && !gap) {
+            var lastIme = -1
+            frame.setOnApplyWindowInsetsListener { v, insets ->
+                val ime = if (Build.VERSION.SDK_INT >= 30) insets.getInsets(android.view.WindowInsets.Type.ime()).bottom
+                    else @Suppress("DEPRECATION") insets.systemWindowInsetBottom
+                if (ime != lastIme) { lastIme = ime; wv.evaluateJavascript("window.storyImeInset&&window.storyImeInset(${ime / dp})", null) }
+                v.onApplyWindowInsets(insets)
+            }
+        }
         wv.webViewClient = object : WebViewClient() {
             override fun onPageStarted(v: WebView, url: String, favicon: android.graphics.Bitmap?) {
                 if (small) paneRef?.let { it.loading = true; it.frame.alpha = 0f; syncBarBg() }

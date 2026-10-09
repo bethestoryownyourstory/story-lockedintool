@@ -1818,7 +1818,7 @@
   #story-profile .msg-end{ flex-shrink:0; display:flex; flex-direction:column; align-items:flex-end; gap:4px; }
   #story-profile .msg-time{ font-size:11px; color:var(--pf-muted); }
   #story-profile .msg-status{ font-size:11px; font-weight:700; }
-  #story-profile .msg-delivered{ color:var(--pf-muted); }
+  #story-profile .msg-delivered, #story-profile .msg-sending{ color:var(--pf-muted); }
   #story-profile .msg-seen{ color:var(--pf-fg); }
   #story-profile .msg-read{ color:var(--pf-fg); }
   #story-profile .pf-msgs-menu{ position:fixed; left:20px; right:20px; bottom:80px; z-index:6; }
@@ -1826,6 +1826,37 @@
   #story-profile .pf-msgs-empty{ text-align:center; padding-top:26vh; }
   #story-profile .pf-msgs-empty-t{ font-size:15px; font-weight:600; }
   #story-profile .pf-msgs-lock{ display:inline-flex; align-items:center; gap:5px; margin-top:8px; font-size:12px; color:var(--pf-muted); }
+  /* A chat (owner's drawing): their picture + name / @username at the top over a line, "End-to-end encrypted",
+     their messages in squarer boxes on the left, yours in rounded bubbles on the right, the time under each (and how
+     your last one stands), and the typing box at the bottom - on top of the keyboard while it's up. */
+  #story-profile .pf-chat{ display:flex; flex-direction:column; overflow:hidden; padding:0; bottom:calc(16px + var(--pf-ime, 0px)) !important; }
+  #story-profile .pf-chat-head{ display:flex; align-items:center; gap:10px; padding:0 20px 12px 12px; border-bottom:1px solid var(--pf-fg); flex-shrink:0; }
+  #story-profile .pf-chat-head .pf-ed-back{ margin-left:0; flex-shrink:0; }
+  #story-profile .pf-chat-head .msg-pic{ width:44px; height:44px; }
+  #story-profile .pf-chat-names{ min-width:0; display:flex; flex-direction:column; gap:2px; }
+  #story-profile .pf-chat-name{ font-size:16px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #story-profile .pf-chat-user{ font-size:13px; color:var(--pf-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #story-profile .pf-chat-list{ flex:1; min-height:0; overflow-y:auto; scrollbar-width:none; padding:14px 20px 10px; display:flex; flex-direction:column; gap:12px; }
+  #story-profile .pf-chat-list::-webkit-scrollbar{ display:none; }
+  #story-profile .pf-chat-e2e{ align-self:center; display:inline-flex; align-items:center; gap:5px; font-size:12px; color:var(--pf-muted); margin:4px 0 8px; }
+  #story-profile .cm{ display:flex; flex-direction:column; align-items:flex-start; max-width:78%; }
+  #story-profile .cm.me{ align-self:flex-end; align-items:flex-end; }
+  #story-profile .cm-b{ border:1.5px solid var(--pf-fg); border-radius:8px; padding:9px 12px; font-size:15px; line-height:1.35; white-space:pre-wrap; overflow-wrap:anywhere; -webkit-user-select:text; user-select:text; }
+  #story-profile .cm.me .cm-b{ border-radius:20px; padding:9px 14px; }
+  #story-profile .cm-t{ font-size:11px; color:var(--pf-muted); margin:4px 4px 0; }
+  #story-profile .cm-t b{ font-weight:700; color:var(--pf-fg); }
+  #story-profile .cm-t b.msg-delivered, #story-profile .cm-t b.msg-sending{ color:var(--pf-muted); }
+  #story-profile .cm-typing .cm-b{ display:flex; align-items:center; gap:4px; padding:13px 14px; }
+  #story-profile .cm-typing i{ width:6px; height:6px; border-radius:50%; background:var(--pf-fg); animation:msgDot 1.2s infinite ease-in-out; }
+  #story-profile .cm-typing i:nth-child(2){ animation-delay:0.2s; }
+  #story-profile .cm-typing i:nth-child(3){ animation-delay:0.4s; }
+  #story-profile .pf-chat-bar{ display:flex; align-items:flex-end; gap:8px; padding:8px 12px 0; flex-shrink:0; }
+  #story-profile .pf-chat-box{ flex:1; min-width:0; display:flex; border:1px solid var(--pf-hair); border-radius:22px; padding:0 16px; }
+  #story-profile .pf-chat-box textarea{ flex:1; min-width:0; border:none; outline:none; background:transparent; color:var(--pf-fg); font-size:15px; line-height:20px; font-family:inherit; padding:11px 0; resize:none; max-height:100px; caret-color:var(--pf-fg); -webkit-user-select:text; user-select:text; }
+  #story-profile .pf-chat-box textarea::placeholder{ color:var(--pf-muted); }
+  #story-profile .pf-chat-send{ width:44px; height:44px; border-radius:50%; border:none; background:var(--pf-fg); color:var(--pf-bg); display:flex; align-items:center; justify-content:center; padding:0; flex-shrink:0; }
+  #story-profile .pf-chat-send:disabled{ opacity:0.3; }
+  #story-profile .pf-chat-send:not(:disabled):active{ opacity:0.6; }
   /* Choose a picture: the phone's pictures, newest first, 3 across. */
   #story-profile .pf-photo-grid{ display:grid; grid-template-columns:repeat(3, 1fr); gap:3px; }
   #story-profile .pf-photo, #story-profile .pf-photo-more{ aspect-ratio:1/1; border:none; padding:0; margin:0; background:var(--pf-hair); overflow:hidden; border-radius:4px; }
@@ -5533,6 +5564,18 @@ window.storyProfileOnly = function(){
         <div class="pf-msgs-lock"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>End-to-end encrypted</div>
       </div>
     </div>
+    <div class="pf-scroll pf-chat" hidden>
+      <div class="pf-chat-head">
+        <button class="pf-ed-back" data-pf="chat-back" aria-label="Back">‹</button>
+        <span class="msg-pic"></span>
+        <div class="pf-chat-names"><div class="pf-chat-name"></div><div class="pf-chat-user"></div></div>
+      </div>
+      <div class="pf-chat-list"></div>
+      <div class="pf-chat-bar">
+        <label class="pf-chat-box"><textarea rows="1" placeholder="Message" autocomplete="off" enterkeyhint="enter"></textarea></label>
+        <button class="pf-chat-send" data-pf="chat-send" aria-label="Send" disabled><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5.5 11.5 12 5l6.5 6.5"/></svg></button>
+      </div>
+    </div>
     <div class="pf-create" hidden>
       <div class="cr-shot" hidden><img alt="" hidden><video playsinline loop hidden></video></div>
       <div class="cr-status" hidden></div>
@@ -5636,7 +5679,9 @@ window.storyProfileOnly = function(){
     else if(k === 'ed-bio') openProfileField('bio');
     else if(k === 'mf'){ msgView.filter = b.getAttribute('data-f'); msgView.sub = null; renderMsgList(); }
     else if(k === 'mf-sub'){ const f = b.getAttribute('data-f'); msgView.sub = msgView.sub === f ? null : f; renderMsgList(); }
-    else if(k === 'msg-open') showToast('Chat — coming soon');
+    else if(k === 'msg-open') openChat(b.getAttribute('data-id'));
+    else if(k === 'chat-back') closeChat();
+    else if(k === 'chat-send') sendChatMessage();
     else if(k === 'msg-archive'){
       const c = msgChats().find(x=>x.id === msgView.menuFor);
       if(c){ c.archived = !c.archived; saveMsgChats(); }
@@ -5666,6 +5711,11 @@ window.storyProfileOnly = function(){
   ['pointerup', 'pointercancel', 'pointerleave'].forEach(t=>el.querySelector('.pf-msgs-list').addEventListener(t, ()=>clearTimeout(holdT)));
   el.querySelector('.pf-msgs-list').addEventListener('click', e=>{ if(held){ e.stopPropagation(); held = false; } }, true);
   el.querySelector('.pf-msgs').addEventListener('click', e=>{ if(msgView.menuFor && !e.target.closest('.pf-msgs-menu') && !e.target.closest('.msg-row')){ msgView.menuFor = null; renderMsgList(); } });
+  const chatBox = el.querySelector('.pf-chat-box textarea');
+  chatBox.addEventListener('input', ()=>{ fitChatBox(); el.querySelector('.pf-chat-send').disabled = !chatBox.value.trim(); msgTypingOut(); });
+  chatBox.addEventListener('pointerdown', ()=>{ profileTypingOn(); msgReadOut(); });
+  chatBox.addEventListener('focus', ()=>{ profileTypingOn(); msgReadOut(); });
+  chatBox.addEventListener('blur', ()=>{ if(NATIVE && window.StoryNative.setTyping) try{ window.StoryNative.setTyping(false); }catch(err){} });
   const fieldInput = el.querySelector('.pf-field input'), bioBox = el.querySelector('.pf-field textarea');
   fieldInput.addEventListener('keydown', e=>{ if(e.key === 'Enter'){ e.preventDefault(); saveProfileField(); } });
   for(const box of [fieldInput, bioBox]){
@@ -5704,6 +5754,7 @@ window.storyProfileReset = function(){
   const el = document.getElementById('story-profile'); if(!el || PF_GAP_WINDOW) return;
   const ae = document.activeElement; if(ae && ae.closest && ae.closest('.pf-field')) ae.blur();
   el.querySelector('.pf-editor').hidden = true; el.querySelector('.pf-viewer').hidden = true; el.querySelector('.pf-photos').hidden = true; el.querySelector('.pf-field').hidden = true; el.querySelector('.pf-msgs').hidden = true;
+  closeChat(true);
   const ms = el.querySelector('.pf-msgs-search input'); if(ms){ ms.value = ''; } msgView.q = ''; msgView.menuFor = null;
   if(crRecording && NATIVE && window.StoryNative.createVideo) window.StoryNative.createVideo(false);
   if(crHas && NATIVE && window.StoryNative.createDiscard) window.StoryNative.createDiscard();
@@ -5858,12 +5909,12 @@ window.addEventListener('storage', e=>{ if(e.key === 'story-highlights') renderH
 // status = how YOUR last message stands: delivered (they got it, chat not opened), seen (opened, then left without
 // typing), read (saw it and tapped the keyboard).
 const MSG_KEY = 'story-messages';
-const msgView = { filter:'chats', sub:null, q:'', menuFor:null };
+const msgView = { filter:'chats', sub:null, q:'', menuFor:null, chat:null };
 let msgTypingTimer = 0;
 // The message server calls this the moment someone starts / keeps typing to you.
 window.storyMsgTyping = function(chatId, who){
   const c = msgChats().find(x=>x.id === chatId); if(!c) return;
-  c.typing = { at: Date.now(), who: who || '' }; renderMsgList();
+  c.typing = { at: Date.now(), who: who || '' }; renderMsgList(); if(msgView.chat === chatId) renderChat();
 };
 let msgChatsCache = null;
 function msgChats(){
@@ -5871,7 +5922,7 @@ function msgChats(){
   return msgChatsCache;
 }
 function saveMsgChats(){ try{ localStorage.setItem(MSG_KEY, JSON.stringify(msgChatsCache || [])); }catch(e){} }
-window.addEventListener('storage', e=>{ if(e.key === MSG_KEY){ msgChatsCache = null; renderMsgList(); } });
+window.addEventListener('storage', e=>{ if(e.key === MSG_KEY){ msgChatsCache = null; renderMsgList(); renderChat(); } });
 // Requests only exist when your privacy setting says messages from new people come in as requests.
 function msgRequestsOn(){ try{ return (JSON.parse(localStorage.getItem('story-privacy') || '{}') || {}).messages === 'requests'; }catch(e){ return false; } }
 function msgTime(at){
@@ -5903,7 +5954,7 @@ function renderMsgList(){
   // Search: any word in any message you sent or got (and names).
   if(q) list = list.filter(c=>(c.name || '').toLowerCase().includes(q) || (c.username || '').toLowerCase().includes(q) || (c.messages || []).some(m=>(m.text || '').toLowerCase().includes(q)));
   list.sort((a, b)=>((b.messages || []).slice(-1)[0]?.at || 0) - ((a.messages || []).slice(-1)[0]?.at || 0));
-  const STATUS = { delivered:'Delivered', seen:'Seen', read:'Read' };
+  const STATUS = MSG_STATUS;
   box.querySelector('.pf-msgs-list').innerHTML = list.map(c=>{
     const ms = c.messages || [];
     // While searching, the row shows the message that matched.
@@ -5933,6 +5984,79 @@ function renderMsgList(){
   menu.hidden = !mc;
   if(mc) menu.querySelector('button').textContent = mc.archived ? 'Unarchive' : 'Archive';
 }
+// ---- A chat (tap a chat in Messages). Your messages go out through the message server: until it has them they
+// show "Sending". What you do in a chat (send, open = Seen, tap the typing box = Read, typing) is queued for the
+// server in localStorage 'story-msg-outbox' - the server never sees what you write, only locked messages. ----
+const MSG_STATUS = { sending:'Sending', delivered:'Delivered', seen:'Seen', read:'Read' };
+const MSG_OUTBOX = 'story-msg-outbox';
+function msgOut(ev){
+  try{ const q = JSON.parse(localStorage.getItem(MSG_OUTBOX) || '[]') || []; q.push(Object.assign({ at: Date.now() }, ev)); localStorage.setItem(MSG_OUTBOX, JSON.stringify(q.slice(-500))); }catch(e){}
+  if(window.storyMsgOutbox) try{ window.storyMsgOutbox(); }catch(e){}
+}
+let msgTypingSentAt = 0, msgReadSent = '';
+function msgTypingOut(){ if(!msgView.chat || Date.now() - msgTypingSentAt < 2000) return; msgTypingSentAt = Date.now(); msgOut({ type:'typing', chatId: msgView.chat }); }
+function msgReadOut(){ if(!msgView.chat || msgReadSent === msgView.chat) return; msgReadSent = msgView.chat; msgOut({ type:'read', chatId: msgView.chat }); }
+function openChat(id){
+  const el = document.getElementById('story-profile'); if(!el || PF_GAP_WINDOW) return;
+  const c = msgChats().find(x=>x.id === id); if(!c) return;
+  msgView.chat = id; msgView.menuFor = null; msgReadSent = '';
+  el.querySelector('.pf-msgs').hidden = true; el.querySelector('.pf-chat').hidden = false;
+  const box = el.querySelector('.pf-chat-box textarea'); box.value = ''; fitChatBox(); el.querySelector('.pf-chat-send').disabled = true;
+  renderChat(true);
+  msgOut({ type:'seen', chatId: id });
+}
+function closeChat(quiet){
+  const el = document.getElementById('story-profile'); if(!el || PF_GAP_WINDOW) return;
+  const box = el.querySelector('.pf-chat-box textarea'); if(box && document.activeElement === box) box.blur();
+  const was = !el.querySelector('.pf-chat').hidden;
+  el.querySelector('.pf-chat').hidden = true; msgView.chat = null;
+  if(was && !quiet){ el.querySelector('.pf-msgs').hidden = false; renderMsgList(); }
+}
+function fitChatBox(){
+  const box = document.querySelector('#story-profile .pf-chat-box textarea'); if(!box) return;
+  box.style.height = 'auto'; box.style.height = Math.min(box.scrollHeight, 100) + 'px';
+}
+function renderChat(toEnd){
+  const el = document.getElementById('story-profile'); if(!el || PF_GAP_WINDOW || !msgView.chat) return;
+  const c = msgChats().find(x=>x.id === msgView.chat); if(!c){ closeChat(); return; }
+  // Only the values, never label words: the name (or @username if there's no name), the @username under it.
+  el.querySelector('.pf-chat-head .msg-pic').innerHTML = c.photo ? '<img alt="" src="' + escText(c.photo) + '">' : PF_PHOTO_PLACEHOLDER;
+  el.querySelector('.pf-chat-name').textContent = c.name || (c.username ? '@' + c.username : '');
+  const u = el.querySelector('.pf-chat-user'); u.textContent = c.name && c.username ? '@' + c.username : ''; u.hidden = !u.textContent;
+  const ms = c.messages || [];
+  let lastMine = -1; ms.forEach((m, i)=>{ if(m.from === 'me') lastMine = i; });
+  const list = el.querySelector('.pf-chat-list');
+  const atEnd = toEnd || list.scrollTop + list.clientHeight >= list.scrollHeight - 40;
+  const typing = c.typing && Date.now() - (c.typing.at || 0) < 6000;
+  list.innerHTML = '<div class="pf-chat-e2e"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>End-to-end encrypted</div>' +
+    ms.map((m, i)=>{
+      const me = m.from === 'me';
+      const st = i === lastMine && MSG_STATUS[m.status] ? ' · <b class="msg-' + m.status + '">' + MSG_STATUS[m.status] + '</b>' : '';
+      const who = c.kind === 'group' && !me && m.who ? escText(m.who) + ' · ' : '';
+      return '<div class="cm' + (me ? ' me' : '') + '"><div class="cm-b">' + escText(m.text || '') + '</div><div class="cm-t">' + who + msgTime(m.at) + st + '</div></div>';
+    }).join('') +
+    (typing ? '<div class="cm cm-typing"><div class="cm-b"><i></i><i></i><i></i></div>' + (c.kind === 'group' && c.typing.who ? '<div class="cm-t">' + escText(c.typing.who) + '</div>' : '') + '</div>' : '');
+  if(atEnd) list.scrollTop = list.scrollHeight;
+  clearTimeout(renderChat.t);
+  if(typing) renderChat.t = setTimeout(()=>renderChat(), 1000);
+}
+function sendChatMessage(){
+  const el = document.getElementById('story-profile'); if(!el || !msgView.chat) return;
+  const box = el.querySelector('.pf-chat-box textarea'), text = box.value.replace(/\s+$/, '').replace(/^\s*\n/, '');
+  if(!text.trim()) return;
+  const c = msgChats().find(x=>x.id === msgView.chat); if(!c) return;
+  const m = { id: 'm' + Date.now() + Math.random().toString(36).slice(2, 6), from:'me', text, at: Date.now(), status:'sending' };
+  (c.messages = c.messages || []).push(m); saveMsgChats();
+  msgOut({ type:'send', chatId: c.id, id: m.id, text });
+  box.value = ''; fitChatBox(); el.querySelector('.pf-chat-send').disabled = true;
+  renderChat(true);
+}
+// The app says how much of this window the keyboard covers: the typing box sits right on top of it.
+window.storyImeInset = function(dp){
+  const el = document.getElementById('story-profile'); if(!el) return;
+  el.style.setProperty('--pf-ime', Math.max(0, dp || 0) + 'px');
+  const list = el.querySelector('.pf-chat-list'); if(list && msgView.chat) requestAnimationFrame(()=>{ list.scrollTop = list.scrollHeight; });
+};
 // STORY's own picture grid: the phone's pictures right inside Edit profile, so choosing is instant (no app switch).
 // Android asks once to let STORY see the pictures; if that's refused, the phone's own picker is used instead.
 const PF_PHOTO_BASE = 'https://appassets.androidplatform.net/story-photo/';
