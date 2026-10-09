@@ -20,7 +20,10 @@ class StoryAccessibilityService : AccessibilityService() {
         val pkg = e.packageName?.toString() ?: return
         // The lock screen asks for your PIN / password / pattern: STORY's lock screen dial pad gets out of the way
         // at once, so it can never cover it (owner: never get locked out of your own phone).
-        if (pkg == "com.android.systemui" && looksLikeUnlockEntry(e)) OverlayService.instance?.lockBouncerShown()
+        if (pkg == "com.android.systemui") {
+            if (e.isPassword || ENTRY_TREE_CLASS.containsMatchIn(e.className?.toString() ?: "")) OverlayService.instance?.lockBouncerShown(sure = true)
+            else if (looksLikeUnlockEntry(e)) OverlayService.instance?.lockBouncerShown(sure = false)
+        }
         when (e.eventType) {
             // Which app is on screen (so music playing in the background can be told apart from it).
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
@@ -37,10 +40,11 @@ class StoryAccessibilityService : AccessibilityService() {
             }
         }
     }
+    /** Weaker signs (a bouncer container, the lock screen saying "PIN"...): only trusted when STORY can't see
+     *  the screen itself - a failed fingerprint's "use PIN" hint must not send the dial pad away. */
     private fun looksLikeUnlockEntry(e: AccessibilityEvent): Boolean {
-        if (e.isPassword) return true
         val cls = e.className?.toString() ?: ""
-        if (Regex("Keyguard.*(PIN|Pin|Password|Pattern|Sim|Puk)|PasswordTextView|PinView|PatternView|NumPadKey|Bouncer").containsMatchIn(cls)) return true
+        if (ENTRY_CLASS.containsMatchIn(cls)) return true
         // What the lock screen announces when it asks (e.g. "PIN area", "Enter PIN", "Draw your pattern").
         val said = (e.text.joinToString(" ") + " " + (e.contentDescription ?: "")).lowercase()
         return e.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
@@ -57,6 +61,40 @@ class StoryAccessibilityService : AccessibilityService() {
 
     companion object {
         var instance: StoryAccessibilityService? = null
+        private val ENTRY_CLASS = Regex("Keyguard.*(PIN|Pin|Password|Pattern|Sim|Puk)|PasswordTextView|PinView|PatternView|NumPadKey|Bouncer")
+        private val ENTRY_ID = Regex("/(pinEntry|passwordEntry|lockPatternView|keyguard_(pin|password|pattern|sim_pin|sim_puk)_view|key_enter|key[0-9])$")
+        // On screen (not just in the event stream): only the entry itself counts - never a bouncer container,
+        // which some phones keep "visible" even when it isn't showing.
+        private val ENTRY_TREE_CLASS = Regex("PasswordTextView|NumPadKey|LockPatternView|Keyguard(PIN|Pin|Password|Pattern|SimPin|SimPuk)View")
+
+        /** Is the phone's own PIN / password / pattern page on screen RIGHT NOW? Looks at what SystemUI is
+         *  actually showing. true / false, or null when it can't tell (no window access) - then the old
+         *  event-based guard is used instead. */
+        fun unlockEntryShowing(): Boolean? {
+            val s = instance ?: return null
+            val ws = runCatching { s.windows }.getOrNull() ?: return null
+            var looked = false
+            for (w in ws) {
+                val r = runCatching { w.root }.getOrNull() ?: continue
+                if (r.packageName?.toString() != "com.android.systemui") continue
+                looked = true
+                if (findEntry(r, 0, intArrayOf(0))) return true
+            }
+            return if (looked) false else null
+        }
+        private fun findEntry(n: android.view.accessibility.AccessibilityNodeInfo, depth: Int, count: IntArray): Boolean {
+            if (depth > 40 || ++count[0] > 1500) return false
+            if (!n.isVisibleToUser) return false
+            if (n.isPassword) return true
+            val id = n.viewIdResourceName ?: ""
+            if (id.isNotEmpty() && ENTRY_ID.containsMatchIn(id)) return true
+            if (ENTRY_TREE_CLASS.containsMatchIn(n.className?.toString() ?: "")) return true
+            for (i in 0 until n.childCount) {
+                val c = runCatching { n.getChild(i) }.getOrNull() ?: continue
+                if (findEntry(c, depth + 1, count)) return true
+            }
+            return false
+        }
         @Volatile var foregroundPkg: String? = null
         private val mediaSessions = ConcurrentHashMap<String, MediaSession.Token>()
 

@@ -929,7 +929,15 @@ class OverlayService : Service(), StoryBridge.Host {
      *  anywhere else (e.g. swipe up to unlock) or the phone asks for your PIN / password / pattern. It must
      *  NEVER sit over the phone's own PIN pad. */
     @Volatile private var lockDialAway = false
-    fun lockBouncerShown() { ui.post { if (lockDialPane?.shown == true || keyguardLocked()) { lockDialAway = true; lockDialPeek = false; syncLockDial() } } }
+    fun lockBouncerShown(sure: Boolean) { ui.post {
+        if (lockDialPane?.shown != true && !keyguardLocked()) return@post
+        // A weak sign while STORY can see the screen: trust what's actually showing (checked now and again as the
+        // PIN page slides in) - e.g. a failed fingerprint's "use PIN" hint must not send the dial pad away.
+        if (!sure && StoryAccessibilityService.unlockEntryShowing() != null) {
+            syncLockDial(); for (d in longArrayOf(300, 800)) ui.postDelayed({ syncLockDial() }, d); return@post
+        }
+        lockDialAway = true; lockDialPeek = false; syncLockDial()
+    } }
     /** A touch on the lock screen (e.g. starting to swipe up): the dial pad steps aside for that moment and comes
      *  back if the PIN page didn't show (you let go, or dragged back down). If the PIN page shows, it stays away.
      *  Touching again soon after it came back means you're heading for the PIN page: it stays away too. */
@@ -939,7 +947,9 @@ class OverlayService : Service(), StoryBridge.Host {
         if (lockDialPeek && !lockDialAway) { lockDialPeek = false; lockDialBackAt = System.currentTimeMillis(); syncLockDial() }
     }
     private fun lockScreenTouched() {
-        if (System.currentTimeMillis() - lockDialBackAt < 6000) { lockDialAway = true; lockDialPeek = false; syncLockDial(); return }
+        // Can't see the screen: touching again soon after it came back means you're heading for the PIN page.
+        // (When STORY can see the screen it simply checks whether the PIN page is there - see syncLockDial.)
+        if (StoryAccessibilityService.unlockEntryShowing() == null && System.currentTimeMillis() - lockDialBackAt < 6000) { lockDialAway = true; lockDialPeek = false; syncLockDial(); return }
         lockDialPeek = true; syncLockDial()
         ui.removeCallbacks(lockDialBack); ui.postDelayed(lockDialBack, 1500)
     }
@@ -956,14 +966,17 @@ class OverlayService : Service(), StoryBridge.Host {
         }
         val p = lockDialPane ?: return
         val aodUp = aodShowing()
-        val want = QuickAccess.lockDial(this) && locked && !lockDialAway && !lockDialPeek &&
+        // The phone's own PIN / password / pattern page is on screen right now: never on top of it.
+        val entry = if (QuickAccess.lockDial(this) && locked) StoryAccessibilityService.unlockEntryShowing() else null
+        val want = QuickAccess.lockDial(this) && locked && !lockDialAway && !lockDialPeek && entry != true &&
             (if (aodUp) QuickAccess.dialAod(this) else getSystemService(android.os.PowerManager::class.java).isInteractive)
         if (want != p.shown) {
             if (!want) p.web.evaluateJavascript("window.storyDialClear&&window.storyDialClear()", null)
             setShown(p, want)
         }
         // While it's up, keep checking: the moment the phone unlocks (by any route) it goes.
-        if (want || aodOn) ui.postDelayed(lockWatch, 1000)
+        // (and while the PIN page is up, it comes back as soon as you drag that away).
+        if (want || aodOn || entry == true) ui.postDelayed(lockWatch, 1000)
     }
     override fun setLockDialSize(w: Int, h: Int) { ui.post {
         val p = lockDialPane ?: return@post
