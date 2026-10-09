@@ -646,18 +646,20 @@
   #notes-editor-shell > .canvas-swatch-row,
   #notes-editor-shell > .section-title,
   #notes-editor-shell > .notes-style-row{ flex-shrink:0; }
-  .note-content-wrap{ border-radius:12px; padding:2px; margin-bottom:0; flex:1; display:flex; min-height:600px; max-height:600px; touch-action:pan-y; position:relative; }
+  .note-content-wrap{ border-radius:12px; padding:2px; margin-bottom:0; flex:1; display:flex; min-height:var(--note-page-h, 600px); max-height:var(--note-page-h, 600px); touch-action:pan-y; position:relative; }
   .note-content-wrap-spaced{ margin-bottom:22px; }
   .note-page-counter{
     position:absolute; right:8px; bottom:6px; font-size:9.5px; font-weight:700; color:rgba(0,0,0,0.35);
     background:rgba(255,255,255,0.7); padding:2px 6px; border-radius:6px; pointer-events:none; letter-spacing:0.2px;
   }
   .note-page-counter.full{ color:#e63946; background:rgba(255,255,255,0.85); }
+  /* The page reaches the bottom with its tools floating on it - the counter sits just above them. */
+  #notes-editor-shell .note-content-wrap .note-page-counter{ bottom:58px; }
   .note-page-counter.flash{ animation:notePageFlash 0.35s; }
   .inline-task-checkbox{ width:14px; height:14px; vertical-align:middle; margin-right:2px; cursor:pointer; }
   .inline-task-text.done{ text-decoration:line-through; opacity:0.55; }
   .note-content-area{
-    flex:1; min-height:600px; max-height:600px; overflow-y:auto; padding:12px; color:#000; font-size:13px; line-height:1.6; outline:none;
+    flex:1; min-height:var(--note-page-h, 600px); max-height:var(--note-page-h, 600px); overflow-y:auto; padding:12px; color:#000; font-size:13px; line-height:1.6; outline:none;
     touch-action:pan-y; background-attachment:local; background-repeat:repeat;
   }
   /* Ruling is drawn on the scrollable text box itself (not its wrapper) and positioned so each rule sits under the
@@ -718,8 +720,8 @@
   @keyframes notePageFlash{ 0%{opacity:1;} 50%{opacity:0.2;} 100%{opacity:1;} }
   /* Matches .note-content-wrap's box exactly (min/max 600px) so the drawing page and the
      writing page always render at the same size. */
-  .canvas-page-wrap{ flex:1; display:flex; min-height:600px; max-height:600px; position:relative; }
-  .canvas-page-wrap .draw-canvas{ flex:1; height:auto; min-height:600px; max-height:600px; }
+  .canvas-page-wrap{ flex:1; display:flex; min-height:var(--note-page-h, 600px); max-height:var(--note-page-h, 600px); position:relative; }
+  .canvas-page-wrap .draw-canvas{ flex:1; height:auto; min-height:var(--note-page-h, 600px); max-height:var(--note-page-h, 600px); }
   /* Pen tools + page color/style now live in two small popovers anchored to icon buttons
      floating over the top-right corner of the canvas itself (same anchored-popover pattern as
      the notes floating toolbar), instead of being stacked as extra rows above .canvas-page-wrap
@@ -754,6 +756,8 @@
     color:var(--text); font-size:17px; font-weight:800; cursor:pointer; font-family:var(--font-body);
   }
   .notes-float-dock{ position:relative; }
+  /* The note's tools float ON the page (owner), fully on screen: above the bottom edge and clear of the Station 3 corner. */
+  .phone-float-dock.notes-float-dock{ padding:10px 54px 18px 12px !important; }
   .notes-float-toolbar{ display:flex; gap:4px; justify-content:space-between; }
   .notes-float-btn{
     width:30px; height:30px; border-radius:9px; background:var(--card-2); border:1px solid var(--line);
@@ -8669,6 +8673,9 @@ function renderDevice(){
   setupCircleAndWheelDrag();
   attachSwipe();
   applyBrightness();
+  // A note's page reaches the bottom of the screen (owner); its tools float on top of it. The height is worked out
+  // once per screen size and kept (pages never resize on their own), before any canvas is sized from it.
+  if(state.current === 'notes-canvas' || state.current === 'scratch-draw') fitNotePageHeight();
   if(state.current === 'notes-canvas' && state.canvasMode==='draw') initCanvas('draw-canvas', false);
   if(state.current === 'notes-canvas' && state.canvasMode==='write' && state.inlineDrawOpen) initCanvas('inline-draw-canvas', true);
   if(state.current === 'scratch-draw') initCanvas('scratch-draw-canvas', false);
@@ -8705,7 +8712,8 @@ function updateScrollHint(){
   const el = document.getElementById('content-area');
   const hint = document.getElementById('scroll-hint');
   if(!el || !hint) return;
-  const hasMore = el.scrollHeight - el.scrollTop - el.clientHeight > 6;
+  // (Not in a note / drawing: the page fills the screen and its own tools sit there.)
+  const hasMore = state.current !== 'notes-canvas' && state.current !== 'scratch-draw' && el.scrollHeight - el.scrollTop - el.clientHeight > 6;
   hint.classList.toggle('visible', hasMore);
 }
 
@@ -8781,6 +8789,19 @@ function updateScrollbarThumb(){
 // note text -- its "eraser" must actually punch a hole (destination-out) so the text underneath
 // reappears, rather than painting over it with the page background color like the full Draw
 // page's opaque canvas does.
+const NOTE_PAGE_FIT = {};
+function fitNotePageHeight(){
+  const shell = document.getElementById('notes-editor-shell') || document.getElementById('scratch-draw-shell');
+  if(!shell) return;
+  const key = window.innerWidth + 'x' + window.innerHeight + ':' + state.current + ':' + state.canvasMode + ':' + (state.notesFullscreen ? 1 : 0);
+  if(!NOTE_PAGE_FIT[key]){
+    const wrap = shell.querySelector('.note-content-wrap, .canvas-page-wrap'); if(!wrap) return;
+    let sc = wrap.parentElement; while(sc && sc !== document.body && !(sc.scrollHeight > sc.clientHeight + 1 && /(auto|scroll)/.test(getComputedStyle(sc).overflowY))) sc = sc.parentElement;
+    const top = wrap.getBoundingClientRect().top + ((sc && sc !== document.body) ? sc.scrollTop : 0);
+    NOTE_PAGE_FIT[key] = Math.max(420, Math.round(window.innerHeight - top - 8));
+  }
+  shell.style.setProperty('--note-page-h', NOTE_PAGE_FIT[key] + 'px');
+}
 function initCanvas(canvasId, isOverlay){
   const canvas = document.getElementById(canvasId || 'draw-canvas');
   if(!canvas) return;
