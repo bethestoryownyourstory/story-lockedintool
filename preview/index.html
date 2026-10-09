@@ -2107,6 +2107,17 @@
     color:#fff; background:rgba(0,0,0,0.55); padding:3px 8px; border-radius:8px;
     pointer-events:none; white-space:nowrap;
   }
+  /* Vertical Page Style (owner's drawing): a stack - home in the middle in front, the others peeking out above
+     and below, a little smaller behind it. */
+  .pswitch-vstack{ position:relative; height:calc(340px + (var(--n) - 1) * 130px); max-height:100%; }
+  .pswitch-vcard{ position:absolute; left:50%; top:50%; width:280px; height:340px; --mscale:0.68;
+    transform:translate(-50%, -50%) translateY(calc(var(--d) * 130px)) scale(calc(1 - var(--ad) * 0.08));
+    box-shadow:0 10px 28px rgba(0,0,0,0.55); transition:opacity 0.2s ease; }
+  .pswitch-vcard.picked{ opacity:0.25; }
+  .pswitch-vfloat{ position:fixed; inset:0; z-index:60; background:rgba(0,0,0,0.6); display:flex; align-items:center; justify-content:center; }
+  .pswitch-vfloat-card{ width:78%; height:68%; --mscale:0.78; border-radius:20px; box-shadow:0 18px 50px rgba(0,0,0,0.6);
+    animation:vstackPop 0.32s cubic-bezier(.2,1.3,.4,1) both; }
+  @keyframes vstackPop{ 0%{ transform:scale(0.6); opacity:0; } 100%{ transform:scale(1); opacity:1; } }
   .pswitch-vertical{ display:flex; flex-direction:column; gap:10px; }
   .pswitch-vertical .pswitch-tile{ height:150px; --mscale:0.55; }
   .pswitch-horizontal{ display:flex; flex-direction:row; gap:10px; }
@@ -3198,6 +3209,30 @@ function pswitchTileHTML(item, navAttr){
 function tileLabelHTML(item, navAttr){
   return navAttr === 'pswitch-nav' ? `<div class="pswitch-tile-label">${item.label}</div>` : '';
 }
+// Vertical (owner's drawing): the pages of the row you're in, stacked and overlapping, the row's home page in the
+// middle (in front), the others peeking out above and below - spaced just enough to see them, always stacked.
+// Tap one: it pops out of the stack and floats, bigger, in the middle of the screen; tap it again to go to that
+// page; tap anywhere else and it goes back into the stack.
+function pswitchVStackHTML(){
+  const items = PAGE_SWITCH_ITEMS, n = items.length;
+  const home = Math.max(0, items.findIndex(it=>it.key === state.homeScreen || it.key === 'wallet'));
+  // Home sits in the middle: the others keep their order around it.
+  const order = items.slice(); const [h] = order.splice(home, 1); order.splice(Math.floor(n / 2), 0, h);
+  const mid = Math.floor(n / 2);
+  const pick = state.vstackPick && items.find(it=>it.key === state.vstackPick);
+  return `
+    <div class="pswitch-vstack" style="--n:${n}">
+      ${order.map((item, i)=>{ const d = i - mid; return `
+        <div class="pswitch-tile pswitch-vcard${pick && pick.key === item.key ? ' picked' : ''}" data-vpick="${item.key}" style="--d:${d}; --ad:${Math.abs(d)}; z-index:${10 - Math.abs(d)};">
+          ${miniPagePreviewHTML(item.key)}
+        </div>`; }).join('')}
+    </div>
+    ${pick ? `
+    <div class="pswitch-vfloat" data-vstack-close>
+      <div class="pswitch-tile pswitch-vfloat-card" data-pagestyle-nav="${pick.key}">${miniPagePreviewHTML(pick.key)}</div>
+    </div>` : ''}
+  `;
+}
 // Flat Circle: 3 real tiles positioned around an ellipse by angle. Drag rotates them --
 // no momentum, they simply stay wherever released (state.circleRotDeg holds the angle;
 // attachHandlers() wires the actual drag).
@@ -3350,6 +3385,7 @@ function wheelPageDividersHTML(totalH){
   return out;
 }
 function pswitchBodyHTML(style, navAttr){
+  if(style==='vertical' && navAttr === 'pagestyle-nav') return pswitchVStackHTML();
   if(style==='circle') return pswitchCircle2dHTML(navAttr);
   if(style==='wheel') return pswitchWheel3dHTML(navAttr);
   return `<div class="pswitch-${style}">${PAGE_SWITCH_ITEMS.map(item=>pswitchTileHTML(item, navAttr)).join('')}</div>`;
@@ -3792,6 +3828,7 @@ let state = {
   // tapping a tile in that arrangement).
   pageStyleOn:false,
   pageStyleViewOpen:false,
+  vstackPick:null,   // Vertical Page Style: the page that popped out of the stack (null = none)
   circleRotDeg:0,        // flat Circle style: current rotation (degrees), drag-follows, no momentum
   wheelRotY:0,           // 3D Circle: spin rotation (degrees) -- has momentum
   wheelRotX:0,           // 3D Circle: tilt rotation (degrees) -- direct drag, no momentum, clamped
@@ -5330,7 +5367,7 @@ document.addEventListener('click', (e)=>{
 window.storyOnPages = function(on){ document.body.classList.toggle('s3-pages', !!on); if(document.body.classList.contains('s3-only')) renderDevice(); };
 window.storyPagesAction = function(a){
   if(a === 'page-quick-rows') state.rowsViewOpen = true;
-  else if(a === 'page-quick-style'){ state.pageStyleOn = true; state.pageStyleViewOpen = true; }
+  else if(a === 'page-quick-style'){ state.pageStyleOn = true; state.pageStyleViewOpen = true; state.vstackPick = null; }
   else return;
   state.station3Open = false; renderDevice();
 };
@@ -8949,12 +8986,20 @@ function attachHandlers(){
       renderDevice();
     });
   });
+  // Vertical Page Style: tap a page in the stack -> it pops out and floats in the middle; tap outside -> back.
+  document.querySelectorAll('[data-vpick]').forEach(el=>{
+    el.addEventListener('click', (e)=>{ e.stopPropagation(); state.vstackPick = el.getAttribute('data-vpick'); renderDevice(); });
+  });
+  document.querySelectorAll('[data-vstack-close]').forEach(el=>{
+    el.addEventListener('click', (e)=>{ if(e.target.closest('[data-pagestyle-nav]')) return; e.stopPropagation(); state.vstackPick = null; renderDevice(); });
+  });
   document.querySelectorAll('[data-pagestyle-nav]').forEach(el=>{
     el.addEventListener('click', (e)=>{
       e.stopPropagation();
       const target = el.getAttribute('data-pagestyle-nav');
       state.current = target;
       state.lastPage = target;
+      state.vstackPick = null;
       // Fully exits Page Style (not just the view) -- see the matching fix in the drag-based
       // runNav() above for why pageStyleOn has to go false here too.
       state.pageStyleOn = false;
@@ -9861,8 +9906,8 @@ function attachHandlers(){
         // quick button again.
         case 'page-quick-rows': state.rowsViewOpen = true; state.station3Open = false; break;
         case 'rows-view-close': state.rowsViewOpen = false; break;
-        case 'page-quick-style': state.pageStyleOn = true; state.pageStyleViewOpen = true; state.station3Open = false; break;
-        case 'page-style-close': state.pageStyleOn = false; state.pageStyleViewOpen = false; break;
+        case 'page-quick-style': state.pageStyleOn = true; state.pageStyleViewOpen = true; state.vstackPick = null; state.station3Open = false; break;
+        case 'page-style-close': state.pageStyleOn = false; state.pageStyleViewOpen = false; state.vstackPick = null; break;
         case 'station3-dial-digit': {
           const d = el.getAttribute('data-digit') || '';
           if(state.station3DialInput.length < 24) state.station3DialInput += d;
