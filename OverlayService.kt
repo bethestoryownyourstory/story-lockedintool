@@ -87,17 +87,16 @@ class OverlayService : Service(), StoryBridge.Host {
     @Volatile private var aodStartedAt = 0L
     private fun onScreenOff() {
         val now = System.currentTimeMillis()
-        if (now - aodStartedAt < 2_000) return             // the same screen-off, reported twice
+        if (now - aodStartedAt < 800) return               // the same screen-off, reported twice
         aodStartedAt = now
         val aod = AodActivity.instance
         if (aod != null && !aod.isFinishing) {
-            // Power pressed while the Always On Display was really up: truly off.
-            if (aod.wasSeen() || aodRetries >= 2) { aod.finish(); return }
-            // It never properly came up (the phone switched the screen off on it): wake it again, not "off".
-            aodRetries++; wakeForAod(); return
+            // Always on (owner): the screen went off with the Always On Display up (power pressed, or the phone
+            // switched it off) - it comes straight back. Double-tap it for the lock screen.
+            if (AodActivity.enabled(this)) { wakeForAod(); return }
+            aod.finish(); return
         }
         if (!AodActivity.enabled(this)) return
-        aodRetries = 0
         // Wake the screen right now, in parallel with the black screen starting (not after it).
         wakeForAod()
         val i = Intent(this, AodActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
@@ -113,7 +112,6 @@ class OverlayService : Service(), StoryBridge.Host {
             }
         }, 1000)
     }
-    private var aodRetries = 0
     private fun wakeForAod() {
         runCatching {
             @Suppress("DEPRECATION")
