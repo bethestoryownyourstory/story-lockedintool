@@ -835,8 +835,8 @@ class OverlayService : Service(), StoryBridge.Host {
     private fun applyAodMask() {
         val views = listOfNotNull(bubble, barBg, s3Pane?.frame, dialPane?.frame, profilePane?.frame, profileGapPane?.frame, profileStrip, lockDialPane?.frame)
         for (v in views) {
-            // Its own layer while masked, so cutting pixels only ever affects that window's own drawing.
-            v.setLayerType(if (aodOn) View.LAYER_TYPE_HARDWARE else View.LAYER_TYPE_NONE, null)
+            // No layer switching (that made Station 3 / the dial pad redraw late): each is its own window, so the
+            // cut-out only ever affects that window's own pixels anyway.
             v.foreground = if (aodOn) checker(aodPhase) else null
         }
     }
@@ -988,16 +988,21 @@ class OverlayService : Service(), StoryBridge.Host {
         val p = lockDialPane ?: return
         val aodUp = aodShowing()
         // The phone's own PIN / password / pattern page is on screen right now: never on top of it.
-        val entry = if (QuickAccess.lockDial(this) && locked) StoryAccessibilityService.unlockEntryShowing() else null
+        val awake = getSystemService(android.os.PowerManager::class.java).isInteractive
+        val entry = if (QuickAccess.lockDial(this) && locked && awake) StoryAccessibilityService.unlockEntryShowing() else null
+        // It never moves (owner): it simply stays put through screen off / Always On Display / lock screen, so it's
+        // already there the instant anything shows. Only hidden on the Always On Display if that's switched off for it.
+        val onAod = aodUp || (!awake && AodActivity.enabled(this))
         val want = QuickAccess.lockDial(this) && locked && !lockDialAway && !lockDialPeek && entry != true &&
-            (if (aodUp) QuickAccess.dialAod(this) else getSystemService(android.os.PowerManager::class.java).isInteractive)
+            (if (onAod) QuickAccess.dialAod(this) else true)
         if (want != p.shown) {
             if (!want) p.web.evaluateJavascript("window.storyDialClear&&window.storyDialClear()", null)
             setShown(p, want)
+            if (!want && p.stale) reload(p)  // new screens were published while it was up: pick them up now it's hidden
         }
         // While it's up, keep checking: the moment the phone unlocks (by any route) it goes.
         // (and while the PIN page is up, it comes back as soon as you drag that away).
-        if (want || aodOn || entry == true) ui.postDelayed(lockWatch, 1000)
+        if (awake && (want || aodOn || entry == true)) ui.postDelayed(lockWatch, 1000)
     }
     override fun setLockDialSize(w: Int, h: Int) { ui.post {
         val p = lockDialPane ?: return@post
