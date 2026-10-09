@@ -531,6 +531,13 @@
   .notes-fab-stack{ position:relative; display:flex; flex-direction:column; align-items:flex-end; gap:12px; margin-top:auto; padding-top:16px; margin-right:6px; margin-bottom:22px; }
   /* Notes fills the screen: Create sits at the bottom when there's room (owner), always clear of the preview. */
   .page-shell.notes-shell{ display:flex; flex-direction:column; min-height:100%; box-sizing:border-box; }
+  /* The rest of the Saved Notes column fills with faint empty note shapes (owner: feel full, hint that more notes go
+     here, show nothing) - tap one for a new note. Real notes take their place as they're added. */
+  .notes-shell .notes-col-left{ display:flex; flex-direction:column; }
+  .notes-ghosts{ flex:1 1 0; min-height:0; overflow:hidden; display:flex; flex-direction:column; gap:8px;
+    -webkit-mask-image:linear-gradient(to bottom, #000 45%, transparent); mask-image:linear-gradient(to bottom, #000 45%, transparent); }
+  .note-ghost{ flex:0 0 auto; height:82px; border-radius:12px; border:1.5px dashed rgba(255,255,255,0.09); cursor:pointer; }
+  .note-ghost:active{ background:rgba(255,255,255,0.03); }
   /* The right side fills the column top to bottom with its sections evenly spaced (owner: no empty gap), the
      Style Preview a fixed, shorter box at the bottom, just above New note / Create. */
   .notes-shell .notes-hub{ flex:1 0 auto; }
@@ -6958,6 +6965,7 @@ function notesScreen(){
             <div class="note-card-date">${n.date}</div>
           </div>
         `).join('')}
+        <div class="notes-ghosts">${'<div class="note-ghost" data-action="notes-new"></div>'.repeat(8)}</div>
       </div>
       <div class="notes-col-right">
         <div class="notes-sec">
