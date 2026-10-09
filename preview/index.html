@@ -3213,16 +3213,17 @@ function pswitchTileHTML(item, navAttr){
 function tileLabelHTML(item, navAttr){
   return navAttr === 'pswitch-nav' ? `<div class="pswitch-tile-label">${item.label}</div>` : '';
 }
-// Vertical (owner's drawing): the pages of the row you're in, stacked and overlapping - the row's home page in front,
-// the others peeking out ABOVE it (never below), spaced just enough to see them, always stacked. Tap one: it pops
+// Vertical (owner's drawing): the pages of the row you're in, stacked and overlapping in the order they're placed in
+// the row (default Money, Wallet, Focus) - each peeking out ABOVE the next, the last one in front at the bottom (never
+// anything below it), spaced just enough to see them, always stacked. Tap one: it pops
 // out and floats in the middle, exactly the size of the whole stack; tap it again to go to that page; tap anywhere
 // else and it goes back into the stack. Horizontal (owner: "same thing, just horizontal"): the same stack sideways -
-// home in front on the right, the others peeking out to its LEFT.
+// in row order left to right, the last one in front on the right, the others peeking out to its LEFT.
 function pswitchVStackHTML(horiz){
   const items = PAGE_SWITCH_ITEMS, n = items.length;
-  const home = Math.max(0, items.findIndex(it=>it.key === state.homeScreen || it.key === 'wallet'));
-  // Back to front: the other pages in row order, the home page last (in front, at the bottom of the stack).
-  const order = items.filter((it, i)=>i !== home).concat([items[home]]);
+  // The stack follows how your pages are placed in the row (default Money, Wallet, Focus): first at the top / left,
+  // last at the bottom / right in front (owner).
+  const order = items.slice();
   const pick = state.vstackPick && items.find(it=>it.key === state.vstackPick);
   return `
     <div class="pswitch-vstack${horiz ? ' pswitch-hstack' : ''}" style="--n:${n}">
