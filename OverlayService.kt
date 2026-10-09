@@ -528,7 +528,7 @@ class OverlayService : Service(), StoryBridge.Host {
                     ui.postDelayed({ paneRef?.let { it.loading = false; if (it.shown) it.frame.alpha = 1f }; syncBarBg() }, 200)
                 } else if (small) {
                     v.evaluateJavascript(exactGeometryJs(), null)
-                    v.evaluateJavascript("window.__storyLocked=${keyguardLocked()};window.storyStation3Only&&window.storyStation3Only()", null); v.evaluateJavascript(S3_JS, null)
+                    v.evaluateJavascript("window.__storyLocked=${keyguardLocked()};window.__storyOnPages=${pagesPane?.shown == true};window.storyStation3Only&&window.storyStation3Only()", null); v.evaluateJavascript(S3_JS, null)
                     // Show it again once Station 3 has actually drawn (a moment after the page is ready).
                     ui.postDelayed({ paneRef?.let { it.loading = false; if (it.shown) it.frame.alpha = 1f }; syncBarBg() }, 200)
                 }
@@ -721,8 +721,11 @@ class OverlayService : Service(), StoryBridge.Host {
     /** The Station 3 button is always there and always the same -- except where Settings > QUICK ACCESS says
      *  otherwise: only on the Pages / only on apps / not at all (Dial pad only), and on the Always On Display
      *  only when its Always On Display is on. Hidden = Station 3 closes. */
+    private var lastOnPages: Boolean? = null
     private fun updateBubble() {
         val pagesUp = pagesPane?.shown == true
+        // On the Pages, Station 3 also has Rows and Page Styles (on top of its button); over apps it doesn't.
+        if (pagesUp != lastOnPages) { lastOnPages = pagesUp; s3Pane?.web?.evaluateJavascript("window.storyOnPages&&window.storyOnPages($pagesUp)", null) }
         val where = QuickAccess.where(this)
         var on = QuickAccess.station3On(this) && when (where) { "pages" -> pagesUp; "apps" -> !pagesUp; else -> true }
         if (aodShowing() && !QuickAccess.s3Aod(this)) on = false
@@ -1079,6 +1082,12 @@ class OverlayService : Service(), StoryBridge.Host {
         }
     }
     override fun getCalls(): String = CallHistory.json(this)
+    /** Station 3's Rows / Page Styles (on the Pages): open them on the Pages, and Station 3 closes - as always. */
+    override fun pagesAction(action: String) { ui.post {
+        if (action != "page-quick-rows" && action != "page-quick-style") return@post
+        pagesPane?.takeIf { it.shown }?.web?.evaluateJavascript("window.storyPagesAction&&window.storyPagesAction('$action')", null) ?: return@post
+        closeStation3Now()
+    } }
     private fun tellCalls() { profilePane?.web?.evaluateJavascript("window.storyCallsChanged&&window.storyCallsChanged()", null) }
     // A call ended (the phone's call log changed): fill in the STORY calls that were waiting for it.
     private val callLogWatch = object : android.database.ContentObserver(ui) {

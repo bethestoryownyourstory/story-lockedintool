@@ -34,6 +34,7 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         fun setQuickAccess(json: String)
         fun toggleCreate()
         fun toggleCalls()
+        fun pagesAction(action: String)
         fun getCalls(): String
         fun createShutter()
         fun createVideo(on: Boolean)
@@ -148,6 +149,10 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
     /** Station 3's call history button: Call history in the same window; its list (every call made from STORY). */
     @JavascriptInterface
     fun toggleCalls() { if (station3) host.toggleCalls() }
+
+    /** Station 3's Rows / Page Styles buttons (on the Pages): do it on the Pages. */
+    @JavascriptInterface
+    fun pagesAction(action: String) { if (station3) host.pagesAction(action) }
 
     @JavascriptInterface
     fun getCalls(): String = if (profile) host.getCalls() else "[]"

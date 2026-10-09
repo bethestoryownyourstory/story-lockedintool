@@ -1609,6 +1609,11 @@
   body.s3-only::before, body.s3-only::after{ display:none !important; }
   /* Over the phone's apps: no Rows / Page Styles buttons, and the arrow rounds its own top. */
   body.s3-only .station3-quick-row, body.s3-only .station3-connector, body.s3-only .station3-connector-2{ display:none !important; }
+  /* On the Pages (owner: always there): Rows and Page Styles sit straight on top of the Station 3 button, the
+     same width, rounded top-left like it - Station 3 itself never moves. */
+  body.s3-only.s3-pages .station3-quick-row{ display:flex !important; width:40px; padding:4px 0 0; gap:2px; border-radius:20px 0 0 0 !important; clip-path:none !important; }
+  body.s3-only.s3-pages .station3-quick-row .station3-quick-btn{ width:40px; height:40px; }
+  body.s3-only.s3-pages .station3-quick-row .station3-quick-btn:last-child{ height:40px; border-radius:0; }
   /* Over other apps the corner button keeps its size and place when open (see positionStation3()). */
   /* Tight in the corner: the bar / dial pad round only their top-left, like the corner button. */
   /* The bar is exactly as tall as the 40px corner button, so it just extends it to the left. */
@@ -5299,6 +5304,7 @@ window.storyShow = function(page, station3){
 // tapping anywhere else does nothing (the app's window only covers Station 3 itself anyway).
 window.storyStation3Only = function(){
   document.body.classList.add('s3-only');
+  if(window.__storyOnPages) document.body.classList.add('s3-pages');
   state.recentsOpen=false; state.homePickerOpen=false; state.appMenuId=null;
   if(state.current==='dashboard') state.current = state.lastPage || 'wallet';
   state.station3Open = true;
@@ -5321,6 +5327,22 @@ document.addEventListener('click', (e)=>{
   if(!t) return;
   e.stopPropagation(); e.preventDefault();
   if(t.getAttribute('data-action') === 'station3-dialpad-toggle') window.StoryNative.toggleDialpad(); else window.StoryNative.closeDialpad();
+}, true);
+// Station 3 on the Pages: Rows and Page Styles are there too (the app says when the Pages are up). Tapping one does it
+// on the Pages and Station 3 closes, as always.
+window.storyOnPages = function(on){ document.body.classList.toggle('s3-pages', !!on); if(document.body.classList.contains('s3-only')) renderDevice(); };
+window.storyPagesAction = function(a){
+  if(a === 'page-quick-rows') state.rowsViewOpen = true;
+  else if(a === 'page-quick-style'){ state.pageStyleOn = true; state.pageStyleViewOpen = true; }
+  else return;
+  state.station3Open = false; renderDevice();
+};
+document.addEventListener('click', (e)=>{
+  if(!NATIVE || !document.body.classList.contains('s3-only') || !window.StoryNative.pagesAction) return;
+  const t = e.target.closest && e.target.closest('[data-action="page-quick-rows"], [data-action="page-quick-style"]');
+  if(!t) return;
+  e.stopPropagation(); e.preventDefault();
+  window.StoryNative.pagesAction(t.getAttribute('data-action'));
 }, true);
 // Called when the overlay window is hidden but kept warm, so the next open is instant.
 window.storyDialClear = function(){ state.station3DialInput = ''; renderDevice(); };
@@ -7844,7 +7866,7 @@ function positionStation3(){
   // gap never is.
   const OVERLAP = 2;
   const arrowRect = arrow.getBoundingClientRect();
-  const quickRowLift = 26;
+  const quickRowLift = (s3Only && document.body.classList.contains('s3-pages')) ? 0 : 26;
   if(quickRow){
     quickRow.style.left = 'auto';
     quickRow.style.top = 'auto';
@@ -7955,7 +7977,8 @@ function positionStation3(){
   // quick-row does (the short bar card) -- when the card is tall enough to start above
   // quick-row's own top (the dial pad), quick-row sits entirely inside the card's own
   // span and there's no inside corner there to cut.
-  if(quickRow && sideCard){
+  // (Station 3 on the Pages in the app: the column just sits on the button - no inside corner to cut.)
+  if(quickRow && sideCard && !(s3Only && document.body.classList.contains('s3-pages'))){
     const qrRect2 = quickRow.getBoundingClientRect();
     const scRect2 = sideCard.getBoundingClientRect();
     if(scRect2.top > qrRect2.top){
