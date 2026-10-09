@@ -758,7 +758,9 @@
   .notes-float-dock{ position:relative; }
   /* The note's tools float ON the page (owner), fully on screen: above the bottom edge and clear of the Station 3 corner. */
   .phone-float-dock.notes-float-dock{ padding:10px 54px 18px 12px !important; }
-  .notes-float-toolbar{ display:flex; gap:4px; justify-content:space-between; }
+  /* The note's tool station: one bar with its own dark background (owner), floating on the page. */
+  .notes-float-toolbar{ display:flex; gap:4px; justify-content:space-between; align-items:center;
+    background:#0d0d0d; border:1px solid #262626; border-radius:16px; padding:6px; box-shadow:0 6px 18px rgba(0,0,0,0.45); }
   .notes-float-btn{
     width:30px; height:30px; border-radius:9px; background:var(--card-2); border:1px solid var(--line);
     color:var(--text); font-size:12px; font-weight:800; cursor:pointer; flex-shrink:0; position:relative;
@@ -7272,7 +7274,6 @@ function notesFloatToolbarHTML(){
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>
         </button>
         ${state.drawToolsPopoverOpen ? inlineDrawPopoverHTML(false) : ''}
-      </div>
       </div>`}
       ${!isDraw ? `
       <div class="notes-float-btn-wrap">
