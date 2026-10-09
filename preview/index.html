@@ -2153,7 +2153,7 @@
 
   /* Flat Circle -- real 2D positions computed in JS (setupCircleAndWheelDrag), drag
      follows 1:1, no momentum. */
-  .pswitch-circle2d{ position:relative; height:260px; touch-action:none; user-select:none; }
+  .pswitch-circle2d{ position:relative; height:440px; touch-action:none; user-select:none; }
   .pswitch-circle2d-item{
     position:absolute; left:50%; top:50%; width:118px; height:150px; margin:-75px 0 0 -59px;
     --mscale:0.34; box-shadow:0 10px 24px rgba(0,0,0,0.4);
@@ -2168,7 +2168,8 @@
     background:radial-gradient(ellipse at center, rgba(255,255,255,0.05), rgba(255,255,255,0.015) 55%, transparent 72%);
     pointer-events:none;
   }
-  .pswitch-circle2d .circle-track-ring{ width:184px; height:124px; margin:-62px 0 0 -92px; }
+  /* The ring is exactly the path the cards' centres travel (RADIUS_X / RADIUS_Y in setupCircleAndWheelDrag). */
+  .pswitch-circle2d .circle-track-ring{ width:264px; height:240px; margin:-120px 0 0 -132px; }
 
   /* 3D Circle (wheel) -- a real perspective cylinder. Each page is cut into thin vertical
      strips (.curve-slice, generated in pswitchWheel3dHTML) that are each rotated a fraction
@@ -8345,7 +8346,7 @@ function setupCircleAndWheelDrag(){
   const circleEl = document.querySelector('[data-circle2d]');
   if(circleEl){
     const items = [...circleEl.querySelectorAll('.pswitch-circle2d-item')];
-    const RADIUS_X = 92, RADIUS_Y = 62;
+    const RADIUS_X = 132, RADIUS_Y = 120;  // = the ring's size (.pswitch-circle2d .circle-track-ring), so the cards sit on it
     const layout = (rotDeg)=>{
       items.forEach(el=>{
         const base = parseFloat(el.getAttribute('data-baseangle')) || 0;
