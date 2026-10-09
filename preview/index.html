@@ -2181,18 +2181,12 @@
   .pswitch-wheel3d-scene{ position:relative; height:320px; perspective:900px; touch-action:none; user-select:none; }
   .pswitch-wheel3d-rig{ position:absolute; inset:0; transform-style:preserve-3d; will-change:transform; }
   .curve-page{ position:absolute; left:50%; top:50%; width:0; height:0; transform-style:preserve-3d; }
-  /* Each slice is a small double-sided card: .curve-slice is just the positioned/rotated
-     wrapper (preserve-3d so its own two faces keep their individual 3D facing instead of
-     being flattened into it), and .curve-face-front / .curve-face-back are two separate,
-     independently backface-hidden faces stacked at the SAME spot -- the back one spun
-     180deg in place. Only ever one of a slice's two faces is actually facing the camera at
-     a time, so the page reads correctly from the front and from the back at every angle,
-     without the "wrong page bleeding through" glitch a single un-culled slice caused. */
-  /* (No overflow:hidden here - it fights preserve-3d and made the faces flicker; each face clips itself. Slices are
-     0.8px wider than their step so neighbours overlap and no hairline gap flashes while it turns.) */
-  .curve-slice{ position:absolute; top:0; left:0; cursor:pointer; transform-style:preserve-3d; }
-  .curve-face{ position:absolute; inset:0; -webkit-backface-visibility:hidden; backface-visibility:hidden; overflow:hidden; }
-  .curve-face-back{ transform:rotateY(180deg); }
+  /* Each slice is ONE flat strip of its page (front only - phones broke the old double-sided, nested-3D strips into
+     missing pieces while turning): it clips its own bit of the page and hides when turned away. Strips are 0.8px wider
+     than their step so neighbours overlap and no hairline gap flashes. Nothing inside the pages animates while here. */
+  .curve-slice{ position:absolute; top:0; left:0; cursor:pointer; overflow:hidden; transform-style:flat;
+    -webkit-backface-visibility:hidden; backface-visibility:hidden; contain:paint; }
+  .pswitch-wheel3d-scene .curve-slice *{ animation:none !important; transition:none !important; }
   .curve-slice-inner{ position:absolute; top:0; width:182px; height:238px; --mscale:0.476; }
   /* Fills the gap above/below a shorter page's real content, up to the shared rim height --
      the app background color (var(--bg-app)), same curve/radius/angle as the content
@@ -3336,25 +3330,11 @@ function pswitchWheel3dHTML(navAttr){
             const rel = -WHEEL_PAGE_ARC/2 + WHEEL_SLICE_ANGLE*(k+0.5);
             const angle = baseAngle + rel;
             const cropLeft = -(k*WHEEL_SLICE_W).toFixed(2);
-            // The back face shows the SAME page, just built from slices in reverse order --
-            // a cheap approximation of a mirror (full pixel-level mirroring would need a
-            // second full render of the page) that's convincing at this slice count and,
-            // critically, is its own real element rather than the front slice's culled
-            // backface: each face is independently backface-hidden, so only ever ONE of
-            // them renders at a given angle. Doing it that way (instead of just turning off
-            // backface-visibility on the single slice) is what fixes the glitch -- a
-            // single un-culled rotated slice was letting other pages' geometry show through
-            // / overlap it at certain angles instead of cleanly showing its own back.
-            const mirroredCropLeft = -((WHEEL_SLICES-1-k)*WHEEL_SLICE_W).toFixed(2);
+            // Front only: each strip hides itself when turned away (backface-visibility on the strip).
             const marginLeft = (-WHEEL_SLICE_W/2).toFixed(2);
             slices += `
               <div class="curve-slice" data-angle="${angle.toFixed(2)}" style="width:${(WHEEL_SLICE_W + 0.8).toFixed(2)}px;height:${h}px;margin:${-h/2}px 0 0 ${marginLeft}px;transform:rotateY(${angle.toFixed(2)}deg) translateZ(${WHEEL_RADIUS.toFixed(2)}px);">
-                <div class="curve-face curve-face-front">
-                  <div class="curve-slice-inner" style="left:${cropLeft}px;height:${h}px;">${miniPagePreviewHTML(item.key)}</div>
-                </div>
-                <div class="curve-face curve-face-back">
-                  <div class="curve-slice-inner" style="left:${mirroredCropLeft}px;height:${h}px;">${miniPagePreviewHTML(item.key)}</div>
-                </div>
+                <div class="curve-slice-inner" style="left:${cropLeft}px;height:${h}px;">${miniPagePreviewHTML(item.key)}</div>
               </div>
             `;
           }
