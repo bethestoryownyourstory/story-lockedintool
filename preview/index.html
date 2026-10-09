@@ -8373,6 +8373,10 @@ function setupCircleAndWheelDrag(){
     };
     state.circleRotDeg = Math.max(-LIMIT, Math.min(LIMIT, Math.round((state.circleRotDeg || 0) / STEP) * STEP));
     layout(state.circleRotDeg);
+    // The cards sit exactly in the middle of the screen (owner), whatever is above them.
+    circleEl.style.transform = '';
+    const cr = circleEl.getBoundingClientRect();
+    if(cr.height) circleEl.style.transform = `translateY(${Math.round(window.innerHeight / 2 - (cr.top + cr.height / 2))}px)`;
     let dragging = false, startX = 0, startRot = 0, dragged = false, downInfo = null;
     circleEl.addEventListener('pointerdown', (e)=>{
       dragging = true; startX = e.clientX; startRot = state.circleRotDeg; dragged = false;
