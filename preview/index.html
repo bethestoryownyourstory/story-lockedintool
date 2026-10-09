@@ -4524,7 +4524,7 @@ function moneyScreen(){
     </div>
 
     <div class="money-transfer-fab-wrap">
-      <button class="money-transfer-fab" data-action="money-transfer-open" title="Money Transfer">
+      <button class="money-transfer-fab" data-action="money-transfer-open" title="Transfer Money">
         $<span class="mtf-arrow">↗</span>
       </button>
     </div>
@@ -4958,7 +4958,7 @@ function walletScreen(){
 
 function walletFloatBar(skipLabel){
   return `
-    ${skipLabel ? '' : '<div class="float-bar-label">MONEY TRANSFER</div>'}
+    ${skipLabel ? '' : '<div class="float-bar-label">TRANSFER MONEY</div>'}
     <div class="wallet-float-bar">
       <button class="wfab" data-action="favorites-open" title="Favorites"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26"></polygon></svg></button>
       <button class="wfab wfab-green wfab-wide" data-action="send-open" title="Send"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="17" x2="17" y2="7"></line><polyline points="8 7 17 7 17 16"></polyline></svg> Send</button>
@@ -4993,7 +4993,7 @@ function moneyTransferPopupTemplate(){
   return `
     <div class="modal-overlay" data-action="money-transfer-bg">
       <div class="confirm-sheet" onclick="event.stopPropagation()">
-        <div class="confirm-title">Money Transfer</div>
+        <div class="confirm-title">Transfer Money</div>
         <div class="confirm-sub">Send, receive, or jump to your wallet.</div>
         ${walletFloatBar(true)}
         <button class="btn-wide" style="margin-top:14px;" data-action="money-transfer-close">Close</button>
