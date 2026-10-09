@@ -1624,6 +1624,7 @@
   /* The dial pad closes with the X just outside its right side, halfway down (where the arrow used to be),
      so no ^ inside. */
   body.s3-only .station3-dialpad-float .station3-dialpad-close{ display:none !important; }
+  body.s3-lock .station3-dialpad-side-x{ display:none !important; }
   .station3-dialpad-side-x{ position:absolute; left:calc(100% + 12px); top:50%; transform:translateY(-50%); width:38px; height:38px;
     display:flex; align-items:center; justify-content:center; border:none; border-radius:50%; background:#fff; color:#000;
     box-shadow:0 4px 14px rgba(0,0,0,0.35); pointer-events:auto; }
@@ -1862,6 +1863,13 @@
   #story-profile .pf-gap-clip svg{ filter:drop-shadow(0 0 0.8px var(--pf-bg)) drop-shadow(0 0 0.8px var(--pf-bg)); }
   #story-profile .pf-line{ position:fixed; right:0; bottom:0; box-sizing:border-box; pointer-events:none;
     border-top:2px solid var(--pf-line); border-left:2px solid var(--pf-line); border-top-left-radius:22px; }
+  /* Settings > QUICK ACCESS */
+  .qa-radio{ width:18px; height:18px; border-radius:50%; border:2px solid #fff; box-sizing:border-box; flex-shrink:0; }
+  .qa-radio.on{ background:#fff; box-shadow:inset 0 0 0 3px #000; }
+  .qa-body{ margin-top:-4px; }
+  .qa-where{ flex-direction:column; align-items:stretch; gap:8px; }
+  .qa-where .theme-pick .theme-opt{ flex:1; }
+  .qa-body .qa-sub + .qa-sub{ border-top:1px solid rgba(255,255,255,0.08); }
   /* Settings > System theme: Black | White */
   .theme-pick{ display:flex; gap:6px; flex-shrink:0; }
   .theme-opt{ padding:7px 14px; border-radius:10px; border:1px solid rgba(255,255,255,0.18); background:#000; color:#fff;
@@ -5120,6 +5128,51 @@ function layoutsArrangementScreen(){
   `;
 }
 
+// Settings > QUICK ACCESS (owner's design): pick one of three; each shows its own settings under it.
+let qaS3MoreOpen = false;
+function quickAccessSettingsHTML(){
+  const q = quickAccess();
+  const radio = (m, name)=>`
+    <div class="row-card qa-pick" data-action="qa-mode" data-v="${m}">
+      <div class="row"><div class="row-left"><div class="row-name">${name}</div></div><span class="qa-radio${q.mode===m?' on':''}"></span></div>
+    </div>`;
+  const toggle = (k, name, sub)=>`
+    <div class="row qa-sub">
+      <div class="row-left"><div class="row-name">${name}</div>${sub ? `<div class="row-sub">${sub}</div>` : ''}</div>
+      <button class="toggle-switch${q[k]?' on':''}" data-action="qa-toggle" data-k="${k}"><span class="toggle-knob"></span></button>
+    </div>`;
+  const where = `
+    <div class="row qa-sub qa-where">
+      <div class="row-left"><div class="row-name">Show Station 3</div></div>
+      <div class="theme-pick">
+        ${[['pages','Pages'],['apps','Apps'],['both','Both']].map(([v,t])=>`<button class="theme-opt${q.where===v?' on':''}" data-action="qa-where" data-v="${v}">${t}</button>`).join('')}
+      </div>
+    </div>`;
+  const s3Opts = where + toggle('s3Aod', 'Always On Display');
+  let body = '';
+  if(q.mode === 's3dial') body = s3Opts;
+  else if(q.mode === 'separate') body = `
+    <div class="row qa-sub" data-action="qa-s3more" style="cursor:pointer;">
+      <div class="row-left"><div class="row-name">Station 3 options</div></div><span class="chev-right">${qaS3MoreOpen ? '⌄' : '›'}</span>
+    </div>
+    ${qaS3MoreOpen ? s3Opts : ''}
+    ${toggle('lockDial', 'Put dial pad on lock screen')}
+    ${q.lockDial ? toggle('dialAod', 'Always On Display') : ''}`;
+  else body = `
+    ${toggle('lockDial', 'Put on lock screen')}
+    ${q.lockDial ? toggle('dialAod', 'Always On Display') : ''}`;
+  const opt = (m, name)=> radio(m, name) + (q.mode === m ? `<div class="row-card qa-body">${body}</div>` : '');
+  return `
+    <div class="section-title">QUICK ACCESS</div>
+    ${opt('s3dial', 'Station 3 with dial pad')}
+    ${opt('separate', 'Station 3 dial pad separate')}
+    ${opt('dialonly', 'Dial pad only')}`;
+}
+function saveQuickAccess(patch){
+  const q = Object.assign(quickAccess(), patch);
+  if(NATIVE && window.StoryNative.setQuickAccess) window.StoryNative.setQuickAccess(JSON.stringify(q));
+  else { try{ localStorage.setItem('story-quick-access', JSON.stringify(q)); }catch(e){} }
+}
 function settingsHubScreen(){
   return `
     <div class="page-shell">
@@ -5146,6 +5199,7 @@ function settingsHubScreen(){
         </div>
       </div>
     </div>
+    ${quickAccessSettingsHTML()}
     <div class="section-title">CATEGORIES</div>
     <div class="row-card" style="cursor:pointer;" data-nav="notif-settings">
       <div class="row"><div class="row-left"><div class="row-name">Notifications</div></div><span class="chev-right">›</span></div>
@@ -5218,6 +5272,8 @@ window.storyStation3Only = function(){
 // The dial pad on its own (Android overlay, its own still window above Station 3).
 window.storyDialOnly = function(){
   document.body.classList.add('s3-only', 's3-dial');
+  // The lock screen dial pad (Settings > QUICK ACCESS): always open, no close X.
+  if(/[?&]lock=1/.test(location.search)) document.body.classList.add('s3-lock');
   state.recentsOpen=false; state.homePickerOpen=false; state.appMenuId=null;
   if(state.current==='dashboard') state.current = state.lastPage || 'wallet';
   state.station3Open = true; state.station3DialpadOpen = true;
@@ -5232,6 +5288,7 @@ document.addEventListener('click', (e)=>{
   if(t.getAttribute('data-action') === 'station3-dialpad-toggle') window.StoryNative.toggleDialpad(); else window.StoryNative.closeDialpad();
 }, true);
 // Called when the overlay window is hidden but kept warm, so the next open is instant.
+window.storyDialClear = function(){ state.station3DialInput = ''; renderDevice(); };
 window.storyReset = function(){
   state.station3Open = false; state.station3DialpadOpen = false;
   renderDevice();
@@ -7327,12 +7384,21 @@ function station3CornerArrowHTML(){
     </button>
   `;
 }
+// Settings > QUICK ACCESS (kept by the app; the browser keeps its own copy).
+function quickAccess(){
+  let q = {};
+  try{ q = JSON.parse((window.StoryNative && window.StoryNative.getQuickAccess) ? window.StoryNative.getQuickAccess() : (localStorage.getItem('story-quick-access') || '{}')) || {}; }catch(e){}
+  return Object.assign({ mode:'s3dial', where:'both', s3Aod:false, lockDial:false, dialAod:false }, q);
+}
+window.storyQuickAccessChanged = function(){ renderDevice(); };
 function station3BarHTML(){
+  // "Station 3 dial pad separate" / "Dial pad only": the dial pad isn't part of Station 3.
+  const dialBtn = quickAccess().mode === 's3dial';
   return `
     <div class="station3-bar">
-      <button class="station3-btn station3-btn-chevron" data-action="station3-dialpad-toggle" title="Dial pad">
+      ${dialBtn ? `<button class="station3-btn station3-btn-chevron" data-action="station3-dialpad-toggle" title="Dial pad">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
-      </button>
+      </button>` : ''}
       <button class="station3-btn" data-action="station3-call-history" title="Call history">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
       </button>
@@ -9509,6 +9575,10 @@ function attachHandlers(){
           if(gone) showToast(gone.name + ' deleted');
           break;
         }
+        case 'qa-mode': saveQuickAccess({ mode: el.getAttribute('data-v') }); qaS3MoreOpen = false; break;
+        case 'qa-where': saveQuickAccess({ where: el.getAttribute('data-v') }); break;
+        case 'qa-toggle': { const k = el.getAttribute('data-k'); const q = quickAccess(); saveQuickAccess({ [k]: !q[k] }); break; }
+        case 'qa-s3more': qaS3MoreOpen = !qaS3MoreOpen; break;
         case 'theme-black': case 'theme-white': {
           const t = action === 'theme-white' ? 'white' : 'black';
           window.storySetTheme(t);
@@ -9576,7 +9646,12 @@ function attachHandlers(){
         }
         case 'station3-dial-backspace': state.station3DialInput = state.station3DialInput.slice(0, -1); break;
         case 'station3-call': {
-          if(state.station3DialInput.trim()){
+          if(state.station3DialInput.trim() && NATIVE && window.StoryNative.callNumber){
+            // Calls straight away (on the lock screen too).
+            window.StoryNative.callNumber(state.station3DialInput.trim());
+            state.station3DialInput = '';
+            if(!document.body.classList.contains('s3-lock')) state.station3DialpadOpen = false;
+          } else if(state.station3DialInput.trim()){
             showToast('Calling — coming soon');
             state.station3DialInput = '';
             state.station3DialpadOpen = false;
