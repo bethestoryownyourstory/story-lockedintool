@@ -66,13 +66,18 @@ class OverlayService : Service(), StoryBridge.Host {
     private val unlocked = object : android.content.BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) {
             AodActivity.instance?.finish()  // unlocked (e.g. fingerprint) while the Always On Display was up
+            ui.post { syncLockDial() }
             Updater.check(this@OverlayService); checkScreens()
         }
     }
     // Always On Display: when the screen goes off, STORY's dim always-on screen comes up instead
     // (if switched on). Pressing power while it's up turns the screen truly off.
     private val screenOff = object : android.content.BroadcastReceiver() {
-        override fun onReceive(c: Context, i: Intent) { onScreenOff() }
+        override fun onReceive(c: Context, i: Intent) { onScreenOff(); ui.post { syncLockDial() } }
+    }
+    // Screen on: the lock screen may be showing -> the lock screen dial pad (Settings > QUICK ACCESS).
+    private val screenOn = object : android.content.BroadcastReceiver() {
+        override fun onReceive(c: Context, i: Intent) { ui.post { syncLockDial() }; ui.postDelayed({ syncLockDial() }, 400) }
     }
     // Always On Display: the moment the screen goes off, switch it straight back on with Station 3
     // showing. Android's display watcher usually reports "off" before the screen-off broadcast does,
@@ -141,6 +146,8 @@ class OverlayService : Service(), StoryBridge.Host {
         val offFilter = android.content.IntentFilter(Intent.ACTION_SCREEN_OFF)
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(screenOff, offFilter, Context.RECEIVER_NOT_EXPORTED) else registerReceiver(screenOff, offFilter)
         runCatching { getSystemService(android.hardware.display.DisplayManager::class.java).registerDisplayListener(displayWatch, ui) }
+        val onFilter = android.content.IntentFilter(Intent.ACTION_SCREEN_ON)
+        if (Build.VERSION.SDK_INT >= 33) registerReceiver(screenOn, onFilter, Context.RECEIVER_NOT_EXPORTED) else registerReceiver(screenOn, onFilter)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -158,6 +165,7 @@ class OverlayService : Service(), StoryBridge.Host {
         instance = null
         ui.removeCallbacks(updateLoop); ui.removeCallbacks(resumeAfterInstall)
         runCatching { unregisterReceiver(unlocked) }
+        runCatching { unregisterReceiver(screenOn) }
         runCatching { unregisterReceiver(screenOff) }
         runCatching { unregisterReceiver(appsChanged) }
         ui.removeCallbacks(hideToast); hideToast.run()
@@ -203,7 +211,7 @@ class OverlayService : Service(), StoryBridge.Host {
             ui.post {
                 val before = screensSeen
                 screensSeen = v
-                if (before != null && before != v) for (p in listOfNotNull(s3Pane, pagesPane, dialPane, profilePane, profileGapPane)) { if (p.shown) p.stale = true else reload(p) }  // every STORY window, the dial pad included
+                if (before != null && before != v) for (p in listOfNotNull(s3Pane, pagesPane, dialPane, profilePane, profileGapPane, lockDialPane)) { if (p.shown) p.stale = true else reload(p) }  // every STORY window, the dial pad included
             }
         }.start()
     }
@@ -211,7 +219,7 @@ class OverlayService : Service(), StoryBridge.Host {
     /** Fresh copy of the screens, skipping the website's cache. */
     private fun reload(p: Pane) {
         p.stale = false; p.loadedAt = System.currentTimeMillis()
-        p.web.loadUrl(remoteBase() + "?" + (if (p.gap) "s3=1&profile=1&gap=1&" else if (p.profile) "s3=1&profile=1&" else if (p.dial) "s3=1&dial=1&" else if (p.small) "s3=1&" else "") + "v=" + System.currentTimeMillis())
+        p.web.loadUrl(remoteBase() + "?" + (if (p.lock) "s3=1&dial=1&lock=1&" else if (p.gap) "s3=1&profile=1&gap=1&" else if (p.profile) "s3=1&profile=1&" else if (p.dial) "s3=1&dial=1&" else if (p.small) "s3=1&" else "") + "v=" + System.currentTimeMillis())
     }
 
     private fun rebuildLayer() {
@@ -226,7 +234,8 @@ class OverlayService : Service(), StoryBridge.Host {
         dialPane?.let { runCatching { it.wm.removeView(it.frame) }; it.web.destroy() }; dialPane = null
         profilePane?.let { runCatching { it.wm.removeView(it.frame) }; it.web.destroy() }; profilePane = null
         profileGapPane?.let { runCatching { it.wm.removeView(it.frame) }; it.web.destroy() }; profileGapPane = null
-        removeProfileStrip()
+        lockDialPane?.let { runCatching { it.wm.removeView(it.frame) }; it.web.destroy() }; lockDialPane = null
+        removeProfileStrip(); removeLockGap()
         pickLayer(); addBubble(); warmUp()
         if (s3WasOpen) showPanel(station3Only = true)
     }
@@ -404,7 +413,7 @@ class OverlayService : Service(), StoryBridge.Host {
     private fun hidePicker() { picker?.let { runCatching { (pickerWm ?: wm).removeView(it) } }; picker = null }
 
     // ---- STORY panes (built once, kept warm, so they open instantly) ----
-    private class Pane(val frame: FrameLayout, val web: WebView, val lp: WindowManager.LayoutParams, val small: Boolean, var wm: WindowManager, val dial: Boolean = false, val profile: Boolean = false, val gap: Boolean = false) {
+    private class Pane(val frame: FrameLayout, val web: WebView, val lp: WindowManager.LayoutParams, val small: Boolean, var wm: WindowManager, val dial: Boolean = false, val profile: Boolean = false, val gap: Boolean = false, val lock: Boolean = false) {
         var shown = false; var loadedAt = System.currentTimeMillis(); var stale = false
         // Station 3 only: true while its page (re)loads -- it stays invisible until it's drawn, never a white box.
         var loading = true
@@ -436,16 +445,16 @@ class OverlayService : Service(), StoryBridge.Host {
     }
 
     @SuppressLint("SetJavaScriptEnabled")
-    private fun buildPane(small: Boolean, dial: Boolean = false, profile: Boolean = false, gap: Boolean = false): Pane {
+    private fun buildPane(small: Boolean, dial: Boolean = false, profile: Boolean = false, gap: Boolean = false, lock: Boolean = false): Pane {
         val themed = ContextThemeWrapper(this, R.style.Theme_Story)
         val frame = FrameLayout(themed)
         val wv = WebView(themed).apply {
             setBackgroundColor(if (small) Color.TRANSPARENT else th(Color.BLACK))
             settings.javaScriptEnabled = true; settings.domStorageEnabled = true; settings.mediaPlaybackRequiresUserGesture = false  // Create plays back the video you just made
-            addJavascriptInterface(StoryBridge(this@OverlayService, this@OverlayService, station3 = small, dial = dial, profile = profile || gap), "StoryNative")
+            addJavascriptInterface(StoryBridge(this@OverlayService, this@OverlayService, station3 = small, dial = dial, profile = profile || gap, lock = lock), "StoryNative")
         }
         val loader = WebViewAssetLoader.Builder().addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this)).build()
-        val query = if (gap) "?s3=1&profile=1&gap=1" else if (profile) "?s3=1&profile=1" else if (dial) "?s3=1&dial=1" else if (small) "?s3=1" else ""
+        val query = if (lock) "?s3=1&dial=1&lock=1" else if (gap) "?s3=1&profile=1&gap=1" else if (profile) "?s3=1&profile=1" else if (dial) "?s3=1&dial=1" else if (small) "?s3=1" else ""
         var paneRef: Pane? = null
         wv.webViewClient = object : WebViewClient() {
             override fun onPageStarted(v: WebView, url: String, favicon: android.graphics.Bitmap?) {
@@ -513,6 +522,12 @@ class OverlayService : Service(), StoryBridge.Host {
             else
                 // Profile: the whole screen down to just above the gap's line.
                 WindowManager.LayoutParams(-1, realHeightPx() - profileBandPx(), WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, flagsFor(true, false), PixelFormat.TRANSLUCENT).apply { gravity = Gravity.TOP or Gravity.START }
+        else if (dial && lock)
+            // Lock screen dial pad: always open, flush to the very bottom, centred (the lock screen has no bottom bar).
+            WindowManager.LayoutParams(dialW, dialH, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, flagsFor(true, false), PixelFormat.TRANSLUCENT).apply {
+                gravity = Gravity.BOTTOM or Gravity.START
+                x = (resources.displayMetrics.widthPixels - (280 * dp).toInt()) / 2; y = 0
+            }
         else if (dial)
             WindowManager.LayoutParams(dialW, dialH, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, flagsFor(true, false), PixelFormat.TRANSLUCENT).apply {
                 // Middle of the screen, just above Station 3's 40dp bar (which sits on the bottom edge).
@@ -543,7 +558,7 @@ class OverlayService : Service(), StoryBridge.Host {
         val inLayer = small && !(profile && !gap)
         val paneWm = if (inLayer) layerWm else wm
         if (inLayer) lp.type = layerType
-        val p = Pane(frame, wv, lp, small, paneWm, dial, profile, gap)
+        val p = Pane(frame, wv, lp, small, paneWm, dial, profile, gap, lock)
         paneRef = p
         paneWm.addView(frame, lp)
         return p
@@ -566,6 +581,7 @@ class OverlayService : Service(), StoryBridge.Host {
         if (profileGapPane == null) { profileGapPane = buildPane(true, profile = true, gap = true); addProfileStrip() }
         if (s3Pane == null) { addBarBg(); s3Pane = buildPane(true) }  // the white goes in first, so it sits under Station 3's page
         if (dialPane == null) dialPane = buildPane(true, dial = true)
+        if (lockDialPane == null) { lockDialPane = buildPane(true, dial = true, lock = true); addLockGap() }
         if (fresh) raiseBubble()  // done while Station 3 is still hidden, so nothing visibly changes later
         addBar()
     }
@@ -588,7 +604,7 @@ class OverlayService : Service(), StoryBridge.Host {
             if (!shown) profileGapPane?.web?.evaluateJavascript("window.storyProfileS3&&window.storyProfileS3(true)", null)
         }
         if (shown && (!p.small || (p.profile && !p.gap))) p.web.requestFocus()
-        if (p === pagesPane) { quietApps(shown); updateBarLine(); if (!shown && pagesTyping) pagesBackToTop() }
+        if (p === pagesPane) { quietApps(shown); updateBarLine(); if (!shown && pagesTyping) pagesBackToTop(); updateBubble() }
     }
 
     // While Pages is open, STORY silences the app underneath itself (a TikTok video, YouTube...), like the
@@ -656,8 +672,22 @@ class OverlayService : Service(), StoryBridge.Host {
     }
 
     /** The Station 3 button is always there and always the same -- over apps, over the Pages, open or closed. */
+    /** The Station 3 button is always there and always the same -- except where Settings > QUICK ACCESS says
+     *  otherwise: only on the Pages / only on apps / not at all (Dial pad only), and on the Always On Display
+     *  only when its Always On Display is on. Hidden = Station 3 closes. */
     private fun updateBubble() {
-        bubble?.visibility = View.VISIBLE
+        val pagesUp = pagesPane?.shown == true
+        val where = QuickAccess.where(this)
+        var on = QuickAccess.station3On(this) && when (where) { "pages" -> pagesUp; "apps" -> !pagesUp; else -> true }
+        if (AodActivity.instance != null && !QuickAccess.s3Aod(this)) on = false
+        if (!on && s3Pane?.shown == true) closeStation3Now()
+        bubble?.visibility = if (on) View.VISIBLE else View.INVISIBLE
+        bubbleLp?.let { lp ->
+            val nt = WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+            val f = if (on) lp.flags and nt.inv() else lp.flags or nt
+            if (f != lp.flags) { lp.flags = f; runCatching { (bubbleWm ?: wm).updateViewLayout(bubble, lp) } }
+        }
+        syncLockDial()
     }
 
     private fun hideOne(p: Pane) {
@@ -740,6 +770,7 @@ class OverlayService : Service(), StoryBridge.Host {
     fun setAod(on: Boolean) {
         ui.post {
             aodOn = on
+            updateBubble()
             ui.removeCallbacks(aodSwap)
             if (on) ui.postDelayed(aodSwap, 60_000)
             applyAodMask()
@@ -759,16 +790,16 @@ class OverlayService : Service(), StoryBridge.Host {
     }
 
     private fun applyAodMask() {
-        val views = listOfNotNull(bubble, barBg, s3Pane?.frame, dialPane?.frame, profilePane?.frame, profileGapPane?.frame, profileStrip)
+        val views = listOfNotNull(bubble, barBg, s3Pane?.frame, dialPane?.frame, profilePane?.frame, profileGapPane?.frame, profileStrip, lockDialPane?.frame, lockGap)
         for (v in views) v.foreground = if (aodOn) checker(aodPhase) else null
     }
 
     private fun destroyPanes() {
         quietApps(false)
         removeBarBg()
-        for (p in listOfNotNull(s3Pane, pagesPane, dialPane, profilePane, profileGapPane)) { runCatching { p.wm.removeView(p.frame) }; p.web.destroy() }
-        s3Pane = null; pagesPane = null; dialPane = null; profilePane = null; profileGapPane = null
-        removeProfileStrip()
+        for (p in listOfNotNull(s3Pane, pagesPane, dialPane, profilePane, profileGapPane, lockDialPane)) { runCatching { p.wm.removeView(p.frame) }; p.web.destroy() }
+        s3Pane = null; pagesPane = null; dialPane = null; profilePane = null; profileGapPane = null; lockDialPane = null
+        removeProfileStrip(); removeLockGap()
     }
 
     /** Gets the Pages out of the way (Home, Apps, opening an app). Station 3 is left exactly as it is. */
@@ -815,7 +846,8 @@ class OverlayService : Service(), StoryBridge.Host {
         (barLine?.background as? GradientDrawable)?.setColor(th(Color.parseColor("#B3FFFFFF")))
         pagesPane?.let { it.frame.setBackgroundColor(th(Color.BLACK)); it.web.setBackgroundColor(th(Color.BLACK)) }
         profileStrip?.setBackgroundColor(th(Color.BLACK))
-        for (p in listOfNotNull(pagesPane, s3Pane, dialPane, profilePane, profileGapPane))
+        lockGap?.invalidate()
+        for (p in listOfNotNull(pagesPane, s3Pane, dialPane, profilePane, profileGapPane, lockDialPane))
             p.web.evaluateJavascript("window.storySetTheme&&window.storySetTheme('$t')", null)
         hidePicker()
     } }
@@ -849,6 +881,94 @@ class OverlayService : Service(), StoryBridge.Host {
         profileStripLp?.let { lp -> val sw = resources.displayMetrics.widthPixels - gw; if (lp.width != sw) { lp.width = sw; runCatching { (profileStripWm ?: layerWm).updateViewLayout(profileStrip, lp) } } }
         for (p in listOfNotNull(profilePane, profileGapPane)) p.web.evaluateJavascript(profileGeometryJs(), null)
     }
+
+    // ---- Settings > QUICK ACCESS: the lock screen dial pad (always open, flush to the bottom, centred), with
+    //      Station 3's gap line around the button when Station 3 is there too; on the Always On Display too if set. ----
+    private var lockDialPane: Pane? = null
+    private var lockGap: View? = null
+    private var lockGapLp: WindowManager.LayoutParams? = null
+    private var lockGapWm: WindowManager? = null
+    private fun keyguardLocked() = getSystemService(android.app.KeyguardManager::class.java)?.isKeyguardLocked == true
+    private fun syncLockDial() {
+        val p = lockDialPane ?: return
+        val aodUp = AodActivity.instance != null
+        val want = QuickAccess.lockDial(this) && keyguardLocked() &&
+            (if (aodUp) QuickAccess.dialAod(this) else getSystemService(android.os.PowerManager::class.java).isInteractive)
+        if (want != p.shown) {
+            if (!want) p.web.evaluateJavascript("window.storyDialClear&&window.storyDialClear()", null)
+            setShown(p, want)
+        }
+        val gapOn = want && bubble?.visibility == View.VISIBLE
+        lockGap?.let { v -> lockGapLp?.let { lp ->
+            v.visibility = if (gapOn) View.VISIBLE else View.INVISIBLE
+            val a = if (gapOn) 1f else 0f
+            if (lp.alpha != a) { lp.alpha = a; runCatching { (lockGapWm ?: layerWm).updateViewLayout(v, lp) } }
+        } }
+    }
+    /** Station 3's gap on the lock screen: the line around the button (top edge + rounded left), like Profile's. */
+    private fun addLockGap() {
+        removeLockGap()
+        val stroke = 2 * dp; val r = 22 * dp
+        val v = object : View(this) {
+            val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { style = android.graphics.Paint.Style.STROKE; strokeWidth = stroke }
+            override fun onDraw(c: android.graphics.Canvas) {
+                paint.color = th(Color.WHITE)
+                val h = height.toFloat(); val w = width.toFloat(); val o = stroke / 2
+                val path = android.graphics.Path().apply {
+                    moveTo(o, h); lineTo(o, r); arcTo(android.graphics.RectF(o, o, o + 2 * (r - o), o + 2 * (r - o)), 180f, 90f, false); lineTo(w, o)
+                }
+                c.drawPath(path, paint)
+            }
+        }
+        val size = (40 * dp).toInt() + Math.round(stroke)
+        val lp = overlayParams(size, size, Gravity.BOTTOM or Gravity.END, 0, 0).also {
+            it.type = layerType; it.flags = it.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE; it.alpha = 0f
+        }
+        v.visibility = View.INVISIBLE
+        lockGap = v; lockGapLp = lp; lockGapWm = layerWm
+        runCatching { layerWm.addView(v, lp) }
+        raiseBubble()
+    }
+    private fun removeLockGap() { lockGap?.let { runCatching { (lockGapWm ?: layerWm).removeView(it) } }; lockGap = null; lockGapLp = null; lockGapWm = null }
+    override fun setLockDialSize(w: Int, h: Int) { ui.post {
+        val p = lockDialPane ?: return@post
+        val full = p.web.layoutParams
+        p.openW = ((w + 2) * dp).toInt().coerceAtMost(full.width)
+        p.openH = ((h + 2) * dp).toInt().coerceAtMost(full.height)
+        val x = (resources.displayMetrics.widthPixels - (w * dp).toInt()) / 2
+        if (p.lp.width != p.openW || p.lp.height != p.openH || p.lp.x != x) {
+            p.lp.width = p.openW; p.lp.height = p.openH; p.lp.x = x
+            runCatching { p.wm.updateViewLayout(p.frame, p.lp) }
+        }
+    } }
+    /** The dial pad's call button (lock screen and Station 3): calls straight away, even locked. */
+    override fun callNumber(number: String) { ui.post {
+        val n = number.filter { it.isDigit() || it in "+*#" }
+        if (n.isEmpty()) return@post
+        val uri = android.net.Uri.fromParts("tel", n, null)
+        val allowed = checkSelfPermission(android.Manifest.permission.CALL_PHONE) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        val ok = allowed && runCatching { getSystemService(android.telecom.TelecomManager::class.java).placeCall(uri, android.os.Bundle()) }.isSuccess
+        if (!ok) {
+            // Not allowed to call yet: the phone's own dialer with the number in it (and ask once for next time).
+            runCatching { startActivity(Intent(Intent.ACTION_DIAL, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            if (!allowed && !keyguardLocked()) askPermissions(arrayOf(android.Manifest.permission.CALL_PHONE))
+        }
+    } }
+    /** Settings > QUICK ACCESS changed. */
+    override fun setQuickAccess(json: String) { ui.post {
+        QuickAccess.save(this, json)
+        s3Pane?.web?.evaluateJavascript("window.storyQuickAccessChanged&&window.storyQuickAccessChanged()", null)
+        updateBubble()
+        // The lock screen dial pad calls straight away: that needs Android's "make phone calls" once.
+        if (QuickAccess.lockDial(this) && checkSelfPermission(android.Manifest.permission.CALL_PHONE) != android.content.pm.PackageManager.PERMISSION_GRANTED)
+            askPermissions(arrayOf(android.Manifest.permission.CALL_PHONE))
+    } }
+    private fun askPermissions(perms: Array<String>) {
+        if (!stepAsideForSystem()) return
+        runCatching { startActivity(Intent(this, AskActivity::class.java).putExtra(AskActivity.EXTRA_PERMS, perms).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)) }
+            .onFailure { comeBackFromSystem() }
+    }
+    fun permissionsDone() { ui.post { comeBackFromSystem() } }
 
     // ---- Profile and Messages: Station 3's profile / messages buttons open them in ONE window attached to Station 3
     //      (same gap, line and scene). Its own button closes it; the other button switches straight over. ----

@@ -15,7 +15,7 @@ import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 
 /** What the overlay panel (which shows the STORY screens) can ask the phone to do. JS name: window.StoryNative */
-class StoryBridge(private val ctx: Context, private val host: Host, private val station3: Boolean = false, private val dial: Boolean = false, private val profile: Boolean = false) {
+class StoryBridge(private val ctx: Context, private val host: Host, private val station3: Boolean = false, private val dial: Boolean = false, private val profile: Boolean = false, private val lock: Boolean = false) {
 
     interface Host {
         fun hidePanel()
@@ -29,6 +29,9 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         fun showToast(msg: String)
         fun toggleProfile()
         fun toggleMessages()
+        fun setLockDialSize(w: Int, h: Int)
+        fun callNumber(number: String)
+        fun setQuickAccess(json: String)
         fun toggleCreate()
         fun createShutter()
         fun createVideo(on: Boolean)
@@ -176,7 +179,18 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
 
     /** The dial pad page reports its size once, so its window fits it before it's ever shown. */
     @JavascriptInterface
-    fun setDialSize(w: Int, h: Int) { if (dial) host.setDialSize(w, h) }
+    fun setDialSize(w: Int, h: Int) { if (lock) host.setLockDialSize(w, h) else if (dial) host.setDialSize(w, h) }
+
+    /** The dial pad's call button: calls straight away (even on the lock screen). */
+    @JavascriptInterface
+    fun callNumber(number: String) { if (station3) host.callNumber(number) }
+
+    /** Settings > QUICK ACCESS (JSON: mode, where, s3Aod, lockDial, dialAod). */
+    @JavascriptInterface
+    fun getQuickAccess(): String = QuickAccess.json(ctx)
+
+    @JavascriptInterface
+    fun setQuickAccess(json: String) { if (!station3) host.setQuickAccess(json) }
 
     companion object {
         @Volatile private var appsCache: String? = null

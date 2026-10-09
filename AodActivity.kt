@@ -50,6 +50,6 @@ class AodActivity : Activity() {
 
     companion object {
         @Volatile var instance: AodActivity? = null
-        fun enabled(c: android.content.Context) = c.getSharedPreferences("story", android.content.Context.MODE_PRIVATE).getBoolean("aod", false)
+        fun enabled(c: android.content.Context) = QuickAccess.aodScreen(c)  // Station 3 and/or the dial pad (Settings > QUICK ACCESS)
     }
 }

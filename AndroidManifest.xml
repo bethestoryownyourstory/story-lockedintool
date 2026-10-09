@@ -21,6 +21,9 @@
     <!-- Station 3 > Create: the camera (pictures, video) and the microphone (video sound). -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Settings > QUICK ACCESS: the dial pad's call button calls straight away (lock screen too). -->
+    <uses-permission android:name="android.permission.CALL_PHONE" />
+    <uses-feature android:name="android.hardware.telephony" android:required="false" />
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
 
@@ -53,6 +56,14 @@
         <!-- Edit profile > Change photo: see-through, opens the phone's own photo picker. -->
         <activity
             android:name=".ProfilePhotoActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <!-- Asks Android once for a permission STORY needs (see-through). -->
+        <activity
+            android:name=".AskActivity"
             android:exported="false"
             android:excludeFromRecents="true"
             android:taskAffinity=""
