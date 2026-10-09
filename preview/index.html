@@ -5181,15 +5181,6 @@ function settingsHubScreen(){
     <div class="row-card">
       <div class="row">
         <div class="row-left">
-          <div class="row-name">3D Tilt</div>
-          <div class="row-sub">${state.tiltEnabled ? 'On — tilt your phone to see it' : 'The screen tilts in real 3D as you tilt your phone'}</div>
-        </div>
-        <button class="toggle-switch${state.tiltEnabled?' on':''}" data-action="tilt-3d-toggle"><span class="toggle-knob"></span></button>
-      </div>
-    </div>
-    <div class="row-card">
-      <div class="row">
-        <div class="row-left">
           <div class="row-name">System theme</div>
           <div class="row-sub">Swaps STORY's black and white. Every other colour stays.</div>
         </div>
@@ -7391,9 +7382,14 @@ function quickAccess(){
   return Object.assign({ mode:'s3dial', where:'both', s3Aod:false, lockDial:false, dialAod:false }, q);
 }
 window.storyQuickAccessChanged = function(){ renderDevice(); };
+// The app says when the phone locks / unlocks (Station 3's dial pad button follows it).
+window.__storyLocked = false;
+window.storyLockState = function(locked){ if(window.__storyLocked === !!locked) return; window.__storyLocked = !!locked; renderDevice(); };
 function station3BarHTML(){
-  // "Station 3 dial pad separate" / "Dial pad only": the dial pad isn't part of Station 3.
-  const dialBtn = quickAccess().mode === 's3dial';
+  // "Station 3 with dial pad": always. "Station 3 dial pad separate": only while the phone is unlocked (locked,
+  // the dial pad lives on the lock screen instead). "Dial pad only": no Station 3.
+  const qaMode = quickAccess().mode;
+  const dialBtn = qaMode === 's3dial' || (qaMode === 'separate' && !window.__storyLocked);
   return `
     <div class="station3-bar">
       ${dialBtn ? `<button class="station3-btn station3-btn-chevron" data-action="station3-dialpad-toggle" title="Dial pad">
