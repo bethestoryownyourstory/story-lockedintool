@@ -2109,13 +2109,14 @@
   }
   /* Vertical Page Style (owner's drawing): a stack - home in the middle in front, the others peeking out above
      and below, a little smaller behind it. */
-  .pswitch-vstack{ position:relative; height:calc(340px + (var(--n) - 1) * 130px); max-height:100%; }
-  .pswitch-vcard{ position:absolute; left:50%; top:50%; width:280px; height:340px; --mscale:0.68;
-    transform:translate(-50%, -50%) translateY(calc(var(--d) * 130px)) scale(calc(1 - var(--ad) * 0.08));
-    box-shadow:0 10px 28px rgba(0,0,0,0.55); transition:opacity 0.2s ease; }
+  .pswitch-vstack{ --card-w:280px; --card-h:360px; --step:72px; position:relative; width:var(--card-w); margin:0 auto;
+    height:calc(var(--card-h) + (var(--n) - 1) * var(--step)); }
+  .pswitch-vcard{ position:absolute; left:0; top:calc(var(--i) * var(--step)); width:var(--card-w); height:var(--card-h); --mscale:0.68;
+    transform:scale(calc(1 - var(--b) * 0.06)); transform-origin:50% 0; box-shadow:0 -6px 22px rgba(0,0,0,0.55); transition:opacity 0.2s ease; }
   .pswitch-vcard.picked{ opacity:0.25; }
-  .pswitch-vfloat{ position:fixed; inset:0; z-index:60; background:rgba(0,0,0,0.6); display:flex; align-items:center; justify-content:center; }
-  .pswitch-vfloat-card{ width:78%; height:68%; --mscale:0.78; border-radius:20px; box-shadow:0 18px 50px rgba(0,0,0,0.6);
+  .pswitch-vfloat{ position:fixed; inset:0; z-index:40; background:rgba(0,0,0,0.6); }
+  /* Exactly the size of the whole stack, right where the stack is (owner). */
+  .pswitch-vfloat-card{ position:absolute; inset:0; z-index:50; --mscale:0.68; border-radius:16px; box-shadow:0 18px 50px rgba(0,0,0,0.6);
     animation:vstackPop 0.32s cubic-bezier(.2,1.3,.4,1) both; }
   @keyframes vstackPop{ 0%{ transform:scale(0.6); opacity:0; } 100%{ transform:scale(1); opacity:1; } }
   .pswitch-vertical{ display:flex; flex-direction:column; gap:10px; }
@@ -3209,28 +3210,26 @@ function pswitchTileHTML(item, navAttr){
 function tileLabelHTML(item, navAttr){
   return navAttr === 'pswitch-nav' ? `<div class="pswitch-tile-label">${item.label}</div>` : '';
 }
-// Vertical (owner's drawing): the pages of the row you're in, stacked and overlapping, the row's home page in the
-// middle (in front), the others peeking out above and below - spaced just enough to see them, always stacked.
-// Tap one: it pops out of the stack and floats, bigger, in the middle of the screen; tap it again to go to that
-// page; tap anywhere else and it goes back into the stack.
+// Vertical (owner's drawing): the pages of the row you're in, stacked and overlapping - the row's home page in front,
+// the others peeking out ABOVE it (never below), spaced just enough to see them, always stacked. Tap one: it pops
+// out and floats in the middle, exactly the size of the whole stack; tap it again to go to that page; tap anywhere
+// else and it goes back into the stack.
 function pswitchVStackHTML(){
   const items = PAGE_SWITCH_ITEMS, n = items.length;
   const home = Math.max(0, items.findIndex(it=>it.key === state.homeScreen || it.key === 'wallet'));
-  // Home sits in the middle: the others keep their order around it.
-  const order = items.slice(); const [h] = order.splice(home, 1); order.splice(Math.floor(n / 2), 0, h);
-  const mid = Math.floor(n / 2);
+  // Back to front: the other pages in row order, the home page last (in front, at the bottom of the stack).
+  const order = items.filter((it, i)=>i !== home).concat([items[home]]);
   const pick = state.vstackPick && items.find(it=>it.key === state.vstackPick);
   return `
     <div class="pswitch-vstack" style="--n:${n}">
-      ${order.map((item, i)=>{ const d = i - mid; return `
-        <div class="pswitch-tile pswitch-vcard${pick && pick.key === item.key ? ' picked' : ''}" data-vpick="${item.key}" style="--d:${d}; --ad:${Math.abs(d)}; z-index:${10 - Math.abs(d)};">
+      ${order.map((item, i)=>{ const back = n - 1 - i; return `
+        <div class="pswitch-tile pswitch-vcard${pick && pick.key === item.key ? ' picked' : ''}" data-vpick="${item.key}" style="--i:${i}; --b:${back}; z-index:${i + 1};">
           ${miniPagePreviewHTML(item.key)}
         </div>`; }).join('')}
+      ${pick ? `
+      <div class="pswitch-vfloat" data-vstack-close></div>
+      <div class="pswitch-tile pswitch-vfloat-card" data-pagestyle-nav="${pick.key}">${miniPagePreviewHTML(pick.key)}</div>` : ''}
     </div>
-    ${pick ? `
-    <div class="pswitch-vfloat" data-vstack-close>
-      <div class="pswitch-tile pswitch-vfloat-card" data-pagestyle-nav="${pick.key}">${miniPagePreviewHTML(pick.key)}</div>
-    </div>` : ''}
   `;
 }
 // Flat Circle: 3 real tiles positioned around an ellipse by angle. Drag rotates them --
