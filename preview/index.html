@@ -757,7 +757,7 @@
   }
   .notes-float-dock{ position:relative; }
   /* The note's tools float ON the page (owner), fully on screen: above the bottom edge and clear of the Station 3 corner. */
-  .phone-float-dock.notes-float-dock{ padding:10px 18px 62px 18px !important; }  /* a little up, clear of the bottom switch, and the full width of the page, side to side (owner) */
+  .phone-float-dock.notes-float-dock, html.native:not(.s3-early) .phone-float-dock.notes-float-dock{ padding:10px 18px 62px 18px !important; }  /* (the app's own dock rule zeroes the bottom padding - not for the note station) */  /* a little up, clear of the bottom switch, and the full width of the page, side to side (owner) */
   /* The note's tool station: one bar with its own dark background (owner), floating on the page. */
   .notes-float-toolbar{ display:flex; gap:4px; justify-content:space-between; align-items:center;
     background:#0d0d0d; border:1px solid #262626; border-radius:16px; padding:6px; box-shadow:0 6px 18px rgba(0,0,0,0.45); }
