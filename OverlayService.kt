@@ -90,16 +90,37 @@ class OverlayService : Service(), StoryBridge.Host {
         if (now - aodStartedAt < 2_000) return             // the same screen-off, reported twice
         aodStartedAt = now
         val aod = AodActivity.instance
-        if (aod != null) { aod.finish(); return }          // power pressed while Always On Display was up: truly off
+        if (aod != null && !aod.isFinishing) {
+            // Power pressed while the Always On Display was really up: truly off.
+            if (aod.wasSeen() || aodRetries >= 2) { aod.finish(); return }
+            // It never properly came up (the phone switched the screen off on it): wake it again, not "off".
+            aodRetries++; wakeForAod(); return
+        }
         if (!AodActivity.enabled(this)) return
+        aodRetries = 0
         // Wake the screen right now, in parallel with the black screen starting (not after it).
+        wakeForAod()
+        val i = Intent(this, AodActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
+        runCatching { startActivity(i) }
+        // Some phones quietly block opening it from the background: ask again the way Android allows explicitly.
+        val startedAt = aodStartedAt
+        ui.postDelayed({
+            if (AodActivity.instance == null && AodActivity.enabled(this) && aodStartedAt == startedAt && userPresentAt < startedAt) runCatching {
+                wakeForAod()
+                val pi = android.app.PendingIntent.getActivity(this, 8, i, android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT)
+                if (Build.VERSION.SDK_INT >= 34) pi.send(android.app.ActivityOptions.makeBasic().setPendingIntentBackgroundActivityStartMode(android.app.ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED).toBundle())
+                else pi.send()
+            }
+        }, 1000)
+    }
+    private var aodRetries = 0
+    private fun wakeForAod() {
         runCatching {
             @Suppress("DEPRECATION")
             getSystemService(android.os.PowerManager::class.java).newWakeLock(
                 android.os.PowerManager.SCREEN_DIM_WAKE_LOCK or android.os.PowerManager.ACQUIRE_CAUSES_WAKEUP or android.os.PowerManager.ON_AFTER_RELEASE,
                 "story:aod").acquire(1_500)
         }
-        runCatching { startActivity(Intent(this, AodActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)) }
     }
     private val displayWatch = object : android.hardware.display.DisplayManager.DisplayListener {
         override fun onDisplayAdded(id: Int) {}
@@ -783,6 +804,7 @@ class OverlayService : Service(), StoryBridge.Host {
         ui.post {
             aodOn = on
             updateBubble()
+            syncLockDial()  // the lock screen dial pad joins (or leaves) the Always On Display right away
             ui.removeCallbacks(aodSwap)
             if (on) ui.postDelayed(aodSwap, 60_000)
             applyAodMask()

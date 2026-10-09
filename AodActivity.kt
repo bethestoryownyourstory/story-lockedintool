@@ -56,6 +56,16 @@ class AodActivity : Activity() {
         }
     }
 
+    // When it has really been on screen (has the focus): only then does a screen-off mean you pressed power.
+    @Volatile var seenAt = 0L
+    override fun onResume() { super.onResume(); if (seenAt == 0L) seenAt = System.currentTimeMillis() }
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus && seenAt == 0L) seenAt = System.currentTimeMillis()
+    }
+    /** Was properly up (focused for a moment) - not one that never got shown. */
+    fun wasSeen() = seenAt > 0L && System.currentTimeMillis() - seenAt > 700
+
     override fun onDestroy() {
         handler.removeCallbacks(unlockWatch)
         if (instance === this) instance = null
