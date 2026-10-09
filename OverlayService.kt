@@ -780,21 +780,35 @@ class OverlayService : Service(), StoryBridge.Host {
         }
     }
 
+    /** Burn-in protection: switches OFF every other pixel of what a window draws (and swaps which half each
+     *  minute). It cuts pixels out instead of painting black dots, so see-through parts of a window stay fully
+     *  see-through (e.g. Station 3's window over the lock screen dial pad never shows a dark block). */
     private fun checker(phase: Boolean): android.graphics.drawable.Drawable {
         val bmp = android.graphics.Bitmap.createBitmap(2, 2, android.graphics.Bitmap.Config.ARGB_8888)
-        val on = Color.BLACK; val off = Color.TRANSPARENT
-        bmp.setPixel(0, 0, if (phase) on else off); bmp.setPixel(1, 1, if (phase) on else off)
-        bmp.setPixel(1, 0, if (phase) off else on); bmp.setPixel(0, 1, if (phase) off else on)
-        bmp.density = resources.displayMetrics.densityDpi  // one checker square = one screen pixel
-        return android.graphics.drawable.BitmapDrawable(resources, bmp).apply {
-            setTileModeXY(android.graphics.Shader.TileMode.REPEAT, android.graphics.Shader.TileMode.REPEAT)
-            paint.isFilterBitmap = false; paint.isAntiAlias = false
+        val cut = Color.BLACK; val keep = Color.TRANSPARENT
+        bmp.setPixel(0, 0, if (phase) cut else keep); bmp.setPixel(1, 1, if (phase) cut else keep)
+        bmp.setPixel(1, 0, if (phase) keep else cut); bmp.setPixel(0, 1, if (phase) keep else cut)
+        val paint = android.graphics.Paint().apply {
+            shader = android.graphics.BitmapShader(bmp, android.graphics.Shader.TileMode.REPEAT, android.graphics.Shader.TileMode.REPEAT)
+            xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.DST_OUT)
+            isFilterBitmap = false; isAntiAlias = false
+        }
+        return object : android.graphics.drawable.Drawable() {
+            override fun draw(c: android.graphics.Canvas) { c.drawRect(bounds, paint) }
+            override fun setAlpha(a: Int) {}
+            override fun setColorFilter(f: android.graphics.ColorFilter?) {}
+            @Deprecated("Deprecated in Java")
+            override fun getOpacity() = android.graphics.PixelFormat.TRANSLUCENT
         }
     }
 
     private fun applyAodMask() {
         val views = listOfNotNull(bubble, barBg, s3Pane?.frame, dialPane?.frame, profilePane?.frame, profileGapPane?.frame, profileStrip, lockDialPane?.frame)
-        for (v in views) v.foreground = if (aodOn) checker(aodPhase) else null
+        for (v in views) {
+            // Its own layer while masked, so cutting pixels only ever affects that window's own drawing.
+            v.setLayerType(if (aodOn) View.LAYER_TYPE_HARDWARE else View.LAYER_TYPE_NONE, null)
+            v.foreground = if (aodOn) checker(aodPhase) else null
+        }
     }
 
     private fun destroyPanes() {
