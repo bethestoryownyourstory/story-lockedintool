@@ -992,6 +992,15 @@
   .acct-title{ font:inherit; letter-spacing:inherit; color:inherit; text-transform:inherit; background:transparent; border:1px solid var(--line); border-radius:999px; padding:3px 10px; margin:0; cursor:pointer; display:inline-flex; align-items:center; gap:6px; max-width:100%; overflow:hidden; white-space:nowrap; }
   .acct-title-caret{ font-size:10px; opacity:0.7; }
   .acct-title:active{ opacity:0.6; }
+  .tv-card{ height:190px; padding:0; position:relative; overflow:hidden; }
+  .tv-slot{ position:absolute; inset:0; }
+  .tv-host{ width:100%; height:100%; touch-action:none; }
+  .tv-empty{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:12px; color:var(--muted); pointer-events:none; text-align:center; padding:0 20px; }
+  .tv-sltp-btn{ position:absolute; left:8px; bottom:8px; z-index:3; font-size:9px; font-weight:800; padding:5px 8px; border-radius:8px; background:var(--card-2); border:1px solid var(--line); color:var(--text); }
+  .tv-sltp-btn.on{ background:#e8e6e1; color:#000; border-color:#e8e6e1; }
+  .tv-sltp-fs{ position:static; }
+  .chart-fs-body{ position:relative; }
+  .tv-slot-fs{ position:absolute; inset:0; }
   .acct-dots{ display:flex; justify-content:center; gap:6px; margin:8px 0 2px; }
   .acct-dots span{ width:6px; height:6px; border-radius:50%; background:var(--line); }
   .acct-dots span.on{ background:var(--text); }
@@ -4877,10 +4886,15 @@ async function tlQuote(acc, inst){
 }
 async function tlRefresh(acc){
   const meta = await tlMeta(acc);
-  const [st, ps] = await Promise.all([
+  const [st, ps, os] = await Promise.all([
     tlCall(acc, 'GET', '/trade/accounts/' + acc.accId + '/state'),
     tlCall(acc, 'GET', '/trade/accounts/' + acc.accId + '/positions'),
+    tlCall(acc, 'GET', '/trade/accounts/' + acc.accId + '/orders').catch(()=>({})),
   ]);
+  // A position's stop loss / take profit are orders tied to it: their prices are the SL / TP lines on the chart.
+  const ocols = tlCols(meta.config, 'ordersConfig');
+  const orders = ((os.d && os.d.orders) || []).map(r=>tlRow(ocols, r));
+  const ordById = {}; orders.forEach(o=>{ ordById[String(o.id)] = o; });
   const det = tlRow(tlCols(meta.config, 'accountDetailsConfig'), (st.d && st.d.accountDetailsData) || []);
   const pcols = tlCols(meta.config, 'positionsConfig');
   const rows = ((ps.d && ps.d.positions) || []).map(r=>tlRow(pcols, r));
@@ -4895,6 +4909,7 @@ async function tlRefresh(acc){
     const pl = num(p.unrealizedPl) || 0;
     positions.push({ id: String(p.id), type: side === 'sell' ? 'sell' : 'buy', qty: num(p.qty), symbol: inst.name,
       label: (side === 'sell' ? 'SELL ' : 'BUY ') + num(p.qty) + ' ' + inst.name, entry: num(p.avgPrice),
+      sl: (o=>o ? num(o.stopPrice) || num(o.price) : null)(ordById[String(p.stopLossId)]), tp: (o=>o ? num(o.price) || num(o.stopPrice) : null)(ordById[String(p.takeProfitId)]),
       current: q ? (side === 'sell' ? q.ask : q.bid) : null, pl, profit: pl >= 0 });
   }
   const balance = num(det.balance);
@@ -4907,12 +4922,12 @@ async function tlFocus(acc){
   const inst = tlInstrument(meta, state.focusSymbol);
   if(!inst) return { quote:null, bars:[] };
   const quote = await tlQuote(acc, inst);
-  const res = { '1H':['1H', 48 * 3600e3], '4H':['4H', 8 * 86400e3], '1D':['1D', 50 * 86400e3], '1W':['1W', 340 * 86400e3] }[state.chartRes] || ['1H', 48 * 3600e3];
+  const res = { '1H':['1H', 7 * 86400e3], '4H':['4H', 30 * 86400e3], '1D':['1D', 200 * 86400e3], '1W':['1W', 1100 * 86400e3] }[state.chartRes] || ['1H', 7 * 86400e3];
   let bars = [];
   try{
     const now = Date.now();
     const j = await tlCall(acc, 'GET', '/trade/history?routeId=' + tlRoute(inst, 'INFO') + '&from=' + (now - res[1]) + '&to=' + now + '&resolution=' + res[0] + '&tradableInstrumentId=' + inst.tradableInstrumentId);
-    bars = ((j.d && j.d.barDetails) || []).map(b=>({ o:Number(b.o), h:Number(b.h), l:Number(b.l), c:Number(b.c) }));
+    bars = ((j.d && j.d.barDetails) || []).map(b=>({ t:Math.floor(Number(b.t) / 1000), o:Number(b.o), h:Number(b.h), l:Number(b.l), c:Number(b.c) }));
   }catch(e){}
   const first = bars.length ? bars[0].o : null;
   quote.change = first ? ((quote.bid - first) / first) * 100 : null;
@@ -4930,6 +4945,12 @@ async function tlOrder(acc, o){
   return tlCall(acc, 'POST', '/trade/accounts/' + acc.accId + '/orders', body);
 }
 async function tlClose(acc, positionId){ return tlCall(acc, 'DELETE', '/trade/positions/' + positionId); }
+async function tlModify(acc, pos, v){
+  const b = {};
+  if(v.sl != null){ b.stopLoss = v.sl; b.stopLossType = 'absolute'; }
+  if(v.tp != null){ b.takeProfit = v.tp; b.takeProfitType = 'absolute'; }
+  return tlCall(acc, 'PATCH', '/trade/positions/' + pos.id, b);
+}
 
 // ---- MT5 (through STORY's MetaApi connection, the only way an app can reach MT5) ----
 const MT5_API = 'https://story-trade.percyjuniormaseko0.workers.dev';   // STORY's trade server (trade-worker.js, MetaApi)
@@ -5044,8 +5065,8 @@ const bnAdapter = {
   },
   async focus(acc){
     const s = state.focusSymbol;
-    const [t, k] = await Promise.all([xget(BN + '/api/v3/ticker/bookTicker?symbol=' + s), xget(BN + '/api/v3/klines?symbol=' + s + '&interval=' + res().bin + '&limit=40')]);
-    const bars = (k || []).map(x=>({ o:+x[1], h:+x[2], l:+x[3], c:+x[4] }));
+    const [t, k] = await Promise.all([xget(BN + '/api/v3/ticker/bookTicker?symbol=' + s), xget(BN + '/api/v3/klines?symbol=' + s + '&interval=' + res().bin + '&limit=150')]);
+    const bars = (k || []).map(x=>({ t:Math.floor(x[0] / 1000), o:+x[1], h:+x[2], l:+x[3], c:+x[4] }));
     return { quote: withChange({ bid:+t.bidPrice, ask:+t.askPrice }, bars), bars, name:s };
   },
   async order(acc, o){
@@ -5075,14 +5096,14 @@ const byAdapter = {
   async refresh(acc){
     const [w, p] = await Promise.all([byCall(acc, 'GET', '/v5/account/wallet-balance', { accountType:'UNIFIED' }), byCall(acc, 'GET', '/v5/position/list', { category:'linear', settleCoin:'USDT' })]);
     const a = (w.list || [])[0] || {};
-    const positions = (p.list || []).filter(x=>Number(x.size) > 0).map(x=>{ const pl = Number(x.unrealisedPnl) || 0; return { id:x.symbol + ':' + x.side, symbol:x.symbol, type: x.side === 'Sell' ? 'sell' : 'buy', qty:Number(x.size), label:(x.side === 'Sell' ? 'SELL ' : 'BUY ') + x.size + ' ' + x.symbol, entry:Number(x.avgPrice), current:Number(x.markPrice), pl, profit: pl >= 0 }; });
+    const positions = (p.list || []).filter(x=>Number(x.size) > 0).map(x=>{ const pl = Number(x.unrealisedPnl) || 0; return { id:x.symbol + ':' + x.side, symbol:x.symbol, type: x.side === 'Sell' ? 'sell' : 'buy', qty:Number(x.size), label:(x.side === 'Sell' ? 'SELL ' : 'BUY ') + x.size + ' ' + x.symbol, entry:Number(x.avgPrice), current:Number(x.markPrice), sl:Number(x.stopLoss) || null, tp:Number(x.takeProfit) || null, pl, profit: pl >= 0 }; });
     return { status:'ok', balance:Number(a.totalWalletBalance), equity:Number(a.totalEquity), margin:Number(a.totalInitialMargin), freeMargin:Number(a.totalAvailableBalance), pl: positions.reduce((s, x)=>s + x.pl, 0), positions };
   },
   async focus(){
     const s = state.focusSymbol;
-    const [t, k] = await Promise.all([xget(BY + '/v5/market/tickers?category=linear&symbol=' + s), xget(BY + '/v5/market/kline?category=linear&symbol=' + s + '&interval=' + res().by + '&limit=40')]);
+    const [t, k] = await Promise.all([xget(BY + '/v5/market/tickers?category=linear&symbol=' + s), xget(BY + '/v5/market/kline?category=linear&symbol=' + s + '&interval=' + res().by + '&limit=150')]);
     const tk = ((t.result || {}).list || [])[0] || {};
-    const bars = (((k.result || {}).list) || []).slice().reverse().map(x=>({ o:+x[1], h:+x[2], l:+x[3], c:+x[4] }));
+    const bars = (((k.result || {}).list) || []).slice().reverse().map(x=>({ t:Math.floor(+x[0] / 1000), o:+x[1], h:+x[2], l:+x[3], c:+x[4] }));
     return { quote: withChange({ bid:+tk.bid1Price, ask:+tk.ask1Price }, bars), bars, name:s };
   },
   async order(acc, o){
@@ -5092,6 +5113,7 @@ const byAdapter = {
     if(o.sl) p.stopLoss = String(o.sl); if(o.tp) p.takeProfit = String(o.tp);
     return byCall(acc, 'POST', '/v5/order/create', p);
   },
+  async modify(acc, pos, v){ const b = { category:'linear', symbol:pos.symbol, positionIdx:0 }; if(v.sl != null) b.stopLoss = String(v.sl); if(v.tp != null) b.takeProfit = String(v.tp); return byCall(acc, 'POST', '/v5/position/trading-stop', b); },
   async close(acc, id){ const [sym, side] = id.split(':'); const pos = ((state.live[acc.id] || {}).positions || []).find(p=>p.id === id); return byCall(acc, 'POST', '/v5/order/create', { category:'linear', symbol:sym, side: side === 'Buy' ? 'Sell' : 'Buy', orderType:'Market', qty:String(pos ? pos.qty : 0), reduceOnly:true }); },
   async symbols(){ const j = await xget(BY + '/v5/market/tickers?category=linear'); return (((j.result || {}).list) || []).map(x=>x.symbol); },
 };
@@ -5115,9 +5137,9 @@ const okAdapter = {
   },
   async focus(){
     const s = state.focusSymbol;
-    const [t, k] = await Promise.all([xget(OKX + '/api/v5/market/ticker?instId=' + s), xget(OKX + '/api/v5/market/candles?instId=' + s + '&bar=' + res().okx + '&limit=40')]);
+    const [t, k] = await Promise.all([xget(OKX + '/api/v5/market/ticker?instId=' + s), xget(OKX + '/api/v5/market/candles?instId=' + s + '&bar=' + res().okx + '&limit=100')]);
     const tk = (t.data || [])[0] || {};
-    const bars = (k.data || []).slice().reverse().map(x=>({ o:+x[1], h:+x[2], l:+x[3], c:+x[4] }));
+    const bars = (k.data || []).slice().reverse().map(x=>({ t:Math.floor(+x[0] / 1000), o:+x[1], h:+x[2], l:+x[3], c:+x[4] }));
     return { quote: withChange({ bid:+tk.bidPx, ask:+tk.askPx }, bars), bars, name:s };
   },
   async order(acc, o){
@@ -5158,7 +5180,7 @@ const krAdapter = {
     const s = state.focusSymbol;
     const t = krDone(await httpRaw('GET', KR + '/0/public/Ticker?pair=' + s, {}, ''));
     const tk = t[Object.keys(t)[0]] || { b:[0], a:[0] };
-    let bars = []; try{ const o = krDone(await httpRaw('GET', KR + '/0/public/OHLC?pair=' + s + '&interval=' + res().kr, {}, '')); const arr = o[Object.keys(o).find(k=>k !== 'last')] || []; bars = arr.slice(-40).map(x=>({ o:+x[1], h:+x[2], l:+x[3], c:+x[4] })); }catch(e){}
+    let bars = []; try{ const o = krDone(await httpRaw('GET', KR + '/0/public/OHLC?pair=' + s + '&interval=' + res().kr, {}, '')); const arr = o[Object.keys(o).find(k=>k !== 'last')] || []; bars = arr.slice(-150).map(x=>({ t:+x[0], o:+x[1], h:+x[2], l:+x[3], c:+x[4] })); }catch(e){}
     return { quote: withChange({ bid:+tk.b[0], ask:+tk.a[0] }, bars), bars, name:s };
   },
   async order(acc, o){
@@ -5183,7 +5205,7 @@ const luAdapter = {
   async focus(){
     const s = state.focusSymbol;
     const t = await xget(LU + '/api/1/ticker?pair=' + s);
-    let bars = []; try{ const c = await xget(LU + '/api/exchange/1/candles?pair=' + s + '&since=' + (Date.now() - res().sec * 40000) + '&duration=' + res().sec); bars = (c.candles || []).slice(-40).map(x=>({ o:+x.open, h:+x.high, l:+x.low, c:+x.close })); }catch(e){}
+    let bars = []; try{ const c = await xget(LU + '/api/exchange/1/candles?pair=' + s + '&since=' + (Date.now() - res().sec * 150000) + '&duration=' + res().sec); bars = (c.candles || []).slice(-150).map(x=>({ t:Math.floor(+x.timestamp / 1000), o:+x.open, h:+x.high, l:+x.low, c:+x.close })); }catch(e){}
     return { quote: withChange({ bid:+t.bid, ask:+t.ask }, bars), bars, name:s };
   },
   async order(acc, o){
@@ -5213,7 +5235,7 @@ const vaAdapter = {
   async focus(){
     const s = state.focusSymbol;
     const t = await xget(VA + '/v1/public/' + s + '/marketsummary');
-    let bars = []; try{ const c = await xget(VA + '/v1/public/' + s + '/buckets?periodSeconds=' + res().sec + '&limit=40'); bars = (c || []).slice().reverse().map(x=>({ o:+x.open, h:+x.high, l:+x.low, c:+x.close })); }catch(e){}
+    let bars = []; try{ const c = await xget(VA + '/v1/public/' + s + '/buckets?periodSeconds=' + res().sec + '&limit=150'); bars = (c || []).slice().reverse().map(x=>({ t:Math.floor(Date.parse(x.startTime) / 1000), o:+x.open, h:+x.high, l:+x.low, c:+x.close })); }catch(e){}
     return { quote: withChange({ bid:+t.bidPrice, ask:+t.askPrice }, bars), bars, name:s };
   },
   async order(acc, o){
@@ -5237,8 +5259,8 @@ const alAdapter = {
   },
   async focus(acc){
     const s = state.focusSymbol; const D = 'https://data.alpaca.markets';
-    const [q, b] = await Promise.all([xget(D + '/v2/stocks/' + s + '/quotes/latest', alHead(acc)), xget(D + '/v2/stocks/' + s + '/bars?timeframe=' + res().al + '&limit=40&start=' + new Date(Date.now() - res().sec * 1000 * 120).toISOString(), alHead(acc)).catch(()=>({}))]);
-    const bars = (b.bars || []).slice(-40).map(x=>({ o:x.o, h:x.h, l:x.l, c:x.c }));
+    const [q, b] = await Promise.all([xget(D + '/v2/stocks/' + s + '/quotes/latest', alHead(acc)), xget(D + '/v2/stocks/' + s + '/bars?timeframe=' + res().al + '&limit=150&start=' + new Date(Date.now() - res().sec * 1000 * 400).toISOString(), alHead(acc)).catch(()=>({}))]);
+    const bars = (b.bars || []).slice(-150).map(x=>({ t:Math.floor(Date.parse(x.t) / 1000), o:x.o, h:x.h, l:x.l, c:x.c }));
     return { quote: withChange({ bid:(q.quote || {}).bp, ask:(q.quote || {}).ap }, bars), bars, name:s };
   },
   async order(acc, o){
@@ -5304,8 +5326,8 @@ const dvAdapter = {
   },
   async focus(acc){
     const s = state.focusSymbol;
-    const h = await dvSend(acc, { ticks_history:s, end:'latest', count:40, style:'candles', granularity: Math.min(86400, res().sec) });
-    const bars = (h.candles || []).map(x=>({ o:+x.open, h:+x.high, l:+x.low, c:+x.close }));
+    const h = await dvSend(acc, { ticks_history:s, end:'latest', count:150, style:'candles', granularity: Math.min(86400, res().sec) });
+    const bars = (h.candles || []).map(x=>({ t:+x.epoch, o:+x.open, h:+x.high, l:+x.low, c:+x.close }));
     const last = bars.length ? bars[bars.length - 1].c : null;
     return { quote: withChange({ bid:last, ask:last }, bars), bars, name:s };
   },
@@ -5323,9 +5345,10 @@ const metaAdapter = {
   focus: acc=>mt5Call(acc, 'GET', '/mt5/' + acc.accId + '/focus?symbol=' + encodeURIComponent(state.focusSymbol) + '&res=' + state.chartRes),
   order: (acc, o)=>mt5Call(acc, 'POST', '/mt5/' + acc.accId + '/order', Object.assign({ symbol: state.focusSymbol }, o)),
   close: (acc, id)=>mt5Call(acc, 'POST', '/mt5/' + acc.accId + '/close', { id }),
+  modify: (acc, pos, v)=>mt5Call(acc, 'POST', '/mt5/' + acc.accId + '/modify', { id: pos.id, sl: v.sl, tp: v.tp }),
   symbols: async acc=>{ const j = await mt5Call(acc, 'GET', '/mt5/' + acc.accId + '/symbols'); return j.symbols || []; },
 };
-const tlAdapter = { refresh: tlRefresh, focus: tlFocus, order: tlOrder, close: tlClose, symbols: async acc=>{ const m = await tlMeta(acc); return m.instruments.map(i=>i.name); } };
+const tlAdapter = { refresh: tlRefresh, focus: tlFocus, order: tlOrder, close: tlClose, modify: tlModify, symbols: async acc=>{ const m = await tlMeta(acc); return m.instruments.map(i=>i.name); } };
 const ADAPTERS = { mt5:metaAdapter, mt4:metaAdapter, tradelocker:tlAdapter, binance:bnAdapter, bybit:byAdapter, okx:okAdapter, kraken:krAdapter, luno:luAdapter, valr:vaAdapter, alpaca:alAdapter, deriv:dvAdapter };
 const adapterOf = acc=>{ const a = ADAPTERS[acc.platform]; if(!a) throw (PLATFORMS[acc.platform] || {}).soon || 'This platform isn’t connected yet'; return a; };
 const TRADE = {
@@ -5334,6 +5357,8 @@ const TRADE = {
   order: (acc, o)=>adapterOf(acc).order(acc, o),
   close: (acc, id)=>adapterOf(acc).close(acc, id),
   symbols: acc=>adapterOf(acc).symbols(acc),
+  canModify: acc=>!!(ADAPTERS[acc.platform] && ADAPTERS[acc.platform].modify),
+  modify: (acc, pos, v)=>{ const a = adapterOf(acc); if(!a.modify) throw 'Moving SL / TP on the chart isn’t available for ' + ((PLATFORMS[acc.platform] || {}).label || 'this account') + ' yet'; return a.modify(acc, pos, v); },
 };
 // form-encoded / raw-body request (Kraken)
 function httpRaw(method, url, headers, rawBody){
@@ -5399,16 +5424,48 @@ async function tradeAddAccount(f){
     } else added = await ADAPTERS[f.platform].connect(f);
     if(f.broker) added.forEach(a=>{ a.broker = f.broker; if(f.platform === 'tradelocker' || f.platform === 'deriv') a.name = f.broker + ' ' + String(a.name).replace(/^Deriv\s*/, ''); });
     added.forEach(a=>{ a.symbol = a.symbol || P.sym; });
-    const list = tradeAccounts().filter(a=>!added.some(b=>b.id === a.id)).concat(added);
-    saveTradeAccounts(list);
-    state.activeTradeId = added[0].id; try{ localStorage.setItem('story-trade-active', state.activeTradeId); }catch(e){}
-    state.focusSymbol = added[0].symbol; state.focusName = null; state.focusQuote = null; state.focusBars = [];
+    // Logged in: STORY asks Save account or Cancel (owner). Saved accounts stay under Accounts.
     state.addAccountOpen = false; state.addAccount.busy = false; state.addAccount.vals = {};
-    showToast(added.length > 1 ? added.length + ' accounts added' : 'Account added');
-    renderDevice(); tradeRefreshNow(true);
+    state.pendingAccounts = added;
+    renderDevice();
   }catch(e){
     state.addAccount.busy = false; state.addAccount.msg = tradeErrText(e); renderDevice();
   }
+}
+function savePendingAccounts(){
+  const added = state.pendingAccounts || []; state.pendingAccounts = null;
+  if(!added.length) return;
+  const list = tradeAccounts().filter(a=>!added.some(b=>b.id === a.id)).concat(added);
+  saveTradeAccounts(list);
+  state.activeTradeId = added[0].id; try{ localStorage.setItem('story-trade-active', state.activeTradeId); }catch(e){}
+  state.focusSymbol = added[0].symbol; state.focusName = null; state.focusQuote = null; state.focusBars = [];
+  showToast(added.length > 1 ? added.length + ' accounts saved' : 'Account saved');
+  renderDevice(); tradeRefreshNow(true);
+}
+// Cancel: nothing is kept - the sign-in keys are thrown away (and an MT4/MT5 connection is removed).
+function cancelPendingAccounts(){
+  const added = state.pendingAccounts || []; state.pendingAccounts = null;
+  const saved = tradeAccounts();
+  added.filter(a=>!saved.some(b=>b.id === a.id)).forEach(a=>{
+    if(a.platform === 'mt5' || a.platform === 'mt4') mt5Call(a, 'DELETE', '/mt5/' + a.accId).catch(()=>{}).then(()=>secretSet('mt5key:' + a.accId, ''));
+    else if(a.platform === 'tradelocker'){ if(!saved.some(b=>b.platform === 'tradelocker' && tlKey(b) === tlKey(a))) secretSet(tlKey(a), ''); }
+    else secretSet('keys:' + a.id, '');
+  });
+  renderDevice();
+}
+function saveAccountTemplate(){
+  const added = state.pendingAccounts || [];
+  return `
+    <div class="modal-overlay" data-action="save-acct-cancel">
+      <div class="confirm-sheet" onclick="event.stopPropagation()">
+        <div class="confirm-title">Save ${added.length > 1 ? added.length + ' accounts' : 'account'}?</div>
+        <div class="confirm-sub">${added.map(a=>escText(a.name)).join('<br>')}<br><span style="opacity:0.7;">Saved accounts stay under Accounts - tap one to go to it.</span></div>
+        <div class="confirm-btn-row">
+          <button class="btn-wide btn-primary" style="margin-top:0;" data-action="save-acct-save">Save account${added.length > 1 ? 's' : ''}</button>
+          <button class="btn-wide" style="margin-top:0;" data-action="save-acct-cancel">Cancel</button>
+        </div>
+      </div>
+    </div>`;
 }
 function tradeRemoveAccount(id){
   const gone = tradeAccounts().find(a=>a.id === id);
@@ -5490,6 +5547,124 @@ function brokerPanelHTML(){
     </div>
   </div>`;
 }
+// ---- The chart: TradingView's own chart engine (Lightweight Charts, free & open source) with your broker's live
+// candles, your positions' entry / SL / TP lines, and stop loss / take profit you DRAG on the chart (owner: manual,
+// movable SL and TP - dragging a position's line really moves it at your broker). One chart, kept alive between
+// screen updates (moved into the Trading page's chart box, or the full-screen chart).
+const LWC_URL = 'https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js';
+let lwcLoading = null;
+function loadLWC(){
+  if(window.LightweightCharts) return Promise.resolve();
+  if(!lwcLoading) lwcLoading = new Promise((res, rej)=>{ const s = document.createElement('script'); s.src = LWC_URL; s.onload = res; s.onerror = ()=>{ lwcLoading = null; rej(); }; document.head.appendChild(s); });
+  return lwcLoading;
+}
+state.draftSLTP = null;   // { sl, tp } while you're setting SL / TP for your next Buy / Sell
+const TV = { host:null, chart:null, series:null, lines:[], dataKey:'', drag:null };
+function tvColors(){
+  const white = window.storyTheme && window.storyTheme() === 'white';
+  return { bg: white ? '#ffffff' : '#000000', text: white ? '#555555' : '#8a8a8a', grid: white ? '#f0f0f0' : '#111111' };
+}
+function tvMount(){
+  if(state.current !== 'trading') return;
+  const slot = document.querySelector('#content-area .chart-fullscreen .tv-slot') || document.querySelector('#content-area #trading-chart .tv-slot');
+  if(!slot) return;
+  if(!window.LightweightCharts){ loadLWC().then(()=>tvMount()).catch(()=>{}); return; }
+  if(!TV.host){
+    const c = tvColors();
+    TV.host = document.createElement('div'); TV.host.className = 'tv-host';
+    TV.chart = LightweightCharts.createChart(TV.host, {
+      layout:{ background:{ type:'solid', color:c.bg }, textColor:c.text, fontSize:10 },
+      grid:{ vertLines:{ color:c.grid }, horzLines:{ color:c.grid } },
+      rightPriceScale:{ borderVisible:false }, timeScale:{ borderVisible:false, timeVisible:true, secondsVisible:false },
+      crosshair:{ mode:0 }, handleScale:{ axisPressedMouseMove:true },
+      // The phone's language for dates / numbers - a language tag the chart can't read would stop it drawing.
+      localization:{ locale: (()=>{ try{ new Intl.DateTimeFormat(navigator.language); return navigator.language; }catch(e){ return 'en-US'; } })() },
+    });
+    TV.series = TV.chart.addCandlestickSeries({ upColor:'#3ecf6a', downColor:'#ef5b5b', borderVisible:false, wickUpColor:'#3ecf6a', wickDownColor:'#ef5b5b',
+      // Every SL / TP line stays on the chart (so you can always reach it to drag it).
+      autoscaleInfoProvider: orig=>{ const r = orig(); if(!r || !r.priceRange) return r; TV.lines.forEach(l=>{ const p = l.line.options().price; if(p > 0){ r.priceRange.minValue = Math.min(r.priceRange.minValue, p); r.priceRange.maxValue = Math.max(r.priceRange.maxValue, p); } }); return r; } });
+    tvDragSetup();
+  }
+  if(TV.host.parentNode !== slot) slot.appendChild(TV.host);
+  // Sized from the box's own layout size (not the zoomed screen size), and re-fitted whenever that changes - a chart
+  // first drawn into a box that wasn't laid out yet would otherwise stay empty.
+  const w = slot.clientWidth, h = slot.clientHeight;
+  tvUpdate();
+  if(w && h && (w !== TV.w || h !== TV.h)){ TV.w = w; TV.h = h; TV.chart.resize(w, h); TV.chart.timeScale().fitContent(); }
+}
+function tvUpdate(){
+  if(!TV.series) return;
+  const bars = (state.focusBars || []).filter(b=>b.t).sort((a, b)=>a.t - b.t);
+  const seen = new Set(); const data = [];
+  bars.forEach(b=>{ if(!seen.has(b.t)){ seen.add(b.t); data.push({ time:b.t, open:b.o, high:b.h, low:b.l, close:b.c }); } });
+  const acc = activeTradeAccount();
+  const key = (acc ? acc.id : '') + '|' + state.focusSymbol + '|' + state.chartRes;
+  if(key !== TV.dataKey || data.length < 2){
+    // Prices with the decimals they really have (EURUSD 1.08432, gold 2359.94, BTC 60000.00).
+    const ref = data.length ? data[data.length - 1].close : (state.focusQuote && state.focusQuote.bid) || 1;
+    const dec = ref < 10 ? 5 : ref < 1000 ? 3 : 2;
+    TV.series.applyOptions({ priceFormat:{ type:'price', precision:dec, minMove: Math.pow(10, -dec) } });
+    TV.series.setData(data); if(data.length) TV.chart.timeScale().fitContent(); TV.dataKey = data.length ? key : ''; }
+  else if(data.length){ const last = data[data.length - 1]; if(state.focusQuote && state.focusQuote.bid){ last.close = state.focusQuote.bid; last.high = Math.max(last.high, last.close); last.low = Math.min(last.low, last.close); } try{ TV.series.update(last); }catch(e){ TV.series.setData(data); } }
+  if(TV.drag) return;   // don't move lines under your finger
+  TV.lines.forEach(l=>TV.series.removePriceLine(l.line)); TV.lines = [];
+  const add = (price, color, title, kind, pos, style)=>{ if(price == null || isNaN(price)) return; TV.lines.push({ kind, pos, line: TV.series.createPriceLine({ price, color, lineWidth: kind === 'entry' ? 1 : 2, lineStyle: style == null ? 2 : style, axisLabelVisible:true, title }) }); };
+  const live = (acc && state.live[acc.id]) || {};
+  const sym = String(state.focusName || state.focusSymbol).toUpperCase();
+  (live.positions || []).filter(p=>!p.spot && String(p.symbol || '').toUpperCase().replace(/[^A-Z0-9]/g, '') === sym.replace(/[^A-Z0-9]/g, '')).forEach(p=>{
+    add(p.entry, '#8a8a8a', p.label, 'entry', p, 0);
+    if(p.sl) add(p.sl, '#ef5b5b', 'SL', 'sl', p); else if(acc && TRADE.canModify(acc)) add(p.type === 'sell' ? p.entry * 1.003 : p.entry * 0.997, 'rgba(239,91,91,0.45)', 'SL - drag', 'sl', p);
+    if(p.tp) add(p.tp, '#3ecf6a', 'TP', 'tp', p); else if(acc && TRADE.canModify(acc)) add(p.type === 'sell' ? p.entry * 0.994 : p.entry * 1.006, 'rgba(62,207,106,0.45)', 'TP - drag', 'tp', p);
+  });
+  if(state.draftSLTP){ add(state.draftSLTP.sl, '#ef5b5b', 'SL (next trade)', 'dsl', null); add(state.draftSLTP.tp, '#3ecf6a', 'TP (next trade)', 'dtp', null); }
+}
+function tvDragSetup(){
+  const host = TV.host;
+  const yOf = e=>e.clientY - host.getBoundingClientRect().top;
+  host.addEventListener('pointerdown', e=>{
+    const y = yOf(e);
+    let best = null, bestD = 18;
+    TV.lines.forEach(l=>{ if(l.kind === 'entry') return; const ly = TV.series.priceToCoordinate(l.line.options().price); if(ly != null && Math.abs(ly - y) < bestD){ best = l; bestD = Math.abs(ly - y); } });
+    if(!best) return;
+    TV.drag = best;
+    TV.chart.applyOptions({ handleScroll:false, handleScale:false });
+    try{ host.setPointerCapture(e.pointerId); }catch(err){}
+    e.preventDefault(); e.stopPropagation();
+  }, true);
+  host.addEventListener('pointermove', e=>{
+    if(!TV.drag) return;
+    const p = TV.series.coordinateToPrice(yOf(e));
+    if(p != null && p > 0) TV.drag.line.applyOptions({ price: p, title: TV.drag.kind.replace('d', '').toUpperCase() + ' ' + fmtPrice(p) });
+    e.preventDefault(); e.stopPropagation();
+  }, true);
+  const end = e=>{
+    const d = TV.drag; if(!d) return;
+    TV.drag = null;
+    TV.chart.applyOptions({ handleScroll:true, handleScale:true });
+    const price = Number(d.line.options().price.toPrecision(8));
+    if(d.kind === 'dsl' || d.kind === 'dtp'){ state.draftSLTP[d.kind === 'dsl' ? 'sl' : 'tp'] = price; tvUpdate(); return; }
+    const acc = activeTradeAccount(); if(!acc) return;
+    const v = d.kind === 'sl' ? { sl: price, tp: d.pos.tp || null } : { tp: price, sl: d.pos.sl || null };
+    d.pos[d.kind] = price;
+    tradeDo((d.kind === 'sl' ? 'Stop loss' : 'Take profit') + ' moved to ' + fmtPrice(price), a=>TRADE.modify(a, d.pos, v));
+  };
+  host.addEventListener('pointerup', end, true);
+  host.addEventListener('pointercancel', end, true);
+}
+// SL / TP for your next trade: two lines from the price, drag them where you want; Buy / Sell send them.
+function toggleDraftSLTP(){
+  if(state.draftSLTP){ state.draftSLTP = null; renderDevice(); return; }
+  const q = state.focusQuote; const p = q && (q.bid || q.ask);
+  if(!p){ showToast(activeTradeAccount() ? 'Waiting for the price…' : 'Log in to your broker first'); return; }
+  state.draftSLTP = { sl: Number((p * 0.997).toPrecision(8)), tp: Number((p * 1.006).toPrecision(8)) };
+  renderDevice();
+}
+function draftFor(side){
+  const d = state.draftSLTP; if(!d) return {};
+  const lo = Math.min(d.sl, d.tp), hi = Math.max(d.sl, d.tp);
+  return side === 'buy' ? { sl: lo, tp: hi } : { sl: hi, tp: lo };
+}
+
 function tradingScreen(){
   // Real numbers only (owner): your connected account's live balance, positions and prices - "—" until there is one.
   const acc = activeTradeAccount();
@@ -5519,9 +5694,11 @@ function tradingScreen(){
     <div class="eyebrow">FOCUS</div>
     <div class="big-num trade-symbol" style="font-size:24px;" data-action="symbol-picker-open">${escText(state.focusName || state.focusSymbol)} <span class="${chg != null && chg < 0 ? 'delta-down' : 'delta-up'}" style="font-size:15px;">${q ? fmtPrice(q.bid) : '—'}${chg != null ? ' ' + (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%' : ''}</span></div>
     <div class="chart-wrap" id="trading-chart">
-      <div class="row-card" style="height:100px;display:flex;align-items:flex-end;padding:10px;gap:3px;">
-        ${bars.length ? bars.map(b=>`<div style="width:8px;height:${hb(b)}%;background:${b.c >= b.o ? 'var(--green)' : 'var(--red)'};border-radius:3px;"></div>`).join('') : `<div class="row-sub" style="margin:auto;">${acc ? (live.status === 'ok' ? 'No chart for this symbol' : '') : 'Add an account to see live prices'}</div>`}
+      <div class="row-card tv-card">
+        <div class="tv-slot"></div>
+        ${!acc ? `<div class="tv-empty">Log in to your broker to see your live chart</div>` : ''}
       </div>
+      <button class="tv-sltp-btn${state.draftSLTP ? ' on' : ''}" data-action="draft-sltp" title="Set stop loss / take profit for your next trade">SL/TP</button>
       <button class="chart-fs-btn" data-action="chart-fullscreen" title="Full screen">⤢</button>
     </div>
     <div class="tabs-row">
@@ -5539,7 +5716,7 @@ function tradingScreen(){
       </div>
       <div class="acct-foot">${acc ? status : `<button class="btn-wide btn-primary acct-add-btn" data-action="add-account-open">Add account</button>`}</div>
       ${state.brokerPanelOpen ? brokerPanelHTML() : ''}
-      <button class="mt5-corner-btn left" data-action="mt5-open">Open ${acc ? escText(platformAppName(acc)) : 'MT5'}</button>
+      <button class="mt5-corner-btn left" data-action="mt5-open">Open ${acc ? escText(acc.broker || platformAppName(acc)) : 'broker'}</button>
       <button class="mt5-corner-btn right" data-action="mt5-switch">Accounts ⌄</button>
     </div>
     ${list.length > 1 ? `<div class="acct-dots">${list.map((a, i)=>`<span class="${i===idx?'on':''}"></span>`).join('')}</div>` : ''}
@@ -5597,6 +5774,7 @@ function tradingScreen(){
     ${state.chartFullscreen ? chartFullscreenTemplate() : ''}
     ${state.addAccountOpen ? addAccountTemplate() : ''}
     ${state.symbolPickerOpen ? symbolPickerTemplate() : ''}
+    ${state.pendingAccounts ? saveAccountTemplate() : ''}
   `;
 }
 
@@ -5640,7 +5818,7 @@ function launchPopupTemplate(){
   const isApp = state.launchPopup === 'mt5';
   const acc = activeTradeAccount();
   const tl = acc && acc.platform === 'tradelocker';
-  const title = isApp ? 'Open ' + (acc ? platformAppName(acc) : 'MT5') : 'Open TradingView';
+  const title = isApp ? 'Open ' + (acc ? (acc.broker || platformAppName(acc)) : 'your broker') : 'Open TradingView';
   const sub = isApp ? (acc ? `Currently active: ${escText(acc.name)}${acc.server ? ' · ' + escText(acc.server) : ''}` : 'Opens the app on your phone.') : 'View this chart in the full TradingView app.';
   return `
     <div class="modal-overlay" data-action="launch-popup-bg">
@@ -5663,7 +5841,7 @@ function accountSwitcherTemplate(){
     <div class="modal-overlay" data-action="account-switcher-bg">
       <div class="modal-sheet" onclick="event.stopPropagation()">
         <div class="modal-head">
-          <span class="modal-title">Accounts</span>
+          <span class="modal-title">Saved accounts</span>
           <button class="modal-close" data-action="account-switcher-close">×</button>
         </div>
         ${list.length ? list.map(a=>{ const l = state.live[a.id] || {}; return `
@@ -5691,10 +5869,11 @@ function chartFullscreenTemplate(){
       </div>
       <div class="chart-fs-main">
         <div class="chart-fs-body">
-          ${(()=>{ const bs = (state.focusBars || []).slice(-20); if(!bs.length) return '<div class="row-sub" style="margin:auto;">No chart yet</div>'; const lo = Math.min(...bs.map(b=>b.l)), hi = Math.max(...bs.map(b=>b.h)); return bs.map(b=>`<div style="width:10px;height:${Math.max(6, Math.round(((b.c - lo) / ((hi - lo) || 1)) * 90) + 8)}%;background:${b.c >= b.o ? 'var(--green)' : 'var(--red)'};border-radius:3px;"></div>`).join(''); })()}
+          <div class="tv-slot tv-slot-fs"></div>
         </div>
         <div class="chart-fs-controls">
           <button class="order-corner-btn" data-action="order-panel" title="Order options">⋯</button>
+          <button class="tv-sltp-btn tv-sltp-fs${state.draftSLTP ? ' on' : ''}" data-action="draft-sltp">SL/TP</button>
           <div class="btn-row chart-fs-btnrow">
             <button class="btn btn-buy" data-action="trade-buy">Buy</button>
             <div class="lot-setter compact">
@@ -10018,6 +10197,7 @@ function renderDevice(){
     }
   }
   if(state.noteSaveAsOpen){ const row = document.querySelector('.note-saveas-row'); if(row) row.scrollIntoView({block:'nearest'}); }
+  if(state.current === 'trading') tvMount();
   positionStation3();
   attachPayScroll();
   refreshNeighbors();
@@ -11458,11 +11638,14 @@ function attachHandlers(){
         case 'order-panel-close':
         case 'order-panel-bg': state.orderPanelOpen = false; break;
         case 'order-place': performOrderPlace(); break;
-        case 'trade-buy': tradeDo('Bought ' + state.lotSize.toFixed(2) + ' ' + state.focusSymbol, acc=>TRADE.order(acc, { side:'buy', type:'market', qty: state.lotSize })); break;
-        case 'trade-sell': tradeDo('Sold ' + state.lotSize.toFixed(2) + ' ' + state.focusSymbol, acc=>TRADE.order(acc, { side:'sell', type:'market', qty: state.lotSize })); break;
+        case 'trade-buy': { const d = draftFor('buy'); state.draftSLTP = null; tradeDo('Bought ' + state.lotSize.toFixed(2) + ' ' + state.focusSymbol, acc=>TRADE.order(acc, Object.assign({ side:'buy', type:'market', qty: state.lotSize }, d))); break; }
+        case 'trade-sell': { const d = draftFor('sell'); state.draftSLTP = null; tradeDo('Sold ' + state.lotSize.toFixed(2) + ' ' + state.focusSymbol, acc=>TRADE.order(acc, Object.assign({ side:'sell', type:'market', qty: state.lotSize }, d))); break; }
+        case 'draft-sltp': toggleDraftSLTP(); return;
         // Add account: first the list of every platform and broker (in the card's place), then that one's details.
         case 'add-account-open': state.accountSwitcherOpen = false; state.brokerPanelOpen = true; state.brokerQuery = ''; state.addAccount.msg = ''; break;
         case 'broker-panel-close': state.brokerPanelOpen = false; break;
+        case 'save-acct-save': savePendingAccounts(); return;
+        case 'save-acct-cancel': cancelPendingAccounts(); return;
         // Tap the words "MT5 ACCOUNT" -> the brokers you can use pop up in the card's place (owner).
         case 'broker-panel-open': state.brokerPanelOpen = !state.brokerPanelOpen; state.brokerQuery = ''; break;
         case 'add-account-close': case 'add-account-bg': if(!state.addAccount.busy){ state.addAccountOpen = false; state.addAccount.vals = {}; } break;
@@ -11495,9 +11678,9 @@ function attachHandlers(){
           const kind = state.launchPopup; state.launchPopup = null;
           if(kind === 'mt5'){
             const acc = activeTradeAccount();
-            const name = acc ? platformAppName(acc) : 'MT5';
-            // The real app on this phone, found by its name among your installed apps.
-            const want = acc ? [platformAppName(acc), (PLATFORMS[acc.platform] || {}).label].concat(acc.platform === 'mt5' ? ['MetaTrader 5'] : acc.platform === 'mt4' ? ['MetaTrader 4'] : []) : ['MetaTrader 5'];
+            const name = acc ? (acc.broker || platformAppName(acc)) : 'MT5';
+            // Your broker's own app first, then the platform's app (e.g. MetaTrader 5) - found among your installed apps.
+            const want = acc ? [acc.broker, platformAppName(acc), (PLATFORMS[acc.platform] || {}).label].concat(acc.platform === 'mt5' ? ['MetaTrader 5'] : acc.platform === 'mt4' ? ['MetaTrader 4'] : []).filter(Boolean) : ['MetaTrader 5'];
             let apps = []; try{ apps = JSON.parse((NATIVE && window.StoryNative.getApps && window.StoryNative.getApps()) || '[]'); }catch(err){}
             const hit = apps.find(a=>want.some(w=>w && String(a.label || '').toLowerCase().includes(String(w).toLowerCase())));
             const ok = hit && window.StoryNative.openPackage && window.StoryNative.openPackage(hit.pkg);
@@ -11508,7 +11691,7 @@ function attachHandlers(){
           }
           break;
         }
-        case 'mt5-open': state.launchPopup = 'mt5'; break;
+        case 'mt5-open': if(!activeTradeAccount()){ showToast('Log in to your broker first'); break; } state.launchPopup = 'mt5'; break;
         case 'mt5-switch': state.accountSwitcherOpen = true; break;
         case 'account-switcher-close':
         case 'account-switcher-bg': state.accountSwitcherOpen = false; break;

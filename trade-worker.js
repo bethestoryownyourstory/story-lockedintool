@@ -9,6 +9,7 @@
 //   GET  /mt5/<id>/symbols                                    -> {symbols:[...]}
 //   POST /mt5/<id>/order         {side, type, qty, price?, sl?, tp?, symbol?}
 //   POST /mt5/<id>/close         {id}
+//   POST /mt5/<id>/modify        {id, sl?, tp?}      (move a position's stop loss / take profit)
 //   DELETE /mt5/<id>                                          (removes it from MetaApi)
 // Every /mt5/<id>/... call needs the header X-Story-Key: <key>.
 
@@ -71,7 +72,7 @@ export default {
       if (action === 'live') {
         const [info, pos] = await Promise.all([meta(env, base + '/account-information'), meta(env, base + '/positions')]);
         const positions = (pos || []).map(p => ({ id: String(p.id), type: /SELL/.test(p.type) ? 'sell' : 'buy', qty: p.volume, symbol: p.symbol,
-          label: (/SELL/.test(p.type) ? 'SELL ' : 'BUY ') + p.volume + ' ' + p.symbol, entry: p.openPrice, current: p.currentPrice,
+          label: (/SELL/.test(p.type) ? 'SELL ' : 'BUY ') + p.volume + ' ' + p.symbol, entry: p.openPrice, current: p.currentPrice, sl: p.stopLoss || null, tp: p.takeProfit || null,
           pl: Math.round(((p.profit || 0) + (p.swap || 0) + (p.commission || 0)) * 100) / 100, profit: ((p.profit || 0) + (p.swap || 0) + (p.commission || 0)) >= 0 }));
         return json({ status: 'ok', balance: info.balance, equity: info.equity, margin: info.margin, freeMargin: info.freeMargin, leverage: info.leverage,
           pl: Math.round(((info.equity || 0) - (info.balance || 0)) * 100) / 100, positions });
@@ -81,8 +82,8 @@ export default {
         const q = await meta(env, base + '/symbols/' + encodeURIComponent(sym) + '/current-price');
         let bars = [];
         try {
-          const c = await meta(env, market(region) + '/users/current/accounts/' + id + '/historical-market-data/symbols/' + encodeURIComponent(sym) + '/timeframes/' + (TF[url.searchParams.get('res')] || '1h') + '/candles?limit=40');
-          bars = (c || []).map(x => ({ o: x.open, h: x.high, l: x.low, c: x.close }));
+          const c = await meta(env, market(region) + '/users/current/accounts/' + id + '/historical-market-data/symbols/' + encodeURIComponent(sym) + '/timeframes/' + (TF[url.searchParams.get('res')] || '1h') + '/candles?limit=150');
+          bars = (c || []).map(x => ({ t: Math.floor(Date.parse(x.time) / 1000), o: x.open, h: x.high, l: x.low, c: x.close }));
         } catch (e) {}
         const first = bars.length ? bars[0].o : null;
         return json({ quote: { bid: q.bid, ask: q.ask, change: first ? ((q.bid - first) / first) * 100 : null }, bars, name: sym });
@@ -98,6 +99,15 @@ export default {
         const r = await meta(env, base + '/trade', { method: 'POST', body: JSON.stringify(body) });
         if (r && r.numericCode && ![10008, 10009, 10010].includes(r.numericCode)) return json({ error: r.message || r.stringCode || 'The broker refused the order' }, 400);
         return json({ ok: true, orderId: r && r.orderId });
+      }
+      if (action === 'modify' && req.method === 'POST') {
+        const b = await req.json();
+        const body = { actionType: 'POSITION_MODIFY', positionId: String(b.id) };
+        if (b.sl != null) body.stopLoss = Number(b.sl);
+        if (b.tp != null) body.takeProfit = Number(b.tp);
+        const r = await meta(env, base + '/trade', { method: 'POST', body: JSON.stringify(body) });
+        if (r && r.numericCode && ![10008, 10009, 10010].includes(r.numericCode)) return json({ error: r.message || 'The broker refused the change' }, 400);
+        return json({ ok: true });
       }
       if (action === 'close' && req.method === 'POST') {
         const b = await req.json();
