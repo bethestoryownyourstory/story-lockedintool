@@ -36,7 +36,39 @@ class NoteMediaActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        showBackdrop()
         if (savedInstanceState != null) { cameraFile = savedInstanceState.getString("cam")?.let { File(it) }; return }
+        // Your note stays behind the phone's screen (owner: never your apps): its picture is shown first, and only once
+        // it is on screen do the Pages step aside and the phone's own screen open over it.
+        val root = window.decorView
+        if (backdrop == null) { OverlayService.instance?.noteStepAside(); launch(); return }
+        root.viewTreeObserver.addOnDrawListener(object : android.view.ViewTreeObserver.OnDrawListener {
+            var fired = false
+            override fun onDraw() {
+                if (fired) return
+                fired = true
+                root.post {
+                    root.viewTreeObserver.removeOnDrawListener(this)
+                    root.postDelayed({ OverlayService.instance?.noteStepAside(); launch() }, 16)
+                }
+            }
+        })
+    }
+
+    /** The picture of the Pages taken just before this opened, exactly where the Pages were (black around it). */
+    private fun showBackdrop() {
+        val frame = android.widget.FrameLayout(this).apply { setBackgroundColor(android.graphics.Color.BLACK) }
+        backdrop?.let { bmp ->
+            val iv = android.widget.ImageView(this).apply { setImageBitmap(bmp); scaleType = android.widget.ImageView.ScaleType.FIT_XY }
+            frame.addView(iv, android.widget.FrameLayout.LayoutParams(bmp.width, bmp.height).apply { leftMargin = backdropX; topMargin = backdropY })
+        }
+        if (backdrop == null) frame.setBackgroundColor(android.graphics.Color.TRANSPARENT)
+        setContentView(frame)
+        // Drawn over the whole screen in screen coordinates, so the picture lines up with where the Pages were.
+        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS)
+    }
+
+    private fun launch() {
         when (kind) {
             "picture" -> {
                 val pick = if (Build.VERSION.SDK_INT >= 33) Intent(MediaStore.ACTION_PICK_IMAGES)
@@ -215,8 +247,8 @@ class NoteMediaActivity : Activity() {
 
     private fun done(status: String, data: JSONObject?) {
         if (!reported) { reported = true; OverlayService.instance?.noteMediaDone(kind, status, data?.toString() ?: "{}") }
-        finish()
-        overridePendingTransition(0, 0)
+        // The Pages come back first, then this (with your note's picture) goes - so your apps never flash in between.
+        window.decorView.postDelayed({ finish(); overridePendingTransition(0, 0); backdrop = null }, if (status == "shared") 0L else 120L)
     }
 
     override fun onDestroy() {
@@ -226,6 +258,10 @@ class NoteMediaActivity : Activity() {
     }
 
     companion object {
+        /** The Pages as they looked when you tapped (set by OverlayService just before this opens). */
+        @Volatile var backdrop: Bitmap? = null
+        var backdropX = 0
+        var backdropY = 0
         const val EXTRA_KIND = "kind"
         const val EXTRA_TITLE = "title"
         const val EXTRA_TEXT = "text"

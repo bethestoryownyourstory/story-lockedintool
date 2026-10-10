@@ -1263,7 +1263,8 @@ class OverlayService : Service(), StoryBridge.Host {
     override fun noteMedia(kind: String, title: String, text: String) {
         if (kind == "print") runCatching { java.io.File(cacheDir, "note_print.html").writeText(text) }
         ui.post {
-            if (!stepAsideForSystem()) return@post
+            if (pickerHid.isNotEmpty()) return@post
+            snapNoteBackdrop()
             val i = Intent(this, NoteMediaActivity::class.java).putExtra(NoteMediaActivity.EXTRA_KIND, kind).putExtra(NoteMediaActivity.EXTRA_TITLE, title)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
             if (kind == "savetext") i.putExtra(NoteMediaActivity.EXTRA_TEXT, text)
@@ -1271,13 +1272,30 @@ class OverlayService : Service(), StoryBridge.Host {
         }
     }
     override fun shareContent(title: String, text: String, files: ArrayList<String>) { ui.post {
-        if (!stepAsideForSystem()) return@post
+        if (pickerHid.isNotEmpty()) return@post
+        snapNoteBackdrop()
         val i = Intent(this, NoteMediaActivity::class.java).putExtra(NoteMediaActivity.EXTRA_KIND, "share")
             .putExtra(NoteMediaActivity.EXTRA_TITLE, title).putExtra(NoteMediaActivity.EXTRA_TEXT, text)
             .putStringArrayListExtra(NoteMediaActivity.EXTRA_FILES, files)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
         runCatching { startActivity(i) }.onFailure { noteMediaDone("share", "error", "{}") }
     } }
+    /** A picture of the Pages exactly as they are now, shown behind the phone's own screen (so you see your note, not apps). */
+    private fun snapNoteBackdrop() {
+        NoteMediaActivity.backdrop = null
+        val p = pagesPane?.takeIf { it.shown } ?: return
+        val v = p.frame
+        if (v.width <= 0 || v.height <= 0) return
+        runCatching {
+            val bmp = android.graphics.Bitmap.createBitmap(v.width, v.height, android.graphics.Bitmap.Config.ARGB_8888)
+            android.graphics.Canvas(bmp).apply { drawColor(android.graphics.Color.BLACK); v.draw(this) }
+            val loc = IntArray(2); v.getLocationOnScreen(loc)
+            NoteMediaActivity.backdropX = loc[0]; NoteMediaActivity.backdropY = loc[1]
+            NoteMediaActivity.backdrop = bmp
+        }
+    }
+    /** NoteMediaActivity: your note's picture is on screen, the Pages can step aside now. */
+    fun noteStepAside() { if (pickerHid.isEmpty()) stepAsideForSystem() }
     fun noteMediaDone(kind: String, status: String, json: String) { ui.post {
         // Shared to an app: you're in that app now, so the Pages stay away (your note is kept as it is for next time).
         if (kind == "share" && status == "shared") { pickerHid = listOf(); updateBubble(); return@post }
