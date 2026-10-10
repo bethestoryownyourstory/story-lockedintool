@@ -1222,6 +1222,14 @@
   .realcard-isphoto{ padding:0; }
   .realcard-photo{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; border-radius:inherit; }
   .realcard-brand{ display:flex; align-items:center; gap:8px; }
+  .card-opts{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:4px 0 6px; }
+  .card-opt{ display:flex; flex-direction:column; align-items:center; text-align:center; gap:8px; padding:20px 12px; border:1px solid var(--line); border-radius:16px; background:var(--card); color:var(--text); }
+  .card-opt-t{ font-size:15px; font-weight:700; }
+  .card-opt-s{ font-size:11px; color:var(--muted); line-height:1.35; }
+  .card-back-btn{ background:none; border:0; color:var(--text); font-size:22px; line-height:1; padding:0 8px 0 0; vertical-align:-1px; }
+  .card-scan-previews{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:6px; }
+  .card-scan-previews img{ width:100%; aspect-ratio:1.586/1; object-fit:cover; border-radius:10px; display:block; background:#000000; }
+  .card-cam-skip{ position:absolute; left:50%; bottom:calc(8% + 84px); transform:translateX(-50%); padding:10px 18px; border-radius:20px; border:1px solid rgba(255,255,255,0.5); background:rgba(0,0,0,0.4); color:#ffffff; font-size:13px; font-weight:600; }
   .card-photo-preview{ margin-top:10px; border-radius:12px; overflow:hidden; aspect-ratio:1.586/1; background:#000000; }
   .card-photo-preview img{ width:100%; height:100%; object-fit:cover; display:block; }
   #card-cam{ position:fixed; inset:0; z-index:2147483000; background:#000000; overflow:hidden; }
@@ -6078,7 +6086,7 @@ function saveWalletCards(l){ try{ localStorage.setItem(CARDS_KEY, JSON.stringify
 function activeCard(){ const l = walletCards(); return state.walletCardIndex > 0 ? (l[state.walletCardIndex - 1] || null) : null; }
 function setWalletCardIndex(i){ state.walletCardIndex = i; const c = activeCard(); try{ localStorage.setItem('story-card-active', c ? c.id : ''); }catch(e){} }
 function cardFaceHTML(c){
-  if(c.photo) return `<img class="realcard-photo" src="${escText(c.photo)}" alt="">`;
+  if(c.photo) return `<img class="realcard-photo" src="${escText(state.cardFlip === c.id && c.photoBack ? c.photoBack : c.photo)}" alt="">`;
   return `
           <div class="realcard-top">
             <span class="realcard-brand">${escText(c.bank || '')}</span>
@@ -6129,7 +6137,7 @@ async function cardBankLookup(pan){
     const r = await Promise.race([httpReq('GET', 'https://lookup.binlist.net/' + bin, { 'Accept-Version':'3' }), new Promise(res=>setTimeout(()=>res({ code:0 }), 8000))]);
     const j = r.code === 200 ? parseJ(r.body) : null;
     const name = j && j.bank && j.bank.name ? String(j.bank.name) : '';
-    return name.replace(/\b(LIMITED|LTD|PLC|N\.?A\.?|INC)\b\.?/gi, '').replace(/\s+/g, ' ').trim().replace(/\w\S*/g, w=>w.length <= 3 ? w.toUpperCase() : w[0].toUpperCase() + w.slice(1).toLowerCase());
+    return name.replace(/\b(LIMITED|LTD|PLC|N\.?A\.?|INC)\b\.?/gi, '').replace(/\s+/g, ' ').trim().replace(/\w\S*/g, w=>/^(of|the|and|de|du|la)$/i.test(w) ? w.toLowerCase() : w.length <= 3 ? w.toUpperCase() : w[0].toUpperCase() + w.slice(1).toLowerCase());
   }catch(e){ return ''; }
 }
 function cardFormVals(){
@@ -6138,19 +6146,31 @@ function cardFormVals(){
 }
 function addCardTemplate(){
   const f = state.addCard || {};
-  return `
+  // First: the two ways, as two clear options (owner).
+  if(!f.mode) return `
     <div class="modal-overlay" data-action="add-card-close">
       <div class="modal-sheet" onclick="event.stopPropagation()">
         <div class="modal-head"><span class="modal-title">Add card</span><button class="modal-close" data-action="add-card-close">×</button></div>
-        <button class="btn-wide" style="margin-top:2px;" data-action="card-photo">${f.photo ? 'Retake the picture' : 'Take a picture of your card'}</button>
-        ${f.photo ? `<div class="card-photo-preview" data-keep-color><img src="${escText(f.photo)}" alt=""></div>` : ''}
+        <div class="card-opts">
+          <button class="card-opt" data-action="card-scan"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8V6a2 2 0 0 1 2-2h2M17 4h2a2 2 0 0 1 2 2v2M21 16v2a2 2 0 0 1-2 2h-2M7 20H5a2 2 0 0 1-2-2v-2"/><rect x="6.5" y="8" width="11" height="8" rx="1.5"/><path d="M6.5 11h11"/></svg><span class="card-opt-t">Scan card</span><span class="card-opt-s">STORY reads your card with the camera - front and back</span></button>
+          <button class="card-opt" data-action="card-manual"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg><span class="card-opt-t">Add manually</span><span class="card-opt-s">Type your card details yourself</span></button>
+        </div>
+      </div>
+    </div>`;
+  const scan = f.mode === 'scan';
+  return `
+    <div class="modal-overlay" data-action="add-card-close">
+      <div class="modal-sheet" onclick="event.stopPropagation()">
+        <div class="modal-head"><span class="modal-title"><button class="card-back-btn" data-action="card-mode-back" aria-label="Back">‹</button>${scan ? 'Check your details' : 'Add manually'}</span><button class="modal-close" data-action="add-card-close">×</button></div>
+        ${scan ? `<div class="card-scan-previews" data-keep-color>${f.photo ? `<img src="${escText(f.photo)}" alt="Front">` : ''}${f.photoBack ? `<img src="${escText(f.photoBack)}" alt="Back">` : ''}</div>
+        <button class="btn-wide" style="margin-top:10px;" data-action="card-scan">Scan again</button>` : ''}
         <div class="grid2" style="grid-template-columns:1fr 1fr;gap:8px;">
           <div style="grid-column:1 / -1;"><div class="section-title" style="margin-top:12px;">CARD NUMBER</div><input class="field-input" id="card-pan" type="text" inputmode="numeric" maxlength="23" autocomplete="off" placeholder="The full number on your card" value="${escText(f.pan || '')}"></div>
           <div><div class="section-title" style="margin-top:12px;">EXPIRES</div><input class="field-input" id="card-exp" type="text" inputmode="numeric" maxlength="5" autocomplete="off" placeholder="MM/YY" value="${escText(f.exp || '')}"></div>
           <div><div class="section-title" style="margin-top:12px;">CVV</div><input class="field-input" id="card-cvv" type="password" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="123" value="${escText(f.cvv || '')}"></div>
         </div>
         <div class="acct-msg">${escText(f.msg || '')}</div>
-        <div class="note" style="margin-top:6px;">Only the last 4 digits are kept, on this phone - never the full number or the CVV (a picture has the number covered). Paying uses your phone's own tap to pay.</div>
+        <div class="note" style="margin-top:6px;">Only the last 4 digits are kept, on this phone - never the full number or the CVV${scan ? ' (they’re covered on the pictures)' : ''}. Paying uses your phone's own tap to pay.</div>
         <button class="btn-wide btn-primary" style="margin-top:12px;" data-action="add-card-save"${f.busy ? ' disabled' : ''}>${f.busy ? 'Checking…' : 'Add card'}</button>
       </div>
     </div>`;
@@ -6169,25 +6189,29 @@ function cardSheetTemplate(){
       </div>
     </div>`;
 }
-// ---- Take a picture of your card: STORY's own camera, a card-shaped frame, then read + cover the number ----
+// ---- Scan card: STORY's own camera reads the FRONT, then the BACK (if the card has details there), then shows your
+// card exactly as it is - with the long number (and the CVV on the back) covered before any picture is kept ----
 let cardAccessWaiting = false;
-function openCardCamera(){
+let cardScanSides = {};   // side -> { canvas, r } - only in memory until both sides are read and covered
+function openCardCamera(side){
+  side = side || 'front';
   closeCardCamera();
-  const wrap = document.createElement('div'); wrap.id = 'card-cam'; wrap.setAttribute('data-keep-color', '');
+  const wrap = document.createElement('div'); wrap.id = 'card-cam'; wrap.setAttribute('data-keep-color', ''); wrap.dataset.side = side;
   document.body.appendChild(wrap);
   if(NATIVE && window.StoryNative.noteCameraAccess && !window.StoryNative.noteCameraAccess()){
-    wrap.innerHTML = '<div class="card-cam-ask"><div>Let STORY use the camera to take a picture of your card.</div><button class="note-panel-btn">Allow</button><button class="card-cam-x" aria-label="Close">×</button></div>';
+    wrap.innerHTML = '<div class="card-cam-ask"><div>Let STORY use the camera to read your card.</div><button class="note-panel-btn">Allow</button><button class="card-cam-x" aria-label="Close">×</button></div>';
     wrap.querySelector('.note-panel-btn').addEventListener('click', ()=>{ cardAccessWaiting = true; window.StoryNative.noteAsk('camera'); });
-    wrap.querySelector('.card-cam-x').addEventListener('click', closeCardCamera);
+    wrap.querySelector('.card-cam-x').addEventListener('click', ()=>{ closeCardCamera(); cardScanBack(); });
     return;
   }
-  wrap.innerHTML = '<video autoplay playsinline muted></video><div class="card-cam-frame"></div><div class="card-cam-hint">Fit the front of your card in the frame</div><div class="card-cam-msg" hidden></div><button class="card-cam-x" aria-label="Close">×</button><button class="card-cam-shutter" aria-label="Take picture"></button>';
+  wrap.innerHTML = '<video autoplay playsinline muted></video><div class="card-cam-frame"></div><div class="card-cam-hint">' + (side === 'back' ? 'Now the BACK of your card' : 'Fit the FRONT of your card in the frame') + '</div><div class="card-cam-msg" hidden></div><button class="card-cam-x" aria-label="Close">×</button><button class="card-cam-shutter" aria-label="Scan"></button>' + (side === 'back' ? '<button class="card-cam-skip">Nothing on the back</button>' : '');
   const video = wrap.querySelector('video'), frame = wrap.querySelector('.card-cam-frame'), msg = wrap.querySelector('.card-cam-msg');
   navigator.mediaDevices && navigator.mediaDevices.getUserMedia ? navigator.mediaDevices.getUserMedia({ video:{ facingMode:{ ideal:'environment' }, width:{ ideal:1920 }, height:{ ideal:1440 } }, audio:false })
     .then(s=>{ if(!document.getElementById('card-cam')){ s.getTracks().forEach(t=>t.stop()); return; } wrap._stream = s; video.srcObject = s; })
     .catch(e=>{ msg.hidden = false; msg.textContent = 'Camera problem: ' + (e && (e.message || e.name) || 'it didn’t open'); })
     : (msg.hidden = false, msg.textContent = 'The camera isn’t available here');
-  wrap.querySelector('.card-cam-x').addEventListener('click', closeCardCamera);
+  wrap.querySelector('.card-cam-x').addEventListener('click', ()=>{ closeCardCamera(); if(side === 'back') cardScanFinish(); else cardScanBack(); });
+  const skip = wrap.querySelector('.card-cam-skip'); if(skip) skip.addEventListener('click', ()=>{ closeCardCamera(); cardScanFinish(); });
   wrap.querySelector('.card-cam-shutter').addEventListener('click', ()=>{
     if(!video.videoWidth) return;
     // The part of the camera picture inside the frame (the video fills the screen like object-fit: cover).
@@ -6198,30 +6222,35 @@ function openCardCamera(){
     const c = document.createElement('canvas'); c.width = 1012; c.height = 638;
     c.getContext('2d').drawImage(video, sx, sy, sw, sh, 0, 0, c.width, c.height);
     closeCardCamera();
-    cardPhotoRead(c);
+    cardPhotoRead(c, side);
   });
 }
 function closeCardCamera(){ const w = document.getElementById('card-cam'); if(w){ if(w._stream) w._stream.getTracks().forEach(t=>t.stop()); w.remove(); } }
+// Closed the camera before scanning anything: back to the two options.
+function cardScanBack(){ if(!cardScanSides.front){ state.addCard = Object.assign(state.addCard || {}, { mode:null }); state.addCardOpen = true; renderDevice(); } else cardScanFinish(); }
 const cardScanWait = {};
 window.storyCardScan = function(id, json){ const w = cardScanWait[id]; if(w){ delete cardScanWait[id]; w(json); } };
-function cardPhotoRead(canvas){
-  const raw = canvas.toDataURL('image/jpeg', 0.92);
+// Reads one side on the phone (CardScan.kt), keeps it in memory, then asks for the back / finishes.
+function cardPhotoRead(canvas, side){
   showToast('Reading your card…');
-  const finish = json=>{
+  const done = json=>{
     let r = {}; try{ r = JSON.parse(json || '{}') || {}; }catch(e){}
-    const lines = r.lines || [];
+    cardScanSides[side] = { canvas, r };
+    if(side === 'front') openCardCamera('back'); else cardScanFinish();
+  };
+  if(NATIVE && window.StoryNative.cardScan){ const id = 'c' + Date.now(); cardScanWait[id] = done; window.StoryNative.cardScan(id, canvas.toDataURL('image/jpeg', 0.92)); setTimeout(()=>{ if(cardScanWait[id]){ delete cardScanWait[id]; done('{}'); } }, 15000); }
+  else done('{}');
+}
+// Both sides read: fill the details, cover the long number (and the CVV) on each picture, then keep the covered pictures.
+function cardScanFinish(){
+  const sides = cardScanSides; cardScanSides = {};
+  const f = state.addCard = Object.assign(state.addCard || {}, { mode:'scan', photo:'', photoBack:'' });
+  let panRead = '', expRead = '', cvvRead = '', panFound = false;
+  const out = {};
+  ['front', 'back'].forEach(side=>{
+    const s = sides[side]; if(!s) return;
+    const canvas = s.canvas, r = s.r, lines = r.lines || [];
     const sx = canvas.width / (r.w || canvas.width), sy = canvas.height / (r.h || canvas.height);
-    const all = lines.map(l=>l.text).join('\n');
-    // The long card number: the line with 12+ digits. Cover every part of it except the last 4.
-    const pan = lines.find(l=>(l.text.match(/\d/g) || []).length >= 12);
-    const covers = [];
-    let last4 = '';
-    if(pan){
-      const digits = (pan.text.match(/\d/g) || []).join(''); last4 = digits.slice(-4);
-      const els = (pan.els || []).filter(e=>/\d/.test(e.text));
-      els.forEach((e, k)=>{ if(k < els.length - 1 || e.text.replace(/\D/g, '').length > 4) covers.push(e.box); });
-      if(!covers.length) covers.push(pan.box);
-    }
     const x = canvas.getContext('2d');
     const cover = b=>{
       const [l, t, rr, bb] = b; const px = l * sx - 8, py = t * sy - 8, pw = (rr - l) * sx + 16, ph = (bb - t) * sy + 16;
@@ -6230,26 +6259,42 @@ function cardPhotoRead(canvas){
       x.fillStyle = 'rgb(' + (R / n | 0) + ',' + (G / n | 0) + ',' + (B / n | 0) + ')';
       x.beginPath(); x.roundRect ? x.roundRect(px, py, pw, ph, 8) : x.rect(px, py, pw, ph); x.fill();
     };
-    if(covers.length) covers.forEach(cover);
-    else { // couldn't find the number: cover the band where card numbers sit (the middle of the card)
-      x.save(); x.filter = 'blur(18px)'; x.drawImage(canvas, 0, canvas.height * 0.46, canvas.width, canvas.height * 0.22, 0, canvas.height * 0.46, canvas.width, canvas.height * 0.22); x.restore();
-      const g = x.getImageData(0, canvas.height * 0.5 | 0, 1, 1).data; x.fillStyle = 'rgba(' + g[0] + ',' + g[1] + ',' + g[2] + ',0.92)'; x.fillRect(canvas.width * 0.05, canvas.height * 0.47, canvas.width * 0.9, canvas.height * 0.2);
+    // The long card number: the line with 12+ digits - covered except the last 4.
+    const pan = lines.find(l=>(l.text.match(/\d/g) || []).length >= 12);
+    if(pan){
+      panFound = true;
+      if(!panRead) panRead = (pan.text.match(/\d/g) || []).join('');
+      const els = (pan.els || []).filter(e=>/\d/.test(e.text));
+      const cov = els.filter((e, k)=>k < els.length - 1 || e.text.replace(/\D/g, '').length > 4).map(e=>e.box);
+      (cov.length ? cov : [pan.box]).forEach(cover);
     }
-    const exp = (all.match(/\b(0[1-9]|1[0-2])\s?\/\s?(\d{2})\b/) || []);
-    const first = pan ? (pan.text.match(/\d/) || [''])[0] : '';
-    const net = /american\s*express|amex/i.test(all) ? 'Amex' : /master\s*card/i.test(all) ? 'Mastercard' : /visa/i.test(all) ? 'Visa' : first === '4' ? 'Visa' : (first === '5' || first === '2') ? 'Mastercard' : first === '3' ? 'Amex' : (state.addCard || {}).net;
-    const safe = canvas.toDataURL('image/jpeg', 0.9);
-    const photo = NATIVE && window.StoryNative.noteSavePhoto ? (n=>n ? NOTE_FILE_BASE + encodeURIComponent(n) : null)(window.StoryNative.noteSavePhoto(safe)) : safe;
-    const read = pan ? (pan.text.match(/\d/g) || []).join('') : '';
-    const f = state.addCard = Object.assign(state.addCard || {}, { photo, msg: cardNumberCheck(read) ? '' : 'Couldn’t read the card number - type it in' });
-    if(cardNumberCheck(read)) f.pan = read.replace(/(\d{4})(?=\d)/g, '$1 ');
-    if(exp[0]) f.exp = exp[1] + '/' + exp[2];
-    if(net) f.net = net;
-    state.addCardOpen = true;
-    renderDevice();
-  };
-  if(NATIVE && window.StoryNative.cardScan){ const id = 'c' + Date.now(); cardScanWait[id] = finish; window.StoryNative.cardScan(id, raw); setTimeout(()=>{ if(cardScanWait[id]){ delete cardScanWait[id]; finish('{}'); } }, 15000); }
-  else finish('{}');
+    const all = lines.map(l=>l.text).join('\n');
+    const exp = all.match(/\b(0[1-9]|1[0-2])\s?\/\s?(\d{2})\b/);
+    if(exp && !expRead) expRead = exp[1] + '/' + exp[2];
+    // The CVV: on the back, a lone 3-4 digit group (not the number, not a date) - read, then covered.
+    if(side === 'back'){
+      const cands = [];
+      lines.forEach(l=>{ if(l === pan || /\//.test(l.text)) return; (l.els || []).forEach(e=>{ if(/^\d{3,4}$/.test(e.text.trim())) cands.push(e); }); });
+      const c = cands[cands.length - 1];
+      if(c){ cvvRead = c.text.trim(); cover(c.box); }
+    }
+    out[side] = canvas;
+  });
+  // Couldn't find the number on either side: cover the band where card numbers sit on the front, to be safe.
+  if(!panFound && out.front){
+    const canvas = out.front, x = canvas.getContext('2d');
+    x.save(); x.filter = 'blur(18px)'; x.drawImage(canvas, 0, canvas.height * 0.46, canvas.width, canvas.height * 0.22, 0, canvas.height * 0.46, canvas.width, canvas.height * 0.22); x.restore();
+    const g = x.getImageData(0, canvas.height * 0.5 | 0, 1, 1).data; x.fillStyle = 'rgba(' + g[0] + ',' + g[1] + ',' + g[2] + ',0.92)'; x.fillRect(canvas.width * 0.05, canvas.height * 0.47, canvas.width * 0.9, canvas.height * 0.2);
+  }
+  const keep = canvas=>{ const safe = canvas.toDataURL('image/jpeg', 0.9); return NATIVE && window.StoryNative.noteSavePhoto ? (n=>n ? NOTE_FILE_BASE + encodeURIComponent(n) : '')(window.StoryNative.noteSavePhoto(safe)) : safe; };
+  if(out.front) f.photo = keep(out.front);
+  if(out.back) f.photoBack = keep(out.back);
+  if(cardNumberCheck(panRead)) f.pan = panRead.replace(/(\d{4})(?=\d)/g, '$1 ');
+  if(expRead) f.exp = expRead;
+  if(cvvRead) f.cvv = cvvRead;
+  f.msg = !cardNumberCheck(panRead) ? 'Couldn’t read the card number - type it in' : !cvvRead ? 'Type the CVV from the back of your card' : '';
+  state.addCardOpen = true;
+  renderDevice();
 }
 // Money follows the card showing in Wallet: that card's payments (by its last 4, or from its bank's app).
 // A payment belongs to the card when it names the card's last 4, or (when it names no card) it came from the card's bank.
@@ -8470,7 +8515,7 @@ let noteAccessWaiting = null;
 window.storyNoteAccessDone = function(kind){
   const w = noteAccessWaiting; noteAccessWaiting = null;
   if(w && w.kind === kind && document.getElementById('note-panel')) w.then();
-  if(cardAccessWaiting && kind === 'camera'){ cardAccessWaiting = false; if(document.getElementById('card-cam')) openCardCamera(); }
+  if(cardAccessWaiting && kind === 'camera'){ cardAccessWaiting = false; const w = document.getElementById('card-cam'); if(w) openCardCamera(w.dataset.side); }
 };
 // Picture: the phone's real pictures in STORY's own grid (thumbnails straight from the phone); tap one -> in the note.
 function openNotePictures(){
@@ -11230,11 +11275,20 @@ function attachHandlers(){
     });
   });
 
-  document.querySelectorAll('[data-wcard]').forEach(el=>el.addEventListener('click', ()=>{
-    const i = walletCards().findIndex(c=>c.id === el.getAttribute('data-wcard')) + 1;
-    if(i === state.walletCardIndex) state.cardSheetId = el.getAttribute('data-wcard'); else setWalletCardIndex(i);
-    renderDevice();
-  }));
+  // Your card: tap turns it over (when STORY has its back), hold it -> Remove.
+  document.querySelectorAll('[data-wcard]').forEach(el=>{
+    const id = el.getAttribute('data-wcard'); let hold = null, held = false;
+    el.addEventListener('pointerdown', ()=>{ held = false; clearTimeout(hold); hold = setTimeout(()=>{ held = true; state.cardSheetId = id; renderDevice(); }, 550); });
+    ['pointerup', 'pointercancel', 'pointerleave', 'pointermove'].forEach(t=>el.addEventListener(t, e=>{ if(t !== 'pointermove' || Math.abs(e.movementX) + Math.abs(e.movementY) > 4) clearTimeout(hold); }));
+    el.addEventListener('click', ()=>{
+      if(held) return;
+      const c = walletCards().find(x=>x.id === id); const i = walletCards().findIndex(x=>x.id === id) + 1;
+      if(i !== state.walletCardIndex) setWalletCardIndex(i);
+      else if(c && c.photoBack) state.cardFlip = state.cardFlip === id ? null : id;
+      else state.cardSheetId = id;
+      renderDevice();
+    });
+  });
   document.querySelectorAll('[data-cardidx]').forEach(el=>{
     el.addEventListener('click', ()=>{
       setWalletCardIndex(parseInt(el.getAttribute('data-cardidx'), 10));
@@ -12658,7 +12712,9 @@ function attachHandlers(){
           break;
         case 'cal-open': state.calOpen = true; break;
         case 'add-card': state.addCard = {}; state.addCardOpen = true; break;
-        case 'card-photo': state.addCard = Object.assign(state.addCard || {}, cardFormVals()); state.addCardOpen = false; renderDevice(); openCardCamera(); return;
+        case 'card-scan': cardScanSides = {}; state.addCard = Object.assign(state.addCard || {}, state.addCard && state.addCard.mode ? cardFormVals() : {}); state.addCardOpen = false; renderDevice(); openCardCamera('front'); return;
+        case 'card-manual': state.addCard = { mode:'manual' }; break;
+        case 'card-mode-back': state.addCard = {}; break;
         case 'add-card-close': state.addCardOpen = false; state.addCard = null; break;
         case 'add-card-save': {
           if((state.addCard || {}).busy) break;
@@ -12672,7 +12728,7 @@ function attachHandlers(){
           f.busy = true;
           cardBankLookup(f.pan).then(bank=>{
             if(state.addCard !== f) return;   // closed while checking: nothing is added
-            const list = walletCards(); list.push({ id:'card' + Date.now(), bank: bank || '', last4:chk.last4, exp:f.exp, net:chk.net, photo:f.photo || '', checked:true });
+            const list = walletCards(); list.push({ id:'card' + Date.now(), bank: bank || '', last4:chk.last4, exp:f.exp, net:chk.net, photo:f.photo || '', photoBack:f.photoBack || '', checked:true });
             saveWalletCards(list);
             state.addCardOpen = false; state.addCard = null; setWalletCardIndex(list.length);
             showToast('Card added'); renderDevice();
