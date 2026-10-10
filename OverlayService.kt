@@ -1311,6 +1311,7 @@ class OverlayService : Service(), StoryBridge.Host {
         if (NoteTools.shareTo(this, pkg, cls, title, text, files)) { pagesPane?.takeIf { it.shown }?.let { setShown(it, false) }; updateBubble() }
         else showToast("Couldn't open that app - try another one")
     } }
+    override fun evalPages(js: String) { ui.post { pagesPane?.web?.evaluateJavascript(js, null) } }
     override fun notePrint(title: String, html: String) {
         runCatching { java.io.File(cacheDir, "note_print.html").writeText(html) }
         ui.post {

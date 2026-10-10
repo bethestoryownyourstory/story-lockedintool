@@ -963,6 +963,36 @@
   .share-app img{ width:42px; height:42px; border-radius:11px; }
   .share-app span{ font-size:10px; font-weight:600; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .share-app:active{ opacity:0.6; }
+  /* Trading: real accounts */
+  /* Sits on the card's bottom strip, between Open MT5 and Accounts (the card never changes height). */
+  .acct-foot{ position:absolute; left:50%; transform:translateX(-50%); bottom:8px; max-width:40%; display:flex; align-items:center; justify-content:center; z-index:2; }
+  .acct-foot:empty{ display:none; }
+  .acct-add-btn{ margin:0 !important; width:auto !important; padding:6px 14px !important; font-size:11.5px !important; border-radius:14px !important; white-space:nowrap; }
+  .acct-status{ font-size:10.5px; color:var(--muted); text-align:center; line-height:1.25; }
+  .acct-link{ border:none; background:none; color:var(--text); font-weight:800; text-decoration:underline; padding:0; font-size:11.5px; }
+  .broker-panel{ position:absolute; inset:0; z-index:3; background:#000; border:1px solid var(--line); border-radius:13px; display:flex; flex-direction:column; padding:10px 12px; overflow:hidden; }
+  .broker-head{ display:flex; align-items:center; justify-content:space-between; font-size:12px; font-weight:800; letter-spacing:0.3px; }
+  .broker-x{ border:none; background:transparent; color:var(--muted); font-size:18px; padding:0 4px; line-height:1; }
+  .broker-search{ margin:8px 0 6px; width:100%; background:var(--card-2); border:1px solid var(--line); border-radius:9px; padding:7px 10px; color:var(--text); font-size:12px; outline:none; }
+  .broker-list{ flex:1; min-height:0; overflow-y:auto; scrollbar-width:none; }
+  .broker-list::-webkit-scrollbar{ display:none; }
+  .broker-row{ display:flex; align-items:center; justify-content:space-between; padding:9px 2px; border-bottom:1px solid var(--line); cursor:pointer; }
+  .broker-row:active{ opacity:0.6; }
+  .broker-name{ font-size:13px; font-weight:700; }
+  .broker-sub{ font-size:10.5px; color:var(--muted); }
+  .acct-broker{ margin-top:12px; font-size:15px; font-weight:800; }
+  .acct-dots{ display:flex; justify-content:center; gap:6px; margin:8px 0 2px; }
+  .acct-dots span{ width:6px; height:6px; border-radius:50%; background:var(--line); }
+  .acct-dots span.on{ background:var(--text); }
+  .acct-seg{ display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  .acct-seg-btn{ border:1px solid var(--line); background:var(--card-2); color:var(--text); border-radius:10px; padding:10px 0; font-weight:800; font-size:12.5px; }
+  .acct-seg-btn.on{ background:#e8e6e1; color:#000; border-color:#e8e6e1; }
+  .acct-note{ font-size:11px; color:var(--muted); line-height:1.45; margin-top:10px; }
+  .acct-msg{ font-size:12px; color:var(--red); margin-top:8px; font-weight:700; }
+  .acct-remove{ border:none; background:transparent; color:var(--muted); font-size:18px; padding:0 10px; margin-left:auto; }
+  .symbol-list{ max-height:320px; overflow-y:auto; margin-top:10px; scrollbar-width:none; }
+  .symbol-list::-webkit-scrollbar{ display:none; }
+  .trade-symbol{ cursor:pointer; }
   .note-img{ display:block; max-width:100%; height:auto; border-radius:8px; margin:6px 0; }
   .note-audio{ display:flex; flex-direction:column; gap:4px; margin:6px 0; padding:8px 10px; border-radius:10px; background:rgba(0,0,0,0.06); max-width:100%; }
   .note-audio-name{ font-size:12px; font-weight:700; color:#000; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -3598,24 +3628,21 @@ function closePool(){
 // Shared by the old click dispatcher (for anything still wired to the data-action names)
 // and by runSwipeAction() below, which is what the swipe-to-confirm controls actually call
 // once a drag crosses the confirm threshold.
-function performCloseAll(){
-  const acc = state.accounts.find(a=>a.id===state.activeAccountId);
-  const realized = state.positions.reduce((s,p)=>s+p.pl, 0);
-  acc.balanceNum = Math.round((acc.balanceNum + realized) * 100) / 100;
-  acc.balance = '$' + acc.balanceNum.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
-  state.positions = [];
-  state.closeCount = 1;
+// Closing is real: each position is closed on your broker, then the account refreshes.
+function closeReal(list, label){
+  if(!list.length){ showToast('No positions to close'); return; }
+  tradeDo(label, async acc=>{ for(const p of list) await TRADE.close(acc, p.id); });
 }
-function performCloseProfitable(){
-  const acc = state.accounts.find(a=>a.id===state.activeAccountId);
-  const realized = state.positions.filter(p=>p.profit).reduce((s,p)=>s+p.pl, 0);
-  acc.balanceNum = Math.round((acc.balanceNum + realized) * 100) / 100;
-  acc.balance = '$' + acc.balanceNum.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
-  state.positions = state.positions.filter(p=>!p.profit);
-  state.closeCount = Math.max(1, Math.min(state.closeCount, Math.max(state.positions.length, 1)));
-}
+function performCloseAll(){ closeReal(state.positions.slice(), 'Positions closed'); state.closeCount = 1; }
+function performCloseProfitable(){ closeReal(state.positions.filter(p=>p.profit), 'Profitable positions closed'); }
 function performOrderPlace(){
+  const types = { buyLimit:['buy','limit'], buyStop:['buy','stop'], sellLimit:['sell','limit'], sellStop:['sell','stop'] };
+  const t = types[state.orderType] || types.buyLimit;
+  const num = id=>{ const el = document.getElementById(id); const v = el ? parseFloat(el.value) : NaN; return isNaN(v) ? null : v; };
+  const price = num('order-price'), sl = num('order-sl'), tp = num('order-tp');
   state.orderPanelOpen = false;
+  if(price == null){ showToast('Enter the price for the order'); return; }
+  tradeDo('Order placed', acc=>TRADE.order(acc, { side:t[0], type:t[1], qty: state.orderLot, price, sl, tp }));
 }
 function runSwipeAction(action){
   if(action === 'close-all') performCloseAll();
@@ -3922,10 +3949,8 @@ let state = {
   lotSize:0.10,
   closeCount:1,
   closeFilter:'buy',
-  positions:[
-    {id:'p1', label:'BUY 0.10 EURUSD', pl:182.40, profit:true, type:'buy', margin:60, entry:1.08250, current:1.08432, mult:100000},
-    {id:'p2', label:'SELL 0.05 XAUUSD', pl:-41.02, profit:false, type:'sell', margin:35, entry:2358.10, current:2359.94, mult:22.3},
-  ],
+  positions:[],         // filled live from your connected broker account (never made up)
+
   chartOrientation:'portrait',
   searchOpen:false,
   searchQuery:'',
@@ -4097,12 +4122,7 @@ let state = {
   recents:[],
   recentsOpen:false,
   accountSwitcherOpen:false,
-  activeAccountId:'acc1',
-  accounts:[
-    {id:'acc1', name:'MT5 — Real 1', number:'#48213390', balance:'$12,480.52', balanceNum:12480.52},
-    {id:'acc2', name:'MT5 — Demo', number:'#10029841', balance:'$50,000.00', balanceNum:50000.00},
-    {id:'acc3', name:'MT5 — Real 2', number:'#77120043', balance:'$3,214.90', balanceNum:3214.90},
-  ],
+
   netWorthChangePct:2.4,
   moneyIn:8540,
   moneyOut:3216,
@@ -4747,70 +4767,394 @@ function swipeConfirmHTML(label, action, extraClass){
   `;
 }
 
+// ===================== REAL TRADING (owner: everything real, no fake numbers) =====================
+// Your own broker accounts, added by you: TradeLocker now (sign in with your TradeLocker email, password and your
+// broker's server), MT5 through STORY's MetaApi connection. The phone talks to the broker itself (StoryNative.http);
+// sign-in tokens stay in STORY's private storage on the phone (StoryNative.secretSet) - never a password.
+const TL_BASE = { live:'https://live.tradelocker.com/backend-api', demo:'https://demo.tradelocker.com/backend-api' };
+const TRADE_ACCOUNTS_KEY = 'story-trade-accounts';
+let httpSeq = 0; const httpWait = {};
+window.storyHttp = function(id, code, body){ const w = httpWait[id]; if(w){ delete httpWait[id]; w({ code, body }); } };
+function httpReq(method, url, headers, body){
+  if(NATIVE && window.StoryNative.http) return new Promise(res=>{
+    const id = 'h' + (++httpSeq); httpWait[id] = res;
+    window.StoryNative.http(id, method, url, JSON.stringify(headers || {}), body ? JSON.stringify(body) : '');
+    setTimeout(()=>{ if(httpWait[id]){ delete httpWait[id]; res({ code:0, body:'' }); } }, 30000);
+  });
+  return fetch(url, { method, headers: Object.assign({ 'Content-Type':'application/json' }, headers || {}), body: body ? JSON.stringify(body) : undefined })
+    .then(async r=>({ code: r.status, body: await r.text() })).catch(()=>({ code:0, body:'' }));
+}
+const parseJ = t=>{ try{ return JSON.parse(t); }catch(e){ return null; } };
+function secretGet(k){ try{ return NATIVE && window.StoryNative.secretGet ? window.StoryNative.secretGet(k) : (localStorage.getItem('sec:' + k) || ''); }catch(e){ return ''; } }
+function secretSet(k, v){ try{ if(NATIVE && window.StoryNative.secretSet) window.StoryNative.secretSet(k, v || ''); else if(v) localStorage.setItem('sec:' + k, v); else localStorage.removeItem('sec:' + k); }catch(e){} }
+
+function tradeAccounts(){ try{ return JSON.parse(localStorage.getItem(TRADE_ACCOUNTS_KEY) || '[]') || []; }catch(e){ return []; } }
+function saveTradeAccounts(list){ try{ localStorage.setItem(TRADE_ACCOUNTS_KEY, JSON.stringify(list)); }catch(e){} }
+function activeTradeAccount(){
+  const list = tradeAccounts();
+  return list.find(a=>a.id === state.activeTradeId) || list[0] || null;
+}
+state.activeTradeId = (()=>{ try{ return localStorage.getItem('story-trade-active') || null; }catch(e){ return null; } })();
+state.focusSymbol = (()=>{ try{ return localStorage.getItem('story-trade-symbol') || 'EURUSD'; }catch(e){ return 'EURUSD'; } })();
+state.chartRes = '1H';
+state.live = {};          // per account: { status, balance, equity, margin, freeMargin, pl, positions, err }
+state.focusQuote = null;  // { bid, ask, change }
+state.focusBars = [];     // real candles for the focus symbol
+state.addAccountOpen = false;
+state.addAccount = { platform:'tradelocker', env:'live', busy:false, msg:'' };
+state.symbolPickerOpen = false;
+state.symbolQuery = '';
+const fmtMoney = (n, cur)=> (n == null || isNaN(n)) ? '—' : (n < 0 ? '-' : '') + (cur && cur !== 'USD' ? cur + ' ' : '$') + Math.abs(n).toLocaleString(undefined, { minimumFractionDigits:2, maximumFractionDigits:2 });
+const fmtPrice = p=> (p == null || isNaN(p)) ? '—' : Number(p).toFixed(p < 10 ? 5 : p < 1000 ? 3 : 2);
+
+// ---- TradeLocker ----
+const tlKey = a=>'tl:' + a.env + ':' + (a.email || '').toLowerCase() + ':' + a.server;
+async function tlLogin(env, email, password, server){
+  const r = await httpReq('POST', TL_BASE[env] + '/auth/jwt/token', {}, { email, password, server });
+  const j = parseJ(r.body);
+  if(r.code === 0) throw 'No connection - check your internet';
+  if(r.code < 200 || r.code >= 300 || !j || !j.accessToken) throw (j && (j.message || j.errmsg)) || 'Wrong email, password or server';
+  const tok = { access: j.accessToken, refresh: j.refreshToken, exp: Date.parse(j.expireDate) || (Date.now() + 15 * 60000) };
+  const r2 = await httpReq('GET', TL_BASE[env] + '/auth/jwt/all-accounts', { Authorization: 'Bearer ' + tok.access });
+  const j2 = parseJ(r2.body);
+  const accs = (j2 && j2.accounts) || [];
+  if(!accs.length) throw 'No trading accounts found for this login';
+  secretSet(tlKey({ env, email, server }), JSON.stringify(tok));
+  return accs.map(a=>({ id: 'tl:' + env + ':' + a.id, platform:'tradelocker', env, server, email, accId: String(a.id), accNum: String(a.accNum), name: a.name || ('#' + a.id), currency: a.currency || 'USD' }));
+}
+async function tlToken(acc){
+  let t = parseJ(secretGet(tlKey(acc)));
+  if(!t) throw 'signin';
+  if(Date.now() > t.exp - 60000){
+    const r = await httpReq('POST', TL_BASE[acc.env] + '/auth/jwt/refresh', {}, { refreshToken: t.refresh });
+    const j = parseJ(r.body);
+    if(r.code === 0) throw 'offline';
+    if(r.code < 200 || r.code >= 300 || !j || !j.accessToken){ secretSet(tlKey(acc), ''); throw 'signin'; }
+    t = { access: j.accessToken, refresh: j.refreshToken || t.refresh, exp: Date.parse(j.expireDate) || (Date.now() + 15 * 60000) };
+    secretSet(tlKey(acc), JSON.stringify(t));
+  }
+  return t.access;
+}
+async function tlCall(acc, method, path, body){
+  const tok = await tlToken(acc);
+  const r = await httpReq(method, TL_BASE[acc.env] + path, { Authorization: 'Bearer ' + tok, accNum: String(acc.accNum) }, body);
+  if(r.code === 0) throw 'offline';
+  if(r.code === 401){ secretSet(tlKey(acc), ''); throw 'signin'; }
+  const j = parseJ(r.body);
+  if(r.code < 200 || r.code >= 300 || (j && j.s === 'error')) throw (j && (j.errmsg || j.message)) || ('error ' + r.code);
+  return j || {};
+}
+const tlCache = {};   // per account: { config, instruments }
+async function tlMeta(acc){
+  const c = tlCache[acc.id] || (tlCache[acc.id] = {});
+  if(!c.config){ const j = await tlCall(acc, 'GET', '/trade/config'); c.config = j.d || {}; }
+  if(!c.instruments){ const j = await tlCall(acc, 'GET', '/trade/accounts/' + acc.accId + '/instruments'); c.instruments = (j.d && j.d.instruments) || []; }
+  return c;
+}
+function tlCols(cfg, key){ return ((cfg[key] && cfg[key].columns) || []).map(c=>c.id); }
+function tlRow(cols, arr){ const o = {}; cols.forEach((k, i)=>{ o[k] = arr[i]; }); return o; }
+function tlRoute(inst, type){ const r = (inst.routes || []).find(x=>x.type === type) || (inst.routes || [])[0]; return r ? r.id : null; }
+function tlInstrument(meta, by){
+  if(typeof by === 'number' || /^\d+$/.test(String(by))) return meta.instruments.find(i=>String(i.tradableInstrumentId) === String(by));
+  const n = String(by).toUpperCase();
+  return meta.instruments.find(i=>String(i.name).toUpperCase() === n) || meta.instruments.find(i=>String(i.name).toUpperCase().replace(/[^A-Z0-9]/g, '').startsWith(n.replace(/[^A-Z0-9]/g, '')));
+}
+async function tlQuote(acc, inst){
+  const j = await tlCall(acc, 'GET', '/trade/quotes?routeId=' + tlRoute(inst, 'INFO') + '&tradableInstrumentId=' + inst.tradableInstrumentId);
+  const d = j.d || {};
+  return { bid: Number(d.bp), ask: Number(d.ap) };
+}
+async function tlRefresh(acc){
+  const meta = await tlMeta(acc);
+  const [st, ps] = await Promise.all([
+    tlCall(acc, 'GET', '/trade/accounts/' + acc.accId + '/state'),
+    tlCall(acc, 'GET', '/trade/accounts/' + acc.accId + '/positions'),
+  ]);
+  const det = tlRow(tlCols(meta.config, 'accountDetailsConfig'), (st.d && st.d.accountDetailsData) || []);
+  const pcols = tlCols(meta.config, 'positionsConfig');
+  const rows = ((ps.d && ps.d.positions) || []).map(r=>tlRow(pcols, r));
+  const num = v=> v == null || v === '' ? null : Number(v);
+  const positions = [];
+  const quotes = {};
+  for(const p of rows){
+    const inst = tlInstrument(meta, p.tradableInstrumentId) || { name: String(p.tradableInstrumentId) };
+    let q = quotes[p.tradableInstrumentId];
+    if(!q && inst.routes){ try{ q = quotes[p.tradableInstrumentId] = await tlQuote(acc, inst); }catch(e){} }
+    const side = String(p.side || '').toLowerCase();
+    const pl = num(p.unrealizedPl) || 0;
+    positions.push({ id: String(p.id), type: side === 'sell' ? 'sell' : 'buy', qty: num(p.qty), symbol: inst.name,
+      label: (side === 'sell' ? 'SELL ' : 'BUY ') + num(p.qty) + ' ' + inst.name, entry: num(p.avgPrice),
+      current: q ? (side === 'sell' ? q.ask : q.bid) : null, pl, profit: pl >= 0 });
+  }
+  const balance = num(det.balance);
+  const equity = num(det.projectedBalance) != null ? num(det.projectedBalance) : (balance != null ? balance + positions.reduce((s, p)=>s + p.pl, 0) : null);
+  return { status:'ok', balance, equity, margin: num(det.initialMarginReq) != null ? num(det.initialMarginReq) : num(det.blockedBalance),
+    freeMargin: num(det.availableFunds), pl: num(det.openGrossPnL) != null ? num(det.openGrossPnL) : positions.reduce((s, p)=>s + p.pl, 0), positions };
+}
+async function tlFocus(acc){
+  const meta = await tlMeta(acc);
+  const inst = tlInstrument(meta, state.focusSymbol);
+  if(!inst) return { quote:null, bars:[] };
+  const quote = await tlQuote(acc, inst);
+  const res = { '1H':['1H', 48 * 3600e3], '4H':['4H', 8 * 86400e3], '1D':['1D', 50 * 86400e3], '1W':['1W', 340 * 86400e3] }[state.chartRes] || ['1H', 48 * 3600e3];
+  let bars = [];
+  try{
+    const now = Date.now();
+    const j = await tlCall(acc, 'GET', '/trade/history?routeId=' + tlRoute(inst, 'INFO') + '&from=' + (now - res[1]) + '&to=' + now + '&resolution=' + res[0] + '&tradableInstrumentId=' + inst.tradableInstrumentId);
+    bars = ((j.d && j.d.barDetails) || []).map(b=>({ o:Number(b.o), h:Number(b.h), l:Number(b.l), c:Number(b.c) }));
+  }catch(e){}
+  const first = bars.length ? bars[0].o : null;
+  quote.change = first ? ((quote.bid - first) / first) * 100 : null;
+  return { quote, bars, name: inst.name };
+}
+async function tlOrder(acc, o){
+  const meta = await tlMeta(acc);
+  const inst = tlInstrument(meta, o.symbol || state.focusSymbol);
+  if(!inst) throw state.focusSymbol + " isn't on this account";
+  const body = { qty: o.qty, routeId: tlRoute(inst, 'TRADE'), side: o.side, tradableInstrumentId: inst.tradableInstrumentId,
+    type: o.type || 'market', validity: (o.type && o.type !== 'market') ? 'GTC' : 'IOC', price: o.price || 0 };
+  if(o.type === 'stop'){ body.stopPrice = o.price; body.price = 0; }
+  if(o.sl){ body.stopLoss = o.sl; body.stopLossType = 'absolute'; }
+  if(o.tp){ body.takeProfit = o.tp; body.takeProfitType = 'absolute'; }
+  return tlCall(acc, 'POST', '/trade/accounts/' + acc.accId + '/orders', body);
+}
+async function tlClose(acc, positionId){ return tlCall(acc, 'DELETE', '/trade/positions/' + positionId); }
+
+// ---- MT5 (through STORY's MetaApi connection, the only way an app can reach MT5) ----
+const MT5_API = 'https://story-trade.percyjuniormaseko0.workers.dev';   // STORY's trade server (trade-worker.js, MetaApi)
+async function mt5Call(acc, method, path, body){
+  if(!MT5_API) throw 'mt5-soon';
+  const r = await httpReq(method, MT5_API + path, { 'X-Story-Key': acc ? (secretGet('mt5key:' + acc.accId) || '') : '' }, body);
+  if(r.code === 0) throw 'offline';
+  const j = parseJ(r.body);
+  if(r.code === 503) throw 'mt5-soon';
+  if(r.code < 200 || r.code >= 300) throw (j && j.error) || ('error ' + r.code);
+  return j || {};
+}
+
+// ---- one place for every platform ----
+const TRADE = {
+  refresh: acc=> acc.platform === 'tradelocker' ? tlRefresh(acc) : mt5Call(acc, 'GET', '/mt5/' + acc.accId + '/live'),
+  focus: acc=> acc.platform === 'tradelocker' ? tlFocus(acc) : mt5Call(acc, 'GET', '/mt5/' + acc.accId + '/focus?symbol=' + encodeURIComponent(state.focusSymbol) + '&res=' + state.chartRes),
+  order: (acc, o)=> acc.platform === 'tradelocker' ? tlOrder(acc, o) : mt5Call(acc, 'POST', '/mt5/' + acc.accId + '/order', Object.assign({ symbol: state.focusSymbol }, o)),
+  close: (acc, id)=> acc.platform === 'tradelocker' ? tlClose(acc, id) : mt5Call(acc, 'POST', '/mt5/' + acc.accId + '/close', { id }),
+  symbols: async acc=>{ if(acc.platform === 'tradelocker'){ const m = await tlMeta(acc); return m.instruments.map(i=>i.name); } const j = await mt5Call(acc, 'GET', '/mt5/' + acc.accId + '/symbols'); return j.symbols || []; },
+};
+function tradeErrText(e){
+  if(e === 'signin') return 'Sign in again to this account';
+  if(e === 'offline') return 'No connection';
+  if(e === 'mt5-soon') return 'MT5 connects once STORY’s MetaApi key is added';
+  return String(e || 'Something went wrong');
+}
+let tradeBusy = false;
+async function tradeRefreshNow(force){
+  const acc = activeTradeAccount();
+  if(!acc || (tradeBusy && !force)) return;
+  tradeBusy = true;
+  try{
+    const live = await TRADE.refresh(acc);
+    state.live[acc.id] = Object.assign({ status:'ok' }, live);
+    const f = await TRADE.focus(acc);
+    state.focusQuote = f.quote; state.focusBars = f.bars || [];
+    if(f.name) state.focusName = f.name;
+  }catch(e){
+    state.live[acc.id] = Object.assign({}, state.live[acc.id] || {}, { status: e === 'signin' ? 'signin' : 'error', err: tradeErrText(e) });
+  }
+  tradeBusy = false;
+  tradeRender();
+}
+function tradeRender(){
+  if(state.current !== 'trading' || pageSwipeAnimating) return;
+  if((state.pageStyleOn && state.pageStyleViewOpen) || state.rowsViewOpen) return;
+  const a = document.activeElement;
+  if(a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA')) return;
+  renderDevice();
+}
+async function tradeDo(label, fn){
+  const acc = activeTradeAccount();
+  if(!acc){ state.addAccountOpen = true; renderDevice(); return; }
+  try{ await fn(acc); showToast(label); }catch(e){ showToast(tradeErrText(e)); }
+  tradeRefreshNow(true);
+}
+// Live: every 2 seconds while you're on Trading and the screen is on.
+setInterval(()=>{ if(state.current === 'trading' && document.visibilityState !== 'hidden') tradeRefreshNow(false); }, 2000);
+
+// ---- adding / removing accounts ----
+async function tradeAddAccount(f){
+  state.addAccount.busy = true; state.addAccount.msg = ''; renderDevice();
+  try{
+    let added = [];
+    if(f.platform === 'tradelocker') added = await tlLogin(f.env, f.email, f.password, f.server);
+    else {
+      const j = await mt5Call(null, 'POST', '/mt5/connect', { login: f.login, password: f.password, server: f.server });
+      secretSet('mt5key:' + j.accountId, j.key);
+      added = [{ id: 'mt5:' + j.accountId, platform:'mt5', env: f.env, server: f.server, login: f.login, accId: j.accountId, name: (f.broker ? f.broker + ' ' : 'MT5 ') + '#' + f.login, broker: f.broker || '', currency: j.currency || 'USD' }];
+    }
+    const list = tradeAccounts().filter(a=>!added.some(b=>b.id === a.id)).concat(added);
+    saveTradeAccounts(list);
+    state.activeTradeId = added[0].id; try{ localStorage.setItem('story-trade-active', state.activeTradeId); }catch(e){}
+    state.addAccountOpen = false; state.addAccount.busy = false; state.addAccount.pass = ''; state.addAccount.user = ''; state.addAccount.server = '';
+    showToast(added.length > 1 ? added.length + ' accounts added' : 'Account added');
+    renderDevice(); tradeRefreshNow(true);
+  }catch(e){
+    state.addAccount.busy = false; state.addAccount.msg = tradeErrText(e); renderDevice();
+  }
+}
+function tradeRemoveAccount(id){
+  const gone = tradeAccounts().find(a=>a.id === id);
+  if(gone && gone.platform === 'mt5') mt5Call(gone, 'DELETE', '/mt5/' + gone.accId).catch(()=>{}).then(()=>secretSet('mt5key:' + gone.accId, ''));
+  const list = tradeAccounts().filter(a=>a.id !== id);
+  saveTradeAccounts(list);
+  delete state.live[id];
+  if(state.activeTradeId === id){ state.activeTradeId = list[0] ? list[0].id : null; try{ localStorage.setItem('story-trade-active', state.activeTradeId || ''); }catch(e){} }
+}
+function tradeSwitch(dir){
+  const list = tradeAccounts(); if(list.length < 2) return;
+  const i = Math.max(0, list.findIndex(a=>a.id === (activeTradeAccount() || {}).id));
+  const n = list[(i + dir + list.length) % list.length];
+  state.activeTradeId = n.id; try{ localStorage.setItem('story-trade-active', n.id); }catch(e){}
+  state.focusQuote = null; state.focusBars = [];
+  renderDevice(); tradeRefreshNow(true);
+}
+function addAccountTemplate(){
+  const f = state.addAccount;
+  const tl = f.platform === 'tradelocker';
+  return `
+    <div class="modal-overlay" data-action="add-account-bg">
+      <div class="modal-sheet" onclick="event.stopPropagation()">
+        <div class="modal-head"><span class="modal-title">Add account</span><button class="modal-close" data-action="add-account-close">×</button></div>
+        <div class="acct-seg">
+          <button class="acct-seg-btn${tl?' on':''}" data-addacct-platform="tradelocker">TradeLocker</button>
+          <button class="acct-seg-btn${!tl?' on':''}" data-addacct-platform="mt5">MT5</button>
+        </div>
+        <div class="acct-seg" style="margin-top:8px;">
+          <button class="acct-seg-btn${f.env==='live'?' on':''}" data-addacct-env="live">Real</button>
+          <button class="acct-seg-btn${f.env==='demo'?' on':''}" data-addacct-env="demo">Demo</button>
+        </div>
+        ${f.broker ? `<div class="acct-broker">${escText(f.broker)}</div>` : ''}
+        <div class="section-title" style="margin-top:14px;">${tl ? 'TRADELOCKER EMAIL' : 'MT5 LOGIN (ACCOUNT NUMBER)'}</div>
+        <input class="field-input" id="addacct-user" type="${tl?'email':'text'}" inputmode="${tl?'email':'numeric'}" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="${tl?'you@email.com':'e.g. 48213390'}" value="${escText(f.user || '')}">
+        <div class="section-title" style="margin-top:12px;">PASSWORD</div>
+        <input class="field-input" id="addacct-pass" type="password" autocomplete="off" placeholder="${tl?'Your TradeLocker password':'Your MT5 password'}" value="${escText(f.pass || '')}">
+        <div class="section-title" style="margin-top:12px;">BROKER SERVER</div>
+        <input class="field-input" id="addacct-server" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="${tl?'Your broker’s server name (from your broker)':(f.broker ? f.broker + ' server (from your broker’s email)' : 'Your broker’s MT5 server')}" value="${escText(f.server || '')}">
+        <div class="acct-note">${tl ? 'STORY signs in to your broker directly. Your password is not kept - only a sign-in key, on this phone.' : 'STORY connects your MT5 account through MetaApi (the only way an app can reach MT5). Your password is only used to connect - it can take up to a minute the first time.'}</div>
+        ${f.msg ? `<div class="acct-msg">${escText(f.msg)}</div>` : ''}
+        <button class="btn-wide btn-primary" style="margin-top:12px;" data-action="add-account-go"${f.busy?' disabled':''}>${f.busy ? 'Connecting…' : 'Connect'}</button>
+      </div>
+    </div>`;
+}
+function symbolPickerTemplate(){
+  const acc = activeTradeAccount();
+  const all = (state.symbolList || []);
+  const q = (state.symbolQuery || '').toUpperCase();
+  const list = all.filter(s=>!q || String(s).toUpperCase().includes(q)).slice(0, 200);
+  return `
+    <div class="modal-overlay" data-action="symbol-picker-bg">
+      <div class="modal-sheet" onclick="event.stopPropagation()">
+        <div class="modal-head"><span class="modal-title">Symbol</span><button class="modal-close" data-action="symbol-picker-close">×</button></div>
+        <input class="field-input" id="symbol-search" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Search ${acc ? 'this account’s symbols' : ''}" value="${escText(state.symbolQuery || '')}">
+        <div class="symbol-list">${list.length ? list.map(s=>`<div class="settings-option${s===state.focusSymbol?' selected':''}" data-symbol="${escText(s)}"><div class="row-name">${escText(s)}</div><div class="radio-dot"></div></div>`).join('') : `<div class="row-sub" style="padding:14px 4px;">${all.length ? 'No match' : 'Loading…'}</div>`}</div>
+      </div>
+    </div>`;
+}
+
+// Tap the account card: the brokers you can use pop up IN ITS PLACE, the same size (owner). MT5 brokers by name,
+// and TradeLocker (any broker on TradeLocker - its server name comes from that broker). Tap one to add your account.
+const MT5_BROKERS = ['IC Markets','Pepperstone','Exness','XM','FBS','HFM','FXTM','RoboForex','Tickmill','Admirals','Deriv','Vantage','FP Markets','Eightcap','ThinkMarkets','AvaTrade','FxPro','Octa'];
+function brokerPanelHTML(){
+  const q = (state.brokerQuery || '').toLowerCase();
+  const rows = [{ name:'TradeLocker', platform:'tradelocker', sub:'Any broker on TradeLocker' }]
+    .concat(MT5_BROKERS.map(n=>({ name:n, platform:'mt5', sub:'MT5' })))
+    .filter(b=>!q || b.name.toLowerCase().includes(q));
+  return `<div class="broker-panel" onclick="event.stopPropagation()">
+    <div class="broker-head"><span>Choose your broker</span><button class="broker-x" data-action="broker-panel-close" aria-label="Close">×</button></div>
+    <input class="broker-search" id="broker-search" type="text" placeholder="Search brokers" autocomplete="off" spellcheck="false" value="${escText(state.brokerQuery || '')}">
+    <div class="broker-list">
+      ${rows.map(b=>`<div class="broker-row" data-broker="${escText(b.name)}" data-broker-platform="${b.platform}"><span class="broker-name">${escText(b.name)}</span><span class="broker-sub">${b.sub}</span></div>`).join('')}
+      <div class="broker-row" data-broker="" data-broker-platform="mt5"><span class="broker-name">Other MT5 broker</span><span class="broker-sub">Type its server</span></div>
+    </div>
+  </div>`;
+}
 function tradingScreen(){
-  const activeAccount = state.accounts.find(a=>a.id===state.activeAccountId) || state.accounts[0];
-  const floatingPL = state.positions.reduce((sum,p)=>sum+p.pl, 0);
-  const usedMargin = state.positions.reduce((sum,p)=>sum+p.margin, 0);
-  const equity = activeAccount.balanceNum + floatingPL;
+  // Real numbers only (owner): your connected account's live balance, positions and prices - "—" until there is one.
+  const acc = activeTradeAccount();
+  const live = (acc && state.live[acc.id]) || {};
+  const positions = live.positions || [];
+  const floatingPL = live.pl != null ? live.pl : positions.reduce((sum,p)=>sum+p.pl, 0);
+  const cur = acc ? acc.currency : 'USD';
   const plNeg = floatingPL < 0;
-  const maxClose = Math.max(state.positions.length, 1);
-  const closeProfitableGlow = (!state.positions.length || floatingPL === 0) ? 'glow-white' : (floatingPL < 0 ? 'glow-red' : 'glow-green');
-  const hasProfitable = state.positions.some(p=>p.profit);
+  const closeProfitableGlow = (!positions.length || floatingPL === 0) ? 'glow-white' : (floatingPL < 0 ? 'glow-red' : 'glow-green');
+  const hasProfitable = positions.some(p=>p.profit);
   const zoneColor = plNeg ? '239,91,91' : '62,207,106';
+  const q = state.focusQuote;
+  const chg = q && q.change != null ? q.change : null;
+  const bars = (state.focusBars || []).slice(-12);
+  const barsFs = (state.focusBars || []).slice(-20);
+  const barH = list=>{ const lo = Math.min(...list.map(b=>b.l)), hi = Math.max(...list.map(b=>b.h)); return b=> Math.max(6, Math.round(((b.c - lo) / ((hi - lo) || 1)) * 90) + 8); };
+  const hb = bars.length ? barH(bars) : null;
+  const list = tradeAccounts();
+  const idx = acc ? list.findIndex(a=>a.id === acc.id) : -1;
+  const val = v=> acc && live.status === 'ok' ? v : '—';
+  const status = !acc ? '' : live.status === 'signin' ? `<div class="acct-status">Signed out - <button class="acct-link" data-action="add-account-open">sign in again</button></div>` : live.status === 'error' ? `<div class="acct-status">${escText(live.err || '')}</div>` : !live.status ? `<div class="acct-status">Connecting…</div>` : '';
+  state.positions = positions;
   return `
     <div class="page-shell">
     ${topBar('Trading', true)}
     ${pageArrows()}
     <div class="eyebrow">FOCUS</div>
-    <div class="big-num" style="font-size:24px;">EURUSD <span class="delta-up" style="font-size:15px;">1.08432 +0.42%</span></div>
+    <div class="big-num trade-symbol" style="font-size:24px;" data-action="symbol-picker-open">${escText(state.focusName || state.focusSymbol)} <span class="${chg != null && chg < 0 ? 'delta-down' : 'delta-up'}" style="font-size:15px;">${q ? fmtPrice(q.bid) : '—'}${chg != null ? ' ' + (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%' : ''}</span></div>
     <div class="chart-wrap" id="trading-chart">
       <div class="row-card" style="height:100px;display:flex;align-items:flex-end;padding:10px;gap:3px;">
-        ${[40,55,48,60,52,66,74,70,62,58,54,56].map(h=>`<div style="width:8px;height:${h}%;background:${h%2? 'var(--green)':'var(--card-2)'};border-radius:3px;"></div>`).join('')}
+        ${bars.length ? bars.map(b=>`<div style="width:8px;height:${hb(b)}%;background:${b.c >= b.o ? 'var(--green)' : 'var(--red)'};border-radius:3px;"></div>`).join('') : `<div class="row-sub" style="margin:auto;">${acc ? (live.status === 'ok' ? 'No chart for this symbol' : '') : 'Add an account to see live prices'}</div>`}
       </div>
       <button class="chart-fs-btn" data-action="chart-fullscreen" title="Full screen">⤢</button>
     </div>
     <div class="tabs-row">
-      <div class="tab active">1H</div><div class="tab">4H</div><div class="tab">1D</div><div class="tab">1W</div>
+      ${['1H','4H','1D','1W'].map(r=>`<div class="tab${state.chartRes===r?' active':''}" data-chartres="${r}">${r}</div>`).join('')}
     </div>
-    <div class="live-pl-zone" style="background:${state.positions.length ? `linear-gradient(180deg, transparent 0%, rgba(${zoneColor},0.09) 26%, rgba(${zoneColor},0.07) 48%, rgba(${zoneColor},0.04) 78%, transparent 100%)` : 'transparent'};">
-    <div class="section-title">MT5 ACCOUNT</div>
-    <div class="mt5-card-wrap">
+    <div class="live-pl-zone" style="background:${positions.length ? `linear-gradient(180deg, transparent 0%, rgba(${zoneColor},0.09) 26%, rgba(${zoneColor},0.07) 48%, rgba(${zoneColor},0.04) 78%, transparent 100%)` : 'transparent'};">
+    <div class="section-title">${acc ? escText((acc.platform === 'mt5' ? 'MT5' : 'TRADELOCKER') + (acc.env === 'demo' ? ' DEMO' : '') + ' · ' + acc.name) : 'ACCOUNT'}</div>
+    <div class="mt5-card-wrap" id="acct-swipe">
       <div class="row-card mt5-card">
-        <div class="row"><div class="row-name">Balance</div><div class="row-amt">${activeAccount.balance}</div></div>
-        <div class="row"><div class="row-name">Floating P/L</div><div class="row-amt" style="color:${plNeg?'var(--red)':'var(--green)'};">${plNeg?'-':'+'}$${Math.abs(floatingPL).toFixed(2)}</div></div>
-        <div class="row"><div class="row-name">Equity</div><div class="row-amt">$${equity.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div></div>
-        <div class="row"><div class="row-name">Margin</div><div class="row-amt">$${usedMargin.toFixed(2)}</div></div>
-        <div class="row"><div class="row-name">Leverage</div><div class="row-amt">1:100</div></div>
+        <div class="row"><div class="row-name">Balance</div><div class="row-amt">${val(fmtMoney(live.balance, cur))}</div></div>
+        <div class="row"><div class="row-name">Floating P/L</div><div class="row-amt" style="color:${acc && live.status === 'ok' ? (plNeg?'var(--red)':'var(--green)') : 'var(--text)'};">${val((plNeg?'-':'+') + fmtMoney(Math.abs(floatingPL), cur))}</div></div>
+        <div class="row"><div class="row-name">Equity</div><div class="row-amt">${val(fmtMoney(live.equity, cur))}</div></div>
+        <div class="row"><div class="row-name">Margin</div><div class="row-amt">${val(fmtMoney(live.margin, cur))}</div></div>
+        <div class="row"><div class="row-name">Free margin</div><div class="row-amt">${val(fmtMoney(live.freeMargin, cur))}</div></div>
       </div>
-      <button class="mt5-corner-btn left" data-action="mt5-open">Open MT5</button>
+      <div class="acct-foot">${acc ? status : `<button class="btn-wide btn-primary acct-add-btn" data-action="add-account-open">Add account</button>`}</div>
+      ${state.brokerPanelOpen ? brokerPanelHTML() : ''}
+      <button class="mt5-corner-btn left" data-action="mt5-open">${acc && acc.platform === 'tradelocker' ? 'Open TradeLocker' : 'Open MT5'}</button>
       <button class="mt5-corner-btn right" data-action="mt5-switch">Accounts ⌄</button>
     </div>
+    ${list.length > 1 ? `<div class="acct-dots">${list.map((a, i)=>`<span class="${i===idx?'on':''}"></span>`).join('')}</div>` : ''}
     <div class="section-title-row">
       <div class="section-title" style="margin:0;">POSITIONS</div>
       <div class="pl-counters">
-        <span class="pl-counter ${plNeg?'pl-counter-down':'pl-counter-up'}">${plNeg?'-':'+'}$${Math.abs(floatingPL).toFixed(2)}</span>
+        <span class="pl-counter ${plNeg?'pl-counter-down':'pl-counter-up'}">${positions.length ? (plNeg?'-':'+') + fmtMoney(Math.abs(floatingPL), cur) : '—'}</span>
       </div>
       <button class="order-corner-btn" data-action="order-panel" title="Order options">⋯</button>
     </div>
     <div class="row-card">
-      ${state.positions.length ? state.positions.map(p=>`
+      ${positions.length ? positions.map(p=>`
         <div class="row pos-row">
           <div>
-            <div class="row-name pos-label">${p.label}</div>
-            <div class="pos-sub">Entry ${p.entry.toFixed(p.entry<100?5:2)} · Now <span class="pos-live">${p.current.toFixed(p.current<100?5:2)}</span></div>
+            <div class="row-name pos-label">${escText(p.label)}</div>
+            <div class="pos-sub">Entry ${fmtPrice(p.entry)} · Now <span class="pos-live">${fmtPrice(p.current)}</span></div>
           </div>
-          <div class="row-amt" style="color:${p.profit?'var(--green)':'var(--red)'};">${p.pl<0?'-':'+'}$${Math.abs(p.pl).toFixed(2)}</div>
+          <div class="row-amt" style="color:${p.profit?'var(--green)':'var(--red)'};">${p.pl<0?'-':'+'}${fmtMoney(Math.abs(p.pl), cur)}</div>
         </div>
       `).join('') : `<div class="row"><div class="row-name" style="color:var(--muted);">No active positions</div></div>`}
     </div>
     <div class="btn-row">
-      <button class="btn btn-buy">Buy</button>
+      <button class="btn btn-buy" data-action="trade-buy">Buy</button>
       <div class="lot-setter compact">
         <button class="lot-btn" data-lot="-1">−</button>
         <input class="lot-input" id="lot-input" type="text" inputmode="decimal" value="${state.lotSize.toFixed(2)}">
         <button class="lot-btn" data-lot="1">+</button>
       </div>
-      <button class="btn btn-sell">Sell</button>
+      <button class="btn btn-sell" data-action="trade-sell">Sell</button>
     </div>
 
     <div class="section-title">POSITION MANAGEMENT</div>
@@ -4837,6 +5181,8 @@ function tradingScreen(){
     ${state.launchPopup ? launchPopupTemplate() : ''}
     ${state.accountSwitcherOpen ? accountSwitcherTemplate() : ''}
     ${state.chartFullscreen ? chartFullscreenTemplate() : ''}
+    ${state.addAccountOpen ? addAccountTemplate() : ''}
+    ${state.symbolPickerOpen ? symbolPickerTemplate() : ''}
   `;
 }
 
@@ -4864,10 +5210,12 @@ function orderPanelTemplate(){
           <input class="lot-input" id="orderlot-input" type="text" inputmode="decimal" value="${state.orderLot.toFixed(2)}" style="width:60px;font-size:15px;">
           <button class="lot-btn" data-orderlot="1">+</button>
         </div>
+        <div class="section-title" style="margin-top:14px;">PRICE</div>
+        <input class="field-input" id="order-price" type="text" inputmode="decimal" placeholder="${state.focusQuote ? fmtPrice(state.focusQuote.bid) : 'Order price'}" value="">
         <div class="section-title" style="margin-top:14px;">STOP LOSS</div>
-        <input class="field-input" id="order-sl" type="text" inputmode="decimal" placeholder="e.g. 1.07800" value="${state.orderSL}">
+        <input class="field-input" id="order-sl" type="text" inputmode="decimal" placeholder="Optional" value="${state.orderSL}">
         <div class="section-title" style="margin-top:14px;">TAKE PROFIT</div>
-        <input class="field-input" id="order-tp" type="text" inputmode="decimal" placeholder="e.g. 1.09200" value="${state.orderTP}">
+        <input class="field-input" id="order-tp" type="text" inputmode="decimal" placeholder="Optional" value="${state.orderTP}">
         <div style="margin-top:16px;">${swipeConfirmHTML('Place ' + activeLabel + ' Order', 'order-place', 'swipe-confirm-primary')}</div>
       </div>
     </div>
@@ -4875,10 +5223,11 @@ function orderPanelTemplate(){
 }
 
 function launchPopupTemplate(){
-  const isMT5 = state.launchPopup === 'mt5';
-  const activeAccount = state.accounts.find(a=>a.id===state.activeAccountId) || state.accounts[0];
-  const title = isMT5 ? 'Open MT5' : 'Open TradingView';
-  const sub = isMT5 ? `Currently active: ${activeAccount.name} (${activeAccount.number})` : 'View this chart in the full TradingView app.';
+  const isApp = state.launchPopup === 'mt5';
+  const acc = activeTradeAccount();
+  const tl = acc && acc.platform === 'tradelocker';
+  const title = isApp ? (tl ? 'Open TradeLocker' : 'Open MT5') : 'Open TradingView';
+  const sub = isApp ? (acc ? `Currently active: ${escText(acc.name)}${acc.server ? ' · ' + escText(acc.server) : ''}` : 'Opens the app on your phone.') : 'View this chart in the full TradingView app.';
   return `
     <div class="modal-overlay" data-action="launch-popup-bg">
       <div class="confirm-sheet" onclick="event.stopPropagation()">
@@ -4894,19 +5243,22 @@ function launchPopupTemplate(){
 }
 
 function accountSwitcherTemplate(){
+  const list = tradeAccounts();
+  const acc = activeTradeAccount();
   return `
     <div class="modal-overlay" data-action="account-switcher-bg">
       <div class="modal-sheet" onclick="event.stopPropagation()">
         <div class="modal-head">
-          <span class="modal-title">Switch Account</span>
+          <span class="modal-title">Accounts</span>
           <button class="modal-close" data-action="account-switcher-close">×</button>
         </div>
-        ${state.accounts.map(a=>`
-          <div class="settings-option${a.id===state.activeAccountId?' selected':''}" data-account="${a.id}">
-            <div class="row-left"><div class="row-name">${a.name}</div><div class="row-sub">${a.number} · ${a.balance}</div></div>
+        ${list.length ? list.map(a=>{ const l = state.live[a.id] || {}; return `
+          <div class="settings-option${acc && a.id===acc.id?' selected':''}" data-account="${escText(a.id)}">
+            <div class="row-left"><div class="row-name">${escText(a.name)}</div><div class="row-sub">${a.platform === 'mt5' ? 'MT5' : 'TradeLocker'}${a.env === 'demo' ? ' Demo' : ''} · ${escText(a.server || '')}${l.balance != null ? ' · ' + fmtMoney(l.balance, a.currency) : ''}</div></div>
+            <button class="acct-remove" data-removeacct="${escText(a.id)}" title="Remove">×</button>
             <div class="radio-dot"></div>
-          </div>
-        `).join('')}
+          </div>`; }).join('') : `<div class="row-sub" style="padding:10px 4px;">No accounts yet.</div>`}
+        <button class="btn-wide btn-primary" style="margin-top:12px;" data-action="add-account-open">Add account</button>
       </div>
     </div>
   `;
@@ -4917,7 +5269,7 @@ function chartFullscreenTemplate(){
   return `
     <div class="chart-fullscreen ${isLandscape?'landscape':''}">
       <div class="chart-fs-head">
-        <span class="page-title" style="font-size:13px;">EURUSD <span class="delta-up" style="font-size:12px;">1.08432 +0.42%</span></span>
+        <span class="page-title" style="font-size:13px;">${escText(state.focusName || state.focusSymbol)} <span class="${state.focusQuote && state.focusQuote.change < 0 ? 'delta-down' : 'delta-up'}" style="font-size:12px;">${state.focusQuote ? fmtPrice(state.focusQuote.bid) + (state.focusQuote.change != null ? ' ' + (state.focusQuote.change >= 0 ? '+' : '') + state.focusQuote.change.toFixed(2) + '%' : '') : '—'}</span></span>
         <div style="display:flex;gap:6px;align-items:center;">
           <button class="chart-orient-btn" data-action="chart-orientation-toggle" title="Rotate view">${isLandscape ? '⬍' : '⬌'}</button>
           <button class="modal-close" data-action="chart-fullscreen-close">×</button>
@@ -4925,18 +5277,18 @@ function chartFullscreenTemplate(){
       </div>
       <div class="chart-fs-main">
         <div class="chart-fs-body">
-          ${[40,55,48,60,52,66,74,70,62,58,54,56,45,62,58,70,66,50,44,60].map(h=>`<div style="width:10px;height:${h}%;background:${h%2? 'var(--green)':'var(--card-2)'};border-radius:3px;"></div>`).join('')}
+          ${(()=>{ const bs = (state.focusBars || []).slice(-20); if(!bs.length) return '<div class="row-sub" style="margin:auto;">No chart yet</div>'; const lo = Math.min(...bs.map(b=>b.l)), hi = Math.max(...bs.map(b=>b.h)); return bs.map(b=>`<div style="width:10px;height:${Math.max(6, Math.round(((b.c - lo) / ((hi - lo) || 1)) * 90) + 8)}%;background:${b.c >= b.o ? 'var(--green)' : 'var(--red)'};border-radius:3px;"></div>`).join(''); })()}
         </div>
         <div class="chart-fs-controls">
           <button class="order-corner-btn" data-action="order-panel" title="Order options">⋯</button>
           <div class="btn-row chart-fs-btnrow">
-            <button class="btn btn-buy">Buy</button>
+            <button class="btn btn-buy" data-action="trade-buy">Buy</button>
             <div class="lot-setter compact">
               <button class="lot-btn" data-lot="-1">−</button>
               <input class="lot-input" id="lot-input-fs" type="text" inputmode="decimal" value="${state.lotSize.toFixed(2)}">
               <button class="lot-btn" data-lot="1">+</button>
             </div>
-            <button class="btn btn-sell">Sell</button>
+            <button class="btn btn-sell" data-action="trade-sell">Sell</button>
           </div>
         </div>
       </div>
@@ -5500,9 +5852,6 @@ const COMING_SOON = [
   ['.search-row', ()=>'Search'],
   ['[data-action="add-card"], .avatar-add', ()=>'Add card'],
   ['.btn-row-action', el=>el.textContent.trim()],
-  ['.tab:not(.active)', el=>el.textContent.trim() + ' chart'],
-  ['.btn-buy', ()=>'Buy'],
-  ['.btn-sell', ()=>'Sell'],
   ['[data-action="notes-unavailable"]', el=>el.textContent.trim()],
   ['.app-row:not([data-native-pkg]):not([data-nav]):not([data-app-launchpopup]):not([data-app-locked]):not([data-app-toast])', el=>(el.querySelector('.row-name')||el).textContent.trim()],
   ['.notif-card', ()=>'Payment details'],
@@ -9841,12 +10190,67 @@ function attachHandlers(){
 
   // --- account switcher: pick an account ---
   document.querySelectorAll('[data-account]').forEach(el=>{
-    el.addEventListener('click', ()=>{
-      state.activeAccountId = el.getAttribute('data-account');
+    el.addEventListener('click', e=>{
+      if(e.target.closest('[data-removeacct]')) return;
+      state.activeTradeId = el.getAttribute('data-account');
+      try{ localStorage.setItem('story-trade-active', state.activeTradeId); }catch(err){}
+      state.accountSwitcherOpen = false; state.focusQuote = null; state.focusBars = [];
+      renderDevice(); tradeRefreshNow(true);
+    });
+  });
+  document.querySelectorAll('[data-removeacct]').forEach(el=>{
+    el.addEventListener('click', e=>{
+      e.stopPropagation();
+      state.confirmDialog = { message: 'Remove this account from STORY? (Nothing changes on your broker.)', action: 'confirm-remove-account', actionData: el.getAttribute('data-removeacct') };
       state.accountSwitcherOpen = false;
       renderDevice();
     });
   });
+  document.querySelectorAll('[data-addacct-platform]').forEach(el=>el.addEventListener('click', ()=>{ state.addAccount.platform = el.getAttribute('data-addacct-platform'); state.addAccount.msg = ''; renderDevice(); }));
+  document.querySelectorAll('[data-addacct-env]').forEach(el=>el.addEventListener('click', ()=>{ state.addAccount.env = el.getAttribute('data-addacct-env'); renderDevice(); }));
+  document.querySelectorAll('[data-chartres]').forEach(el=>el.addEventListener('click', ()=>{ state.chartRes = el.getAttribute('data-chartres'); state.focusBars = []; renderDevice(); tradeRefreshNow(true); }));
+  document.querySelectorAll('[data-symbol]').forEach(el=>el.addEventListener('click', ()=>{
+    state.focusSymbol = el.getAttribute('data-symbol'); state.focusName = state.focusSymbol;
+    try{ localStorage.setItem('story-trade-symbol', state.focusSymbol); }catch(err){}
+    state.symbolPickerOpen = false; state.focusQuote = null; state.focusBars = [];
+    renderDevice(); tradeRefreshNow(true);
+  }));
+  const symSearch = document.getElementById('symbol-search');
+  if(symSearch){
+    symSearch.addEventListener('input', ()=>{
+      state.symbolQuery = symSearch.value;
+      const box = document.querySelector('.symbol-list');
+      if(box){ const tmp = document.createElement('div'); tmp.innerHTML = symbolPickerTemplate(); const nb = tmp.querySelector('.symbol-list'); if(nb){ box.innerHTML = nb.innerHTML;
+        box.querySelectorAll('[data-symbol]').forEach(el=>el.addEventListener('click', ()=>{ state.focusSymbol = el.getAttribute('data-symbol'); state.focusName = state.focusSymbol; try{ localStorage.setItem('story-trade-symbol', state.focusSymbol); }catch(err){} state.symbolPickerOpen = false; state.focusQuote = null; state.focusBars = []; renderDevice(); tradeRefreshNow(true); })); } }
+    });
+  }
+  const swipeCardTime = ()=>{ const w = document.querySelector('#content-area #acct-swipe'); return w && w.__swiped && Date.now() - w.__swiped < 500; };
+  // Tap the account card -> the brokers pop up in its place (owner).
+  const tapCard = document.querySelector('#content-area #acct-swipe .mt5-card');
+  if(tapCard) tapCard.addEventListener('click', ()=>{ if(swipeCardTime() ) return; state.brokerPanelOpen = true; state.brokerQuery = ''; renderDevice(); });
+  document.querySelectorAll('[data-broker-platform]').forEach(el=>el.addEventListener('click', ()=>{
+    state.brokerPanelOpen = false;
+    state.addAccount.platform = el.getAttribute('data-broker-platform');
+    state.addAccount.broker = el.getAttribute('data-broker-platform') === 'tradelocker' ? '' : el.getAttribute('data-broker');
+    state.addAccount.msg = ''; state.addAccountOpen = true;
+    renderDevice();
+  }));
+  const brokerSearch = document.getElementById('broker-search');
+  if(brokerSearch) brokerSearch.addEventListener('input', ()=>{
+    state.brokerQuery = brokerSearch.value;
+    const q = brokerSearch.value.toLowerCase();
+    document.querySelectorAll('.broker-row[data-broker]').forEach(r=>{ const n = r.getAttribute('data-broker'); r.style.display = (!n || !q || n.toLowerCase().includes(q) || r.textContent.toLowerCase().includes(q)) ? '' : 'none'; });
+  });
+  // Swipe the account card left / right to go through your accounts (owner).
+  const swipeCard = document.querySelector('#content-area #acct-swipe');
+  if(swipeCard){
+    let sx = null, sy = null;
+    swipeCard.addEventListener('touchstart', e=>{ const t = e.touches[0]; sx = t.clientX; sy = t.clientY; }, { passive:true });
+    swipeCard.addEventListener('touchend', e=>{
+      if(sx == null) return; const t = e.changedTouches[0]; const dx = t.clientX - sx, dy = t.clientY - sy; sx = null;
+      if(Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.4){ e.stopPropagation(); e.preventDefault(); swipeCard.__swiped = Date.now(); tradeSwitch(dx < 0 ? 1 : -1); }
+    });
+  }
 
   // --- long-press on the trading chart to offer opening the real TradingView app ---
   const chartEl = document.getElementById('trading-chart');
@@ -10629,10 +11033,48 @@ function attachHandlers(){
         case 'order-panel': state.orderPanelOpen = true; break;
         case 'order-panel-close':
         case 'order-panel-bg': state.orderPanelOpen = false; break;
-        case 'order-place': state.orderPanelOpen = false; break;
+        case 'order-place': performOrderPlace(); break;
+        case 'trade-buy': tradeDo('Bought ' + state.lotSize.toFixed(2) + ' ' + state.focusSymbol, acc=>TRADE.order(acc, { side:'buy', type:'market', qty: state.lotSize })); break;
+        case 'trade-sell': tradeDo('Sold ' + state.lotSize.toFixed(2) + ' ' + state.focusSymbol, acc=>TRADE.order(acc, { side:'sell', type:'market', qty: state.lotSize })); break;
+        case 'add-account-open': state.addAccountOpen = true; state.accountSwitcherOpen = false; state.brokerPanelOpen = false; state.addAccount.msg = ''; break;
+        case 'broker-panel-close': state.brokerPanelOpen = false; break;
+        case 'add-account-close': case 'add-account-bg': if(!state.addAccount.busy){ state.addAccountOpen = false; state.addAccount.pass = ''; } break;
+        case 'add-account-go': {
+          const v = id=>((document.getElementById(id) || {}).value || '').trim();
+          // What you typed stays in the form (kept only while it's open), so a wrong password doesn't wipe it.
+          state.addAccount.user = v('addacct-user'); state.addAccount.server = v('addacct-server'); state.addAccount.pass = (document.getElementById('addacct-pass') || {}).value || '';
+          const f = Object.assign({}, state.addAccount, { email: state.addAccount.user, login: state.addAccount.user, password: state.addAccount.pass });
+          if(!f.email || !f.password || !f.server){ state.addAccount.msg = 'Fill in all three'; break; }
+          if(f.platform === 'mt5' && !MT5_API){ state.addAccount.msg = tradeErrText('mt5-soon'); break; }
+          tradeAddAccount(f);
+          return;
+        }
+        case 'symbol-picker-open': {
+          const acc = activeTradeAccount();
+          if(!acc){ state.addAccountOpen = true; break; }
+          state.symbolPickerOpen = true; state.symbolQuery = '';
+          if(!state.symbolList || state.symbolListFor !== acc.id){
+            state.symbolList = []; state.symbolListFor = acc.id;
+            TRADE.symbols(acc).then(l=>{ state.symbolList = l; if(state.symbolPickerOpen) renderDevice(); }).catch(e=>showToast(tradeErrText(e)));
+          }
+          break;
+        }
+        case 'symbol-picker-close': case 'symbol-picker-bg': state.symbolPickerOpen = false; break;
         case 'launch-cancel':
         case 'launch-popup-bg': state.launchPopup = null; break;
-        case 'launch-go': state.launchPopup = null; break;
+        case 'launch-go': {
+          const kind = state.launchPopup; state.launchPopup = null;
+          if(kind === 'mt5'){
+            const acc = activeTradeAccount();
+            const pkgs = acc && acc.platform === 'tradelocker' ? ['com.tradelocker.app', 'com.tradelocker'] : ['net.metaquotes.metatrader5'];
+            const ok = NATIVE && window.StoryNative.openPackage && pkgs.some(p=>window.StoryNative.openPackage(p));
+            if(!ok) showToast((acc && acc.platform === 'tradelocker' ? 'TradeLocker' : 'MT5') + ' isn’t installed on this phone');
+          } else {
+            const ok = NATIVE && window.StoryNative.openPackage && window.StoryNative.openPackage('com.tradingview.tradingviewapp');
+            if(!ok) showToast('TradingView isn’t installed on this phone');
+          }
+          break;
+        }
         case 'mt5-open': state.launchPopup = 'mt5'; break;
         case 'mt5-switch': state.accountSwitcherOpen = true; break;
         case 'account-switcher-close':
@@ -10946,6 +11388,8 @@ function attachHandlers(){
               state.moreMenuSection = null;
               state.readMode = false;
               state.current = 'notes';
+            } else if(action === 'confirm-remove-account'){
+              tradeRemoveAccount(actionData);
             } else if(action === 'confirm-delete-note-by-id'){
               deleteNoteById(actionData);
             }
@@ -11261,14 +11705,7 @@ function attachHandlers(){
         }
         case 'close-all': performCloseAll(); break;
         case 'close-count': {
-          const pool = closePool();
-          const ids = pool.slice(0, state.closeCount).map(p=>p.id);
-          const acc = state.accounts.find(a=>a.id===state.activeAccountId);
-          const realized = state.positions.filter(p=>ids.includes(p.id)).reduce((s,p)=>s+p.pl, 0);
-          acc.balanceNum = Math.round((acc.balanceNum + realized) * 100) / 100;
-          acc.balance = '$' + acc.balanceNum.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
-          state.positions = state.positions.filter(p=>!ids.includes(p.id));
-          state.closeCount = Math.max(1, Math.min(state.closeCount, Math.max(closePool().length, 1)));
+          closeReal(closePool().slice(0, state.closeCount), 'Positions closed');
           break;
         }
         case 'close-profitable': {
@@ -13069,23 +13506,6 @@ function endRecentDrag(e){
 document.addEventListener('pointerup', endRecentDrag, true);
 document.addEventListener('pointercancel', endRecentDrag, true);
 
-setInterval(()=>{
-  if(state.current !== 'trading' || pageSwipeAnimating) return;
-  // Page Styles / Rows on screen: don't rebuild them every tick (that made 3D Circle flash).
-  if((state.pageStyleOn && state.pageStyleViewOpen) || state.rowsViewOpen) return;
-  const active = document.activeElement;
-  if(active && (active.tagName === 'INPUT')) return;
-  if(!state.positions.length) return;
-  state.positions.forEach(p=>{
-    const step = p.current * (Math.random()-0.5) * 0.0005;
-    const nextPrice = Math.max(0.0001, p.current + step);
-    p.current = Math.round(nextPrice * 100000) / 100000;
-    const rawPl = p.type==='buy' ? p.mult*(p.current-p.entry) : p.mult*(p.entry-p.current);
-    p.pl = Math.round(rawPl * 100) / 100;
-    p.profit = p.pl >= 0;
-  });
-  renderDevice();
-}, 700); // fast enough that the Close All Profitable Positions glow tracks live price moves in real time
 
 // Keeps the Wallet page's activity amounts honest while someone just sits on that screen:
 // walletActivityColor() is re-evaluated against the real clock every time renderDevice()

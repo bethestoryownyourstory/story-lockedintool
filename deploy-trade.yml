@@ -1,0 +1,45 @@
+name: Deploy STORY trade server
+# Puts trade-worker.js on Cloudflare as the "story-trade" Worker (MT5 through MetaApi) - no code editor needed.
+# Runs when trade-worker.js changes, or Actions -> this workflow -> Run workflow.
+# Needs repo secrets (Settings -> Secrets and variables -> Actions):
+#   CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID - the same ones the release server uses
+#   METAAPI_TOKEN - STORY's MetaApi key (app.metaapi.cloud -> API access). Without it MT5 says "coming soon".
+on:
+  push:
+    branches: [main]
+    paths: ['trade-worker.js', '.github/workflows/deploy-trade.yml']
+  workflow_dispatch:
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the secrets are set
+        id: ready
+        env:
+          T: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          A: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          M: ${{ secrets.METAAPI_TOKEN }}
+        run: |
+          if [ -n "$T" ] && [ -n "$A" ]; then echo "ok=true" >> "$GITHUB_OUTPUT"
+          else echo "### Not deployed: add CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID in Settings -> Secrets and variables -> Actions." >> "$GITHUB_STEP_SUMMARY"; fi
+          if [ -n "$M" ]; then echo "meta=true" >> "$GITHUB_OUTPUT"
+          else echo "### MT5 waits for the METAAPI_TOKEN secret (deployed without it - MT5 says coming soon)." >> "$GITHUB_STEP_SUMMARY"; fi
+      - name: Deploy to Cloudflare (with the MetaApi key)
+        if: steps.ready.outputs.ok == 'true' && steps.ready.outputs.meta == 'true'
+        uses: cloudflare/wrangler-action@v3
+        env:
+          METAAPI_TOKEN: ${{ secrets.METAAPI_TOKEN }}
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          secrets: |
+            METAAPI_TOKEN
+          command: deploy trade-worker.js --name story-trade --compatibility-date 2025-01-01
+      - name: Deploy to Cloudflare (no MetaApi key yet)
+        if: steps.ready.outputs.ok == 'true' && steps.ready.outputs.meta != 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy trade-worker.js --name story-trade --compatibility-date 2025-01-01

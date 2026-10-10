@@ -54,6 +54,7 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         fun noteSavePdf(title: String, pages: List<String>)
         fun noteShareTo(pkg: String, cls: String, title: String, text: String, files: List<java.io.File>)
         fun notePrint(title: String, html: String)
+        fun evalPages(js: String)
     }
 
     /** The phone's real launchable apps, with their real icons -- kept ready, so the Apps area opens instantly. */
@@ -117,6 +118,54 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
 
     @JavascriptInterface
     fun removeProfilePhoto() { if (profile) host.removeProfilePhoto() }
+
+    // ---- Trading (the Pages only): real broker servers, talked to by the phone itself (no browser limits), and the
+    //      sign-in tokens kept in STORY's private storage on the phone (never a password). ----
+    /** Answer: window.storyHttp(id, status, body). status 0 = no connection. */
+    @JavascriptInterface
+    fun http(id: String, method: String, url: String, headersJson: String, body: String) {
+        if (station3 || profile) return
+        if (!url.startsWith("https://")) { answerHttp(id, 0, ""); return }
+        Thread {
+            var code = 0; var text = ""
+            runCatching {
+                val c = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+                c.requestMethod = method.uppercase()
+                c.connectTimeout = 15000; c.readTimeout = 20000
+                c.setRequestProperty("Accept", "application/json")
+                runCatching { val h = JSONObject(headersJson); h.keys().forEach { k -> c.setRequestProperty(k, h.getString(k)) } }
+                if (body.isNotEmpty() && method.uppercase() != "GET") {
+                    c.doOutput = true
+                    if (c.getRequestProperty("Content-Type") == null) c.setRequestProperty("Content-Type", "application/json")
+                    c.outputStream.use { it.write(body.toByteArray()) }
+                }
+                code = c.responseCode
+                text = (if (code in 200..399) c.inputStream else c.errorStream)?.bufferedReader()?.use { it.readText() } ?: ""
+                c.disconnect()
+            }
+            answerHttp(id, code, text)
+        }.start()
+    }
+    private fun answerHttp(id: String, code: Int, text: String) {
+        host.evalPages("window.storyHttp&&window.storyHttp(" + JSONObject.quote(id) + "," + code + "," + JSONObject.quote(text) + ")")
+    }
+
+    @JavascriptInterface
+    fun secretSet(key: String, value: String) {
+        if (station3 || profile) return
+        ctx.getSharedPreferences("trade_secrets", Context.MODE_PRIVATE).edit().apply { if (value.isEmpty()) remove(key) else putString(key, value) }.apply()
+    }
+
+    @JavascriptInterface
+    fun secretGet(key: String): String =
+        if (station3 || profile) "" else ctx.getSharedPreferences("trade_secrets", Context.MODE_PRIVATE).getString(key, "") ?: ""
+
+    /** Opens an app on the phone by its package (e.g. MetaTrader 5); false if it isn't installed. */
+    @JavascriptInterface
+    fun openPackage(pkg: String): Boolean {
+        val i = ctx.packageManager.getLaunchIntentForPackage(pkg) ?: return false
+        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); host.hidePanel(); ctx.startActivity(i); return true
+    }
 
     /** Drawings: saves each picture (PNG data URLs, JSON list) straight into the phone's photos (Pictures/STORY).
      *  Returns how many were saved. */
