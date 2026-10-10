@@ -4175,7 +4175,7 @@ let state = {
   favorites:[],
   favoritesOpen:false,
   moneyTransferOpen:false,
-  walletCardIndex:(()=>{ try{ const l = JSON.parse(localStorage.getItem('story-cards') || '[]') || []; const a = localStorage.getItem('story-card-active'); const i = l.findIndex(c=>c.id === a); return i >= 0 ? i + 1 : (a === '' || !l.length ? 0 : 1); }catch(e){ return 0; } })(),
+  walletCardIndex:(()=>{ try{ const l = (JSON.parse(localStorage.getItem('story-cards') || '[]') || []).filter(c=>c && c.checked); const a = localStorage.getItem('story-card-active'); const i = l.findIndex(c=>c.id === a); return i >= 0 ? i + 1 : (a === '' || !l.length ? 0 : 1); }catch(e){ return 0; } })(),
   txHistoryBackTarget:'wallet',
   sendAmount:'',
   sendToContactId:null,
@@ -6085,7 +6085,8 @@ const NET_LOGOS = {
   Mastercard: '<svg viewBox="0 0 38 24" height="24" aria-label="Mastercard"><circle cx="13" cy="12" r="10" fill="#EB001B"/><circle cx="25" cy="12" r="10" fill="#F79E1B"/><path d="M19 4a10 10 0 0 1 0 16a10 10 0 0 1 0-16z" fill="#FF5F00"/></svg>',
   Amex: '<svg viewBox="0 0 24 24" height="26" aria-label="American Express"><rect x="0.5" y="0.5" width="23" height="23" rx="3" fill="#ffffff"/><path fill="#2E77BC" d="M16.015 14.378c0-.32-.135-.496-.344-.622-.21-.12-.464-.135-.81-.135h-1.543v2.82h.675v-1.027h.72c.24 0 .39.024.478.125.12.13.104.38.104.55v.35h.66v-.555c-.002-.25-.017-.376-.108-.516-.06-.08-.18-.18-.33-.234l.02-.008c.18-.072.48-.297.48-.747zm-.87.407l-.028-.002c-.09.053-.195.058-.33.058h-.81v-.63h.824c.12 0 .24 0 .33.05.098.048.156.147.15.255 0 .12-.045.215-.134.27zM20.297 15.837H19v.6h1.304c.676 0 1.05-.278 1.05-.884 0-.28-.066-.448-.187-.582-.153-.133-.392-.193-.73-.207l-.376-.015c-.104 0-.18 0-.255-.03-.09-.03-.15-.105-.15-.21 0-.09.017-.166.09-.21.083-.046.177-.066.272-.06h1.23v-.602h-1.35c-.704 0-.958.437-.958.84 0 .9.776.855 1.407.87.104 0 .18.015.225.06.046.03.082.106.082.18 0 .077-.035.15-.08.18-.06.053-.15.07-.277.07zM0 0v10.096L.81 8.22h1.75l.225.464V8.22h2.043l.45 1.02.437-1.013h6.502c.295 0 .56.057.756.236v-.23h1.787v.23c.307-.17.686-.23 1.12-.23h2.606l.24.466v-.466h1.918l.254.465v-.466h1.858v3.948H20.87l-.36-.6v.585h-2.353l-.256-.63h-.583l-.27.614h-1.213c-.48 0-.84-.104-1.08-.24v.24h-2.89v-.884c0-.12-.03-.12-.105-.135h-.105v1.036H6.067v-.48l-.21.48H4.69l-.202-.48v.465H2.235l-.256-.624H1.4l-.256.624H0V24h23.786v-7.108c-.27.135-.613.18-.973.18H21.09v-.255c-.21.165-.57.255-.914.255H14.71v-.9c0-.12-.018-.12-.12-.12h-.075v1.022h-1.8v-1.066c-.298.136-.643.15-.928.136h-.214v.915h-2.18l-.54-.617-.57.6H4.742v-3.93h3.61l.518.602.554-.6h2.412c.28 0 .74.03.942.225v-.24h2.177c.202 0 .644.045.903.225v-.24h3.265v.24c.163-.164.508-.24.803-.24h1.89v.24c.194-.15.464-.24.84-.24h1.176V0H0zM21.156 14.955c.004.005.006.012.01.016.01.01.024.01.032.02l-.042-.035zM23.828 13.082h.065v.555h-.065zM23.865 15.03v-.005c-.03-.025-.046-.048-.075-.07-.15-.153-.39-.215-.764-.225l-.36-.012c-.12 0-.194-.007-.27-.03-.09-.03-.15-.105-.15-.21 0-.09.03-.16.09-.204.076-.045.15-.05.27-.05h1.223v-.588h-1.283c-.69 0-.96.437-.96.84 0 .9.78.855 1.41.87.104 0 .18.015.224.06.046.03.076.106.076.18 0 .07-.034.138-.09.18-.045.056-.136.07-.27.07h-1.288v.605h1.287c.42 0 .734-.118.9-.36h.03c.09-.134.135-.3.135-.523 0-.24-.045-.39-.135-.526zM18.597 14.208v-.583h-2.235V16.458h2.235v-.585h-1.57v-.57h1.533v-.584h-1.532v-.51M13.51 8.787h.685V11.6h-.684zM13.126 9.543l-.007.006c0-.314-.13-.5-.34-.624-.217-.125-.47-.135-.81-.135H10.43v2.82h.674v-1.034h.72c.24 0 .39.03.487.12.122.136.107.378.107.548v.354h.677v-.553c0-.25-.016-.375-.11-.516-.09-.107-.202-.19-.33-.237.172-.07.472-.3.472-.75zm-.855.396h-.015c-.09.054-.195.056-.33.056H11.1v-.623h.825c.12 0 .24.004.33.05.09.04.15.128.15.25s-.047.22-.134.266zM15.92 9.373h.632v-.6h-.644c-.464 0-.804.105-1.02.33-.286.3-.362.69-.362 1.11 0 .512.123.833.36 1.074.232.238.645.31.97.31h.78l.255-.627h1.39l.262.627h1.36v-2.11l1.272 2.11h.95l.002.002V8.786h-.684v1.963l-1.18-1.96h-1.02V11.4L18.11 8.744h-1.004l-.943 2.22h-.3c-.177 0-.362-.03-.468-.134-.125-.15-.186-.36-.186-.662 0-.285.08-.51.194-.63.133-.135.272-.165.516-.165zm1.668-.108l.464 1.118v.002h-.93l.466-1.12zM2.38 10.97l.254.628H4V9.393l.972 2.205h.584l.973-2.202.015 2.202h.69v-2.81H6.118l-.807 1.904-.876-1.905H3.343v2.663L2.205 8.787h-.997L.01 11.597h.72l.26-.626h1.39zm-.688-1.705l.46 1.118-.003.002h-.915l.457-1.12zM11.856 13.62H9.714l-.85.923-.825-.922H5.346v2.82H8l.855-.932.824.93h1.302v-.94h.838c.6 0 1.17-.164 1.17-.945l-.006-.003c0-.78-.598-.93-1.128-.93zM7.67 15.853l-.014-.002H6.02v-.557h1.47v-.574H6.02v-.51H7.7l.733.82-.764.824zm2.642.33l-1.03-1.147 1.03-1.108v2.253zm1.553-1.258h-.885v-.717h.885c.24 0 .42.098.42.344 0 .243-.15.372-.42.372zM9.967 9.373v-.586H7.73V11.6h2.237v-.58H8.4v-.564h1.527V9.88H8.4v-.507"/></svg>',
 };
-function walletCards(){ try{ return JSON.parse(localStorage.getItem(CARDS_KEY) || '[]') || []; }catch(e){ return []; } }
+// Cards added before the number check existed were never checked - they don't count (owner: no fake card details).
+function walletCards(){ try{ return (JSON.parse(localStorage.getItem(CARDS_KEY) || '[]') || []).filter(c=>c && c.checked); }catch(e){ return []; } }
 function saveWalletCards(l){ try{ localStorage.setItem(CARDS_KEY, JSON.stringify(l)); }catch(e){} }
 // The card that's showing in Wallet (null on the + slide or with no cards) - Money shows this card's money.
 function activeCard(){ const l = walletCards(); return state.walletCardIndex > 0 ? (l[state.walletCardIndex - 1] || null) : null; }
@@ -6118,9 +6119,29 @@ function cardSlideHTML(c, i){
         </div>
         </div>`;
 }
+// A card number is checked before a card is added (owner: no fake card details): 13-19 digits, the check digit every
+// real card has (Luhn), and the network from its first digits. The full number is only checked - never kept.
+function cardNumberCheck(num){
+  const d = String(num || '').replace(/\D/g, '');
+  if(d.length < 13 || d.length > 19) return null;
+  let sum = 0;
+  for(let i = 0; i < d.length; i++){ let n = +d[d.length - 1 - i]; if(i % 2){ n *= 2; if(n > 9) n -= 9; } sum += n; }
+  if(sum % 10) return null;
+  const p2 = +d.slice(0, 2), p4 = +d.slice(0, 4);
+  const net = /^4/.test(d) && [13, 16, 19].includes(d.length) ? 'Visa'
+    : ((p2 >= 51 && p2 <= 55) || (p4 >= 2221 && p4 <= 2720)) && d.length === 16 ? 'Mastercard'
+    : (p2 === 34 || p2 === 37) && d.length === 15 ? 'Amex'
+    : /^[3456]/.test(d) && !/^(4|5[1-5]|3[47])/.test(d) ? 'Other' : null;
+  return net ? { last4: d.slice(-4), net } : null;
+}
+function cardExpiryOk(exp){
+  const m = /^(0[1-9]|1[0-2])\/(\d{2})$/.exec(exp || ''); if(!m) return false;
+  const end = new Date(2000 + +m[2], +m[1], 1);   // first day after the expiry month
+  return end > new Date() && end < new Date(Date.now() + 21 * 365 * 864e5);
+}
 function cardFormVals(){
   const v = id=>((document.getElementById(id) || {}).value || '').trim();
-  return { bank: v('card-bank'), last4: v('card-last4').replace(/[^0-9]/g, ''), exp: v('card-exp'), msg:'' };
+  return { bank: v('card-bank'), pan: v('card-pan').replace(/[^0-9 ]/g, ''), exp: v('card-exp'), msg:'' };
 }
 // Bank apps for the logo + linking payments: the apps your payments came from first, then the rest of your apps.
 function bankAppChoices(){
@@ -6154,15 +6175,13 @@ function addCardTemplate(){
         <div class="section-title" style="margin-top:12px;">YOUR BANK'S APP</div>
         <button class="card-app-row card-app-pick" data-action="card-app-open">${app && app.iconUrl ? `<img src="${app.iconUrl}" alt="">` : '<span class="card-app-ph"></span>'}<span>${app ? escText(app.name) : 'Pick it - its logo goes on the card and its payments show on Money'}</span></button>
         <div class="grid2" style="grid-template-columns:1fr 1fr;gap:8px;">
-          <div><div class="section-title" style="margin-top:12px;">LAST 4 DIGITS</div><input class="field-input" id="card-last4" type="text" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="1234" value="${escText(f.last4 || '')}"></div>
+          <div style="grid-column:1 / -1;"><div class="section-title" style="margin-top:12px;">CARD NUMBER</div><input class="field-input" id="card-pan" type="text" inputmode="numeric" maxlength="23" autocomplete="off" placeholder="The full number on your card" value="${escText(f.pan || '')}"></div>
           <div><div class="section-title" style="margin-top:12px;">EXPIRES</div><input class="field-input" id="card-exp" type="text" inputmode="numeric" maxlength="5" autocomplete="off" placeholder="MM/YY" value="${escText(f.exp || '')}"></div>
         </div>
-        <div class="section-title" style="margin-top:12px;">NETWORK</div>
-        <div class="acct-seg" style="grid-template-columns:repeat(4,1fr);margin-bottom:8px;">${CARD_NETS.map(n=>`<button class="acct-seg-btn${(f.net || 'Visa') === n ? ' on' : ''}" data-cardnet="${n}">${n}</button>`).join('')}</div>
         ${f.photo ? '' : `<div class="section-title" style="margin-top:4px;">COLOUR</div>
         <div style="display:flex;gap:10px;margin:6px 0 4px;flex-wrap:wrap;">${CARD_COLORS.map(([n, bg])=>`<button data-keep-color data-cardcolor="${n}" title="${n}" style="width:30px;height:30px;border-radius:50%;background:${bg};border:2px solid ${(f.color || 'Blue') === n ? '#ffffff' : 'transparent'};padding:0;"></button>`).join('')}</div>`}
         <div class="acct-msg">${escText(f.msg || '')}</div>
-        <div class="note" style="margin-top:6px;">Only this is kept, on this phone - never your full card number (a picture has it covered). Paying uses your phone's own tap to pay.</div>
+        <div class="note" style="margin-top:6px;">STORY checks the card number is a real card's, then keeps only the last 4 digits, on this phone - never the full number (a picture has it covered). Paying uses your phone's own tap to pay.</div>
         <button class="btn-wide btn-primary" style="margin-top:12px;" data-action="add-card-save">Add card</button>
       </div>
     </div>`;
@@ -6252,8 +6271,9 @@ function cardPhotoRead(canvas){
     const net = /american\s*express|amex/i.test(all) ? 'Amex' : /master\s*card/i.test(all) ? 'Mastercard' : /visa/i.test(all) ? 'Visa' : first === '4' ? 'Visa' : (first === '5' || first === '2') ? 'Mastercard' : first === '3' ? 'Amex' : (state.addCard || {}).net;
     const safe = canvas.toDataURL('image/jpeg', 0.9);
     const photo = NATIVE && window.StoryNative.noteSavePhoto ? (n=>n ? NOTE_FILE_BASE + encodeURIComponent(n) : null)(window.StoryNative.noteSavePhoto(safe)) : safe;
-    const f = state.addCard = Object.assign(state.addCard || {}, { photo, msg: pan ? '' : 'Couldn’t read the card number - type the last 4 digits' });
-    if(last4) f.last4 = last4;
+    const read = pan ? (pan.text.match(/\d/g) || []).join('') : '';
+    const f = state.addCard = Object.assign(state.addCard || {}, { photo, msg: cardNumberCheck(read) ? '' : 'Couldn’t read the card number - type it in' });
+    if(cardNumberCheck(read)) f.pan = read.replace(/(\d{4})(?=\d)/g, '$1 ');
     if(exp[0]) f.exp = exp[1] + '/' + exp[2];
     if(net) f.net = net;
     state.addCardOpen = true;
@@ -11246,7 +11266,6 @@ function attachHandlers(){
     const box = q.parentElement.querySelector('.card-app-list'); const v = q.value.toLowerCase();
     box.querySelectorAll('[data-cardapp]').forEach(r=>{ r.style.display = r.textContent.toLowerCase().includes(v) ? '' : 'none'; });
   }); }
-  document.querySelectorAll('[data-cardnet]').forEach(el=>el.addEventListener('click', ()=>{ state.addCard = Object.assign(state.addCard || {}, cardFormVals(), { net: el.getAttribute('data-cardnet') }); renderDevice(); }));
   document.querySelectorAll('[data-cardcolor]').forEach(el=>el.addEventListener('click', ()=>{ state.addCard = Object.assign(state.addCard || {}, cardFormVals(), { color: el.getAttribute('data-cardcolor') }); renderDevice(); }));
   document.querySelectorAll('[data-wcard]').forEach(el=>el.addEventListener('click', ()=>{
     const i = walletCards().findIndex(c=>c.id === el.getAttribute('data-wcard')) + 1;
@@ -12679,14 +12698,17 @@ function attachHandlers(){
         case 'card-photo': state.addCard = Object.assign(state.addCard || {}, cardFormVals()); state.addCardOpen = false; renderDevice(); openCardCamera(); return;
         case 'card-app-open': state.addCard = Object.assign(state.addCard || {}, cardFormVals(), { pickApp:true, appQuery:'' }); break;
         case 'card-app-back': state.addCard.pickApp = false; break;
-        case 'add-card-close': state.addCardOpen = false; break;
+        case 'add-card-close': state.addCardOpen = false; state.addCard = null; break;
         case 'add-card-save': {
           const f = state.addCard = Object.assign(state.addCard || {}, cardFormVals());
           let exp = f.exp.replace(/[^0-9]/g, ''); if(exp.length === 4) exp = exp.slice(0, 2) + '/' + exp.slice(2); f.exp = exp;
           if(!f.bank){ f.msg = 'Type the bank or card name'; break; }
-          if(!/^\d{4}$/.test(f.last4)){ f.msg = 'Type the last 4 digits of the card'; break; }
+          if(!f.pan){ f.msg = 'Type the card number'; break; }
+          const chk = cardNumberCheck(f.pan);
+          if(!chk){ f.msg = 'This isn’t a real card number'; break; }
           if(!/^(0[1-9]|1[0-2])\/\d{2}$/.test(f.exp)){ f.msg = 'Type the expiry like 09/28'; break; }
-          const list = walletCards(); list.push({ id:'card' + Date.now(), bank:f.bank, pkg:f.pkg || '', last4:f.last4, exp:f.exp, net:f.net || 'Visa', color:f.color || 'Blue', photo:f.photo || '' });
+          if(!cardExpiryOk(f.exp)){ f.msg = 'This expiry date isn’t valid - the card has expired or the date is wrong'; break; }
+          const list = walletCards(); list.push({ id:'card' + Date.now(), bank:f.bank, pkg:f.pkg || '', last4:chk.last4, exp:f.exp, net:chk.net, color:f.color || 'Blue', photo:f.photo || '', checked:true });
           saveWalletCards(list);
           state.addCardOpen = false; state.addCard = null; setWalletCardIndex(list.length);
           showToast('Card added');
