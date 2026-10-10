@@ -5435,7 +5435,11 @@ function addAccountTemplate(){
   return `
     <div class="modal-overlay" data-action="add-account-bg">
       <div class="modal-sheet" onclick="event.stopPropagation()">
-        <div class="modal-head"><span class="modal-title">Log in to ${escText(f.broker || P.label)}</span><button class="modal-close" data-action="add-account-close">×</button></div>
+        <div class="modal-head"><span class="modal-title">Log in to ${escText(f.other ? 'your broker' : (f.broker || P.label))}</span><button class="modal-close" data-action="add-account-close">×</button></div>
+        ${f.other ? `<div class="section-title" style="margin-top:4px;">YOUR BROKER</div>
+          <input class="field-input" data-addacct-field="brokerName" type="text" autocomplete="off" spellcheck="false" placeholder="Your broker’s name" value="${escText(v.brokerName || '')}">
+          <div class="section-title" style="margin-top:12px;">ITS PLATFORM</div>
+          <div class="acct-seg" style="grid-template-columns:repeat(4,1fr);margin-bottom:8px;">${['mt5','mt4','tradelocker','deriv'].map(p=>`<button class="acct-seg-btn${f.platform===p?' on':''}" data-addacct-platform="${p}">${escText(PLATFORMS[p].label)}</button>`).join('')}</div>` : ''}
         ${(()=>{ const b = brokerByName(f.broker); if(!b) return ''; return `<div class="acct-broker-sub">${escText(b.regs)}${b.fsca ? ' · FSCA' : ''}${b.note ? ' · ' + escText(b.note) : ''}</div>` + (b.platforms.length > 1 ? `<div class="acct-seg acct-seg-n" style="grid-template-columns:repeat(${b.platforms.length},1fr);margin-bottom:8px;">${b.platforms.map(p=>`<button class="acct-seg-btn${f.platform===p?' on':''}" data-addacct-platform="${p}">${escText((PLATFORMS[p] || {}).label || p)}</button>`).join('')}</div>` : ''); })()}
         ${P.env ? `<div class="acct-seg">
           <button class="acct-seg-btn${f.env==='live'?' on':''}" data-addacct-env="live">Real</button>
@@ -5444,7 +5448,7 @@ function addAccountTemplate(){
         ${P.soon ? `<div class="acct-note">${escText(P.soon)} - coming soon.</div>` : (P.fields || []).map(([k, label, ph, kind])=>`
           <div class="section-title" style="margin-top:12px;">${label}</div>
           <input class="field-input" data-addacct-field="${k}" type="${kind === 'password' ? 'password' : kind === 'email' ? 'email' : 'text'}" inputmode="${kind === 'numeric' ? 'numeric' : kind === 'email' ? 'email' : 'text'}" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="${escText(k === 'server' && f.broker ? f.broker + ' server (from your broker’s email)' : (ph || ''))}" value="${escText(v[k] || '')}">`).join('')}
-        ${P.note && !P.soon ? `<div class="acct-note">${escText(P.note)}</div>` : ''}
+        ${P.note && !P.soon ? `<div class="acct-note">${escText(P.note)} Deposits and withdrawals stay with your broker.</div>` : ''}
         ${f.msg ? `<div class="acct-msg">${escText(f.msg)}</div>` : ''}
         ${P.soon ? '' : `<button class="btn-wide btn-primary" style="margin-top:12px;" data-action="add-account-go"${f.busy?' disabled':''}>${f.busy ? 'Logging in…' : 'Log in'}</button>`}
       </div>
@@ -5480,7 +5484,9 @@ function brokerPanelHTML(){
       <div class="broker-group">Forex & CFDs</div>${fx.map(row).join('')}
       <div class="broker-group">Stocks</div>${stocks.map(row).join('')}
       <div class="broker-group">Crypto</div>${crypto.map(row).join('')}
-      <div class="broker-legit">Only regulated brokers: each holds a licence from a top regulator (FCA, ASIC, CySEC, BaFin, FINMA, MAS…) or the FSCA, with no serious unresolved cases. Always check your broker’s licence on the regulator’s own register.</div>
+      <div class="broker-group">Any other broker</div>
+      <div class="broker-row broker-row2" data-broker-other="1"><span class="broker-l"><span class="broker-name">Log in to another broker</span><span class="broker-regs">Any trading account - pick its platform</span></span><span class="broker-sub">MT5 · MT4 · TradeLocker · Deriv</span></div>
+      <div class="broker-legit">The brokers above are regulated: each holds a licence from a top regulator (FCA, ASIC, CySEC, BaFin, FINMA, MAS…) or the FSCA. STORY is only the gateway to your own broker account - it isn’t part of your agreement with your broker, and deposits and withdrawals always stay with your broker.</div>
     </div>
   </div>`;
 }
@@ -10615,7 +10621,7 @@ function attachHandlers(){
     });
   });
 
-  document.querySelectorAll('[data-addacct-platform]').forEach(el=>el.addEventListener('click', ()=>{ state.addAccount.platform = el.getAttribute('data-addacct-platform'); state.addAccount.msg = ''; state.addAccount.vals = {}; renderDevice(); }));
+  document.querySelectorAll('[data-addacct-platform]').forEach(el=>el.addEventListener('click', ()=>{ const bn = (document.querySelector('#content-area [data-addacct-field=brokerName]') || {}).value; state.addAccount.platform = el.getAttribute('data-addacct-platform'); state.addAccount.msg = ''; state.addAccount.vals = bn != null ? { brokerName: bn } : {}; renderDevice(); }));
   document.querySelectorAll('[data-addacct-env]').forEach(el=>el.addEventListener('click', ()=>{
     const vals = Object.assign({}, state.addAccount.vals || {}); document.querySelectorAll('#content-area [data-addacct-field]').forEach(i=>{ vals[i.getAttribute('data-addacct-field')] = i.value; }); state.addAccount.vals = vals;
     state.addAccount.env = el.getAttribute('data-addacct-env'); renderDevice(); }));
@@ -10635,7 +10641,15 @@ function attachHandlers(){
         box.querySelectorAll('[data-symbol]').forEach(el=>el.addEventListener('click', ()=>{ state.focusSymbol = el.getAttribute('data-symbol'); state.focusName = state.focusSymbol; { const l = tradeAccounts(); const a = l.find(x=>x.id === (activeTradeAccount() || {}).id); if(a){ a.symbol = state.focusSymbol; saveTradeAccounts(l); } } state.symbolPickerOpen = false; state.focusQuote = null; state.focusBars = []; renderDevice(); tradeRefreshNow(true); })); } }
     });
   }
+  document.querySelectorAll('[data-broker-other]').forEach(el=>el.addEventListener('click', ()=>{
+    state.brokerPanelOpen = false;
+    state.addAccount.broker = ''; state.addAccount.other = true;
+    state.addAccount.platform = 'mt5'; state.addAccount.vals = { brokerName: (document.getElementById('broker-search') || {}).value || '' };
+    state.addAccount.msg = ''; state.addAccountOpen = true;
+    renderDevice();
+  }));
   document.querySelectorAll('.broker-row2[data-broker-name]').forEach(el=>el.addEventListener('click', ()=>{
+    state.addAccount.other = false;
     const b = brokerByName(el.getAttribute('data-broker-name')); if(!b) return;
     state.brokerPanelOpen = false;
     state.addAccount.broker = b.name;
@@ -10648,7 +10662,7 @@ function attachHandlers(){
   if(brokerSearch) brokerSearch.addEventListener('input', ()=>{
     state.brokerQuery = brokerSearch.value;
     const q = brokerSearch.value.toLowerCase();
-    document.querySelectorAll('.broker-row2').forEach(r=>{ r.style.display = (!q || r.textContent.toLowerCase().includes(q)) ? '' : 'none'; });
+    document.querySelectorAll('.broker-row2:not([data-broker-other])').forEach(r=>{ r.style.display = (!q || r.textContent.toLowerCase().includes(q)) ? '' : 'none'; });
     document.querySelectorAll('.broker-group').forEach(g=>{ g.style.display = q ? 'none' : ''; });
   });
   // Swipe the account card left / right to go through your accounts (owner).
@@ -11460,6 +11474,7 @@ function attachHandlers(){
           const P = PLATFORMS[state.addAccount.platform] || {};
           if((P.fields || []).some(([k])=>!vals[k])){ state.addAccount.msg = 'Fill in every box'; break; }
           const f = Object.assign({}, state.addAccount, vals);
+          if(f.other){ if(!vals.brokerName){ state.addAccount.msg = 'Type your broker’s name'; break; } f.broker = vals.brokerName; }
           tradeAddAccount(f);
           return;
         }
