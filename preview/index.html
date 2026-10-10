@@ -921,6 +921,12 @@
     border:1px solid rgba(0,0,0,0.4); box-shadow:0 1px 3px rgba(0,0,0,0.4); transform:translate(-50%,-50%); pointer-events:none;
   }
 
+  .note-img{ display:block; max-width:100%; height:auto; border-radius:8px; margin:6px 0; }
+  .note-audio{ display:flex; flex-direction:column; gap:4px; margin:6px 0; padding:8px 10px; border-radius:10px; background:rgba(0,0,0,0.06); max-width:100%; }
+  .note-audio-name{ font-size:12px; font-weight:700; color:#000; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .note-audio audio{ width:100%; height:36px; }
+  .note-saveas-row{ display:flex; align-items:center; gap:8px; padding:4px 2px; }
+  .note-saveas-label{ font-size:12px; font-weight:800; color:var(--muted); margin-right:auto; }
   .sticky-note-embed{
     display:block; background:#fff59d; color:#000; padding:12px; margin:10px 0; border-radius:4px;
     box-shadow:0 4px 10px rgba(0,0,0,0.2); font-size:12.5px; outline:none; transform:rotate(-1deg); min-height:20px;
@@ -3899,11 +3905,7 @@ let state = {
   flashlightOn:false,
   rotationLockOn:false,
   myControls:['wifi','bt','dnd'],
-  notes:[
-    {id:'n1', title:'Grocery List', preview:'Eggs, milk, bread, coffee, spinach…', date:'Sep 20', cover:'#f4d35e', pageStyle:'blank', content:null, text:'Eggs, milk, bread, coffee, spinach…', pages:['Eggs, milk, bread, coffee, spinach…'], tasks:[], favorite:false},
-    {id:'n2', title:'Meeting Notes', preview:'Discussed Q3 roadmap and budget…', date:'Sep 18', cover:'#8ecae6', pageStyle:'blank', content:null, text:'Discussed Q3 roadmap and budget…', pages:['Discussed Q3 roadmap and budget…'], tasks:[], favorite:false},
-    {id:'n3', title:'Ideas', preview:'App redesign concepts, color themes…', date:'Sep 15', cover:'#f4a6c6', pageStyle:'blank', content:null, text:'App redesign concepts, color themes…', pages:['App redesign concepts, color themes…'], tasks:[], favorite:false},
-  ],
+  notes:[],            // a new user starts with no notes (owner) - yours are loaded from the phone
   currentNoteId:null,
   currentPages:[''],
   // Parallel to currentPages -- canvasPages[i] is page i's drawing (a canvas dataURL, or null
@@ -5460,7 +5462,6 @@ const COMING_SOON = [
   ['.btn-buy', ()=>'Buy'],
   ['.btn-sell', ()=>'Sell'],
   ['[data-action="notes-unavailable"]', el=>el.textContent.trim()],
-  ['[data-action="note-print"]', ()=>'Print'],   // the phone's WebView can't print yet
   ['.app-row:not([data-native-pkg]):not([data-nav]):not([data-app-launchpopup]):not([data-app-locked]):not([data-app-toast])', el=>(el.querySelector('.row-name')||el).textContent.trim()],
   ['.notif-card', ()=>'Payment details'],
 ];
@@ -6977,6 +6978,136 @@ function noteTaskTidy(area){
     if(!isNoteTask(l.previousSibling)){ while(l.firstChild) l.parentNode.insertBefore(l.firstChild, l); l.remove(); }
   });
 }
+// ---- Notes: pictures, photos and audio files from the phone, print / Save as PDF and Save as text ----
+let noteInsertAt = null;   // where your cursor was when + opened (text offsets)
+const NOTE_FILE_BASE = 'https://appassets.androidplatform.net/story-photo/note/';
+// The open note (text, drawings, title) into state and onto the phone right now.
+function noteFlushOpen(){
+  if(state.current !== 'notes-canvas') return;
+  const area = document.getElementById('note-content-area');
+  if(area && area.getAttribute('data-search-highlighted') !== 'true'){ state.currentNoteText = area.innerHTML; state.currentPages[state.currentPageIndex] = state.currentNoteText; }
+  const canvas = document.getElementById('draw-canvas') || document.getElementById('inline-draw-canvas');
+  if(canvas && canvas.dataset.ready === '1' && !canvas.classList.contains('idle')){ state.canvasSnapshot = canvas.toDataURL(); state.canvasPages[state.currentPageIndex] = state.canvasSnapshot; }
+  const title = document.getElementById('note-title-input');
+  if(title) state.currentNoteTitle = title.value;
+  commitOpenNote();
+  persistNotesNow();
+}
+// Puts a node in the note where the cursor was (or at the end), then a line break after it, caret after that.
+function noteInsertBlock(node){
+  const area = document.getElementById('note-content-area');
+  if(!area || state.readMode) return false;
+  pushNoteUndoSnapshot();
+  let placed = false;
+  if(noteInsertAt && restoreContentSelection(noteInsertAt)){
+    const sel = window.getSelection();
+    if(sel.rangeCount && area.contains(sel.anchorNode)){
+      const r = sel.getRangeAt(0); r.deleteContents(); r.collapse(true);
+      const br = document.createElement('br');
+      r.insertNode(br); r.insertNode(node);
+      placed = true;
+      notePlaceCaret(br.parentNode, Array.prototype.indexOf.call(br.parentNode.childNodes, br) + 1);
+    }
+  }
+  if(!placed){ area.appendChild(node); area.appendChild(document.createElement('br')); }
+  noteInsertAt = null;
+  state.currentNoteText = area.innerHTML;
+  state.currentPages[state.currentPageIndex] = state.currentNoteText;
+  noteLiveSave();
+  return true;
+}
+function noteImageNode(src){
+  const img = document.createElement('img');
+  img.className = 'note-img'; img.alt = ''; img.src = src;
+  return img;
+}
+function noteAudioNode(src, name){
+  const wrap = document.createElement('span');
+  wrap.className = 'note-audio'; wrap.contentEditable = 'false';
+  const a = document.createElement('audio'); a.controls = true; a.preload = 'metadata'; a.src = src;
+  const n = document.createElement('span'); n.className = 'note-audio-name'; n.textContent = name || 'Audio';
+  wrap.appendChild(n); wrap.appendChild(a);
+  return wrap;
+}
+// The phone tells the note what came back from its picker / camera / print / save screen.
+window.storyNoteMedia = function(kind, status, data){
+  data = data || {};
+  if(status === 'denied'){ showToast('Allow STORY to use the camera to take a photo'); return; }
+  if(status === 'error'){ showToast(kind === 'savetext' ? "Couldn't save the note - try again" : kind === 'print' ? "Couldn't open printing - try again" : "Couldn't add that - try another one"); return; }
+  if(status !== 'ok') return;
+  if(kind === 'savetext'){ showToast('Note saved'); return; }
+  if(kind === 'print' || !data.file || state.current !== 'notes-canvas') return;
+  const src = NOTE_FILE_BASE + encodeURIComponent(data.file);
+  noteInsertBlock(kind === 'audio' ? noteAudioNode(src, data.name) : noteImageNode(src));
+};
+// In a browser (no phone underneath): the browser's own file picker.
+function noteMediaWebFallback(kind){
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = kind === 'audio' ? 'audio/*' : 'image/*';
+  if(kind === 'camera') inp.setAttribute('capture', 'environment');
+  inp.onchange = ()=>{
+    const f = inp.files && inp.files[0]; if(!f) return;
+    const rd = new FileReader();
+    rd.onload = ()=>noteInsertBlock(kind === 'audio' ? noteAudioNode(rd.result, f.name.replace(/\.[^.]+$/, '')) : noteImageNode(rd.result));
+    rd.readAsDataURL(f);
+  };
+  inp.click();
+}
+// The note as plain text: tasks as [ ] / [x], pictures and audio named, one blank line between pages.
+function noteAsText(title){
+  const toText = html=>{
+    const d = document.createElement('div'); d.innerHTML = html || '';
+    let out = '';
+    const walk = n=>{
+      if(n.nodeType === 3){ out += n.textContent.replace(/​/g, ''); return; }
+      if(n.nodeType !== 1) return;
+      const tag = n.nodeName;
+      if(n.classList.contains('inline-task')){ const cb = n.querySelector('input'); out += (cb && cb.hasAttribute('checked') ? '[x] ' : '[ ] '); return; }
+      if(n.classList.contains('note-audio')){ out += '[Audio: ' + ((n.querySelector('.note-audio-name') || {}).textContent || 'Audio') + ']'; return; }
+      if(tag === 'IMG'){ out += (out && !out.endsWith('\n') ? '\n' : '') + '[Picture]'; return; }
+      if(tag === 'BR'){ out += '\n'; return; }
+      if(n.classList.contains('note-table-tap-catcher') || n.classList.contains('note-table-controls') || tag === 'BUTTON') return;
+      const block = /^(DIV|P|LI|TR|H1|H2|H3|H4|TABLE)$/.test(tag);
+      if(block && out && !out.endsWith('\n')) out += '\n';
+      n.childNodes.forEach(walk);
+      if(tag === 'TD' || tag === 'TH') out += '\t';
+      if(block && !out.endsWith('\n')) out += '\n';
+    };
+    d.childNodes.forEach(walk);
+    return out.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+  };
+  const pages = state.currentPages.map(toText).filter(Boolean);
+  return title + '\n\n' + pages.join('\n\n') + '\n';
+}
+// The note laid out for paper: the title, then each page (its drawing under its writing), one page per sheet.
+function notePrintHTML(title){
+  const esc = escapeHtml;
+  const pages = state.currentPages.map((h, i)=>({ h: h || '', ink: state.canvasPages[i] || null }))
+    .filter(p=>p.ink || p.h.replace(/<[^>]+>|​|&nbsp;|\s/g, '') || /<img|inline-task|note-audio|note-table/.test(p.h));
+  const body = (pages.length ? pages : [{h:'', ink:null}]).map(p=>{
+    const d = document.createElement('div'); d.innerHTML = p.h;
+    d.querySelectorAll('.note-table-tap-catcher, .note-table-controls, button').forEach(x=>x.remove());
+    d.querySelectorAll('[contenteditable]').forEach(x=>x.removeAttribute('contenteditable'));
+    d.querySelectorAll('.note-audio').forEach(x=>{ const n = (x.querySelector('.note-audio-name') || {}).textContent || 'Audio'; x.replaceWith(Object.assign(document.createElement('div'), { className:'audio', textContent:'♪ ' + n })); });
+    return `<section class="page"><div class="text" style="font-family:${state.fontFamily === 'inherit' ? 'inherit' : state.fontFamily};">${d.innerHTML}</div>${p.ink ? `<img class="ink" src="${p.ink}" alt="">` : ''}</section>`;
+  }).join('');
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title><style>
+    @page{ size:A4; margin:16mm; }
+    *{ box-sizing:border-box; }
+    body{ margin:0; color:#000; background:#fff; font-family:Roboto, Arial, Helvetica, sans-serif; font-size:13pt; line-height:1.5; }
+    h1{ font-size:20pt; margin:0 0 12pt; }
+    .page{ page-break-after:always; break-after:page; }
+    .page:last-child{ page-break-after:auto; break-after:auto; }
+    .text{ word-wrap:break-word; }
+    .text img{ max-width:100%; height:auto; display:block; margin:6pt 0; border-radius:6pt; }
+    .ink{ width:100%; height:auto; display:block; margin-top:8pt; }
+    .audio{ margin:6pt 0; font-weight:600; }
+    .inline-task-checkbox{ width:12pt; height:12pt; vertical-align:middle; margin:0 4pt 0 0; }
+    .inline-task-text.done{ text-decoration:line-through; opacity:0.6; }
+    table{ border-collapse:collapse; width:100%; margin:6pt 0; } td, th{ border:1px solid #999; padding:4pt 6pt; vertical-align:top; }
+    .sticky-note-embed{ padding:8pt 10pt; border-radius:6pt; margin:6pt 0; }
+  </style></head><body><h1>${esc(title)}</h1>${body}</body></html>`;
+}
 function resolveLineColor(pageBg, chosen){
   if(!chosen || chosen === 'auto') return contrastLineColor(pageBg);
   return chosen;
@@ -7384,9 +7515,10 @@ function notesFloatToolbarHTML(){
   const fontColorOpen = state.colorPickerTarget === 'fontcolor';
   return `
     <div class="notes-float-toolbar">
+      ${!isDraw ? `
       <button class="notes-float-btn" data-action="note-add-task" title="Add task">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"></rect><polyline points="8 12 11 15 16 9"></polyline></svg>
-      </button>
+      </button>` : ''}
       ${!isDraw ? `
       <div class="notes-float-btn-wrap">
         <button class="notes-float-btn${state.inlineDrawOpen?' active':''}" data-action="note-inlinedraw-toggle" title="Draw on this page">
@@ -7406,6 +7538,7 @@ function notesFloatToolbarHTML(){
         ${fontColorOpen ? fontColorPopoverHTML() : ''}
       </div>
       <button class="notes-float-btn" data-action="note-underline" title="Underline"><span style="text-decoration:underline;">A</span></button>` : ''}
+      ${!isDraw ? `
       <div class="notes-float-btn-wrap">
         <button class="notes-float-btn${state.fontPickerOpen?' active':''}" data-action="note-font-toggle" title="Font">F</button>
         ${state.fontPickerOpen ? fontPickerPopoverHTML() : ''}
@@ -7413,7 +7546,7 @@ function notesFloatToolbarHTML(){
       <div class="notes-float-btn-wrap">
         <button class="notes-float-btn${state.sizePickerOpen?' active':''}" data-action="note-size-toggle" title="Text size">T</button>
         ${state.sizePickerOpen ? sizePickerPopoverHTML() : ''}
-      </div>
+      </div>` : ''}
       <button class="notes-float-btn" data-action="note-undo" title="Undo">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"></path><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path></svg>
       </button>
@@ -7594,12 +7727,12 @@ function notesCanvasScreen(){
 
 function plusMenuTemplate(){
   const items = [
-    {id:'picture', label:'Picture', icon:'🖼️'},
-    {id:'camera', label:'Camera', icon:'📷'},
-    {id:'pdf', label:'PDF', icon:'📄'},
-    {id:'audio', label:'Audio File', icon:'🎙️'},
+    {id:'picture', label:'Picture', icon:'🖼️', action:'note-media', kind:'picture'},
+    {id:'camera', label:'Camera', icon:'📷', action:'note-media', kind:'camera'},
+    {id:'pdf', label:'PDF', icon:'📄', action:'note-export-pdf'},
+    {id:'audio', label:'Audio File', icon:'🎙️', action:'note-media', kind:'audio'},
     {id:'table', label:'Table', icon:'▦', action:'note-add-table'},
-    {id:'saveas', label:'Save As', icon:'💾'},
+    {id:'saveas', label:'Save As', icon:'💾', action:'note-saveas'},
   ];
   return `
     <div class="notes-popover-overlay" data-action="notes-plus-bg">
@@ -7617,7 +7750,13 @@ function plusMenuTemplate(){
             </span>
           </div>
           ${items.map(it=>`
-            <div class="plus-menu-list-item" ${it.action ? `data-action="${it.action}"` : `data-action="notes-unavailable"`}>${it.label}</div>
+            <div class="plus-menu-list-item" ${it.action ? `data-action="${it.action}"` : `data-action="notes-unavailable"`}${it.kind ? ` data-kind="${it.kind}"` : ''}>${it.label}</div>
+            ${it.id === 'saveas' && state.noteSaveAsOpen ? `
+            <div class="note-saveas-row">
+              <span class="note-saveas-label">Save as</span>
+              <button class="plus-menu-bottom-btn" data-action="note-export-pdf">PDF</button>
+              <button class="plus-menu-bottom-btn" data-action="note-save-text">Text file</button>
+            </div>` : ''}
           `).join('')}
         </div>
         <div class="plus-menu-hr"></div>
@@ -8713,7 +8852,7 @@ function commitOpenNote(){
     } else {
       // A new note you left without writing, naming or drawing anything isn't kept (like an untouched drawing).
       const blank = !plainPreview.replace(/​/g, '').trim() && !state.currentNoteTitle.trim() && !state.canvasPages.some(Boolean) &&
-        !state.currentPages.some(h=>/inline-task|note-table|sticky-note|<img/.test(h || ''));
+        !state.currentPages.some(h=>/inline-task|note-table|sticky-note|note-audio|<img/.test(h || ''));
       if(blank) return;
       const newNote = {
         id: 'n' + Date.now(),
@@ -8887,6 +9026,7 @@ function renderDevice(){
       restoreContentSelection(pendingSelectionRestore);
     }
   }
+  if(state.noteSaveAsOpen){ const row = document.querySelector('.note-saveas-row'); if(row) row.scrollIntoView({block:'nearest'}); }
   positionStation3();
   attachPayScroll();
   refreshNeighbors();
@@ -10146,6 +10286,9 @@ function attachHandlers(){
   // (mousedown, with preventDefault stopping the focus shift too) and every case handler
   // below restores it from those offsets right before acting, rather than trusting
   // whatever window.getSelection() happens to report by the time click fires.
+  document.querySelectorAll('[data-action="notes-plus-toggle"]').forEach(el=>{
+    el.addEventListener('pointerdown', ()=>{ const sv = saveContentSelection(); if(sv) noteInsertAt = sv; });
+  });
   const SELECTION_PRESERVING_ACTIONS = new Set([
     'note-underline','note-undo','note-redo','note-font-toggle','note-size-toggle',
     'note-add-task','note-font-select','note-size-step'
@@ -10400,7 +10543,7 @@ function attachHandlers(){
           state.notesSearchOpen = !state.notesSearchOpen;
           if(!state.notesSearchOpen) state.notesSearchQuery = '';
           break;
-        case 'notes-plus-toggle': state.plusMenuOpen = true; state.moreMenuOpen = false; break;
+        case 'notes-plus-toggle': state.plusMenuOpen = true; state.moreMenuOpen = false; state.noteSaveAsOpen = false; break;
         case 'notes-plus-close':
         case 'notes-plus-bg': state.plusMenuOpen = false; break;
         case 'notes-more-toggle': state.moreMenuOpen = true; state.plusMenuOpen = false; state.moreMenuSection = null; break;
@@ -10451,8 +10594,35 @@ function attachHandlers(){
           state.plusMenuOpen = false;
           break;
         }
-        case 'note-print': window.print(); break;
-        case 'note-export-pdf': window.print(); break;
+        // Print and PDF: the phone's own print screen (it prints, or saves the note as a PDF - "Save as PDF").
+        case 'note-print':
+        case 'note-export-pdf': {
+          state.plusMenuOpen = false; state.noteSaveAsOpen = false;
+          noteFlushOpen();
+          const title = state.currentNoteTitle.trim() || 'Untitled';
+          if(NATIVE && window.StoryNative.noteMedia) window.StoryNative.noteMedia('print', title, notePrintHTML(title));
+          else { const w = window.open('', '_blank'); if(w){ w.document.write(notePrintHTML(title)); w.document.close(); w.onload = ()=>w.print(); } }
+          break;
+        }
+        case 'note-saveas': state.noteSaveAsOpen = !state.noteSaveAsOpen; break;
+        case 'note-save-text': {
+          state.plusMenuOpen = false; state.noteSaveAsOpen = false;
+          noteFlushOpen();
+          const title = state.currentNoteTitle.trim() || 'Untitled';
+          const text = noteAsText(title);
+          if(NATIVE && window.StoryNative.noteMedia) window.StoryNative.noteMedia('savetext', title, text);
+          else { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], {type:'text/plain'})); a.download = title.replace(/[\\/:*?"<>|]/g, ' ') + '.txt'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href), 4000); }
+          break;
+        }
+        // Picture / Camera / Audio File: the phone's own picker or camera; what you choose goes in the note where your cursor was.
+        case 'note-media': {
+          const kind = el.getAttribute('data-kind');
+          state.plusMenuOpen = false;
+          noteFlushOpen();
+          if(NATIVE && window.StoryNative.noteMedia) window.StoryNative.noteMedia(kind, '', '');
+          else noteMediaWebFallback(kind);
+          break;
+        }
         case 'note-unavailable': break;
         case 'note-actionsheet-bg':
         case 'note-actionsheet-close': state.noteActionSheetId = null; break;
@@ -10690,7 +10860,7 @@ function attachHandlers(){
             // A template never wipes what you wrote: on a page that already has something, it goes on a new page.
             const tplHTML = buildTemplateContent(tplId);
             const contentEl = document.getElementById('note-content-area');
-            const hasText = contentEl ? !!(contentEl.textContent.replace(/[​\s]/g, '') || contentEl.querySelector('.inline-task,.note-table-wrap,.sticky-note-embed,img')) : !!(state.currentPages[state.currentPageIndex] || '').replace(/<[^>]+>|[​\s]|&nbsp;/g, '');
+            const hasText = contentEl ? !!(contentEl.textContent.replace(/[​\s]/g, '') || contentEl.querySelector('.inline-task,.note-table-wrap,.sticky-note-embed,.note-audio,img')) : !!(state.currentPages[state.currentPageIndex] || '').replace(/<[^>]+>|[​\s]|&nbsp;/g, '');
             if(hasText){
               if(contentEl){ state.currentPages[state.currentPageIndex] = contentEl.innerHTML; }
               pendingPageFlushIndex = state.currentPageIndex;
