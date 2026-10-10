@@ -49,6 +49,7 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         fun requestPhotoAccess()
         fun useProfilePhoto(id: Long)
         fun profileTyping(on: Boolean)
+        fun noteMedia(kind: String, title: String, text: String)
     }
 
     /** The phone's real launchable apps, with their real icons -- kept ready, so the Apps area opens instantly. */
@@ -112,6 +113,10 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
 
     @JavascriptInterface
     fun removeProfilePhoto() { if (profile) host.removeProfilePhoto() }
+
+    /** Notes (the Pages only): "picture" / "camera" / "audio" / "print" (html = the laid-out note) / "savetext". */
+    @JavascriptInterface
+    fun noteMedia(kind: String, title: String, text: String) { if (!station3 && !profile) host.noteMedia(kind, title, text) }
 
     @JavascriptInterface
     fun openRecents() {

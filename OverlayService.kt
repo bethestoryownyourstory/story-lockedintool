@@ -1155,6 +1155,7 @@ class OverlayService : Service(), StoryBridge.Host {
             "capture" -> CreateCameraActivity.currentCapture(this)
             "post" -> seg.getOrNull(2)?.let { CreateCameraActivity.postFile(this, it) }
             "postthumb" -> seg.getOrNull(2)?.let { CreateCameraActivity.postThumb(this, it) }
+            "note" -> seg.getOrNull(2)?.let { NoteMediaActivity.file(this, it) }
             else -> null
         }
         if (file != null) return fileResponse(file, r.requestHeaders)
@@ -1171,7 +1172,7 @@ class OverlayService : Service(), StoryBridge.Host {
         } else WebResourceResponse("image/jpeg", null, 404, "Not Found", mapOf(), java.io.ByteArrayInputStream(ByteArray(0)))
     }
     private fun fileResponse(f: java.io.File, headers: Map<String, String>): WebResourceResponse {
-        val mime = if (f.extension == "mp4") "video/mp4" else "image/jpeg"
+        val mime = if (f.extension == "mp4") "video/mp4" else if (f.parentFile?.name == "notes") NoteMediaActivity.mimeOf(f) else "image/jpeg"
         val len = f.length()
         val range = headers.entries.firstOrNull { it.key.equals("Range", true) }?.value
         val m = range?.let { Regex("bytes=(\\d*)-(\\d*)").find(it) }
@@ -1257,6 +1258,23 @@ class OverlayService : Service(), StoryBridge.Host {
         for (p in back) if (!p.shown) setShown(p, true)
         if (profilePane in back) tellProfileStation3()
     }
+    // ---- Notes: a picture / photo / audio file goes into the note; print / Save as PDF / save as text. The Pages step
+    //      aside for the phone's own screen and come straight back. ----
+    override fun noteMedia(kind: String, title: String, text: String) {
+        if (kind == "print") runCatching { java.io.File(cacheDir, "note_print.html").writeText(text) }
+        ui.post {
+            if (!stepAsideForSystem()) return@post
+            val i = Intent(this, NoteMediaActivity::class.java).putExtra(NoteMediaActivity.EXTRA_KIND, kind).putExtra(NoteMediaActivity.EXTRA_TITLE, title)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
+            if (kind == "savetext") i.putExtra(NoteMediaActivity.EXTRA_TEXT, text)
+            runCatching { startActivity(i) }.onFailure { noteMediaDone(kind, "error", "{}") }
+        }
+    }
+    fun noteMediaDone(kind: String, status: String, json: String) { ui.post {
+        comeBackFromSystem()
+        pagesPane?.web?.evaluateJavascript("window.storyNoteMedia&&window.storyNoteMedia(" + org.json.JSONObject.quote(kind) + "," +
+            org.json.JSONObject.quote(status) + "," + json + ")", null)
+    } }
     override fun removeProfilePhoto() { ui.post {
         runCatching { ProfilePhotoActivity.file(this).delete() }
         profilePane?.web?.evaluateJavascript("window.storyProfilePhotoChanged&&window.storyProfilePhotoChanged()", null)

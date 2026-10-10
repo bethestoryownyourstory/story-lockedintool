@@ -2,4 +2,6 @@
 <!-- Downloaded STORY updates (in the app's cache) that Android's installer may open. -->
 <paths>
     <cache-path name="updates" path="." />
+    <!-- Notes: the phone's camera app saves a photo straight into STORY's notes folder. -->
+    <files-path name="notes" path="notes/" />
 </paths>

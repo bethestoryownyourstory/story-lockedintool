@@ -64,6 +64,14 @@
             android:taskAffinity=""
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
+        <!-- Notes: pick a picture / take a photo / pick an audio file / print or save as PDF / save as text (see-through). -->
+        <activity
+            android:name=".NoteMediaActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
         <!-- Asks Android once for a permission STORY needs (see-through). -->
         <activity
             android:name=".AskActivity"
