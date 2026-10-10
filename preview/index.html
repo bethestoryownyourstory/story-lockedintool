@@ -1222,7 +1222,19 @@
   .realcard-isphoto{ padding:0; }
   .realcard-photo{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; border-radius:inherit; }
   .realcard-brand{ display:flex; align-items:center; gap:8px; }
-  .range-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:10px; }
+  .range-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:10px; }
+  .range-grid .acct-seg-btn{ padding-left:2px; padding-right:2px; font-size:12px; }
+  .cal{ margin-top:14px; }
+  .cal-head{ display:flex; align-items:center; justify-content:space-between; font-weight:700; font-size:14px; margin-bottom:8px; }
+  .cal-nav{ width:34px; height:34px; border-radius:10px; border:1px solid var(--line); background:none; color:var(--text); font-size:18px; }
+  .cal-nav:disabled{ opacity:0.25; }
+  .cal-grid{ display:grid; grid-template-columns:repeat(7,1fr); gap:3px; text-align:center; }
+  .cal-dow{ font-size:10px; color:var(--muted); padding:4px 0; }
+  .cal-day{ height:36px; border:0; border-radius:10px; background:none; color:var(--text); font-size:13px; }
+  .cal-day.off{ color:var(--muted); opacity:0.3; }
+  .cal-day.today{ box-shadow:inset 0 0 0 1px var(--line); }
+  .cal-day.in{ background:rgba(255,255,255,0.12); }
+  .cal-day.edge{ background:#e8e6e1; color:#0a0a0a; font-weight:700; }
   .card-opts{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:4px 0 6px; }
   .card-opt{ display:flex; flex-direction:column; align-items:center; text-align:center; gap:8px; padding:20px 12px; border:1px solid var(--line); border-radius:16px; background:var(--card); color:var(--text); }
   .card-opt-t{ font-size:15px; font-weight:700; }
@@ -4627,8 +4639,10 @@ function netWorthPct(nw, cur){
 // Fills the Money page's numbers from your real payments (same places the page always read them from).
 // ---- The period Money shows (owner): the calendar button under Summary - a day, a set of days, or Day / Week /
 // 3 months / 6 months / Year / 2 years / 3 years / From day 1. Everything below the big number follows it. ----
-const MONEY_RANGES = [['month', 'This month'], ['day', 'Day'], ['week', 'Week'], ['3m', '3 months'], ['6m', '6 months'], ['1y', 'Year'], ['2y', '2 years'], ['3y', '3 years'], ['all', 'From day 1']];
-state.moneyRange = (()=>{ try{ return JSON.parse(localStorage.getItem('story-money-range') || 'null') || { kind:'month' }; }catch(e){ return { kind:'month' }; } })();
+const MONEY_RANGES = [['month', 'This month'], ['day', 'Day'], ['week', 'Week'], ['3m', '3 months'], ['6m', '6 months'], ['1y', 'Year'], ['2y', '2 years'], ['3y', '3 years']];
+// The calendar only goes from the card's first day of history to today (owner).
+function moneyFirstDay(){ const l = moneyView(); return l.length ? dayStart(l[l.length - 1].ts) : dayStart(Date.now()); }
+state.moneyRange = (()=>{ try{ const r = JSON.parse(localStorage.getItem('story-money-range') || 'null'); return r && r.kind !== 'all' ? r : { kind:'month' }; }catch(e){ return { kind:'month' }; } })();
 function setMoneyRange(r){ state.moneyRange = r; try{ localStorage.setItem('story-money-range', JSON.stringify(r)); }catch(e){} }
 const dayStart = t=>{ const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); };
 function moneyRangeSpan(){
@@ -4636,13 +4650,12 @@ function moneyRangeSpan(){
   const back = m=>{ const d = new Date(today); d.setMonth(d.getMonth() - m); return d.getTime(); };
   switch(r.kind){
     case 'day': return { from: today, to: now, label: 'TODAY' };
-    case 'week': return { from: today - 6 * D, to: now, label: 'THIS WEEK' };
+    case 'week': { const d = new Date(today); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return { from: d.getTime(), to: now, label: 'THIS WEEK' }; }   // this week: Monday to today
     case '3m': return { from: back(3), to: now, label: 'LAST 3 MONTHS' };
     case '6m': return { from: back(6), to: now, label: 'LAST 6 MONTHS' };
     case '1y': return { from: back(12), to: now, label: 'LAST YEAR' };
     case '2y': return { from: back(24), to: now, label: 'LAST 2 YEARS' };
     case '3y': return { from: back(36), to: now, label: 'LAST 3 YEARS' };
-    case 'all': { const l = moneyView(); return { from: l.length ? dayStart(l[l.length - 1].ts) : today, to: now, label: 'FROM DAY 1' }; }
     case 'date': { const f = dayStart(r.from), t = dayStart(r.to || r.from) + D - 1; const fmt = x=>new Date(x).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' }).toUpperCase(); return { from: f, to: t, label: dayStart(r.from) === dayStart(r.to || r.from) ? fmt(f) : fmt(f) + ' – ' + fmt(t) }; }
     default: { const d = new Date(today); d.setDate(1); return { from: d.getTime(), to: now, label: 'THIS MONTH' }; }
   }
@@ -4663,6 +4676,11 @@ function spanExpenses(from, to, cur){
 // The period split into equal parts for the charts, each with a short label fitting its length.
 function spanBuckets(from, to, n){
   const len = Math.max(1, to - from), D = 864e5, out = [];
+  // A few days: one bar per day.
+  if(len > 1.01 * D && len <= 10 * D){
+    for(let t = dayStart(from); t <= to; t += D){ const d = new Date(t); out.push({ a: t, b: t + D - 1, label: d.toLocaleDateString('en-US', { weekday:'short' }) }); }
+    return out;
+  }
   for(let i = 0; i < n; i++){
     const a = from + len * i / n, b = from + len * (i + 1) / n - 1, d = new Date(a);
     const label = len <= 1.01 * D ? String(d.getHours()).padStart(2, '0') + 'h'
@@ -4904,20 +4922,34 @@ function moneySummaryScreen(){
 
 function calPopupTemplate(){
   const r = state.moneyRange || { kind:'month' };
-  const iso = t=>{ const d = new Date(t); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+  const first = moneyFirstDay(), last = dayStart(Date.now());
+  const sel = state.calSel || (r.kind === 'date' ? { from: dayStart(r.from), to: dayStart(r.to || r.from) } : {});
+  const v = state.calView || (()=>{ const d = new Date(sel.from || last); return { y: d.getFullYear(), m: d.getMonth() }; })();
+  const start = new Date(v.y, v.m, 1), startDow = (start.getDay() + 6) % 7, days = new Date(v.y, v.m + 1, 0).getDate();
+  const canPrev = new Date(v.y, v.m, 1).getTime() > first, canNext = new Date(v.y, v.m + 1, 1).getTime() <= last;
+  const cells = [];
+  for(let k = 0; k < startDow; k++) cells.push('<span></span>');
+  for(let dd = 1; dd <= days; dd++){
+    const t = new Date(v.y, v.m, dd).getTime();
+    const off = t < first || t > last;
+    const lo = sel.from, hi = sel.to != null ? sel.to : sel.from;
+    const on = lo != null && t >= Math.min(lo, hi) && t <= Math.max(lo, hi);
+    const edge = t === lo || t === hi;
+    cells.push(`<button class="cal-day${off ? ' off' : ''}${on ? ' in' : ''}${edge ? ' edge' : ''}${t === last ? ' today' : ''}"${off ? ' disabled' : ` data-calday="${t}"`}>${dd}</button>`);
+  }
   return `
     <div class="modal-overlay" data-action="cal-bg">
       <div class="confirm-sheet" onclick="event.stopPropagation()">
         <div class="confirm-title">Show activity for</div>
-        <div class="range-grid">${MONEY_RANGES.map(([k, l])=>`<button class="acct-seg-btn${r.kind === k ? ' on' : ''}" data-moneyrange="${k}">${l}</button>`).join('')}</div>
-        <div class="section-title" style="margin-top:14px;">A DAY, OR FROM - TO</div>
-        <div class="grid2" style="grid-template-columns:1fr 1fr;gap:8px;">
-          <input type="date" id="cal-from" class="field-input" value="${r.kind === 'date' ? iso(r.from) : ''}" max="${iso(Date.now())}">
-          <input type="date" id="cal-to" class="field-input" value="${r.kind === 'date' && r.to && dayStart(r.to) !== dayStart(r.from) ? iso(r.to) : ''}" max="${iso(Date.now())}">
+        <div class="range-grid">${MONEY_RANGES.map(([k, l])=>`<button class="acct-seg-btn${r.kind === k && sel.from == null ? ' on' : ''}" data-moneyrange="${k}">${l}</button>`).join('')}</div>
+        <div class="cal">
+          <div class="cal-head"><button class="cal-nav" data-calnav="-1"${canPrev ? '' : ' disabled'}>‹</button><span>${start.toLocaleDateString('en-US', { month:'long', year:'numeric' })}</span><button class="cal-nav" data-calnav="1"${canNext ? '' : ' disabled'}>›</button></div>
+          <div class="cal-grid">${['M','T','W','T','F','S','S'].map(x=>`<span class="cal-dow">${x}</span>`).join('')}${cells.join('')}</div>
+          <div class="note" style="text-align:center;margin-top:6px;">Tap a day, or two days for everything between them</div>
         </div>
-        <div class="confirm-btn-row" style="margin-top:14px;">
+        <div class="confirm-btn-row" style="margin-top:12px;">
           <button class="btn-wide" style="margin-top:0;" data-action="cal-cancel">Cancel</button>
-          <button class="btn-wide btn-primary" style="margin-top:0;" data-action="cal-go">Show</button>
+          <button class="btn-wide btn-primary" style="margin-top:0;" data-action="cal-go"${sel.from == null ? ' disabled' : ''}>Show</button>
         </div>
       </div>
     </div>
@@ -11342,7 +11374,21 @@ function attachHandlers(){
     });
   });
 
-  document.querySelectorAll('[data-moneyrange]').forEach(el=>el.addEventListener('click', ()=>{ setMoneyRange({ kind: el.getAttribute('data-moneyrange') }); state.calOpen = false; renderDevice(); }));
+  document.querySelectorAll('[data-moneyrange]').forEach(el=>el.addEventListener('click', ()=>{ setMoneyRange({ kind: el.getAttribute('data-moneyrange') }); state.calOpen = false; state.calSel = null; state.calView = null; renderDevice(); }));
+  // The calendar: first tap = a day, second tap = the other end of the range, a third tap starts again.
+  document.querySelectorAll('[data-calday]').forEach(el=>el.addEventListener('click', ()=>{
+    const t = +el.getAttribute('data-calday'), c = state.calSel || {};
+    const r = state.moneyRange || {};
+    const cur = c.from != null ? c : (r.kind === 'date' ? null : null);
+    state.calSel = !cur || cur.to != null ? { from:t, to:null } : { from:cur.from, to:t };
+    renderDevice();
+  }));
+  document.querySelectorAll('[data-calnav]').forEach(el=>el.addEventListener('click', ()=>{
+    const r = state.moneyRange || {}; const sel = state.calSel || (r.kind === 'date' ? { from:r.from } : {});
+    const v = state.calView || (()=>{ const d = new Date(sel.from || Date.now()); return { y:d.getFullYear(), m:d.getMonth() }; })();
+    const d = new Date(v.y, v.m + (+el.getAttribute('data-calnav')), 1); state.calView = { y:d.getFullYear(), m:d.getMonth() };
+    renderDevice();
+  }));
   // Your card: tap turns it over (when STORY has its back), hold it -> Remove.
   document.querySelectorAll('[data-wcard]').forEach(el=>{
     const id = el.getAttribute('data-wcard'); let hold = null, held = false;
@@ -12778,7 +12824,7 @@ function attachHandlers(){
           state.sendToContactId = null;
           state.current = 'wallet';
           break;
-        case 'cal-open': state.calOpen = true; break;
+        case 'cal-open': state.calOpen = true; state.calSel = null; state.calView = null; break;
         case 'add-card': state.addCard = {}; state.addCardOpen = true; break;
         case 'card-scan': cardScanSides = {}; state.addCard = Object.assign(state.addCard || {}, state.addCard && state.addCard.mode ? cardFormVals() : {}); state.addCardOpen = false; renderDevice(); openCardCamera('front'); return;
         case 'card-manual': state.addCard = { mode:'manual' }; break;
@@ -12833,13 +12879,9 @@ function attachHandlers(){
         case 'cal-cancel':
         case 'cal-bg': state.calOpen = false; break;
         case 'cal-go': {
-          const a = document.getElementById('cal-from')?.value, b = document.getElementById('cal-to')?.value;
-          if(a){
-            let f = new Date(a + 'T00:00:00').getTime(), t = b ? new Date(b + 'T00:00:00').getTime() : f;
-            if(t < f){ const x = f; f = t; t = x; }
-            setMoneyRange({ kind:'date', from:f, to:t });
-          }
-          state.calOpen = false;
+          const c = state.calSel;
+          if(c && c.from != null){ const t = c.to != null ? c.to : c.from; setMoneyRange({ kind:'date', from: Math.min(c.from, t), to: Math.max(c.from, t) }); }
+          state.calOpen = false; state.calSel = null; state.calView = null;
           break;
         }
         case 'close-all': performCloseAll(); break;
