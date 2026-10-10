@@ -981,7 +981,11 @@
   .broker-name{ font-size:13px; font-weight:700; }
   .broker-sub{ font-size:10.5px; color:var(--muted); }
   .acct-broker{ margin-top:12px; font-size:15px; font-weight:800; }
-  .acct-title{ font:inherit; letter-spacing:inherit; color:inherit; text-transform:inherit; background:transparent; border:1px solid var(--line); border-radius:999px; padding:3px 10px; margin-left:-4px; cursor:pointer; }
+  .acct-broker-sub{ font-size:11px; color:var(--muted); margin:-6px 0 10px; font-weight:700; }
+  .broker-row.on .broker-name{ text-decoration:underline; text-underline-offset:3px; }
+  .broker-group{ font-size:9.5px; font-weight:800; letter-spacing:0.6px; color:var(--muted); text-transform:uppercase; padding:10px 2px 2px; }
+  .acct-title{ font:inherit; letter-spacing:inherit; color:inherit; text-transform:inherit; background:transparent; border:1px solid var(--line); border-radius:999px; padding:3px 10px; margin:0; cursor:pointer; display:inline-flex; align-items:center; gap:6px; max-width:100%; overflow:hidden; white-space:nowrap; }
+  .acct-title-caret{ font-size:10px; opacity:0.7; }
   .acct-title:active{ opacity:0.6; }
   .acct-dots{ display:flex; justify-content:center; gap:6px; margin:8px 0 2px; }
   .acct-dots span{ width:6px; height:6px; border-radius:50%; background:var(--line); }
@@ -4797,7 +4801,7 @@ function activeTradeAccount(){
   return list.find(a=>a.id === state.activeTradeId) || list[0] || null;
 }
 state.activeTradeId = (()=>{ try{ return localStorage.getItem('story-trade-active') || null; }catch(e){ return null; } })();
-state.focusSymbol = (()=>{ try{ return localStorage.getItem('story-trade-symbol') || 'EURUSD'; }catch(e){ return 'EURUSD'; } })();
+state.focusSymbol = (()=>{ const a = activeTradeAccount(); return (a && a.symbol) || 'EURUSD'; })();
 state.chartRes = '1H';
 state.live = {};          // per account: { status, balance, equity, margin, freeMargin, pl, positions, err }
 state.focusQuote = null;  // { bid, ask, change }
@@ -4935,13 +4939,372 @@ async function mt5Call(acc, method, path, body){
 }
 
 // ---- one place for every platform ----
-const TRADE = {
-  refresh: acc=> acc.platform === 'tradelocker' ? tlRefresh(acc) : mt5Call(acc, 'GET', '/mt5/' + acc.accId + '/live'),
-  focus: acc=> acc.platform === 'tradelocker' ? tlFocus(acc) : mt5Call(acc, 'GET', '/mt5/' + acc.accId + '/focus?symbol=' + encodeURIComponent(state.focusSymbol) + '&res=' + state.chartRes),
-  order: (acc, o)=> acc.platform === 'tradelocker' ? tlOrder(acc, o) : mt5Call(acc, 'POST', '/mt5/' + acc.accId + '/order', Object.assign({ symbol: state.focusSymbol }, o)),
-  close: (acc, id)=> acc.platform === 'tradelocker' ? tlClose(acc, id) : mt5Call(acc, 'POST', '/mt5/' + acc.accId + '/close', { id }),
-  symbols: async acc=>{ if(acc.platform === 'tradelocker'){ const m = await tlMeta(acc); return m.instruments.map(i=>i.name); } const j = await mt5Call(acc, 'GET', '/mt5/' + acc.accId + '/symbols'); return j.symbols || []; },
+// ---- every platform STORY connects to (owner: not only TradeLocker and MT5; real brokers only, never made up) ----
+// Each one: the details you type to add your account, and how STORY reads it / trades on it. Platforms marked soon
+// are real ones still being connected (they say so, never pretend).
+const PLATFORMS = {
+  mt5:        { label:'MT5', group:'Forex & CFDs', sym:'EURUSD', env:true, fields:[['login','MT5 LOGIN (ACCOUNT NUMBER)','e.g. 48213390','numeric'],['password','PASSWORD','Your MT5 password','password'],['server','BROKER SERVER','Your broker’s MT5 server (from your broker)']], note:'STORY connects your MT5 account through MetaApi (the only way an app can reach MT5). Your password is only used to connect - it can take up to a minute the first time.' },
+  mt4:        { label:'MT4', group:'Forex & CFDs', sym:'EURUSD', env:true, fields:[['login','MT4 LOGIN (ACCOUNT NUMBER)','e.g. 48213390','numeric'],['password','PASSWORD','Your MT4 password','password'],['server','BROKER SERVER','Your broker’s MT4 server (from your broker)']], note:'STORY connects your MT4 account through MetaApi. Your password is only used to connect - it can take up to a minute the first time.' },
+  tradelocker:{ label:'TradeLocker', group:'Forex & CFDs', sym:'EURUSD', env:true, fields:[['email','TRADELOCKER EMAIL','you@email.com','email'],['password','PASSWORD','Your TradeLocker password','password'],['server','BROKER SERVER','Your broker’s server name (from your broker)']], note:'STORY signs in to your broker directly. Your password is not kept - only a sign-in key, on this phone.' },
+  ctrader:    { label:'cTrader', group:'Forex & CFDs', soon:'cTrader connects once STORY’s cTrader app is registered with Spotware' },
+  dxtrade:    { label:'DXtrade', group:'Forex & CFDs', soon:'DXtrade is being connected' },
+  matchtrader:{ label:'Match-Trader', group:'Forex & CFDs', soon:'Match-Trader is being connected' },
+  deriv:      { label:'Deriv', group:'Forex & CFDs', sym:'R_100', fields:[['token','DERIV API TOKEN','From Deriv: Account settings > API token (Read + Trade)','password']], note:'Make a token in your Deriv account with Read and Trade on. Buy / Sell open Multiplier trades (up / down) with your lot as the stake; closing sells them.' },
+  binance:    { label:'Binance', group:'Crypto', sym:'BTCUSDT', fields:[['key','API KEY','From Binance: API Management','text'],['secret','SECRET KEY','Shown once when you create the key','password']], note:'Make an API key in your Binance account with Spot trading on (never withdrawals). The key stays on this phone.' },
+  bybit:      { label:'Bybit', group:'Crypto', sym:'BTCUSDT', fields:[['key','API KEY','From Bybit: API','text'],['secret','API SECRET','','password']], note:'Make an API key in Bybit with Trade on (never withdrawals). STORY trades USDT perpetuals. The key stays on this phone.' },
+  okx:        { label:'OKX', group:'Crypto', sym:'BTC-USDT-SWAP', fields:[['key','API KEY','From OKX: API','text'],['secret','SECRET KEY','','password'],['passphrase','PASSPHRASE','The passphrase you set for the key','password']], note:'Make an API key in OKX with Trade on (never withdrawals). STORY trades perpetual swaps; lot = contracts. The key stays on this phone.' },
+  kraken:     { label:'Kraken', group:'Crypto', sym:'XBTUSD', fields:[['key','API KEY','From Kraken: Security > API','text'],['secret','PRIVATE KEY','','password']], note:'Make an API key in Kraken with Query funds and Create & modify orders (never withdrawals). The key stays on this phone.' },
+  luno:       { label:'Luno', group:'Crypto', sym:'XBTZAR', fields:[['key','API KEY ID','From Luno: Security > API keys','text'],['secret','API KEY SECRET','','password']], note:'Make an API key in Luno with Trade permission (never send). The key stays on this phone.' },
+  valr:       { label:'VALR', group:'Crypto', sym:'BTCZAR', fields:[['key','API KEY','From VALR: Account > API keys','text'],['secret','API SECRET','','password']], note:'Make an API key in VALR with View and Trade (never withdraw). The key stays on this phone.' },
+  coinbase:   { label:'Coinbase', group:'Crypto', soon:'Coinbase is being connected' },
+  alpaca:     { label:'Alpaca', group:'Stocks', sym:'AAPL', env:true, fields:[['key','API KEY ID','From Alpaca: Your API keys','text'],['secret','SECRET KEY','','password']], note:'US stocks and ETFs. Make API keys in Alpaca (Real or Paper). Lot = number of shares. The keys stay on this phone.' },
+  ibkr:       { label:'Interactive Brokers', group:'Stocks', soon:'Interactive Brokers needs their approval for apps - being connected' },
 };
+// Real brokers that offer MT4 / MT5 (picking one only fills in its name; your server comes from your broker).
+const platformAppName = acc=>acc.platform === 'mt5' ? 'MT5' : acc.platform === 'mt4' ? 'MT4' : ((PLATFORMS[acc.platform] || {}).label || 'app');
+const MT5_BROKERS = ['IC Markets','Pepperstone','Exness','XM','FBS','HFM','FXTM','RoboForex','Tickmill','Admirals','Deriv','Vantage','FP Markets','Eightcap','ThinkMarkets','AvaTrade','FxPro','Octa'];
+
+// ---- signing for exchanges (keys stay on the phone; requests go out from the phone itself) ----
+const enc = new TextEncoder();
+const hex = buf=>[...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2, '0')).join('');
+const b64 = buf=>btoa(String.fromCharCode(...new Uint8Array(buf)));
+const unb64 = s=>Uint8Array.from(atob(s), c=>c.charCodeAt(0));
+async function hmac(hash, keyBytes, msgBytes){
+  const k = await crypto.subtle.importKey('raw', typeof keyBytes === 'string' ? enc.encode(keyBytes) : keyBytes, { name:'HMAC', hash }, false, ['sign']);
+  return crypto.subtle.sign('HMAC', k, typeof msgBytes === 'string' ? enc.encode(msgBytes) : msgBytes);
+}
+const keysOf = acc=>parseJ(secretGet('keys:' + acc.id)) || {};
+const qs = o=>Object.entries(o).filter(([, v])=>v !== undefined && v !== null && v !== '').map(([k, v])=>encodeURIComponent(k) + '=' + encodeURIComponent(v)).join('&');
+async function xget(url, headers){ const r = await httpReq('GET', url, headers || {}); if(r.code === 0) throw 'offline'; const j = parseJ(r.body); if(r.code < 200 || r.code >= 300) throw (j && (j.msg || j.message || j.error || (j.error && j.error[0]) || j.retMsg)) || ('error ' + r.code); return j; }
+async function xsend(method, url, headers, body){ const r = await httpReq(method, url, headers || {}, body); if(r.code === 0) throw 'offline'; const j = parseJ(r.body); if(r.code < 200 || r.code >= 300) throw (j && (j.msg || j.message || j.error || j.retMsg)) || ('error ' + r.code); return j || {}; }
+const RES = { '1H':{ bin:'1h', by:'60', okx:'1H', kr:60, sec:3600, al:'1Hour' }, '4H':{ bin:'4h', by:'240', okx:'4H', kr:240, sec:14400, al:'4Hour' }, '1D':{ bin:'1d', by:'D', okx:'1D', kr:1440, sec:86400, al:'1Day' }, '1W':{ bin:'1w', by:'W', okx:'1W', kr:10080, sec:604800, al:'1Week' } };
+const res = ()=>RES[state.chartRes] || RES['1H'];
+const withChange = (quote, bars)=>{ const f = bars.length ? bars[0].o : null; quote.change = f ? ((quote.bid - f) / f) * 100 : null; return quote; };
+const spotLive = (holdings, cur)=>({ status:'ok', spot:true, balance: holdings.reduce((s, h)=>s + (h.value || 0), 0), equity: holdings.reduce((s, h)=>s + (h.value || 0), 0), margin:null, freeMargin: (holdings.find(h=>h.symbol === cur) || {}).value ?? null, pl:null,
+  positions: holdings.filter(h=>h.symbol !== cur && h.value > 0.5).sort((a, b)=>b.value - a.value).map(h=>({ id:h.symbol, spot:true, symbol:h.symbol, type:'buy', qty:h.qty, label:h.symbol + ' ' + (+h.qty.toPrecision(6)), entry:null, current:h.price, value:h.value, pl:0, profit:false })) });
+
+// ---- Binance (spot) ----
+const BN = 'https://api.binance.com';
+async function bnSigned(acc, method, path, params){
+  const k = keysOf(acc);
+  const q = qs(Object.assign({}, params, { recvWindow:5000, timestamp: Date.now() }));
+  const sig = hex(await hmac('SHA-256', k.secret, q));
+  const url = BN + path + '?' + q + '&signature=' + sig;
+  return method === 'GET' ? xget(url, { 'X-MBX-APIKEY': k.key }) : xsend(method, url, { 'X-MBX-APIKEY': k.key });
+}
+async function bnStep(sym){ const j = await xget(BN + '/api/v3/exchangeInfo?symbol=' + sym); const f = ((j.symbols || [])[0] || {}).filters || []; const ls = f.find(x=>x.filterType === 'LOT_SIZE'); const pf = f.find(x=>x.filterType === 'PRICE_FILTER'); return { step: ls ? Number(ls.stepSize) : 0.00001, tick: pf ? Number(pf.tickSize) : 0.01 }; }
+const roundTo = (v, step)=>{ const d = Math.max(0, Math.round(-Math.log10(step))); return (Math.floor(v / step + 1e-9) * step).toFixed(d); };
+const bnAdapter = {
+  async connect(f){ const acc = { id:'bn:' + f.key.slice(-6), platform:'binance', name:'Binance', currency:'USDT' }; secretSet('keys:' + acc.id, JSON.stringify({ key:f.key, secret:f.secret })); await bnSigned(acc, 'GET', '/api/v3/account', {}); return [acc]; },
+  async refresh(acc){
+    const [a, prices] = await Promise.all([bnSigned(acc, 'GET', '/api/v3/account', { omitZeroBalances:true }), xget(BN + '/api/v3/ticker/price')]);
+    const px = {}; (prices || []).forEach(p=>{ px[p.symbol] = Number(p.price); });
+    const holdings = (a.balances || []).map(b=>{ const qty = Number(b.free) + Number(b.locked); const price = b.asset === 'USDT' ? 1 : (px[b.asset + 'USDT'] || (px[b.asset + 'BTC'] && px.BTCUSDT ? px[b.asset + 'BTC'] * px.BTCUSDT : 0)); return { symbol:b.asset, qty, price, value: qty * price }; }).filter(h=>h.qty > 0);
+    return spotLive(holdings, 'USDT');
+  },
+  async focus(acc){
+    const s = state.focusSymbol;
+    const [t, k] = await Promise.all([xget(BN + '/api/v3/ticker/bookTicker?symbol=' + s), xget(BN + '/api/v3/klines?symbol=' + s + '&interval=' + res().bin + '&limit=40')]);
+    const bars = (k || []).map(x=>({ o:+x[1], h:+x[2], l:+x[3], c:+x[4] }));
+    return { quote: withChange({ bid:+t.bidPrice, ask:+t.askPrice }, bars), bars, name:s };
+  },
+  async order(acc, o){
+    const s = o.symbol || state.focusSymbol; const st = await bnStep(s);
+    const p = { symbol:s, side:o.side.toUpperCase(), quantity: roundTo(o.qty, st.step) };
+    if(o.type === 'limit') Object.assign(p, { type:'LIMIT', timeInForce:'GTC', price: roundTo(o.price, st.tick) });
+    else if(o.type === 'stop') Object.assign(p, { type:'STOP_LOSS_LIMIT', timeInForce:'GTC', price: roundTo(o.price, st.tick), stopPrice: roundTo(o.price, st.tick) });
+    else p.type = 'MARKET';
+    return bnSigned(acc, 'POST', '/api/v3/order', p);
+  },
+  async close(acc, asset){ const live = state.live[acc.id] || {}; const h = (live.positions || []).find(p=>p.id === asset); if(!h) throw 'Nothing to sell'; return this.order(acc, { symbol: asset + 'USDT', side:'sell', type:'market', qty: h.qty }); },
+  async symbols(){ const j = await xget(BN + '/api/v3/ticker/price'); return (j || []).map(x=>x.symbol).filter(s=>/USDT$|BTC$|FDUSD$/.test(s)); },
+};
+// ---- Bybit (USDT perpetuals) ----
+const BY = 'https://api.bybit.com';
+async function byCall(acc, method, path, params){
+  const k = keysOf(acc); const ts = String(Date.now()); const rw = '5000';
+  const payload = method === 'GET' ? qs(params || {}) : JSON.stringify(params || {});
+  const sign = hex(await hmac('SHA-256', k.secret, ts + k.key + rw + payload));
+  const h = { 'X-BAPI-API-KEY':k.key, 'X-BAPI-TIMESTAMP':ts, 'X-BAPI-RECV-WINDOW':rw, 'X-BAPI-SIGN':sign };
+  const j = method === 'GET' ? await xget(BY + path + (payload ? '?' + payload : ''), h) : await xsend(method, BY + path, h, params || {});
+  if(j && j.retCode !== 0) throw j.retMsg || 'Bybit refused it';
+  return j.result || {};
+}
+const byAdapter = {
+  async connect(f){ const acc = { id:'by:' + f.key.slice(-6), platform:'bybit', name:'Bybit', currency:'USD' }; secretSet('keys:' + acc.id, JSON.stringify({ key:f.key, secret:f.secret })); await byCall(acc, 'GET', '/v5/account/wallet-balance', { accountType:'UNIFIED' }); return [acc]; },
+  async refresh(acc){
+    const [w, p] = await Promise.all([byCall(acc, 'GET', '/v5/account/wallet-balance', { accountType:'UNIFIED' }), byCall(acc, 'GET', '/v5/position/list', { category:'linear', settleCoin:'USDT' })]);
+    const a = (w.list || [])[0] || {};
+    const positions = (p.list || []).filter(x=>Number(x.size) > 0).map(x=>{ const pl = Number(x.unrealisedPnl) || 0; return { id:x.symbol + ':' + x.side, symbol:x.symbol, type: x.side === 'Sell' ? 'sell' : 'buy', qty:Number(x.size), label:(x.side === 'Sell' ? 'SELL ' : 'BUY ') + x.size + ' ' + x.symbol, entry:Number(x.avgPrice), current:Number(x.markPrice), pl, profit: pl >= 0 }; });
+    return { status:'ok', balance:Number(a.totalWalletBalance), equity:Number(a.totalEquity), margin:Number(a.totalInitialMargin), freeMargin:Number(a.totalAvailableBalance), pl: positions.reduce((s, x)=>s + x.pl, 0), positions };
+  },
+  async focus(){
+    const s = state.focusSymbol;
+    const [t, k] = await Promise.all([xget(BY + '/v5/market/tickers?category=linear&symbol=' + s), xget(BY + '/v5/market/kline?category=linear&symbol=' + s + '&interval=' + res().by + '&limit=40')]);
+    const tk = ((t.result || {}).list || [])[0] || {};
+    const bars = (((k.result || {}).list) || []).slice().reverse().map(x=>({ o:+x[1], h:+x[2], l:+x[3], c:+x[4] }));
+    return { quote: withChange({ bid:+tk.bid1Price, ask:+tk.ask1Price }, bars), bars, name:s };
+  },
+  async order(acc, o){
+    const p = { category:'linear', symbol:o.symbol || state.focusSymbol, side: o.side === 'sell' ? 'Sell' : 'Buy', orderType: o.type === 'limit' ? 'Limit' : 'Market', qty:String(o.qty) };
+    if(o.type === 'limit') p.price = String(o.price);
+    if(o.type === 'stop'){ p.triggerPrice = String(o.price); p.triggerDirection = o.side === 'buy' ? 1 : 2; }
+    if(o.sl) p.stopLoss = String(o.sl); if(o.tp) p.takeProfit = String(o.tp);
+    return byCall(acc, 'POST', '/v5/order/create', p);
+  },
+  async close(acc, id){ const [sym, side] = id.split(':'); const pos = ((state.live[acc.id] || {}).positions || []).find(p=>p.id === id); return byCall(acc, 'POST', '/v5/order/create', { category:'linear', symbol:sym, side: side === 'Buy' ? 'Sell' : 'Buy', orderType:'Market', qty:String(pos ? pos.qty : 0), reduceOnly:true }); },
+  async symbols(){ const j = await xget(BY + '/v5/market/tickers?category=linear'); return (((j.result || {}).list) || []).map(x=>x.symbol); },
+};
+// ---- OKX (perpetual swaps) ----
+const OKX = 'https://www.okx.com';
+async function okCall(acc, method, path, body){
+  const k = keysOf(acc); const ts = new Date().toISOString(); const b = body ? JSON.stringify(body) : '';
+  const sign = b64(await hmac('SHA-256', k.secret, ts + method + path + b));
+  const h = { 'OK-ACCESS-KEY':k.key, 'OK-ACCESS-SIGN':sign, 'OK-ACCESS-TIMESTAMP':ts, 'OK-ACCESS-PASSPHRASE':k.passphrase };
+  const j = method === 'GET' ? await xget(OKX + path, h) : await xsend(method, OKX + path, h, body);
+  if(j && j.code !== '0' && j.code !== 0) throw (j.data && j.data[0] && j.data[0].sMsg) || j.msg || 'OKX refused it';
+  return j.data || [];
+}
+const okAdapter = {
+  async connect(f){ const acc = { id:'okx:' + f.key.slice(-6), platform:'okx', name:'OKX', currency:'USD' }; secretSet('keys:' + acc.id, JSON.stringify({ key:f.key, secret:f.secret, passphrase:f.passphrase })); await okCall(acc, 'GET', '/api/v5/account/balance'); return [acc]; },
+  async refresh(acc){
+    const [b, p] = await Promise.all([okCall(acc, 'GET', '/api/v5/account/balance'), okCall(acc, 'GET', '/api/v5/account/positions')]);
+    const a = b[0] || {};
+    const positions = (p || []).filter(x=>Number(x.pos) !== 0).map(x=>{ const pl = Number(x.upl) || 0; const sell = x.posSide === 'short' || Number(x.pos) < 0; return { id:x.instId, symbol:x.instId, type: sell ? 'sell' : 'buy', qty:Math.abs(Number(x.pos)), label:(sell ? 'SELL ' : 'BUY ') + Math.abs(Number(x.pos)) + ' ' + x.instId, entry:Number(x.avgPx), current:Number(x.markPx), pl, profit: pl >= 0 }; });
+    return { status:'ok', balance:Number(a.totalEq) - positions.reduce((s, x)=>s + x.pl, 0), equity:Number(a.totalEq), margin:Number(a.imr) || null, freeMargin:Number(a.adjEq) || null, pl: positions.reduce((s, x)=>s + x.pl, 0), positions };
+  },
+  async focus(){
+    const s = state.focusSymbol;
+    const [t, k] = await Promise.all([xget(OKX + '/api/v5/market/ticker?instId=' + s), xget(OKX + '/api/v5/market/candles?instId=' + s + '&bar=' + res().okx + '&limit=40')]);
+    const tk = (t.data || [])[0] || {};
+    const bars = (k.data || []).slice().reverse().map(x=>({ o:+x[1], h:+x[2], l:+x[3], c:+x[4] }));
+    return { quote: withChange({ bid:+tk.bidPx, ask:+tk.askPx }, bars), bars, name:s };
+  },
+  async order(acc, o){
+    const b = { instId:o.symbol || state.focusSymbol, tdMode:'cross', side:o.side, ordType: o.type === 'limit' ? 'limit' : 'market', sz:String(o.qty) };
+    if(o.type === 'limit') b.px = String(o.price);
+    if(o.type === 'stop') return okCall(acc, 'POST', '/api/v5/trade/order-algo', { instId:b.instId, tdMode:'cross', side:o.side, ordType:'trigger', sz:b.sz, triggerPx:String(o.price), orderPx:'-1' });
+    if(o.sl || o.tp) b.attachAlgoOrds = [Object.assign({}, o.sl ? { slTriggerPx:String(o.sl), slOrdPx:'-1' } : {}, o.tp ? { tpTriggerPx:String(o.tp), tpOrdPx:'-1' } : {})];
+    return okCall(acc, 'POST', '/api/v5/trade/order', b);
+  },
+  async close(acc, instId){ return okCall(acc, 'POST', '/api/v5/trade/close-position', { instId, mgnMode:'cross' }); },
+  async symbols(){ const j = await xget(OKX + '/api/v5/public/instruments?instType=SWAP'); return (j.data || []).map(x=>x.instId); },
+};
+// ---- Kraken (spot) ----
+const KR = 'https://api.kraken.com';
+async function krPrivate(acc, path, params){
+  const k = keysOf(acc); const nonce = String(Date.now() * 1000);
+  const body = qs(Object.assign({ nonce }, params || {}));
+  const inner = await crypto.subtle.digest('SHA-256', enc.encode(nonce + body));
+  const msg = new Uint8Array([...enc.encode(path), ...new Uint8Array(inner)]);
+  const sign = b64(await hmac('SHA-512', unb64(k.secret), msg));
+  return krDone(await httpRaw('POST', KR + path, { 'API-Key':k.key, 'API-Sign':sign, 'Content-Type':'application/x-www-form-urlencoded' }, body));
+}
+function krDone(r){ if(r.code === 0) throw 'offline'; const j = parseJ(r.body) || {}; if(j.error && j.error.length) throw j.error.join(', '); return j.result || {}; }
+const krAdapter = {
+  async connect(f){ const acc = { id:'kr:' + f.key.slice(-6), platform:'kraken', name:'Kraken', currency:'USD' }; secretSet('keys:' + acc.id, JSON.stringify({ key:f.key, secret:f.secret })); await krPrivate(acc, '/0/private/Balance'); return [acc]; },
+  async refresh(acc){
+    const bal = await krPrivate(acc, '/0/private/Balance');
+    const assets = Object.keys(bal).filter(a=>Number(bal[a]) > 0);
+    const name = a=>a.replace(/^X(?=[A-Z]{3}$)|^Z(?=[A-Z]{3}$)/, '').replace(/\.F$/, '');
+    const fiat = a=>['USD','ZUSD'].includes(a);
+    const pairs = assets.filter(a=>!fiat(a)).map(a=>name(a) + 'USD');
+    let tick = {}; if(pairs.length){ try{ tick = krDone(await httpRaw('GET', KR + '/0/public/Ticker?pair=' + pairs.join(','), {}, '')); }catch(e){} }
+    const priceOf = a=>{ if(fiat(a)) return 1; const key = Object.keys(tick).find(k=>k.replace(/^X|Z(?=USD)/g, '').startsWith(name(a).replace(/^XBT$/, 'XBT'))); return key ? Number(tick[key].c[0]) : 0; };
+    const holdings = assets.map(a=>{ const qty = Number(bal[a]); const price = priceOf(a); return { symbol: fiat(a) ? 'USD' : name(a), qty, price, value: qty * price }; });
+    return spotLive(holdings, 'USD');
+  },
+  async focus(){
+    const s = state.focusSymbol;
+    const t = krDone(await httpRaw('GET', KR + '/0/public/Ticker?pair=' + s, {}, ''));
+    const tk = t[Object.keys(t)[0]] || { b:[0], a:[0] };
+    let bars = []; try{ const o = krDone(await httpRaw('GET', KR + '/0/public/OHLC?pair=' + s + '&interval=' + res().kr, {}, '')); const arr = o[Object.keys(o).find(k=>k !== 'last')] || []; bars = arr.slice(-40).map(x=>({ o:+x[1], h:+x[2], l:+x[3], c:+x[4] })); }catch(e){}
+    return { quote: withChange({ bid:+tk.b[0], ask:+tk.a[0] }, bars), bars, name:s };
+  },
+  async order(acc, o){
+    const p = { pair:o.symbol || state.focusSymbol, type:o.side, ordertype: o.type === 'limit' ? 'limit' : o.type === 'stop' ? 'stop-loss' : 'market', volume:String(o.qty) };
+    if(o.type === 'limit' || o.type === 'stop') p.price = String(o.price);
+    return krPrivate(acc, '/0/private/AddOrder', p);
+  },
+  async close(acc, asset){ const h = ((state.live[acc.id] || {}).positions || []).find(p=>p.id === asset); if(!h) throw 'Nothing to sell'; return this.order(acc, { symbol:(asset === 'BTC' ? 'XBT' : asset) + 'USD', side:'sell', type:'market', qty:h.qty }); },
+  async symbols(){ const j = krDone(await httpRaw('GET', KR + '/0/public/AssetPairs', {}, '')); return Object.values(j).map(x=>x.altname).filter(Boolean); },
+};
+// ---- Luno (spot, ZAR and more) ----
+const LU = 'https://api.luno.com';
+const luAuth = acc=>{ const k = keysOf(acc); return { Authorization: 'Basic ' + btoa(k.key + ':' + k.secret) }; };
+const luAdapter = {
+  async connect(f){ const acc = { id:'lu:' + f.key.slice(-6), platform:'luno', name:'Luno', currency:'ZAR' }; secretSet('keys:' + acc.id, JSON.stringify({ key:f.key, secret:f.secret })); await xget(LU + '/api/1/balance', luAuth(acc)); return [acc]; },
+  async refresh(acc){
+    const [b, t] = await Promise.all([xget(LU + '/api/1/balance', luAuth(acc)), xget(LU + '/api/1/tickers')]);
+    const px = {}; (t.tickers || []).forEach(x=>{ px[x.pair] = Number(x.last_trade); });
+    const holdings = (b.balance || []).map(x=>{ const qty = Number(x.balance) + Number(x.reserved || 0) * 0; const price = x.asset === 'ZAR' ? 1 : (px[x.asset + 'ZAR'] || 0); return { symbol:x.asset, qty, price, value: qty * price }; }).filter(h=>h.qty > 0);
+    return spotLive(holdings, 'ZAR');
+  },
+  async focus(){
+    const s = state.focusSymbol;
+    const t = await xget(LU + '/api/1/ticker?pair=' + s);
+    let bars = []; try{ const c = await xget(LU + '/api/exchange/1/candles?pair=' + s + '&since=' + (Date.now() - res().sec * 40000) + '&duration=' + res().sec); bars = (c.candles || []).slice(-40).map(x=>({ o:+x.open, h:+x.high, l:+x.low, c:+x.close })); }catch(e){}
+    return { quote: withChange({ bid:+t.bid, ask:+t.ask }, bars), bars, name:s };
+  },
+  async order(acc, o){
+    const pair = o.symbol || state.focusSymbol;
+    if(o.type === 'limit' || o.type === 'stop') return xsend('POST', LU + '/api/1/postorder?' + qs({ pair, type: o.side === 'buy' ? 'BID' : 'ASK', volume:o.qty, price:o.price }), luAuth(acc));
+    return xsend('POST', LU + '/api/1/marketorder?' + qs({ pair, type: o.side === 'buy' ? 'BUY' : 'SELL', base_volume:o.qty }), luAuth(acc));
+  },
+  async close(acc, asset){ const h = ((state.live[acc.id] || {}).positions || []).find(p=>p.id === asset); if(!h) throw 'Nothing to sell'; return this.order(acc, { symbol: asset + 'ZAR', side:'sell', type:'market', qty:h.qty }); },
+  async symbols(){ const j = await xget(LU + '/api/1/tickers'); return (j.tickers || []).map(x=>x.pair); },
+};
+// ---- VALR (spot, ZAR) ----
+const VA = 'https://api.valr.com';
+async function vaCall(acc, method, path, body){
+  const k = keysOf(acc); const ts = String(Date.now()); const b = body ? JSON.stringify(body) : '';
+  const sig = hex(await hmac('SHA-512', k.secret, ts + method.toUpperCase() + path + b));
+  const h = { 'X-VALR-API-KEY':k.key, 'X-VALR-SIGNATURE':sig, 'X-VALR-TIMESTAMP':ts };
+  return method === 'GET' ? xget(VA + path, h) : xsend(method, VA + path, h, body);
+}
+const vaAdapter = {
+  async connect(f){ const acc = { id:'va:' + f.key.slice(-6), platform:'valr', name:'VALR', currency:'ZAR' }; secretSet('keys:' + acc.id, JSON.stringify({ key:f.key, secret:f.secret })); await vaCall(acc, 'GET', '/v1/account/balances'); return [acc]; },
+  async refresh(acc){
+    const [b, m] = await Promise.all([vaCall(acc, 'GET', '/v1/account/balances'), xget(VA + '/v1/public/marketsummary')]);
+    const px = {}; (m || []).forEach(x=>{ px[x.currencyPair] = Number(x.lastTradedPrice); });
+    const holdings = (b || []).map(x=>{ const qty = Number(x.total); const price = x.currency === 'ZAR' ? 1 : (px[x.currency + 'ZAR'] || 0); return { symbol:x.currency, qty, price, value: qty * price }; }).filter(h=>h.qty > 0);
+    return spotLive(holdings, 'ZAR');
+  },
+  async focus(){
+    const s = state.focusSymbol;
+    const t = await xget(VA + '/v1/public/' + s + '/marketsummary');
+    let bars = []; try{ const c = await xget(VA + '/v1/public/' + s + '/buckets?periodSeconds=' + res().sec + '&limit=40'); bars = (c || []).slice().reverse().map(x=>({ o:+x.open, h:+x.high, l:+x.low, c:+x.close })); }catch(e){}
+    return { quote: withChange({ bid:+t.bidPrice, ask:+t.askPrice }, bars), bars, name:s };
+  },
+  async order(acc, o){
+    const pair = o.symbol || state.focusSymbol;
+    if(o.type === 'limit') return vaCall(acc, 'POST', '/v1/orders/limit', { side:o.side.toUpperCase(), quantity:String(o.qty), price:String(o.price), pair, timeInForce:'GTC' });
+    if(o.type === 'stop') return vaCall(acc, 'POST', '/v1/orders/stop/limit', { side:o.side.toUpperCase(), quantity:String(o.qty), price:String(o.price), stopPrice:String(o.price), pair, type:o.side === 'buy' ? 'TAKE_PROFIT_LIMIT' : 'STOP_LOSS_LIMIT', timeInForce:'GTC' });
+    return vaCall(acc, 'POST', '/v1/orders/market', { side:o.side.toUpperCase(), baseAmount:String(o.qty), pair });
+  },
+  async close(acc, asset){ const h = ((state.live[acc.id] || {}).positions || []).find(p=>p.id === asset); if(!h) throw 'Nothing to sell'; return this.order(acc, { symbol: asset + 'ZAR', side:'sell', type:'market', qty:h.qty }); },
+  async symbols(){ const j = await xget(VA + '/v1/public/pairs'); return (j || []).filter(x=>x.active).map(x=>x.symbol); },
+};
+// ---- Alpaca (US stocks) ----
+const alBase = acc=>acc.env === 'demo' ? 'https://paper-api.alpaca.markets' : 'https://api.alpaca.markets';
+const alHead = acc=>{ const k = keysOf(acc); return { 'APCA-API-KEY-ID':k.key, 'APCA-API-SECRET-KEY':k.secret }; };
+const alAdapter = {
+  async connect(f){ const acc = { id:'al:' + f.env + ':' + f.key.slice(-6), platform:'alpaca', env:f.env, name:'Alpaca' + (f.env === 'demo' ? ' Paper' : ''), currency:'USD' }; secretSet('keys:' + acc.id, JSON.stringify({ key:f.key, secret:f.secret })); const a = await xget(alBase(acc) + '/v2/account', alHead(acc)); acc.name += ' ' + (a.account_number || ''); return [acc]; },
+  async refresh(acc){
+    const [a, p] = await Promise.all([xget(alBase(acc) + '/v2/account', alHead(acc)), xget(alBase(acc) + '/v2/positions', alHead(acc))]);
+    const positions = (p || []).map(x=>{ const pl = Number(x.unrealized_pl) || 0; return { id:x.symbol, symbol:x.symbol, type: x.side === 'short' ? 'sell' : 'buy', qty:Math.abs(Number(x.qty)), label:(x.side === 'short' ? 'SELL ' : 'BUY ') + Math.abs(Number(x.qty)) + ' ' + x.symbol, entry:Number(x.avg_entry_price), current:Number(x.current_price), pl, profit: pl >= 0 }; });
+    return { status:'ok', balance:Number(a.cash), equity:Number(a.equity), margin:Number(a.initial_margin) || null, freeMargin:Number(a.buying_power), pl: positions.reduce((s, x)=>s + x.pl, 0), positions };
+  },
+  async focus(acc){
+    const s = state.focusSymbol; const D = 'https://data.alpaca.markets';
+    const [q, b] = await Promise.all([xget(D + '/v2/stocks/' + s + '/quotes/latest', alHead(acc)), xget(D + '/v2/stocks/' + s + '/bars?timeframe=' + res().al + '&limit=40&start=' + new Date(Date.now() - res().sec * 1000 * 120).toISOString(), alHead(acc)).catch(()=>({}))]);
+    const bars = (b.bars || []).slice(-40).map(x=>({ o:x.o, h:x.h, l:x.l, c:x.c }));
+    return { quote: withChange({ bid:(q.quote || {}).bp, ask:(q.quote || {}).ap }, bars), bars, name:s };
+  },
+  async order(acc, o){
+    const b = { symbol:o.symbol || state.focusSymbol, qty:String(o.qty), side:o.side, type:o.type || 'market', time_in_force:'day' };
+    if(o.type === 'limit') b.limit_price = String(o.price);
+    if(o.type === 'stop') b.stop_price = String(o.price);
+    if(o.sl || o.tp){ b.order_class = o.sl && o.tp ? 'bracket' : 'oto'; if(o.tp) b.take_profit = { limit_price:String(o.tp) }; if(o.sl) b.stop_loss = { stop_price:String(o.sl) }; }
+    return xsend('POST', alBase(acc) + '/v2/orders', alHead(acc), b);
+  },
+  async close(acc, sym){ return xsend('DELETE', alBase(acc) + '/v2/positions/' + encodeURIComponent(sym), alHead(acc)); },
+  async symbols(acc){ const j = await xget(alBase(acc) + '/v2/assets?status=active&asset_class=us_equity', alHead(acc)); return (j || []).filter(x=>x.tradable).map(x=>x.symbol).sort(); },
+};
+// ---- Deriv (WebSocket API; Multipliers for Buy / Sell) ----
+const DERIV_APP_ID = 1089;   // Deriv's public app id - STORY's own can replace it once registered at api.deriv.com
+const dvSockets = {};
+function dvSend(acc, req){
+  return new Promise((resolve, reject)=>{
+    let s = dvSockets[acc.id];
+    const go = ()=>{
+      const id = (s.__n = (s.__n || 0) + 1);
+      s.__wait[id] = { resolve, reject };
+      s.send(JSON.stringify(Object.assign({ req_id:id }, req)));
+      setTimeout(()=>{ if(s.__wait[id]){ delete s.__wait[id]; reject('offline'); } }, 15000);
+    };
+    if(s && s.readyState === 1 && s.__authed) return go();
+    if(!s || s.readyState > 1){
+      s = dvSockets[acc.id] = new WebSocket('wss://ws.derivws.com/websockets/v3?app_id=' + DERIV_APP_ID);
+      s.__wait = {}; s.__q = [];
+      s.onmessage = ev=>{ const m = parseJ(ev.data) || {}; const w = s.__wait[m.req_id]; if(!w) return; delete s.__wait[m.req_id]; if(m.error) w.reject(m.error.message || 'Deriv refused it'); else w.resolve(m); };
+      s.onclose = ()=>{ Object.values(s.__wait).forEach(w=>w.reject('offline')); s.__wait = {}; };
+      s.onopen = ()=>{
+        const k = keysOf(acc);
+        s.__n = 1; s.__wait[1] = { resolve: m=>{ s.__authed = true; acc.__login = m.authorize; s.__q.splice(0).forEach(f=>f()); }, reject: e=>{ s.__q.splice(0); reject(e === 'offline' ? 'offline' : 'signin'); } };
+        s.send(JSON.stringify({ req_id:1, authorize:k.token }));
+      };
+    }
+    s.__q = s.__q || []; s.__q.push(go);
+    if(s.readyState === 1 && s.__authed) s.__q.splice(0).forEach(f=>f());
+  });
+}
+const dvAdapter = {
+  async connect(f){
+    const acc = { id:'dv:' + f.token.slice(-6), platform:'deriv', name:'Deriv', currency:'USD' };
+    secretSet('keys:' + acc.id, JSON.stringify({ token:f.token }));
+    const m = await dvSend(acc, { balance:1 });
+    acc.currency = (m.balance && m.balance.currency) || 'USD';
+    acc.name = 'Deriv ' + ((acc.__login && acc.__login.loginid) || '');
+    delete acc.__login;
+    return [acc];
+  },
+  async refresh(acc){
+    const [b, p] = await Promise.all([dvSend(acc, { balance:1 }), dvSend(acc, { portfolio:1 })]);
+    const contracts = (p.portfolio && p.portfolio.contracts) || [];
+    const positions = [];
+    for(const c of contracts.slice(0, 20)){
+      try{ const o = (await dvSend(acc, { proposal_open_contract:1, contract_id:c.contract_id })).proposal_open_contract || {};
+        const pl = Number(o.profit) || 0; const up = /UP|CALL/.test(o.contract_type || c.contract_type);
+        positions.push({ id:String(c.contract_id), symbol:o.underlying || c.symbol, type: up ? 'buy' : 'sell', qty:Number(o.buy_price || c.buy_price), label:(up ? 'BUY ' : 'SELL ') + (o.display_name || c.symbol), entry:Number(o.entry_spot), current:Number(o.current_spot), pl, profit: pl >= 0 });
+      }catch(e){}
+    }
+    const bal = Number((b.balance || {}).balance);
+    return { status:'ok', balance:bal, equity: bal + positions.reduce((s, x)=>s + x.pl, 0) + positions.reduce((s, x)=>s + (x.qty || 0), 0), margin: positions.reduce((s, x)=>s + (x.qty || 0), 0), freeMargin:bal, pl: positions.reduce((s, x)=>s + x.pl, 0), positions };
+  },
+  async focus(acc){
+    const s = state.focusSymbol;
+    const h = await dvSend(acc, { ticks_history:s, end:'latest', count:40, style:'candles', granularity: Math.min(86400, res().sec) });
+    const bars = (h.candles || []).map(x=>({ o:+x.open, h:+x.high, l:+x.low, c:+x.close }));
+    const last = bars.length ? bars[bars.length - 1].c : null;
+    return { quote: withChange({ bid:last, ask:last }, bars), bars, name:s };
+  },
+  async order(acc, o){
+    const pr = await dvSend(acc, { proposal:1, amount:Number(o.qty), basis:'stake', contract_type: o.side === 'buy' ? 'MULTUP' : 'MULTDOWN', currency:acc.currency, symbol:o.symbol || state.focusSymbol, multiplier:100,
+      limit_order: Object.assign({}, o.sl ? { stop_loss:Number(o.sl) } : {}, o.tp ? { take_profit:Number(o.tp) } : {}) });
+    return dvSend(acc, { buy:pr.proposal.id, price:Number(o.qty) });
+  },
+  async close(acc, id){ return dvSend(acc, { sell:Number(id), price:0 }); },
+  async symbols(acc){ const j = await dvSend(acc, { active_symbols:'brief' }); return (j.active_symbols || []).map(x=>x.symbol); },
+};
+// ---- MetaApi (MT4 / MT5) and TradeLocker, as before ----
+const metaAdapter = {
+  refresh: acc=>mt5Call(acc, 'GET', '/mt5/' + acc.accId + '/live'),
+  focus: acc=>mt5Call(acc, 'GET', '/mt5/' + acc.accId + '/focus?symbol=' + encodeURIComponent(state.focusSymbol) + '&res=' + state.chartRes),
+  order: (acc, o)=>mt5Call(acc, 'POST', '/mt5/' + acc.accId + '/order', Object.assign({ symbol: state.focusSymbol }, o)),
+  close: (acc, id)=>mt5Call(acc, 'POST', '/mt5/' + acc.accId + '/close', { id }),
+  symbols: async acc=>{ const j = await mt5Call(acc, 'GET', '/mt5/' + acc.accId + '/symbols'); return j.symbols || []; },
+};
+const tlAdapter = { refresh: tlRefresh, focus: tlFocus, order: tlOrder, close: tlClose, symbols: async acc=>{ const m = await tlMeta(acc); return m.instruments.map(i=>i.name); } };
+const ADAPTERS = { mt5:metaAdapter, mt4:metaAdapter, tradelocker:tlAdapter, binance:bnAdapter, bybit:byAdapter, okx:okAdapter, kraken:krAdapter, luno:luAdapter, valr:vaAdapter, alpaca:alAdapter, deriv:dvAdapter };
+const adapterOf = acc=>{ const a = ADAPTERS[acc.platform]; if(!a) throw (PLATFORMS[acc.platform] || {}).soon || 'This platform isn’t connected yet'; return a; };
+const TRADE = {
+  refresh: acc=>adapterOf(acc).refresh(acc),
+  focus: acc=>adapterOf(acc).focus(acc),
+  order: (acc, o)=>adapterOf(acc).order(acc, o),
+  close: (acc, id)=>adapterOf(acc).close(acc, id),
+  symbols: acc=>adapterOf(acc).symbols(acc),
+};
+// form-encoded / raw-body request (Kraken)
+function httpRaw(method, url, headers, rawBody){
+  if(NATIVE && window.StoryNative.http) return new Promise(res=>{
+    const id = 'h' + (++httpSeq); httpWait[id] = res;
+    window.StoryNative.http(id, method, url, JSON.stringify(headers || {}), rawBody || '');
+    setTimeout(()=>{ if(httpWait[id]){ delete httpWait[id]; res({ code:0, body:'' }); } }, 30000);
+  });
+  return fetch(url, { method, headers: headers || {}, body: rawBody || undefined }).then(async r=>({ code:r.status, body: await r.text() })).catch(()=>({ code:0, body:'' }));
+}
+
 function tradeErrText(e){
   if(e === 'signin') return 'Sign in again to this account';
   if(e === 'offline') return 'No connection';
@@ -4986,16 +5349,20 @@ async function tradeAddAccount(f){
   state.addAccount.busy = true; state.addAccount.msg = ''; renderDevice();
   try{
     let added = [];
+    const P = PLATFORMS[f.platform] || {};
+    if(P.soon) throw P.soon;
     if(f.platform === 'tradelocker') added = await tlLogin(f.env, f.email, f.password, f.server);
-    else {
-      const j = await mt5Call(null, 'POST', '/mt5/connect', { login: f.login, password: f.password, server: f.server });
+    else if(f.platform === 'mt5' || f.platform === 'mt4'){
+      const j = await mt5Call(null, 'POST', '/mt5/connect', { login: f.login, password: f.password, server: f.server, platform: f.platform });
       secretSet('mt5key:' + j.accountId, j.key);
-      added = [{ id: 'mt5:' + j.accountId, platform:'mt5', env: f.env, server: f.server, login: f.login, accId: j.accountId, name: (f.broker ? f.broker + ' ' : 'MT5 ') + '#' + f.login, broker: f.broker || '', currency: j.currency || 'USD' }];
-    }
+      added = [{ id: f.platform + ':' + j.accountId, platform:f.platform, env: f.env, server: f.server, login: f.login, accId: j.accountId, name: (f.broker ? f.broker + ' ' : P.label + ' ') + '#' + f.login, broker: f.broker || '', currency: j.currency || 'USD' }];
+    } else added = await ADAPTERS[f.platform].connect(f);
+    added.forEach(a=>{ a.symbol = a.symbol || P.sym; });
     const list = tradeAccounts().filter(a=>!added.some(b=>b.id === a.id)).concat(added);
     saveTradeAccounts(list);
     state.activeTradeId = added[0].id; try{ localStorage.setItem('story-trade-active', state.activeTradeId); }catch(e){}
-    state.addAccountOpen = false; state.addAccount.busy = false; state.addAccount.pass = ''; state.addAccount.user = ''; state.addAccount.server = '';
+    state.focusSymbol = added[0].symbol; state.focusName = null; state.focusQuote = null; state.focusBars = [];
+    state.addAccountOpen = false; state.addAccount.busy = false; state.addAccount.vals = {};
     showToast(added.length > 1 ? added.length + ' accounts added' : 'Account added');
     renderDevice(); tradeRefreshNow(true);
   }catch(e){
@@ -5004,7 +5371,8 @@ async function tradeAddAccount(f){
 }
 function tradeRemoveAccount(id){
   const gone = tradeAccounts().find(a=>a.id === id);
-  if(gone && gone.platform === 'mt5') mt5Call(gone, 'DELETE', '/mt5/' + gone.accId).catch(()=>{}).then(()=>secretSet('mt5key:' + gone.accId, ''));
+  if(gone && (gone.platform === 'mt5' || gone.platform === 'mt4')) mt5Call(gone, 'DELETE', '/mt5/' + gone.accId).catch(()=>{}).then(()=>secretSet('mt5key:' + gone.accId, ''));
+  if(gone) secretSet('keys:' + gone.id, '');
   const list = tradeAccounts().filter(a=>a.id !== id);
   saveTradeAccounts(list);
   delete state.live[id];
@@ -5015,34 +5383,29 @@ function tradeSwitch(dir){
   const i = Math.max(0, list.findIndex(a=>a.id === (activeTradeAccount() || {}).id));
   const n = list[(i + dir + list.length) % list.length];
   state.activeTradeId = n.id; try{ localStorage.setItem('story-trade-active', n.id); }catch(e){}
+  state.focusSymbol = n.symbol || (PLATFORMS[n.platform] || {}).sym || state.focusSymbol; state.focusName = null;
   state.focusQuote = null; state.focusBars = [];
   renderDevice(); tradeRefreshNow(true);
 }
 function addAccountTemplate(){
   const f = state.addAccount;
-  const tl = f.platform === 'tradelocker';
+  const P = PLATFORMS[f.platform] || PLATFORMS.mt5;
+  const v = f.vals || {};
   return `
     <div class="modal-overlay" data-action="add-account-bg">
       <div class="modal-sheet" onclick="event.stopPropagation()">
-        <div class="modal-head"><span class="modal-title">Add account</span><button class="modal-close" data-action="add-account-close">×</button></div>
-        <div class="acct-seg">
-          <button class="acct-seg-btn${tl?' on':''}" data-addacct-platform="tradelocker">TradeLocker</button>
-          <button class="acct-seg-btn${!tl?' on':''}" data-addacct-platform="mt5">MT5</button>
-        </div>
-        <div class="acct-seg" style="margin-top:8px;">
+        <div class="modal-head"><span class="modal-title">Add ${escText(f.broker || P.label)} account</span><button class="modal-close" data-action="add-account-close">×</button></div>
+        ${f.broker ? `<div class="acct-broker-sub">${escText(P.label)}</div>` : ''}
+        ${P.env ? `<div class="acct-seg">
           <button class="acct-seg-btn${f.env==='live'?' on':''}" data-addacct-env="live">Real</button>
-          <button class="acct-seg-btn${f.env==='demo'?' on':''}" data-addacct-env="demo">Demo</button>
-        </div>
-        ${f.broker ? `<div class="acct-broker">${escText(f.broker)}</div>` : ''}
-        <div class="section-title" style="margin-top:14px;">${tl ? 'TRADELOCKER EMAIL' : 'MT5 LOGIN (ACCOUNT NUMBER)'}</div>
-        <input class="field-input" id="addacct-user" type="${tl?'email':'text'}" inputmode="${tl?'email':'numeric'}" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="${tl?'you@email.com':'e.g. 48213390'}" value="${escText(f.user || '')}">
-        <div class="section-title" style="margin-top:12px;">PASSWORD</div>
-        <input class="field-input" id="addacct-pass" type="password" autocomplete="off" placeholder="${tl?'Your TradeLocker password':'Your MT5 password'}" value="${escText(f.pass || '')}">
-        <div class="section-title" style="margin-top:12px;">BROKER SERVER</div>
-        <input class="field-input" id="addacct-server" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="${tl?'Your broker’s server name (from your broker)':(f.broker ? f.broker + ' server (from your broker’s email)' : 'Your broker’s MT5 server')}" value="${escText(f.server || '')}">
-        <div class="acct-note">${tl ? 'STORY signs in to your broker directly. Your password is not kept - only a sign-in key, on this phone.' : 'STORY connects your MT5 account through MetaApi (the only way an app can reach MT5). Your password is only used to connect - it can take up to a minute the first time.'}</div>
+          <button class="acct-seg-btn${f.env==='demo'?' on':''}" data-addacct-env="demo">${f.platform === 'alpaca' ? 'Paper' : 'Demo'}</button>
+        </div>` : ''}
+        ${P.soon ? `<div class="acct-note">${escText(P.soon)} - coming soon.</div>` : (P.fields || []).map(([k, label, ph, kind])=>`
+          <div class="section-title" style="margin-top:12px;">${label}</div>
+          <input class="field-input" data-addacct-field="${k}" type="${kind === 'password' ? 'password' : kind === 'email' ? 'email' : 'text'}" inputmode="${kind === 'numeric' ? 'numeric' : kind === 'email' ? 'email' : 'text'}" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="${escText(k === 'server' && f.broker ? f.broker + ' server (from your broker’s email)' : (ph || ''))}" value="${escText(v[k] || '')}">`).join('')}
+        ${P.note && !P.soon ? `<div class="acct-note">${escText(P.note)}</div>` : ''}
         ${f.msg ? `<div class="acct-msg">${escText(f.msg)}</div>` : ''}
-        <button class="btn-wide btn-primary" style="margin-top:12px;" data-action="add-account-go"${f.busy?' disabled':''}>${f.busy ? 'Connecting…' : 'Connect'}</button>
+        ${P.soon ? '' : `<button class="btn-wide btn-primary" style="margin-top:12px;" data-action="add-account-go"${f.busy?' disabled':''}>${f.busy ? 'Connecting…' : 'Connect'}</button>`}
       </div>
     </div>`;
 }
@@ -5061,21 +5424,20 @@ function symbolPickerTemplate(){
     </div>`;
 }
 
-// Tap the account card: the brokers you can use pop up IN ITS PLACE, the same size (owner). MT5 brokers by name,
-// and TradeLocker (any broker on TradeLocker - its server name comes from that broker). Tap one to add your account.
-const MT5_BROKERS = ['IC Markets','Pepperstone','Exness','XM','FBS','HFM','FXTM','RoboForex','Tickmill','Admirals','Deriv','Vantage','FP Markets','Eightcap','ThinkMarkets','AvaTrade','FxPro','Octa'];
+// The words "MT5 ACCOUNT": every platform and broker you can use pops up IN THE CARD'S PLACE, the same size (owner).
+// Platforms by group, then the real brokers that offer MT4 / MT5. Tap one to add your account.
 function brokerPanelHTML(){
-  const q = (state.brokerQuery || '').toLowerCase();
-  const rows = [{ name:'TradeLocker', platform:'tradelocker', sub:'Any broker on TradeLocker' }]
-    .concat(MT5_BROKERS.map(n=>({ name:n, platform:'mt5', sub:'MT5' })))
-    .filter(b=>!q || b.name.toLowerCase().includes(q));
+  const groups = ['Forex & CFDs', 'Crypto', 'Stocks'];
+  const plat = groups.map(g=>`<div class="broker-group">${g}</div>` + Object.entries(PLATFORMS).filter(([, p])=>p.group === g).map(([id, p])=>
+    `<div class="broker-row" data-broker="${escText(p.label)}" data-broker-platform="${id}"><span class="broker-name">${escText(p.label)}</span><span class="broker-sub">${p.soon ? 'Coming soon' : (id === 'tradelocker' ? 'Any broker on TradeLocker' : id === 'mt5' || id === 'mt4' ? 'Any ' + p.label + ' broker' : '')}</span></div>`).join('')).join('');
+  const brokers = `<div class="broker-group">MT4 / MT5 brokers</div>` + MT5_BROKERS.map(n=>`<div class="broker-row" data-broker="${escText(n)}" data-broker-platform="mt5" data-broker-name="${escText(n)}"><span class="broker-name">${escText(n)}</span><span class="broker-sub">MT5</span></div>`).join('');
+  const mine = tradeAccounts();
+  const act = activeTradeAccount();
+  const yours = mine.length ? `<div class="broker-group">Your accounts</div>` + mine.map(a=>`<div class="broker-row${act && a.id === act.id ? ' on' : ''}" data-switchacct="${escText(a.id)}"><span class="broker-name">${escText(a.name)}</span><span class="broker-sub">${escText((PLATFORMS[a.platform] || {}).label || '')}${act && a.id === act.id ? ' · now' : ''}</span></div>`).join('') + `<div class="broker-group">Add another</div>` : '';
   return `<div class="broker-panel" onclick="event.stopPropagation()">
-    <div class="broker-head"><span>Choose your broker</span><button class="broker-x" data-action="broker-panel-close" aria-label="Close">×</button></div>
-    <input class="broker-search" id="broker-search" type="text" placeholder="Search brokers" autocomplete="off" spellcheck="false" value="${escText(state.brokerQuery || '')}">
-    <div class="broker-list">
-      ${rows.map(b=>`<div class="broker-row" data-broker="${escText(b.name)}" data-broker-platform="${b.platform}"><span class="broker-name">${escText(b.name)}</span><span class="broker-sub">${b.sub}</span></div>`).join('')}
-      <div class="broker-row" data-broker="" data-broker-platform="mt5"><span class="broker-name">Other MT5 broker</span><span class="broker-sub">Type its server</span></div>
-    </div>
+    <div class="broker-head"><span>${mine.length ? 'Your accounts and brokers' : 'Search broker'}</span><button class="broker-x" data-action="broker-panel-close" aria-label="Close">×</button></div>
+    <input class="broker-search" id="broker-search" type="text" placeholder="Search broker" autocomplete="off" spellcheck="false" value="${escText(state.brokerQuery || '')}">
+    <div class="broker-list">${yours}${plat}${brokers}</div>
   </div>`;
 }
 function tradingScreen(){
@@ -5116,25 +5478,25 @@ function tradingScreen(){
       ${['1H','4H','1D','1W'].map(r=>`<div class="tab${state.chartRes===r?' active':''}" data-chartres="${r}">${r}</div>`).join('')}
     </div>
     <div class="live-pl-zone" style="background:${positions.length ? `linear-gradient(180deg, transparent 0%, rgba(${zoneColor},0.09) 26%, rgba(${zoneColor},0.07) 48%, rgba(${zoneColor},0.04) 78%, transparent 100%)` : 'transparent'};">
-    <div class="section-title"><button class="acct-title" data-action="broker-panel-open">${acc && acc.platform === 'tradelocker' ? 'TRADELOCKER' : 'MT5'}${acc && acc.env === 'demo' ? ' DEMO' : ''} ACCOUNT</button></div>
+    <div class="section-title"><button class="acct-title" data-action="broker-panel-open">${acc ? escText(acc.name) + (acc.env === 'demo' ? (acc.platform === 'alpaca' ? ' · PAPER' : ' · DEMO') : '') : `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Search broker`}<span class="acct-title-caret">⌄</span></button></div>
     <div class="mt5-card-wrap" id="acct-swipe">
       <div class="row-card mt5-card">
         <div class="row"><div class="row-name">Balance</div><div class="row-amt">${val(fmtMoney(live.balance, cur))}</div></div>
-        <div class="row"><div class="row-name">Floating P/L</div><div class="row-amt" style="color:${acc && live.status === 'ok' ? (plNeg?'var(--red)':'var(--green)') : 'var(--text)'};">${val((plNeg?'-':'+') + fmtMoney(Math.abs(floatingPL), cur))}</div></div>
+        <div class="row"><div class="row-name">Floating P/L</div><div class="row-amt" style="color:${acc && live.status === 'ok' && !live.spot ? (plNeg?'var(--red)':'var(--green)') : 'var(--text)'};">${live.spot ? '—' : val((plNeg?'-':'+') + fmtMoney(Math.abs(floatingPL), cur))}</div></div>
         <div class="row"><div class="row-name">Equity</div><div class="row-amt">${val(fmtMoney(live.equity, cur))}</div></div>
         <div class="row"><div class="row-name">Margin</div><div class="row-amt">${val(fmtMoney(live.margin, cur))}</div></div>
         <div class="row"><div class="row-name">Free margin</div><div class="row-amt">${val(fmtMoney(live.freeMargin, cur))}</div></div>
       </div>
       <div class="acct-foot">${acc ? status : `<button class="btn-wide btn-primary acct-add-btn" data-action="add-account-open">Add account</button>`}</div>
       ${state.brokerPanelOpen ? brokerPanelHTML() : ''}
-      <button class="mt5-corner-btn left" data-action="mt5-open">${acc && acc.platform === 'tradelocker' ? 'Open TradeLocker' : 'Open MT5'}</button>
+      <button class="mt5-corner-btn left" data-action="mt5-open">Open ${acc ? escText(platformAppName(acc)) : 'MT5'}</button>
       <button class="mt5-corner-btn right" data-action="mt5-switch">Accounts ⌄</button>
     </div>
     ${list.length > 1 ? `<div class="acct-dots">${list.map((a, i)=>`<span class="${i===idx?'on':''}"></span>`).join('')}</div>` : ''}
     <div class="section-title-row">
       <div class="section-title" style="margin:0;">POSITIONS</div>
       <div class="pl-counters">
-        <span class="pl-counter ${plNeg?'pl-counter-down':'pl-counter-up'}">${positions.length ? (plNeg?'-':'+') + fmtMoney(Math.abs(floatingPL), cur) : '—'}</span>
+        <span class="pl-counter ${plNeg?'pl-counter-down':'pl-counter-up'}">${positions.length && !live.spot ? (plNeg?'-':'+') + fmtMoney(Math.abs(floatingPL), cur) : '—'}</span>
       </div>
       <button class="order-corner-btn" data-action="order-panel" title="Order options">⋯</button>
     </div>
@@ -5143,9 +5505,9 @@ function tradingScreen(){
         <div class="row pos-row">
           <div>
             <div class="row-name pos-label">${escText(p.label)}</div>
-            <div class="pos-sub">Entry ${fmtPrice(p.entry)} · Now <span class="pos-live">${fmtPrice(p.current)}</span></div>
+            <div class="pos-sub">${p.spot ? 'Price' : 'Entry ' + fmtPrice(p.entry) + ' ·'} Now <span class="pos-live">${fmtPrice(p.current)}</span></div>
           </div>
-          <div class="row-amt" style="color:${p.profit?'var(--green)':'var(--red)'};">${p.pl<0?'-':'+'}${fmtMoney(Math.abs(p.pl), cur)}</div>
+          ${p.spot ? `<div class="row-amt">${fmtMoney(p.value, cur)}</div>` : `<div class="row-amt" style="color:${p.profit?'var(--green)':'var(--red)'};">${p.pl<0?'-':'+'}${fmtMoney(Math.abs(p.pl), cur)}</div>`}
         </div>
       `).join('') : `<div class="row"><div class="row-name" style="color:var(--muted);">No active positions</div></div>`}
     </div>
@@ -5228,7 +5590,7 @@ function launchPopupTemplate(){
   const isApp = state.launchPopup === 'mt5';
   const acc = activeTradeAccount();
   const tl = acc && acc.platform === 'tradelocker';
-  const title = isApp ? (tl ? 'Open TradeLocker' : 'Open MT5') : 'Open TradingView';
+  const title = isApp ? 'Open ' + (acc ? platformAppName(acc) : 'MT5') : 'Open TradingView';
   const sub = isApp ? (acc ? `Currently active: ${escText(acc.name)}${acc.server ? ' · ' + escText(acc.server) : ''}` : 'Opens the app on your phone.') : 'View this chart in the full TradingView app.';
   return `
     <div class="modal-overlay" data-action="launch-popup-bg">
@@ -10208,12 +10570,14 @@ function attachHandlers(){
       renderDevice();
     });
   });
-  document.querySelectorAll('[data-addacct-platform]').forEach(el=>el.addEventListener('click', ()=>{ state.addAccount.platform = el.getAttribute('data-addacct-platform'); state.addAccount.msg = ''; renderDevice(); }));
-  document.querySelectorAll('[data-addacct-env]').forEach(el=>el.addEventListener('click', ()=>{ state.addAccount.env = el.getAttribute('data-addacct-env'); renderDevice(); }));
+
+  document.querySelectorAll('[data-addacct-env]').forEach(el=>el.addEventListener('click', ()=>{
+    const vals = Object.assign({}, state.addAccount.vals || {}); document.querySelectorAll('#content-area [data-addacct-field]').forEach(i=>{ vals[i.getAttribute('data-addacct-field')] = i.value; }); state.addAccount.vals = vals;
+    state.addAccount.env = el.getAttribute('data-addacct-env'); renderDevice(); }));
   document.querySelectorAll('[data-chartres]').forEach(el=>el.addEventListener('click', ()=>{ state.chartRes = el.getAttribute('data-chartres'); state.focusBars = []; renderDevice(); tradeRefreshNow(true); }));
   document.querySelectorAll('[data-symbol]').forEach(el=>el.addEventListener('click', ()=>{
     state.focusSymbol = el.getAttribute('data-symbol'); state.focusName = state.focusSymbol;
-    try{ localStorage.setItem('story-trade-symbol', state.focusSymbol); }catch(err){}
+    { const l = tradeAccounts(); const a = l.find(x=>x.id === (activeTradeAccount() || {}).id); if(a){ a.symbol = state.focusSymbol; saveTradeAccounts(l); } }
     state.symbolPickerOpen = false; state.focusQuote = null; state.focusBars = [];
     renderDevice(); tradeRefreshNow(true);
   }));
@@ -10223,21 +10587,30 @@ function attachHandlers(){
       state.symbolQuery = symSearch.value;
       const box = document.querySelector('.symbol-list');
       if(box){ const tmp = document.createElement('div'); tmp.innerHTML = symbolPickerTemplate(); const nb = tmp.querySelector('.symbol-list'); if(nb){ box.innerHTML = nb.innerHTML;
-        box.querySelectorAll('[data-symbol]').forEach(el=>el.addEventListener('click', ()=>{ state.focusSymbol = el.getAttribute('data-symbol'); state.focusName = state.focusSymbol; try{ localStorage.setItem('story-trade-symbol', state.focusSymbol); }catch(err){} state.symbolPickerOpen = false; state.focusQuote = null; state.focusBars = []; renderDevice(); tradeRefreshNow(true); })); } }
+        box.querySelectorAll('[data-symbol]').forEach(el=>el.addEventListener('click', ()=>{ state.focusSymbol = el.getAttribute('data-symbol'); state.focusName = state.focusSymbol; { const l = tradeAccounts(); const a = l.find(x=>x.id === (activeTradeAccount() || {}).id); if(a){ a.symbol = state.focusSymbol; saveTradeAccounts(l); } } state.symbolPickerOpen = false; state.focusQuote = null; state.focusBars = []; renderDevice(); tradeRefreshNow(true); })); } }
     });
   }
   document.querySelectorAll('[data-broker-platform]').forEach(el=>el.addEventListener('click', ()=>{
     state.brokerPanelOpen = false;
     state.addAccount.platform = el.getAttribute('data-broker-platform');
-    state.addAccount.broker = el.getAttribute('data-broker-platform') === 'tradelocker' ? '' : el.getAttribute('data-broker');
+    state.addAccount.broker = el.getAttribute('data-broker-name') || '';
+    state.addAccount.vals = {};
     state.addAccount.msg = ''; state.addAccountOpen = true;
     renderDevice();
+  }));
+  document.querySelectorAll('[data-switchacct]').forEach(el=>el.addEventListener('click', ()=>{
+    const id = el.getAttribute('data-switchacct'); const a = tradeAccounts().find(x=>x.id === id);
+    state.brokerPanelOpen = false; if(!a) return;
+    state.activeTradeId = id; try{ localStorage.setItem('story-trade-active', id); }catch(err){}
+    state.focusSymbol = a.symbol || (PLATFORMS[a.platform] || {}).sym || state.focusSymbol; state.focusName = null; state.focusQuote = null; state.focusBars = [];
+    renderDevice(); tradeRefreshNow(true);
   }));
   const brokerSearch = document.getElementById('broker-search');
   if(brokerSearch) brokerSearch.addEventListener('input', ()=>{
     state.brokerQuery = brokerSearch.value;
     const q = brokerSearch.value.toLowerCase();
-    document.querySelectorAll('.broker-row[data-broker]').forEach(r=>{ const n = r.getAttribute('data-broker'); r.style.display = (!n || !q || n.toLowerCase().includes(q) || r.textContent.toLowerCase().includes(q)) ? '' : 'none'; });
+    document.querySelectorAll('.broker-row[data-broker]').forEach(r=>{ r.style.display = (!q || r.textContent.toLowerCase().includes(q)) ? '' : 'none'; });
+    document.querySelectorAll('.broker-group').forEach(g=>{ g.style.display = q ? 'none' : ''; });
   });
   // Swipe the account card left / right to go through your accounts (owner).
   const swipeCard = document.querySelector('#content-area #acct-swipe');
@@ -11034,18 +11407,20 @@ function attachHandlers(){
         case 'order-place': performOrderPlace(); break;
         case 'trade-buy': tradeDo('Bought ' + state.lotSize.toFixed(2) + ' ' + state.focusSymbol, acc=>TRADE.order(acc, { side:'buy', type:'market', qty: state.lotSize })); break;
         case 'trade-sell': tradeDo('Sold ' + state.lotSize.toFixed(2) + ' ' + state.focusSymbol, acc=>TRADE.order(acc, { side:'sell', type:'market', qty: state.lotSize })); break;
-        case 'add-account-open': state.addAccountOpen = true; state.accountSwitcherOpen = false; state.brokerPanelOpen = false; state.addAccount.msg = ''; break;
+        // Add account: first the list of every platform and broker (in the card's place), then that one's details.
+        case 'add-account-open': state.accountSwitcherOpen = false; state.brokerPanelOpen = true; state.brokerQuery = ''; state.addAccount.msg = ''; break;
         case 'broker-panel-close': state.brokerPanelOpen = false; break;
         // Tap the words "MT5 ACCOUNT" -> the brokers you can use pop up in the card's place (owner).
         case 'broker-panel-open': state.brokerPanelOpen = !state.brokerPanelOpen; state.brokerQuery = ''; break;
-        case 'add-account-close': case 'add-account-bg': if(!state.addAccount.busy){ state.addAccountOpen = false; state.addAccount.pass = ''; } break;
+        case 'add-account-close': case 'add-account-bg': if(!state.addAccount.busy){ state.addAccountOpen = false; state.addAccount.vals = {}; } break;
         case 'add-account-go': {
           const v = id=>((document.getElementById(id) || {}).value || '').trim();
           // What you typed stays in the form (kept only while it's open), so a wrong password doesn't wipe it.
-          state.addAccount.user = v('addacct-user'); state.addAccount.server = v('addacct-server'); state.addAccount.pass = (document.getElementById('addacct-pass') || {}).value || '';
-          const f = Object.assign({}, state.addAccount, { email: state.addAccount.user, login: state.addAccount.user, password: state.addAccount.pass });
-          if(!f.email || !f.password || !f.server){ state.addAccount.msg = 'Fill in all three'; break; }
-          if(f.platform === 'mt5' && !MT5_API){ state.addAccount.msg = tradeErrText('mt5-soon'); break; }
+          const vals = {}; document.querySelectorAll('#content-area [data-addacct-field]').forEach(i=>{ vals[i.getAttribute('data-addacct-field')] = i.getAttribute('type') === 'password' ? i.value : i.value.trim(); });
+          state.addAccount.vals = vals;
+          const P = PLATFORMS[state.addAccount.platform] || {};
+          if((P.fields || []).some(([k])=>!vals[k])){ state.addAccount.msg = 'Fill in every box'; break; }
+          const f = Object.assign({}, state.addAccount, vals);
           tradeAddAccount(f);
           return;
         }
@@ -11066,9 +11441,13 @@ function attachHandlers(){
           const kind = state.launchPopup; state.launchPopup = null;
           if(kind === 'mt5'){
             const acc = activeTradeAccount();
-            const pkgs = acc && acc.platform === 'tradelocker' ? ['com.tradelocker.app', 'com.tradelocker'] : ['net.metaquotes.metatrader5'];
-            const ok = NATIVE && window.StoryNative.openPackage && pkgs.some(p=>window.StoryNative.openPackage(p));
-            if(!ok) showToast((acc && acc.platform === 'tradelocker' ? 'TradeLocker' : 'MT5') + ' isn’t installed on this phone');
+            const name = acc ? platformAppName(acc) : 'MT5';
+            // The real app on this phone, found by its name among your installed apps.
+            const want = acc ? [platformAppName(acc), (PLATFORMS[acc.platform] || {}).label].concat(acc.platform === 'mt5' ? ['MetaTrader 5'] : acc.platform === 'mt4' ? ['MetaTrader 4'] : []) : ['MetaTrader 5'];
+            let apps = []; try{ apps = JSON.parse((NATIVE && window.StoryNative.getApps && window.StoryNative.getApps()) || '[]'); }catch(err){}
+            const hit = apps.find(a=>want.some(w=>w && String(a.label || '').toLowerCase().includes(String(w).toLowerCase())));
+            const ok = hit && window.StoryNative.openPackage && window.StoryNative.openPackage(hit.pkg);
+            if(!ok) showToast(name + ' isn’t installed on this phone');
           } else {
             const ok = NATIVE && window.StoryNative.openPackage && window.StoryNative.openPackage('com.tradingview.tradingviewapp');
             if(!ok) showToast('TradingView isn’t installed on this phone');
