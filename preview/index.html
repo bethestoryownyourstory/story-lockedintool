@@ -6311,7 +6311,8 @@ function cardMatches(c, t){
   const a = String(t.app || '').toLowerCase(), b = String(c.bank || '').toLowerCase().replace(/^firstrand bank/, 'fnb firstrand bank');
   return !!a && !!b && (b.includes(a) || a.includes(b.split(' ')[0]));
 }
-const walletActivityList = ()=>moneyTx().slice(0, 5);
+// The whole Wallet follows the card that's showing (owner), like Money.
+const walletActivityList = ()=>moneyView().slice(0, 5);
 function walletActivityColor(amt, ts){
   const age = Date.now() - ts;
   if(age >= WALLET_ACTIVITY_COLOR_WINDOW_MS) return 'var(--text)';
@@ -6340,7 +6341,7 @@ function walletActivityRowsHTML(){
 // Subscriptions = the same payee paid in 2+ different months (worked out from your real payments).
 function walletSubscriptions(){
   const by = {};
-  moneyTx().forEach(t=>{ if(t.amt >= 0 || !t.who) return; const k = t.who.toLowerCase() + '|' + t.cur; (by[k] = by[k] || []).push(t); });
+  moneyView().forEach(t=>{ if(t.amt >= 0 || !t.who) return; const k = t.who.toLowerCase() + '|' + t.cur; (by[k] = by[k] || []).push(t); });
   return Object.values(by).map(l=>{
     const months = new Set(l.map(t=>monthKey(t.ts)));
     if(months.size < 2) return null;
@@ -6469,7 +6470,7 @@ function walletOverviewScreen(){
     ${topBar('Overview', false, '', 'wallet', '', false, true)}
     <div class="note" style="margin-bottom:2px;margin-top:-11px;text-align:left;">Welcome back${(()=>{ let p = {}; try{ p = JSON.parse(localStorage.getItem('story-profile') || '{}') || {}; }catch(e){} const n = (p.name || '').trim() || ((p.username || '').trim() ? '@' + p.username.trim() : ''); return n ? ', ' + escText(n.split(' ')[0]) : ''; })()}!</div>
     <div class="row-sub" style="font-size:11px;">Current balance</div>
-    ${(()=>{ const cur = moneyMainCur(); const b = moneyBalances().filter(a=>a.cur === cur).reduce((x, a)=>x + a.bal, 0); const t = fmtCur(b, cur); const k = t.lastIndexOf('.'); return `<div class="big-num" style="font-size:32px;margin-top:2px;">${t.slice(0, k)}<span style="font-size:16px;color:var(--muted);">${t.slice(k)}</span></div>`; })()}
+    ${(()=>{ const cur = moneyMainCur(); const b = moneyBalances(!!activeCard()).filter(a=>a.cur === cur).reduce((x, a)=>x + a.bal, 0); const t = fmtCur(b, cur); const k = t.lastIndexOf('.'); return `<div class="big-num" style="font-size:32px;margin-top:2px;">${t.slice(0, k)}<span style="font-size:16px;color:var(--muted);">${t.slice(k)}</span></div>`; })()}
     <div class="btn-row" style="margin-top:14px;">
       <button class="btn" style="background:#b6f27a;color:#0a2a05;" data-action="send-open">↗ Send</button>
       <button class="btn" style="background:#e8e6e1;color:#000;" data-nav="wallet">⧉ Scan</button>
@@ -6487,7 +6488,7 @@ function walletOverviewScreen(){
       <span style="font-size:10.5px;color:var(--green);cursor:pointer;font-weight:700;" data-action="open-tx-from-overview">More</span>
     </div>
     <div class="row-card">
-      ${moneyTx().slice(0,4).length ? moneyTx().slice(0,4).map(t=>`
+      ${moneyView().slice(0,4).length ? moneyView().slice(0,4).map(t=>`
         <div class="row"><div class="row-left"><div class="row-icon">${moneyIcon(t)}</div><div><div class="row-name">${escText(moneyWho(t))}</div><div class="row-sub">${escText(t.app || '')} · ${moneyDate(t.ts)}</div></div></div><div class="row-amt" style="color:${t.amt<0?'var(--red)':'var(--green)'};">${fmtCur(t.amt, t.cur, true)}</div></div>
       `).join('') : moneyRowsEmpty('No transactions yet')}
     </div>
@@ -6550,12 +6551,12 @@ function txHistoryScreen(){
     ${topBar('<span style="font-size:25px;line-height:1.3;margin-left:6px;display:inline-block;">Transaction History</span>', false, `<button class="big-x-btn" data-nav="${state.txHistoryBackTarget}" title="Back">✕</button>`, state.txHistoryBackTarget, '', true)}
     <div class="tx-balance-card">
       <div class="tx-balance-label">Total Balance</div>
-      <div class="tx-balance-amt">${(()=>{ const cur = moneyMainCur(); return fmtCur(moneyBalances().filter(a=>a.cur === cur).reduce((x, a)=>x + a.bal, 0), cur); })()}</div>
-      <div class="tx-balance-num" style="${walletCards().length ? '' : 'visibility:hidden;'}">•••• •••• •••• ${escText((walletCards()[Math.max(0, state.walletCardIndex - 1)] || walletCards()[0] || {}).last4 || '0000')}</div>
+      <div class="tx-balance-amt">${(()=>{ const cur = moneyMainCur(); return fmtCur(moneyBalances(!!activeCard()).filter(a=>a.cur === cur).reduce((x, a)=>x + a.bal, 0), cur); })()}</div>
+      <div class="tx-balance-num" style="${walletCards().length ? '' : 'visibility:hidden;'}">•••• •••• •••• ${escText((activeCard() || {}).last4 || '0000')}</div>
     </div>
     <div class="section-title">TRANSACTION HISTORY</div>
     <div class="row-card">
-      ${moneyTx().slice(0,200).length ? moneyTx().slice(0,200).map(t=>`
+      ${moneyView().slice(0,200).length ? moneyView().slice(0,200).map(t=>`
         <div class="row"><div class="row-left"><div class="row-icon">${moneyIcon(t)}</div><div><div class="row-name">${escText(moneyWho(t))}</div><div class="row-sub">${escText(t.app || '')} · ${moneyDate(t.ts)}</div></div></div><div class="row-amt" style="color:${t.amt<0?'var(--red)':'var(--green)'};">${fmtCur(t.amt, t.cur, true)}</div></div>
       `).join('') : moneyRowsEmpty('No transactions yet')}
     </div>
