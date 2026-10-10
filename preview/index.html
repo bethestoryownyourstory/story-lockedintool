@@ -5860,8 +5860,8 @@ function tvColors(){
   const white = window.storyTheme && window.storyTheme() === 'white';
   return { bg: white ? '#ffffff' : '#000000', text: white ? '#555555' : '#8a8a8a', grid: white ? '#f0f0f0' : '#111111' };
 }
-// No trading account logged in: TradingView's own live chart (TradingView's market data) for the symbol, so the chart
-// is always there (owner). One frame kept alive and moved, like the chart below - it never reloads on a re-render.
+// The chart is TradingView's own live chart (TradingView's market data and candles) for the focus symbol - always,
+// logged in or not (owner: "TradingView chart only"). One frame kept alive and moved, like the chart below - it never reloads on a re-render.
 function tvSymbol(sym){
   const s = String(sym || 'EURUSD').toUpperCase().replace(/[^A-Z0-9.:]/g, '');
   if(s.includes(':')) return s;
@@ -5886,8 +5886,8 @@ function tvMount(){
   if(state.current !== 'trading') return;
   const slot = document.querySelector('#content-area .chart-fullscreen .tv-slot') || document.querySelector('#content-area #trading-chart .tv-slot');
   if(!slot) return;
-  if(!activeTradeAccount()){ tvWidgetMount(slot); return; }
-  if(TV.widget && TV.widget.parentElement) TV.widget.remove();
+  // TradingView's own chart ONLY (owner) - exactly TradingView's live candles, logged in or not.
+  tvWidgetMount(slot); return;
   if(!window.LightweightCharts){ loadLWC().then(()=>tvMount()).catch(()=>{}); return; }
   if(!TV.host){
     const c = tvColors();
@@ -12288,7 +12288,8 @@ function attachHandlers(){
         case 'order-place': performOrderPlace(); break;
         case 'trade-buy': { const d = draftFor('buy'); state.draftSLTP = null; tradeDo('Bought ' + state.lotSize.toFixed(2) + ' ' + state.focusSymbol, acc=>TRADE.order(acc, Object.assign({ side:'buy', type:'market', qty: state.lotSize }, d))); break; }
         case 'trade-sell': { const d = draftFor('sell'); state.draftSLTP = null; tradeDo('Sold ' + state.lotSize.toFixed(2) + ' ' + state.focusSymbol, acc=>TRADE.order(acc, Object.assign({ side:'sell', type:'market', qty: state.lotSize }, d))); break; }
-        case 'draft-sltp': toggleDraftSLTP(); return;
+        // TradingView's chart can't take lines from STORY, so SL/TP is set by price in the order panel.
+        case 'draft-sltp': state.draftSLTP = null; state.orderPanelOpen = true; break;
         // Add account: first the list of every platform and broker (in the card's place), then that one's details.
         case 'add-account-open': state.accountSwitcherOpen = false; state.brokerPanelOpen = true; state.brokerQuery = ''; state.addAccount.msg = ''; break;
         case 'broker-panel-close': state.brokerPanelOpen = false; break;
