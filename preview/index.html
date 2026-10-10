@@ -5009,9 +5009,9 @@ async function mt5Call(acc, method, path, body){
 // Each one: the details you type to add your account, and how STORY reads it / trades on it. Platforms marked soon
 // are real ones still being connected (they say so, never pretend).
 const PLATFORMS = {
-  mt5:        { hidden:true, label:'MT5', group:'Forex & CFDs', sym:'EURUSD', env:true, fields:[['login','MT5 LOGIN (ACCOUNT NUMBER)','e.g. 48213390','numeric'],['password','PASSWORD','Your MT5 password','password'],['server','BROKER SERVER','Your broker’s MT5 server (from your broker)']], note:'STORY connects your MT5 account through MetaApi (the only way an app can reach MT5). Your password is only used to connect - it can take up to a minute the first time.' },
-  mt4:        { hidden:true, label:'MT4', group:'Forex & CFDs', sym:'EURUSD', env:true, fields:[['login','MT4 LOGIN (ACCOUNT NUMBER)','e.g. 48213390','numeric'],['password','PASSWORD','Your MT4 password','password'],['server','BROKER SERVER','Your broker’s MT4 server (from your broker)']], note:'STORY connects your MT4 account through MetaApi. Your password is only used to connect - it can take up to a minute the first time.' },
-  tradelocker:{ label:'TradeLocker', group:'Forex & CFDs', sym:'EURUSD', env:true, fields:[['email','TRADELOCKER EMAIL','you@email.com','email'],['password','PASSWORD','Your TradeLocker password','password'],['server','BROKER SERVER','Your broker’s server name (from your broker)'],['accNo','ACCOUNT NUMBER','The account’s number in TradeLocker (e.g. 1234567)','numeric']], note:'STORY signs in to your broker directly. Your password is not kept - only a sign-in key, on this phone.' },
+  mt5:        { label:'MT5', group:'Forex & CFDs', sym:'EURUSD', env:true, fields:[['login','MT5 LOGIN (ACCOUNT NUMBER)','e.g. 48213390','numeric'],['password','PASSWORD','Your MT5 password','password'],['server','BROKER SERVER','Your broker’s MT5 server (from your broker)']], note:'STORY connects your MT5 account through MetaApi (the only way an app can reach MT5). Your password is only used to connect - it can take up to a minute the first time.' },
+  mt4:        { label:'MT4', group:'Forex & CFDs', sym:'EURUSD', env:true, fields:[['login','MT4 LOGIN (ACCOUNT NUMBER)','e.g. 48213390','numeric'],['password','PASSWORD','Your MT4 password','password'],['server','BROKER SERVER','Your broker’s MT4 server (from your broker)']], note:'STORY connects your MT4 account through MetaApi. Your password is only used to connect - it can take up to a minute the first time.' },
+  tradelocker:{ label:'TradeLocker', group:'Forex & CFDs', sym:'EURUSD', env:true, fields:[['email','TRADELOCKER EMAIL','you@email.com','email'],['password','PASSWORD','Your TradeLocker password','password'],['server','BROKER SERVER','Your broker’s server name (from your broker)'],['accNo','ACCOUNT NUMBER','Its number in TradeLocker, e.g. 1234567','numeric']], note:'STORY signs in to your broker directly. Your password is not kept - only a sign-in key, on this phone.' },
   ctrader:    { label:'cTrader', group:'Forex & CFDs', soon:'cTrader connects once STORY’s cTrader app is registered with Spotware' },
   dxtrade:    { label:'DXtrade', group:'Forex & CFDs', soon:'DXtrade is being connected' },
   matchtrader:{ label:'Match-Trader', group:'Forex & CFDs', soon:'Match-Trader is being connected' },
@@ -5063,7 +5063,7 @@ const BROKERS = [
   { name:'Luno', regs:'FSCA crypto licence (CASP)', fsca:true, platforms:['luno'], crypto:true },
   { name:'VALR', regs:'FSCA crypto licence (CASP)', fsca:true, platforms:['valr'], crypto:true },
 ];
-// Only the platforms STORY offers (MT4 / MT5 are not offered for now - owner); a broker with none of them isn't listed.
+// Only platforms STORY offers (a platform marked hidden:true drops out); a broker with none of them isn't listed.
 const shownPlatforms = list=>list.filter(p=>!(PLATFORMS[p] || {}).hidden);
 const BROKERS_SHOWN = ()=>BROKERS.map(b=>Object.assign({}, b, { platforms: shownPlatforms(b.platforms) })).filter(b=>b.platforms.length);
 const brokerByName = n=>BROKERS_SHOWN().find(b=>b.name === n);
@@ -5538,7 +5538,7 @@ function addAccountTemplate(){
         ${f.other ? `<div class="section-title" style="margin-top:4px;">YOUR BROKER</div>
           <input class="field-input" data-addacct-field="brokerName" type="text" autocomplete="off" spellcheck="false" placeholder="Your broker’s name" value="${escText(v.brokerName || '')}">
           <div class="section-title" style="margin-top:12px;">ITS PLATFORM</div>
-          <div class="acct-seg" style="grid-template-columns:repeat(3,1fr);margin-bottom:8px;">${['tradelocker','deriv','ctrader','dxtrade','matchtrader'].map(p=>`<button class="acct-seg-btn${f.platform===p?' on':''}" data-addacct-platform="${p}">${escText(PLATFORMS[p].label)}</button>`).join('')}</div>` : ''}
+          <div class="acct-seg" style="grid-template-columns:repeat(3,1fr);margin-bottom:8px;">${['tradelocker','mt5','mt4','deriv','ctrader','dxtrade','matchtrader'].map(p=>`<button class="acct-seg-btn${f.platform===p?' on':''}" data-addacct-platform="${p}">${escText(PLATFORMS[p].label)}</button>`).join('')}</div>` : ''}
         ${(()=>{ const b = brokerByName(f.broker); if(!b) return ''; return `<div class="acct-broker-sub">${escText(b.regs)}${b.fsca ? ' · FSCA' : ''}${b.note ? ' · ' + escText(b.note) : ''}</div>` + (b.platforms.length > 1 ? `<div class="acct-seg acct-seg-n" style="grid-template-columns:repeat(${b.platforms.length},1fr);margin-bottom:8px;">${b.platforms.map(p=>`<button class="acct-seg-btn${f.platform===p?' on':''}" data-addacct-platform="${p}">${escText((PLATFORMS[p] || {}).label || p)}</button>`).join('')}</div>` : ''); })()}
         ${P.env ? `<div class="acct-seg">
           <button class="acct-seg-btn${f.env==='live'?' on':''}" data-addacct-env="live">Real</button>
