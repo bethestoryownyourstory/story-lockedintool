@@ -2318,9 +2318,10 @@
      new page would land if added underneath (new row, same column) or beside (same row, new
      column) an existing one. Tapping any real tile jumps straight to that page. */
   .pswitch-rows-grid{ display:flex; flex-direction:column; gap:14px; }
-  .pswitch-rows-row{ display:flex; align-items:flex-start; gap:10px; }
+  /* The row label always sits in the vertical middle of its row of pages (owner). */
+  .pswitch-rows-row{ display:flex; align-items:center; gap:10px; }
   .pswitch-rows-row-label{
-    width:44px; flex:0 0 44px; padding-top:6px;
+    width:44px; flex:0 0 44px; text-align:center; white-space:nowrap;
     font-size:10px; font-weight:800; letter-spacing:0.4px; text-transform:uppercase;
     color:var(--text); opacity:0.55;
   }
