@@ -6135,7 +6135,7 @@ async function cardBankLookup(pan){
 }
 function cardFormVals(){
   const v = id=>((document.getElementById(id) || {}).value || '').trim();
-  return { pan: v('card-pan').replace(/[^0-9 ]/g, ''), exp: v('card-exp'), msg:'' };
+  return { pan: v('card-pan').replace(/[^0-9 ]/g, ''), exp: v('card-exp'), cvv: v('card-cvv').replace(/\D/g, ''), msg:'' };
 }
 function addCardTemplate(){
   const f = state.addCard || {};
@@ -6148,11 +6148,12 @@ function addCardTemplate(){
         <div class="grid2" style="grid-template-columns:1fr 1fr;gap:8px;">
           <div style="grid-column:1 / -1;"><div class="section-title" style="margin-top:12px;">CARD NUMBER</div><input class="field-input" id="card-pan" type="text" inputmode="numeric" maxlength="23" autocomplete="off" placeholder="The full number on your card" value="${escText(f.pan || '')}"></div>
           <div><div class="section-title" style="margin-top:12px;">EXPIRES</div><input class="field-input" id="card-exp" type="text" inputmode="numeric" maxlength="5" autocomplete="off" placeholder="MM/YY" value="${escText(f.exp || '')}"></div>
+          <div><div class="section-title" style="margin-top:12px;">CVV</div><input class="field-input" id="card-cvv" type="password" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="123" value="${escText(f.cvv || '')}"></div>
         </div>
         ${f.photo ? '' : `<div class="section-title" style="margin-top:4px;">COLOUR</div>
         <div style="display:flex;gap:10px;margin:6px 0 4px;flex-wrap:wrap;">${CARD_COLORS.map(([n, bg])=>`<button data-keep-color data-cardcolor="${n}" title="${n}" style="width:30px;height:30px;border-radius:50%;background:${bg};border:2px solid ${(f.color || 'Blue') === n ? '#ffffff' : 'transparent'};padding:0;"></button>`).join('')}</div>`}
         <div class="acct-msg">${escText(f.msg || '')}</div>
-        <div class="note" style="margin-top:6px;">Only the last 4 digits are kept, on this phone - never the full number (a picture has it covered). Paying uses your phone's own tap to pay.</div>
+        <div class="note" style="margin-top:6px;">Only the last 4 digits are kept, on this phone - never the full number or the CVV (a picture has the number covered). Paying uses your phone's own tap to pay.</div>
         <button class="btn-wide btn-primary" style="margin-top:12px;" data-action="add-card-save"${f.busy ? ' disabled' : ''}>${f.busy ? 'Checking…' : 'Add card'}</button>
       </div>
     </div>`;
@@ -12667,9 +12668,11 @@ function attachHandlers(){
           if((state.addCard || {}).busy) break;
           const f = state.addCard = Object.assign(state.addCard || {}, cardFormVals());
           let exp = f.exp.replace(/[^0-9]/g, ''); if(exp.length === 4) exp = exp.slice(0, 2) + '/' + exp.slice(2); f.exp = exp;
-          if(!f.pan || !f.exp){ f.msg = 'Enter your card number and expiry date'; break; }
+          if(!f.pan || !f.exp || !f.cvv){ f.msg = 'Enter your card number, expiry date and CVV'; break; }
           const chk = cardNumberCheck(f.pan);
-          if(!chk || !cardExpiryOk(f.exp)){ f.msg = 'Invalid card details'; break; }
+          // CVV: 3 digits (4 on Amex) - checked like any card form, never kept anywhere.
+          if(!chk || !cardExpiryOk(f.exp) || f.cvv.length !== (chk.net === 'Amex' ? 4 : 3)){ f.msg = 'Invalid card details'; break; }
+          f.cvv = '';
           f.busy = true;
           cardBankLookup(f.pan).then(bank=>{
             if(state.addCard !== f) return;   // closed while checking: nothing is added
