@@ -6071,7 +6071,6 @@ const WALLET_ACTIVITY_COLOR_WINDOW_MS = 10 * 60 * 1000;
 // (localStorage story-cards; photos in STORY's private files). The card showing in Wallet is the card Money shows.
 const CARDS_KEY = 'story-cards';
 const CARD_NETS = ['Visa', 'Mastercard', 'Amex', 'Other'];
-const CARD_COLORS = [['Blue', 'linear-gradient(135deg, #1c3f8f, #0d1f4d)'], ['Black', 'linear-gradient(135deg, #1f2422, #0a0b0a)'], ['Green', 'linear-gradient(135deg, #1f6f43, #0b2e1c)'], ['Red', 'linear-gradient(135deg, #8f1c2c, #3d0a12)'], ['Gold', 'linear-gradient(135deg, #a8842c, #4a3910)'], ['Purple', 'linear-gradient(135deg, #5b2a8f, #230d3d)'], ['Silver', 'linear-gradient(135deg, #9aa0a6, #4b5055)']];
 // Cards added before the number check existed were never checked - they don't count (owner: no fake card details).
 function walletCards(){ try{ return (JSON.parse(localStorage.getItem(CARDS_KEY) || '[]') || []).filter(c=>c && c.checked); }catch(e){ return []; } }
 function saveWalletCards(l){ try{ localStorage.setItem(CARDS_KEY, JSON.stringify(l)); }catch(e){} }
@@ -6096,7 +6095,7 @@ function cardFaceHTML(c){
 function cardSlideHTML(c, i){
   const idx = state.walletCardIndex;
   const cls = i === idx ? '' : (idx !== 0 && Math.abs(i - idx) === 1 ? 'inactive' : 'inactive hidden-peek');
-  const bg = c.photo ? '#000000' : (CARD_COLORS.find(k=>k[0] === c.color) || CARD_COLORS[0])[1];
+  const bg = '#000000';   // no colour choice (owner: real only) - a typed card is plain black; a picture shows the card's own colours
   return `
         <div class="paycard-slide">
         <div class="realcard ${cls}${c.photo ? ' realcard-isphoto' : ''}" data-keep-color data-wcard="${escText(c.id)}" style="background:${bg};border:1px solid rgba(255,255,255,0.08);">${cardFaceHTML(c)}
@@ -6150,8 +6149,6 @@ function addCardTemplate(){
           <div><div class="section-title" style="margin-top:12px;">EXPIRES</div><input class="field-input" id="card-exp" type="text" inputmode="numeric" maxlength="5" autocomplete="off" placeholder="MM/YY" value="${escText(f.exp || '')}"></div>
           <div><div class="section-title" style="margin-top:12px;">CVV</div><input class="field-input" id="card-cvv" type="password" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="123" value="${escText(f.cvv || '')}"></div>
         </div>
-        ${f.photo ? '' : `<div class="section-title" style="margin-top:4px;">COLOUR</div>
-        <div style="display:flex;gap:10px;margin:6px 0 4px;flex-wrap:wrap;">${CARD_COLORS.map(([n, bg])=>`<button data-keep-color data-cardcolor="${n}" title="${n}" style="width:30px;height:30px;border-radius:50%;background:${bg};border:2px solid ${(f.color || 'Blue') === n ? '#ffffff' : 'transparent'};padding:0;"></button>`).join('')}</div>`}
         <div class="acct-msg">${escText(f.msg || '')}</div>
         <div class="note" style="margin-top:6px;">Only the last 4 digits are kept, on this phone - never the full number or the CVV (a picture has the number covered). Paying uses your phone's own tap to pay.</div>
         <button class="btn-wide btn-primary" style="margin-top:12px;" data-action="add-card-save"${f.busy ? ' disabled' : ''}>${f.busy ? 'Checking…' : 'Add card'}</button>
@@ -11233,7 +11230,6 @@ function attachHandlers(){
     });
   });
 
-  document.querySelectorAll('[data-cardcolor]').forEach(el=>el.addEventListener('click', ()=>{ state.addCard = Object.assign(state.addCard || {}, cardFormVals(), { color: el.getAttribute('data-cardcolor') }); renderDevice(); }));
   document.querySelectorAll('[data-wcard]').forEach(el=>el.addEventListener('click', ()=>{
     const i = walletCards().findIndex(c=>c.id === el.getAttribute('data-wcard')) + 1;
     if(i === state.walletCardIndex) state.cardSheetId = el.getAttribute('data-wcard'); else setWalletCardIndex(i);
@@ -12661,7 +12657,7 @@ function attachHandlers(){
           state.current = 'wallet';
           break;
         case 'cal-open': state.calOpen = true; break;
-        case 'add-card': state.addCard = { net:'Visa', color:'Blue' }; state.addCardOpen = true; break;
+        case 'add-card': state.addCard = {}; state.addCardOpen = true; break;
         case 'card-photo': state.addCard = Object.assign(state.addCard || {}, cardFormVals()); state.addCardOpen = false; renderDevice(); openCardCamera(); return;
         case 'add-card-close': state.addCardOpen = false; state.addCard = null; break;
         case 'add-card-save': {
@@ -12676,7 +12672,7 @@ function attachHandlers(){
           f.busy = true;
           cardBankLookup(f.pan).then(bank=>{
             if(state.addCard !== f) return;   // closed while checking: nothing is added
-            const list = walletCards(); list.push({ id:'card' + Date.now(), bank: bank || '', last4:chk.last4, exp:f.exp, net:chk.net, color:f.color || 'Blue', photo:f.photo || '', checked:true });
+            const list = walletCards(); list.push({ id:'card' + Date.now(), bank: bank || '', last4:chk.last4, exp:f.exp, net:chk.net, photo:f.photo || '', checked:true });
             saveWalletCards(list);
             state.addCardOpen = false; state.addCard = null; setWalletCardIndex(list.length);
             showToast('Card added'); renderDevice();
