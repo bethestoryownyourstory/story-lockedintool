@@ -1,9 +1,9 @@
-// STORY trade server (Cloudflare Worker "story-trade"): connects MT5 accounts through MetaApi - the only way an app
+// STORY trade server (Cloudflare Worker "story-trade"): connects MT4 / MT5 accounts through MetaApi - the only way an app
 // can reach MT5. STORY's MetaApi key (secret METAAPI_TOKEN) stays here, never in the app. Each MT5 account added in
 // STORY gets its own access key (an HMAC of the account id) that only the phone that added it holds, so a phone can
 // only ever see and trade its own accounts.
 //
-//   POST /mt5/connect            {login, password, server}  -> {accountId, key, currency}
+//   POST /mt5/connect            {login, password, server, platform: 'mt5'|'mt4'}  -> {accountId, key, currency}
 //   GET  /mt5/<id>/live                                       -> {balance, equity, margin, freeMargin, pl, positions[]}
 //   GET  /mt5/<id>/focus?symbol=EURUSD&res=1H                 -> {quote:{bid,ask,change}, bars:[{o,h,l,c}], name}
 //   GET  /mt5/<id>/symbols                                    -> {symbols:[...]}
@@ -45,7 +45,7 @@ export default {
         const b = await req.json();
         if (!b.login || !b.password || !b.server) return json({ error: 'Login, password and server are needed' }, 400);
         const acc = await meta(env, PROV + '/users/current/accounts', { method: 'POST', body: JSON.stringify({
-          name: 'STORY ' + b.login, login: String(b.login), password: b.password, server: b.server, platform: 'mt5', magic: 0, type: 'cloud-g2', application: 'MetaApi' }) });
+          name: 'STORY ' + b.login, login: String(b.login), password: b.password, server: b.server, platform: b.platform === 'mt4' ? 'mt4' : 'mt5', magic: 0, type: 'cloud-g2', application: 'MetaApi' }) });
         const id = acc.id;
         // Wait (up to ~50s) until MetaApi has signed in to the broker.
         let info = null, region = 'new-york';
