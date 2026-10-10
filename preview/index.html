@@ -4639,7 +4639,7 @@ function netWorthPct(nw, cur){
 // Fills the Money page's numbers from your real payments (same places the page always read them from).
 // ---- The period Money shows (owner): the calendar button under Summary - a day, a set of days, or Day / Week /
 // 3 months / 6 months / Year / 2 years / 3 years / From day 1. Everything below the big number follows it. ----
-const MONEY_RANGES = [['month', 'This month'], ['day', 'Today'], ['week', 'This week'], ['3m', '3 months'], ['6m', '6 months'], ['1y', 'Year'], ['2y', '2 years'], ['3y', '3 years']];
+const MONEY_RANGES = [['month', 'This month'], ['day', 'Today'], ['week', 'Current week'], ['3m', '3 months'], ['6m', '6 months'], ['1y', 'Year'], ['2y', '2 years'], ['3y', '3 years']];
 // The calendar only goes from the card's first day of history to today (owner).
 function moneyFirstDay(){ const l = moneyView(); return l.length ? dayStart(l[l.length - 1].ts) : dayStart(Date.now()); }
 state.moneyRange = (()=>{ try{ const r = JSON.parse(localStorage.getItem('story-money-range') || 'null'); return r && r.kind !== 'all' ? r : { kind:'month' }; }catch(e){ return { kind:'month' }; } })();
@@ -4650,7 +4650,7 @@ function moneyRangeSpan(){
   const back = m=>{ const d = new Date(today); d.setMonth(d.getMonth() - m); return d.getTime(); };
   switch(r.kind){
     case 'day': return { from: today, to: now, label: 'TODAY' };
-    case 'week': { const d = new Date(today); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return { from: d.getTime(), to: now, label: 'THIS WEEK' }; }   // this week: Monday to today
+    case 'week': { const d = new Date(today); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return { from: d.getTime(), to: now, label: 'CURRENT WEEK' }; }   // this week: Monday to today
     case '3m': return { from: back(3), to: now, label: 'LAST 3 MONTHS' };
     case '6m': return { from: back(6), to: now, label: 'LAST 6 MONTHS' };
     case '1y': return { from: back(12), to: now, label: 'LAST YEAR' };
