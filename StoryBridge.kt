@@ -114,6 +114,43 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
     @JavascriptInterface
     fun removeProfilePhoto() { if (profile) host.removeProfilePhoto() }
 
+    /** Drawings: saves each picture (PNG data URLs, JSON list) straight into the phone's photos (Pictures/STORY).
+     *  Returns how many were saved. */
+    @JavascriptInterface
+    fun saveImages(json: String, title: String): Int {
+        if (station3 || profile) return 0
+        val list = runCatching { JSONArray(json) }.getOrNull() ?: return 0
+        val base = title.replace(Regex("[\\\\/:*?\"<>|]"), " ").trim().take(40).ifBlank { "Drawing" }
+        val stamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
+        var saved = 0
+        for (i in 0 until list.length()) {
+            val bytes = runCatching { Base64.decode(list.getString(i).substringAfter("base64,"), Base64.DEFAULT) }.getOrNull() ?: continue
+            val name = "$base $stamp" + (if (list.length() > 1) " (${i + 1})" else "") + ".png"
+            val ok = runCatching {
+                if (android.os.Build.VERSION.SDK_INT >= 29) {
+                    val values = android.content.ContentValues().apply {
+                        put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, name)
+                        put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/png")
+                        put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, android.os.Environment.DIRECTORY_PICTURES + "/STORY")
+                        put(android.provider.MediaStore.Images.Media.IS_PENDING, 1)
+                    }
+                    val uri = ctx.contentResolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values) ?: return@runCatching false
+                    ctx.contentResolver.openOutputStream(uri)?.use { it.write(bytes) } ?: return@runCatching false
+                    values.clear(); values.put(android.provider.MediaStore.Images.Media.IS_PENDING, 0)
+                    ctx.contentResolver.update(uri, values, null, null)
+                    true
+                } else {
+                    val dir = java.io.File(ctx.getExternalFilesDir(android.os.Environment.DIRECTORY_PICTURES), "STORY").apply { mkdirs() }
+                    val f = java.io.File(dir, name); f.writeBytes(bytes)
+                    android.media.MediaScannerConnection.scanFile(ctx, arrayOf(f.path), arrayOf("image/png"), null)
+                    true
+                }
+            }.getOrDefault(false)
+            if (ok) saved++
+        }
+        return saved
+    }
+
     /** Notes (the Pages only): "picture" / "camera" / "audio" / "print" (html = the laid-out note) / "savetext". */
     @JavascriptInterface
     fun noteMedia(kind: String, title: String, text: String) { if (!station3 && !profile) host.noteMedia(kind, title, text) }
