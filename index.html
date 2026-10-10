@@ -1624,9 +1624,17 @@
   .chart-fullscreen.landscape .chart-fs-main{ flex-direction:row; }
   .chart-fullscreen.landscape .chart-fs-body{ padding:14px 8px; }
   .chart-fullscreen.landscape .chart-fs-controls{
-    flex-direction:column; justify-content:center; width:150px; flex-shrink:0;
-    padding:10px 12px; border-left:1px solid var(--line);
+    flex-direction:column; justify-content:space-between; width:150px; flex-shrink:0;
+    padding:10px 12px; border-left:1px solid var(--line); overflow-y:auto; scrollbar-width:none;
   }
+  .chart-fullscreen.landscape .chart-fs-controls::-webkit-scrollbar{ display:none; }
+  .chart-fullscreen.landscape .fs-hide-land{ display:none; }
+  .fs-order{ width:100%; display:flex; flex-direction:column; gap:8px; }
+  .fs-order-types{ display:grid; grid-template-columns:1fr; gap:6px; }
+  .fs-order-types .order-type-btn{ padding:9px 4px; font-size:12px; text-align:center; }
+  .fs-order-in{ width:100%; box-sizing:border-box; padding:10px; font-size:13px; }
+  .fs-order-place{ margin-top:0; padding:11px 4px; font-size:13px; }
+  .chart-fullscreen.landscape .chart-fs-btnrow .btn{ width:100%; padding:12px 0; }
   .chart-fullscreen.landscape .chart-fs-btnrow{ flex-direction:column; gap:8px; }
   .chart-fullscreen.landscape .chart-fs-btnrow .lot-setter{ width:100%; }
 
@@ -6098,6 +6106,20 @@ function tradingScreen(){
   `;
 }
 
+// The side column of the full-screen (sideways) chart uses its whole height (owner): the order types, price, SL and TP
+// sit right there instead of behind the ⋯ button; Buy / lot / Sell under them.
+function fsOrderHTML(){
+  const types = [['buyLimit','Buy Limit'], ['buyStop','Buy Stop'], ['sellLimit','Sell Limit'], ['sellStop','Sell Stop']];
+  const lbl = (types.find(t=>t[0] === state.orderType) || types[0])[1];
+  return `
+    <div class="fs-order">
+      <div class="fs-order-types">${types.map(([id, l])=>`<div class="order-type-btn${state.orderType === id ? ' active' : ''}" data-ordertype="${id}">${l}</div>`).join('')}</div>
+      <input class="field-input fs-order-in" id="order-price" data-fsorder="orderPrice" type="text" inputmode="decimal" placeholder="Price ${state.focusQuote ? fmtPrice(state.focusQuote.bid) : ''}" value="${escText(state.orderPrice || '')}">
+      <input class="field-input fs-order-in" id="order-sl" data-fsorder="orderSL" type="text" inputmode="decimal" placeholder="Stop loss" value="${escText(state.orderSL || '')}">
+      <input class="field-input fs-order-in" id="order-tp" data-fsorder="orderTP" type="text" inputmode="decimal" placeholder="Take profit" value="${escText(state.orderTP || '')}">
+      <button class="btn-wide btn-primary fs-order-place" data-action="fs-order-place">Place ${lbl}</button>
+    </div>`;
+}
 function orderPanelTemplate(){
   const types = [
     {id:'buyLimit', label:'Buy Limit'},
@@ -6192,8 +6214,9 @@ function chartFullscreenTemplate(){
           <div class="tv-slot tv-slot-fs"></div>
         </div>
         <div class="chart-fs-controls">
-          <button class="order-corner-btn" data-action="order-panel" title="Order options">⋯</button>
-          <button class="tv-sltp-btn tv-sltp-fs${state.draftSLTP ? ' on' : ''}" data-action="draft-sltp">SL/TP</button>
+          ${isLandscape ? fsOrderHTML() : ''}
+          <button class="order-corner-btn fs-hide-land" data-action="order-panel" title="Order options">⋯</button>
+          <button class="tv-sltp-btn tv-sltp-fs fs-hide-land${state.draftSLTP ? ' on' : ''}" data-action="draft-sltp">SL/TP</button>
           <div class="btn-row chart-fs-btnrow">
             <button class="btn btn-buy" data-action="trade-buy">Buy</button>
             <div class="lot-setter compact">
@@ -11398,6 +11421,7 @@ function attachHandlers(){
   if(tpInput){ tpInput.addEventListener('input', ()=>{ state.orderTP = tpInput.value; }); }
 
   // --- order type selector (Buy Limit / Buy Stop / Sell Limit / Sell Stop) ---
+  document.querySelectorAll('[data-fsorder]').forEach(el=>el.addEventListener('input', ()=>{ state[el.getAttribute('data-fsorder')] = el.value; }));
   document.querySelectorAll('[data-ordertype]').forEach(el=>{
     el.addEventListener('click', ()=>{ state.orderType = el.getAttribute('data-ordertype'); renderDevice(); });
   });
@@ -12286,6 +12310,7 @@ function attachHandlers(){
         case 'order-panel-close':
         case 'order-panel-bg': state.orderPanelOpen = false; break;
         case 'order-place': performOrderPlace(); break;
+        case 'fs-order-place': state.orderLot = state.lotSize; performOrderPlace(); state.orderPrice = ''; break;
         case 'trade-buy': { const d = draftFor('buy'); state.draftSLTP = null; tradeDo('Bought ' + state.lotSize.toFixed(2) + ' ' + state.focusSymbol, acc=>TRADE.order(acc, Object.assign({ side:'buy', type:'market', qty: state.lotSize }, d))); break; }
         case 'trade-sell': { const d = draftFor('sell'); state.draftSLTP = null; tradeDo('Sold ' + state.lotSize.toFixed(2) + ' ' + state.focusSymbol, acc=>TRADE.order(acc, Object.assign({ side:'sell', type:'market', qty: state.lotSize }, d))); break; }
         // TradingView's chart can't take lines from STORY, so SL/TP is set by price in the order panel.
