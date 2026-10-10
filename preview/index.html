@@ -994,6 +994,7 @@
   .tv-card{ height:190px; padding:0; position:relative; overflow:hidden; }
   .tv-slot{ position:absolute; inset:0; }
   .tv-host{ width:100%; height:100%; touch-action:none; }
+  .tv-widget{ position:absolute; inset:0; width:100%; height:100%; border:0; display:block; background:#000000; }
   .tv-empty{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:12px; color:var(--muted); pointer-events:none; text-align:center; padding:0 20px; }
   .tv-sltp-btn{ position:absolute; left:8px; bottom:8px; z-index:3; font-size:9px; font-weight:800; padding:5px 8px; border-radius:8px; background:var(--card-2); border:1px solid var(--line); color:var(--text); }
   .tv-sltp-btn.on{ background:#e8e6e1; color:#000; border-color:#e8e6e1; }
@@ -5859,10 +5860,34 @@ function tvColors(){
   const white = window.storyTheme && window.storyTheme() === 'white';
   return { bg: white ? '#ffffff' : '#000000', text: white ? '#555555' : '#8a8a8a', grid: white ? '#f0f0f0' : '#111111' };
 }
+// No trading account logged in: TradingView's own live chart (TradingView's market data) for the symbol, so the chart
+// is always there (owner). One frame kept alive and moved, like the chart below - it never reloads on a re-render.
+function tvSymbol(sym){
+  const s = String(sym || 'EURUSD').toUpperCase().replace(/[^A-Z0-9.:]/g, '');
+  if(s.includes(':')) return s;
+  if(/^(XAU|XAG)USD$/.test(s)) return 'OANDA:' + s;
+  if(/^[A-Z]{6}$/.test(s) && /(USD|EUR|GBP|JPY|ZAR|AUD|CAD|CHF|NZD)$/.test(s)) return 'FX:' + s;
+  return s;
+}
+function tvWidgetMount(slot){
+  const iv = { '1H':'60', '4H':'240', '1D':'D', '1W':'W' }[state.chartRes] || '60';
+  const key = tvSymbol(state.focusSymbol) + '|' + iv;
+  if(!TV.widget || TV.widget.dataset.key !== key){
+    if(TV.widget) TV.widget.remove();
+    const f = document.createElement('iframe');
+    f.className = 'tv-widget'; f.dataset.key = key; f.setAttribute('frameborder', '0'); f.setAttribute('allowtransparency', 'true');
+    f.src = 'https://s.tradingview.com/widgetembed/?symbol=' + encodeURIComponent(key.split('|')[0]) + '&interval=' + iv +
+      '&hidesidetoolbar=1&hidetoptoolbar=1&symboledit=0&saveimage=0&toolbarbg=000000&theme=dark&style=1&timezone=exchange&withdateranges=0&locale=en';
+    TV.widget = f;
+  }
+  if(TV.widget.parentElement !== slot){ slot.innerHTML = ''; slot.appendChild(TV.widget); }
+}
 function tvMount(){
   if(state.current !== 'trading') return;
   const slot = document.querySelector('#content-area .chart-fullscreen .tv-slot') || document.querySelector('#content-area #trading-chart .tv-slot');
   if(!slot) return;
+  if(!activeTradeAccount()){ tvWidgetMount(slot); return; }
+  if(TV.widget && TV.widget.parentElement) TV.widget.remove();
   if(!window.LightweightCharts){ loadLWC().then(()=>tvMount()).catch(()=>{}); return; }
   if(!TV.host){
     const c = tvColors();
@@ -5992,7 +6017,6 @@ function tradingScreen(){
     <div class="chart-wrap" id="trading-chart">
       <div class="row-card tv-card">
         <div class="tv-slot"></div>
-        ${!acc ? `<div class="tv-empty">Log in to your broker to see your live chart</div>` : ''}
       </div>
       <button class="tv-sltp-btn${state.draftSLTP ? ' on' : ''}" data-action="draft-sltp" title="Set stop loss / take profit for your next trade">SL/TP</button>
       <button class="chart-fs-btn" data-action="chart-fullscreen" title="Full screen">⤢</button>
