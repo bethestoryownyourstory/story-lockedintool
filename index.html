@@ -743,6 +743,8 @@
     position:absolute; top:2px; left:2px; right:2px; bottom:2px; width:calc(100% - 4px); height:calc(100% - 4px);
     z-index:5; border-radius:10px; background:transparent; touch-action:none; cursor:crosshair;
   }
+  /* Pencil closed: the drawing stays on the page (owner), it just lets taps/typing through. */
+  .inline-draw-canvas.idle{ pointer-events:none; touch-action:auto; cursor:auto; }
   .inline-draw-popover{ min-width:172px; position:relative; }
   .inline-draw-popover.has-close{ padding-top:26px; }
   .inline-draw-popover .canvas-swatch-row{ margin-bottom:8px; }
@@ -6552,6 +6554,11 @@ function restoreContentSelection(saved){
     // a plain "<=" on both would (which put the START just outside the span while the END
     // landed inside it, an asymmetric split that corrupted underline-toggle detection and any
     // extractContents()-based rewrap done on the restored range).
+    // A caret saved just after a zero-width placeholder (an empty size / colour span waiting for typing) goes back
+    // INSIDE that span, so what you type next still gets its style.
+    if(!startSet && start === end && start === nextCharCount && node.textContent.charAt(node.length - 1) === '​'){
+      range.setStart(node, node.length); range.setEnd(node, node.length); startSet = endSet = true; break;
+    }
     if(!startSet && start < nextCharCount){ range.setStart(node, start - charCount); startSet = true; }
     if(!endSet && end <= nextCharCount){ range.setEnd(node, end - charCount); endSet = true; break; }
     charCount = nextCharCount;
@@ -6572,7 +6579,21 @@ function restoreContentSelection(saved){
 // If that's missing for any reason -- e.g. something drove this without a real mousedown --
 // this falls back to whatever live selection the editable area already has, so formatting
 // still applies instead of silently doing nothing.
+// The exact caret (a live Range) captured the moment a toolbar button is touched - used first when its nodes are
+// still on the page (nothing re-rendered in between), so a task box / size lands exactly where the typing line was.
+let pendingLiveRange = null;
+function saveLiveRange(){
+  const area = document.getElementById('note-content-area');
+  const sel = window.getSelection();
+  pendingLiveRange = (area && sel && sel.rangeCount && area.contains(sel.anchorNode)) ? sel.getRangeAt(0).cloneRange() : null;
+}
 function ensureFormattingSelection(area){
+  const live = pendingLiveRange; pendingLiveRange = null;
+  if(live && area.contains(live.startContainer) && area.contains(live.endContainer)){
+    const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(live);
+    pendingSelectionRestore = null;
+    return;
+  }
   if(pendingSelectionRestore){
     restoreContentSelection(pendingSelectionRestore);
     pendingSelectionRestore = null;
@@ -6604,6 +6625,16 @@ function applyInlineStyle(area, styleProp, styleValue){
   const sel = window.getSelection();
   if(!sel || !sel.rangeCount || !area.contains(sel.anchorNode)) return false;
   const range = sel.getRangeAt(0);
+  // Same spot again (e.g. dragging the size slider): change the span already made there instead of nesting new ones.
+  const hostOf = n => n && (n.nodeType === 3 ? n.parentElement : n);
+  const reuse = range.collapsed ? hostOf(range.startContainer) : hostOf(range.commonAncestorContainer);
+  if(reuse && reuse !== area && reuse.nodeName === 'SPAN' && area.contains(reuse) && reuse.style[styleProp] &&
+     (range.collapsed ? reuse.textContent.replace(/​/g, '') === '' : range.toString() === reuse.textContent)){
+    reuse.style[styleProp] = styleValue;
+    state.currentNoteText = area.innerHTML;
+    pendingSelectionRestore = saveContentSelection();
+    return true;
+  }
   const span = document.createElement('span');
   span.style[styleProp] = styleValue;
   if(range.collapsed){
@@ -6851,163 +6882,84 @@ function notesSearchPanelHTML(){
     </div>
   `;
 }
-// Returns the .inline-task element the caret is directly touching or editing inside, or null.
-// "Touching" is deliberately narrow -- immediately before it, immediately after it, or inside
-// its own label -- NOT "anywhere else on the same visual line". An earlier version scanned the
-// whole line (back to the nearest <br> in both directions), which meant a task added at the end
-// of a line of text, followed later by the caret being placed at the FRONT of that same text
-// (with no <br> between the text and the task), was wrongly treated as "on this line" and got
-// cancelled by a press meant to insert a brand new task at the new cursor position. Real text
-// sharing a line with a task should never make Add Task treat that task as the one under the
-// caret -- only actual adjacency (nothing between the caret and the task) should.
-function findTaskInLine(area){
-  const sel = window.getSelection();
-  if(!sel || !sel.rangeCount || !area.contains(sel.anchorNode)) return null;
-  const isTaskNode = n => n && n.nodeType === 1 && n.classList && n.classList.contains('inline-task');
-  const isTaskLabel = n => n && n.nodeType === 1 && n.classList && n.classList.contains('inline-task-text');
-  const node = sel.anchorNode;
-  const offset = sel.anchorOffset;
-  if(node.nodeType === 3){
-    // Caret is literally inside the task's own editable label -- that's "on" the task itself.
-    if(isTaskLabel(node.parentElement) && isTaskNode(node.parentElement.previousElementSibling)){
-      return node.parentElement.previousElementSibling;
-    }
-    // Caret at the very start/end of this text node, with the task immediately adjacent (no
-    // other character in between). A caret anywhere else inside the text -- including at a
-    // node boundary that just happens to be mid-line -- is never "on" a task, however close.
-    if(offset === 0 && isTaskNode(node.previousSibling)) return node.previousSibling;
-    if(offset === node.textContent.length && isTaskNode(node.nextSibling)) return node.nextSibling;
-    return null;
-  }
-  if(node.nodeType === 1){
-    // The anchor node itself is the (possibly still-empty) task label -- e.g. right after
-    // inserting a task with no selected text to become its label, the label span has no text
-    // child yet, so a caret placed "inside" it anchors directly on the span element rather
-    // than on a text node within it.
-    if(isTaskLabel(node) && isTaskNode(node.previousElementSibling)) return node.previousElementSibling;
-    const before = offset > 0 ? node.childNodes[offset - 1] : null;
-    const after = offset < node.childNodes.length ? node.childNodes[offset] : null;
-    if(isTaskNode(before)) return before;
-    if(isTaskNode(after)) return after;
-    if(isTaskLabel(before) && isTaskNode(before.previousElementSibling)) return before.previousElementSibling;
-  }
-  return null;
-}
-// ---- Task lines (owner): a task is a whole line - [box] text. ----
+// ---- Task boxes (owner): each press of the task button puts ONE box exactly where the typing line (caret) is.
+// Enter is a normal new line - it never adds or removes a box. Ticking a box strikes through the text after it on
+// its line (wrapped in .inline-task-text.done only while ticked).
 const NOTE_ZW = '​';
 const isNoteTask = n => n && n.nodeType === 1 && n.classList && n.classList.contains('inline-task');
 const isNoteTaskLabel = n => n && n.nodeType === 1 && n.classList && n.classList.contains('inline-task-text');
 const isNoteLineEnd = n => n && n.nodeType === 1 && (n.nodeName === 'BR' || /^(DIV|P|LI|UL|OL|TABLE)$/.test(n.nodeName));
-function noteMakeTask(labelNodes){
-  const wrap = document.createElement('span');
-  wrap.className = 'inline-task'; wrap.contentEditable = 'false';
-  const cb = document.createElement('input'); cb.type = 'checkbox'; cb.className = 'inline-task-checkbox';
-  wrap.appendChild(cb);
-  const label = document.createElement('span');
-  label.className = 'inline-task-text'; label.contentEditable = 'true';
-  (labelNodes || []).forEach(n=>label.appendChild(n));
-  if(!label.textContent.replace(/​/g, '')) { label.textContent = NOTE_ZW; }
-  return { wrap, label };
-}
 function notePlaceCaret(node, offset){
   const sel = window.getSelection(), r = document.createRange();
   r.setStart(node, Math.max(0, Math.min(offset, node.nodeType === 3 ? node.length : node.childNodes.length)));
   r.collapse(true); sel.removeAllRanges(); sel.addRange(r);
 }
-function noteCaretAtEnd(el){
-  let n = el; while(n && n.lastChild) n = n.lastChild;
-  if(n && n.nodeType === 3) notePlaceCaret(n, n.length); else notePlaceCaret(el, el.childNodes.length);
-}
-// The line the caret is on: the nodes between the line breaks around it (inside the area or inside a block line).
-function noteCaretLine(area){
+// Puts a task box at the caret and leaves the caret right after it, ready to type.
+function noteInsertTaskBox(area){
   const sel = window.getSelection();
-  if(!sel || !sel.rangeCount || !area.contains(sel.anchorNode)) return null;
-  const marker = document.createElement('span');
-  const r = sel.getRangeAt(0).cloneRange(); r.collapse(true);
-  // Inside a task's label: the line is that task.
-  let lab = sel.anchorNode.nodeType === 1 ? sel.anchorNode : sel.anchorNode.parentElement;
-  lab = lab && lab.closest ? lab.closest('.inline-task-text') : null;
-  if(lab && area.contains(lab)){ r.setStartBefore(lab); r.collapse(true); }
-  r.insertNode(marker);
-  let node = marker;
-  while(node.parentNode !== area && !/^(DIV|P|LI)$/.test(node.parentNode.nodeName)) node = node.parentNode;
-  const container = node.parentNode;
-  let start = node; while(start.previousSibling && !isNoteLineEnd(start.previousSibling)) start = start.previousSibling;
-  let end = node; while(end.nextSibling && !isNoteLineEnd(end.nextSibling)) end = end.nextSibling;
-  const nodes = []; for(let n = start; ; n = n.nextSibling){ nodes.push(n); if(n === end) break; }
-  const anchorBefore = start.previousSibling;   // the line break before the line (or null = container start)
-  const lineNodes = nodes.filter(n=>n !== marker);
-  marker.remove();
-  return { container, nodes: lineNodes, anchorBefore };
-}
-// Turns the caret's line into a task, or a task line back into plain text. Returns false if nothing changed.
-function noteToggleTaskLine(area){
-  const line = noteCaretLine(area); if(!line) return false;
-  const first = line.nodes.find(n=>!(n.nodeType === 3 && !n.textContent.replace(/​/g, '').trim()));
-  if(isNoteTask(first)){
-    const label = first.nextSibling && isNoteTaskLabel(first.nextSibling) ? first.nextSibling : null;
-    const moved = label ? [...label.childNodes] : [];
-    let lastText = null;
-    if(label){ moved.forEach(n=>{ if(n.nodeType === 3) n.textContent = n.textContent.replace(/​/g, ''); label.parentNode.insertBefore(n, label); lastText = n; }); label.remove(); }
-    const keep = document.createTextNode(NOTE_ZW); first.parentNode.insertBefore(keep, first); first.remove();
-    if(lastText && lastText.nodeType === 3) notePlaceCaret(lastText, lastText.length);
-    else if(lastText) noteCaretAtEnd(lastText);
-    else notePlaceCaret(keep, keep.length);
-    return true;
-  }
+  if(!sel || !sel.rangeCount || !area.contains(sel.anchorNode)) return false;
   if(area.textContent.length >= NOTE_PAGE_CHAR_LIMIT){ flashNotePageFull(); return false; }
-  const content = line.nodes.filter(n=>!(n.nodeType === 3 && !n.textContent.replace(/​/g, '')));
-  const t = noteMakeTask([]);
-  const ref = line.anchorBefore ? line.anchorBefore.nextSibling : line.container.firstChild;
-  line.container.insertBefore(t.wrap, ref || null);
-  line.container.insertBefore(t.label, t.wrap.nextSibling);
-  if(content.length){ t.label.textContent = ''; content.forEach(n=>t.label.appendChild(n)); }
-  line.nodes.forEach(n=>{ if(n.parentNode && n !== t.wrap && n !== t.label && !t.label.contains(n)) n.remove(); });
-  noteCaretAtEnd(t.label);
+  const r = sel.getRangeAt(0); r.collapse(true);
+  // Never inside a ticked label: the box goes just after it so a new box isn't struck through.
+  let inLab = r.startContainer.nodeType === 1 ? r.startContainer : r.startContainer.parentElement;
+  inLab = inLab && inLab.closest ? inLab.closest('.inline-task-text') : null;
+  if(inLab && area.contains(inLab)){
+    const rest = document.createRange(); rest.setStart(r.startContainer, r.startOffset); rest.setEndAfter(inLab.lastChild || inLab);
+    const tail = rest.extractContents();
+    inLab.parentNode.insertBefore(tail, inLab.nextSibling);
+    r.setStartAfter(inLab); r.collapse(true);
+  }
+  const wrap = document.createElement('span');
+  wrap.className = 'inline-task'; wrap.contentEditable = 'false';
+  const cb = document.createElement('input'); cb.type = 'checkbox'; cb.className = 'inline-task-checkbox';
+  wrap.appendChild(cb);
+  const after = document.createTextNode(NOTE_ZW);
+  r.insertNode(after);
+  r.insertNode(wrap);
+  notePlaceCaret(after, after.length);
   return true;
 }
-// Inside a task: Enter starts the next task (an empty task + Enter ends the list); Backspace at its very start
-// takes the box away (the text stays).
+// Ticked: the text after the box up to the end of its line (or the next box) is struck through. Unticked: plain again.
+function noteTaskTick(cb){
+  const wrap = cb.closest('.inline-task'); if(!wrap) return;
+  const next = wrap.nextSibling;
+  if(cb.checked){
+    if(isNoteTaskLabel(next)){ next.classList.add('done'); return; }
+    const nodes = [];
+    for(let n = next; n && !isNoteLineEnd(n) && !isNoteTask(n); n = n.nextSibling) nodes.push(n);
+    if(!nodes.length) return;
+    const label = document.createElement('span'); label.className = 'inline-task-text done';
+    wrap.parentNode.insertBefore(label, nodes[0]);
+    nodes.forEach(n=>label.appendChild(n));
+  } else if(isNoteTaskLabel(next)){
+    while(next.firstChild) next.parentNode.insertBefore(next.firstChild, next);
+    next.remove();
+  }
+}
+// Enter inside a struck-through label is a plain new line: the text after the caret leaves the label (no strike, no box).
 function noteTaskKey(area, e){
+  if(e.inputType !== 'insertParagraph' && e.inputType !== 'insertLineBreak') return false;
   const sel = window.getSelection(); if(!sel || !sel.rangeCount) return false;
   let lab = sel.anchorNode && (sel.anchorNode.nodeType === 1 ? sel.anchorNode : sel.anchorNode.parentElement);
   lab = lab && lab.closest ? lab.closest('.inline-task-text') : null;
   if(!lab || !area.contains(lab)) return false;
-  const box = lab.previousSibling && isNoteTask(lab.previousSibling) ? lab.previousSibling : null;
-  if(!box) return false;
-  const empty = !lab.textContent.replace(/​/g, '').trim();
-  if(e.inputType === 'insertParagraph' || e.inputType === 'insertLineBreak'){
-    e.preventDefault();
-    if(empty){
-      const keep = document.createTextNode(NOTE_ZW);
-      lab.parentNode.insertBefore(keep, box); box.remove(); lab.remove();
-      notePlaceCaret(keep, keep.length);
-    } else {
-      const r = sel.getRangeAt(0).cloneRange(); r.setEndAfter(lab.lastChild || lab);
-      const rest = r.extractContents();
-      const t = noteMakeTask([...rest.childNodes]);
-      const br = document.createElement('br');
-      lab.parentNode.insertBefore(br, lab.nextSibling);
-      lab.parentNode.insertBefore(t.wrap, br.nextSibling);
-      lab.parentNode.insertBefore(t.label, t.wrap.nextSibling);
-      const firstText = t.label.firstChild;
-      if(firstText && firstText.nodeType === 3) notePlaceCaret(firstText, firstText.textContent.charAt(0) === NOTE_ZW ? 1 : 0); else notePlaceCaret(t.label, 0);
-    }
-    return true;
-  }
-  if(e.inputType === 'deleteContentBackward' && sel.isCollapsed){
-    const r = document.createRange(); r.setStart(lab, 0); r.setEnd(sel.anchorNode, sel.anchorOffset);
-    if(r.toString().replace(/​/g, '') === ''){
-      e.preventDefault();
-      const moved = [...lab.childNodes]; let firstMoved = null;
-      moved.forEach(n=>{ if(n.nodeType === 3) n.textContent = n.textContent.replace(/​/g, ''); lab.parentNode.insertBefore(n, lab); if(!firstMoved) firstMoved = n; });
-      const keep = document.createTextNode(NOTE_ZW); lab.parentNode.insertBefore(keep, box);
-      box.remove(); lab.remove();
-      notePlaceCaret(keep, keep.length);
-      return true;
-    }
-  }
-  return false;
+  e.preventDefault();
+  const r = sel.getRangeAt(0); r.deleteContents();
+  const rest = document.createRange(); rest.setStart(r.startContainer, r.startOffset); rest.setEndAfter(lab.lastChild || lab);
+  const tail = rest.extractContents();
+  const br = document.createElement('br');
+  const anchor = document.createTextNode(NOTE_ZW);
+  lab.parentNode.insertBefore(br, lab.nextSibling);
+  br.parentNode.insertBefore(anchor, br.nextSibling);
+  anchor.parentNode.insertBefore(tail, anchor.nextSibling);
+  notePlaceCaret(anchor, anchor.length);
+  return true;
+}
+// A label whose box was deleted (Backspace) goes back to plain text.
+function noteTaskTidy(area){
+  area.querySelectorAll('.inline-task-text').forEach(l=>{
+    if(!isNoteTask(l.previousSibling)){ while(l.firstChild) l.parentNode.insertBefore(l.firstChild, l); l.remove(); }
+  });
 }
 function resolveLineColor(pageBg, chosen){
   if(!chosen || chosen === 'auto') return contrastLineColor(pageBg);
@@ -7555,7 +7507,7 @@ function notesCanvasScreen(){
       (state.scrollDirection==='vertical' && !state.readMode) ? state.currentPages.map((pageHtml, idx)=> idx===pageIdx ? `
         <div class="note-content-wrap note-content-wrap-spaced" style="background-color:${state.canvasColor}; --note-line-color:${resolveLineColor(state.canvasColor, state.canvasLineColor)};">
           <div id="note-content-area" class="note-content-area notes-style-${state.canvasPageStyle}" contenteditable="${searchActive?'false':'true'}" data-search-highlighted="${searchActive?'true':'false'}" data-placeholder="Start writing…" style="line-height:${LINE_HEIGHT_BY_STYLE[state.canvasPageStyle]||'24px'};">${activeNoteHTML}</div>
-          ${state.inlineDrawOpen ? `<canvas id="inline-draw-canvas" class="inline-draw-canvas"></canvas>` : ''}
+          <canvas id="inline-draw-canvas" class="inline-draw-canvas${(state.inlineDrawOpen && !state.readMode)?'':' idle'}"></canvas>
           <div class="note-page-counter${initialFull?' full':''}" id="note-page-counter">${initialLen}/${NOTE_PAGE_CHAR_LIMIT}</div>
         </div>
       ` : `
@@ -7567,7 +7519,7 @@ function notesCanvasScreen(){
       `).join('') : `
       <div class="note-content-wrap" style="background-color:${state.canvasColor}; --note-line-color:${resolveLineColor(state.canvasColor, state.canvasLineColor)};">
         <div id="note-content-area" class="note-content-area notes-style-${state.canvasPageStyle}" contenteditable="${(state.readMode||searchActive)?'false':'true'}" data-search-highlighted="${searchActive?'true':'false'}" data-placeholder="Start writing…" style="line-height:${LINE_HEIGHT_BY_STYLE[state.canvasPageStyle]||'24px'};">${activeNoteHTML}</div>
-        ${state.inlineDrawOpen && !state.readMode ? `<canvas id="inline-draw-canvas" class="inline-draw-canvas"></canvas>` : ''}
+        <canvas id="inline-draw-canvas" class="inline-draw-canvas${(state.inlineDrawOpen && !state.readMode)?'':' idle'}"></canvas>
         ${!state.readMode ? `<div class="note-page-counter${initialFull?' full':''}" id="note-page-counter">${initialLen}/${NOTE_PAGE_CHAR_LIMIT}</div>` : ''}
       </div>
     `
@@ -8692,7 +8644,9 @@ function renderDevice(){
   // still lands on the right page rather than the NEW one). Read it once and use it for both,
   // only clearing it after both have had a chance to use it.
   const flushIdx = pendingPageFlushIndex !== null ? pendingPageFlushIndex : state.currentPageIndex;
-  if(oldCanvas){
+  // Only a canvas that has finished painting its saved drawing and could be drawn on is read back - a closed pencil's
+  // canvas (idle) can't have changed, and one still loading would overwrite the drawing with a blank page.
+  if(oldCanvas && oldCanvas.dataset.ready === '1' && !oldCanvas.classList.contains('idle')){
     state.canvasSnapshot = oldCanvas.toDataURL();
     if(flushIdx >= 0 && flushIdx < state.canvasPages.length) state.canvasPages[flushIdx] = state.canvasSnapshot;
   }
@@ -8794,7 +8748,7 @@ function renderDevice(){
   // once per screen size and kept (pages never resize on their own), before any canvas is sized from it.
   if(state.current === 'notes-canvas' || state.current === 'scratch-draw') fitNotePageHeight();
   if(state.current === 'notes-canvas' && state.canvasMode==='draw') initCanvas('draw-canvas', false);
-  if(state.current === 'notes-canvas' && state.canvasMode==='write' && state.inlineDrawOpen) initCanvas('inline-draw-canvas', true);
+  if(state.current === 'notes-canvas' && state.canvasMode==='write') initCanvas('inline-draw-canvas', true);
   if(state.current === 'scratch-draw') initCanvas('scratch-draw-canvas', false);
   // Every formatting action (color, underline, size, highlighter) ends by rebuilding the whole
   // DOM via this same renderDevice(), which throws away whatever had focus. Without this, picking
@@ -8935,9 +8889,10 @@ function initCanvas(canvasId, isOverlay){
   const pageSnapshot = isScratch ? state.scratchPages[state.scratchPageIndex] : state.canvasPages[state.currentPageIndex];
   if(pageSnapshot){
     const img = new Image();
-    img.onload = () => { ctx.drawImage(img, 0, 0, canvas.width, canvas.height); };
+    img.onload = () => { ctx.drawImage(img, 0, 0, canvas.width, canvas.height); canvas.dataset.ready = '1'; };
+    img.onerror = () => { canvas.dataset.ready = '1'; };
     img.src = pageSnapshot;
-  }
+  } else canvas.dataset.ready = '1';
   let drawing = false, lastX = 0, lastY = 0, activePointer = null;
   const getPos = e => {
     const r = canvas.getBoundingClientRect();
@@ -9602,13 +9557,9 @@ function attachHandlers(){
   document.querySelectorAll('.inline-task-checkbox').forEach(cb=>{
     cb.addEventListener('change', ()=>{
       if(cb.checked){ cb.setAttribute('checked',''); } else { cb.removeAttribute('checked'); }
-      const wrap = cb.closest('.inline-task');
-      const textEl = wrap ? wrap.nextElementSibling : null;
-      if(textEl && textEl.classList.contains('inline-task-text')){
-        textEl.classList.toggle('done', cb.checked);
-      }
+      noteTaskTick(cb);
       const area = document.getElementById('note-content-area');
-      if(area) state.currentNoteText = area.innerHTML;
+      if(area){ state.currentNoteText = area.innerHTML; state.currentPages[state.currentPageIndex] = state.currentNoteText; }
     });
   });
 
@@ -9736,7 +9687,7 @@ function attachHandlers(){
   const noteContentArea = document.getElementById('note-content-area');
   if(noteContentArea){
     noteContentArea.style.fontFamily = state.fontFamily;
-    noteContentArea.style.fontSize = state.fontSizeValue + 'px';
+    // Text size never resizes the whole note (owner): it only applies to what you type next or to text you hold-select.
     if(!state.readMode){
       noteContentArea.addEventListener('beforeinput', (e)=>{
         if(noteTaskKey(noteContentArea, e)){
@@ -9766,7 +9717,9 @@ function attachHandlers(){
           flashNotePageFull();
         }
       });
-      noteContentArea.addEventListener('input', ()=>{
+      noteContentArea.addEventListener('pointerdown', ()=>{ pendingLiveRange = null; });
+      noteContentArea.addEventListener('input', (e)=>{
+        if(e && e.inputType && e.inputType.indexOf('delete') === 0) noteTaskTidy(noteContentArea);
         state.currentNoteText = noteContentArea.innerHTML;
         state.currentPages[state.currentPageIndex] = state.currentNoteText;
         updateNotePageMeter(noteContentArea.textContent.length);
@@ -9816,36 +9769,24 @@ function attachHandlers(){
         else range.collapse(true);
         return range;
       };
-      const unwrapMark = mark=>{
-        const parent = mark.parentNode;
-        if(!parent) return;
-        while(mark.firstChild) parent.insertBefore(mark.firstChild, mark);
-        parent.removeChild(mark);
-        parent.normalize();
-      };
-      const getElementTextRange = (root, el)=>{
-        let offset = 0, start = null, end = null;
-        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-        let node;
-        while(node = walker.nextNode()){
-          const len = node.textContent.length;
-          if(el.contains(node)){
-            if(start === null) start = offset;
-            end = offset + len;
-          }
-          offset += len;
-        }
-        return start === null ? null : {start, end};
-      };
       const applyHighlightToRange = range=>{
         if(!range || range.collapsed) return;
         const startOffset = getTextOffset(noteContentArea, range.startContainer, range.startOffset);
         const endOffset = getTextOffset(noteContentArea, range.endContainer, range.endOffset);
         if(endOffset <= startOffset) return;
-        Array.from(noteContentArea.querySelectorAll('.note-highlight')).forEach(mark=>{
-          const span = getElementTextRange(noteContentArea, mark);
-          if(span && span.end > startOffset && span.start < endOffset) unwrapMark(mark);
+        // One walk finds every existing highlight's span of text (not one walk per highlight).
+        const markSpans = new Map(); let off = 0;
+        const mw = document.createTreeWalker(noteContentArea, NodeFilter.SHOW_TEXT); let tn;
+        while((tn = mw.nextNode())){
+          const len = tn.textContent.length;
+          const m = tn.parentElement && tn.parentElement.closest('.note-highlight');
+          if(m && noteContentArea.contains(m)){ const sp = markSpans.get(m); if(sp) sp.end = off + len; else markSpans.set(m, {start:off, end:off + len}); }
+          off += len;
+        }
+        markSpans.forEach((sp, m)=>{
+          if(sp.end > startOffset && sp.start < endOffset){ const par = m.parentNode; while(m.firstChild) par.insertBefore(m.firstChild, m); par.removeChild(m); }
         });
+        noteContentArea.normalize();
         const cleanRange = rangeFromTextOffsets(noteContentArea, startOffset, endOffset);
         const mark = document.createElement('mark');
         mark.className = 'note-highlight';
@@ -9869,25 +9810,32 @@ function attachHandlers(){
         const note = state.notes.find(n=>n.id===state.currentNoteId);
         if(note) note.pages = state.currentPages.slice();
       };
-      let dragStart = null, dragMoved = false, startPoint = null;
-      const pt = e=> (e.touches && e.touches[0]) ? {x:e.touches[0].clientX,y:e.touches[0].clientY} : {x:e.clientX,y:e.clientY};
-      noteContentArea.addEventListener('pointerdown', e=>{
-        const p = pt(e);
-        const r = caretFromPoint(p.x, p.y);
+      // Swiping paints the highlight live under the finger (owner: best performance): moves are coalesced to one per
+      // frame, and the live stroke uses the browser's highlight layer (CSS.highlights - no DOM changes, no selection
+      // handles) when there is one; the note itself is changed once, when the finger lifts.
+      const liveHL = (window.CSS && CSS.highlights && window.Highlight) ? true : false;
+      let liveStyle = document.getElementById('story-hl-live-style');
+      if(liveHL && !liveStyle){ liveStyle = document.createElement('style'); liveStyle.id = 'story-hl-live-style'; document.head.appendChild(liveStyle); }
+      if(liveHL){
+        const c = state.highlighterColor === 'rainbow' ? 'rgba(254,202,87,0.55)' : state.highlighterColor;
+        liveStyle.textContent = `::highlight(story-hl-live){ background-color:${c}; }`;
+      }
+      let dragStart = null, dragMoved = false, startPoint = null, dragPointer = null, liveRange = null, movePt = null, moveRAF = 0;
+      const showLive = range=>{
+        liveRange = range;
+        if(liveHL){ CSS.highlights.set('story-hl-live', new Highlight(range)); }
+        else { const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range); }
+      };
+      const clearLive = ()=>{
+        liveRange = null;
+        if(liveHL) CSS.highlights.delete('story-hl-live');
+        else window.getSelection().removeAllRanges();
+      };
+      const trackMove = ()=>{
+        moveRAF = 0;
+        if(!dragStart || !movePt) return;
+        const r = caretFromPoint(movePt.x, movePt.y);
         if(!r || !noteContentArea.contains(r.startContainer)) return;
-        dragStart = r; startPoint = p; dragMoved = false;
-        try{ noteContentArea.setPointerCapture(e.pointerId); }catch(err){}
-        e.preventDefault();
-      });
-      noteContentArea.addEventListener('pointermove', e=>{
-        if(!dragStart) return;
-        const p = pt(e);
-        if(Math.abs(p.x-startPoint.x) > 4 || Math.abs(p.y-startPoint.y) > 4) dragMoved = true;
-        if(!dragMoved) return;
-        const r = caretFromPoint(p.x, p.y);
-        if(!r || !noteContentArea.contains(r.startContainer)) return;
-        const sel = window.getSelection();
-        sel.removeAllRanges();
         const combined = document.createRange();
         if(dragStart.compareBoundaryPoints(Range.START_TO_START, r) <= 0){
           combined.setStart(dragStart.startContainer, dragStart.startOffset);
@@ -9896,38 +9844,44 @@ function attachHandlers(){
           combined.setStart(r.startContainer, r.startOffset);
           combined.setEnd(dragStart.startContainer, dragStart.startOffset);
         }
-        sel.addRange(combined);
+        showLive(combined);
+      };
+      noteContentArea.addEventListener('pointerdown', e=>{
+        if(dragStart) return;
+        const p = {x:e.clientX, y:e.clientY};
+        const r = caretFromPoint(p.x, p.y);
+        if(!r || !noteContentArea.contains(r.startContainer)) return;
+        dragStart = r; startPoint = p; dragMoved = false; dragPointer = e.pointerId;
+        try{ noteContentArea.setPointerCapture(e.pointerId); }catch(err){}
         e.preventDefault();
       });
-      noteContentArea.addEventListener('pointerup', ()=>{
-        if(!dragStart) return;
-        if(dragMoved){
-          const sel = window.getSelection();
-          if(sel && sel.rangeCount){
-            const range = sel.getRangeAt(0);
-            sel.removeAllRanges();
-            if(noteContentArea.contains(range.startContainer) && noteContentArea.contains(range.endContainer)){
-              applyHighlightToRange(range);
-            }
-          }
-        } else {
-          const sel = window.getSelection();
-          sel.removeAllRanges();
-          sel.addRange(dragStart);
-          try{
-            if(sel.modify){
-              sel.modify('extend', 'backward', 'word');
-              sel.modify('extend', 'forward', 'word');
-            }
-          }catch(e){}
-          if(sel.rangeCount){
-            const range = sel.getRangeAt(0);
-            sel.removeAllRanges();
-            applyHighlightToRange(range);
-          }
-        }
-        dragStart = null; dragMoved = false;
+      noteContentArea.addEventListener('pointermove', e=>{
+        if(!dragStart || e.pointerId !== dragPointer) return;
+        if(!dragMoved && (Math.abs(e.clientX-startPoint.x) > 4 || Math.abs(e.clientY-startPoint.y) > 4)) dragMoved = true;
+        if(!dragMoved) return;
+        movePt = {x:e.clientX, y:e.clientY};
+        if(!moveRAF) moveRAF = requestAnimationFrame(trackMove);
+        e.preventDefault();
       });
+      const endDrag = (e, apply)=>{
+        if(!dragStart || (e && e.pointerId !== dragPointer)) return;
+        if(moveRAF){ cancelAnimationFrame(moveRAF); moveRAF = 0; if(apply && dragMoved) trackMove(); }
+        let range = null;
+        if(apply && dragMoved) range = liveRange;
+        else if(apply){
+          // A tap highlights the word under the finger.
+          const sel = window.getSelection();
+          sel.removeAllRanges(); sel.addRange(dragStart);
+          try{ if(sel.modify){ sel.modify('move', 'backward', 'word'); sel.modify('extend', 'forward', 'word'); } }catch(err){}
+          if(sel.rangeCount) range = sel.getRangeAt(0).cloneRange();
+          sel.removeAllRanges();
+        }
+        clearLive();
+        dragStart = null; dragMoved = false; dragPointer = null; movePt = null;
+        if(range && noteContentArea.contains(range.startContainer) && noteContentArea.contains(range.endContainer)) applyHighlightToRange(range);
+      };
+      noteContentArea.addEventListener('pointerup', e=>endDrag(e, true));
+      noteContentArea.addEventListener('pointercancel', e=>endDrag(e, false));
     }
   }
   document.querySelectorAll('[data-sethighlightcolor]').forEach(el=>{
@@ -10031,10 +9985,13 @@ function attachHandlers(){
   document.querySelectorAll('[data-action]').forEach(el=>{
     const action0 = el.getAttribute('data-action');
     if(SELECTION_PRESERVING_ACTIONS.has(action0)){
+      // pointerdown comes first on a phone, while the caret is still in the note.
+      el.addEventListener('pointerdown', ()=>{ saveLiveRange(); });
       el.addEventListener('mousedown', e=>{
         e.preventDefault();
         if(action0 === 'note-font-toggle' && state.fontPickerOpen) return;
         if(action0 === 'note-size-toggle' && state.sizePickerOpen) return;
+        saveLiveRange();
         const saved = saveContentSelection();
         if(saved) pendingSelectionRestore = saved;
       });
@@ -10253,15 +10210,15 @@ function attachHandlers(){
           break;
         }
         case 'note-add-task': {
-          // The task button turns the LINE you're on into a task (box at its start, the line's text beside it), and
-          // back into plain text when pressed again on a task line (owner). Never a stray box mid-line or stacking.
+          // Each press puts one task box exactly where the caret is (owner) - never a toggle, never a new line.
           const area = document.getElementById('note-content-area');
           if(area && !state.readMode){
             pushNoteUndoSnapshot();
             area.focus();
             ensureFormattingSelection(area);
-            if(!noteToggleTaskLine(area)) break;
+            if(!noteInsertTaskBox(area)) break;
             state.currentNoteText = area.innerHTML;
+            state.currentPages[state.currentPageIndex] = state.currentNoteText;
             pendingSelectionRestore = saveContentSelection();
           }
           break;
@@ -10587,7 +10544,8 @@ function attachHandlers(){
           break;
         }
         case 'note-size-toggle': {
-          if(state.sizePickerOpen) pendingSelectionRestore = null;
+          // Closing keeps the caret / held text the size was set on (saved after each size change), so you go straight
+          // back to typing in the new size right there (owner).
           state.sizePickerOpen = !state.sizePickerOpen;
           state.fontPickerOpen = false;
           break;
