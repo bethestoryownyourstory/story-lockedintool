@@ -1217,6 +1217,29 @@
   .realcard-logo{ font-size:14px; font-weight:900; font-style:italic; letter-spacing:0.5px; }
   .realcard-logo-visa{ color:#fff; }
   .realcard-logo-amex{ color:#67c3c0; font-style:normal; }
+  /* Your real card: its picture fills the card; a drawn card carries the bank's real logo and the network's. */
+  .realcard{ position:relative; overflow:hidden; }
+  .realcard-isphoto{ padding:0; }
+  .realcard-photo{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; border-radius:inherit; }
+  .realcard-brand{ display:flex; align-items:center; gap:8px; }
+  .realcard-banklogo{ width:24px; height:24px; border-radius:6px; object-fit:cover; }
+  .realcard-netlogo{ display:flex; align-items:flex-end; }
+  .realcard-netlogo svg{ display:block; }
+  .card-photo-preview{ margin-top:10px; border-radius:12px; overflow:hidden; aspect-ratio:1.586/1; background:#000000; }
+  .card-photo-preview img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .card-app-row{ display:flex; align-items:center; gap:10px; width:100%; padding:10px 6px; background:none; border:0; border-bottom:1px solid var(--line); color:var(--text); font-size:13px; text-align:left; }
+  .card-app-row img, .card-app-ph{ width:30px; height:30px; border-radius:8px; flex-shrink:0; object-fit:cover; background:var(--card-2); }
+  .card-app-pick{ border:1px solid var(--line); border-radius:12px; padding:8px 10px; color:var(--muted); }
+  .card-app-list{ max-height:52vh; overflow-y:auto; scrollbar-width:none; margin-top:8px; }
+  .card-app-list::-webkit-scrollbar{ display:none; }
+  #card-cam{ position:fixed; inset:0; z-index:2147483000; background:#000000; overflow:hidden; }
+  #card-cam video{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+  .card-cam-frame{ position:absolute; left:7%; right:7%; top:50%; aspect-ratio:1.586/1; transform:translateY(-58%); border:2px solid #ffffff; border-radius:16px; box-shadow:0 0 0 100vmax rgba(0,0,0,0.55); }
+  .card-cam-hint, .card-cam-msg{ position:absolute; left:0; right:0; top:14%; text-align:center; color:#ffffff; font-size:13px; font-weight:600; }
+  .card-cam-msg{ top:auto; bottom:22%; color:#ff6b6b; }
+  .card-cam-x{ position:absolute; top:14px; right:14px; width:38px; height:38px; border-radius:50%; border:0; background:rgba(255,255,255,0.15); color:#ffffff; font-size:22px; }
+  .card-cam-shutter{ position:absolute; left:50%; bottom:8%; width:70px; height:70px; margin-left:-35px; border-radius:50%; border:4px solid #ffffff; background:rgba(255,255,255,0.25); }
+  .card-cam-ask{ position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; padding:30px; color:#ffffff; text-align:center; font-size:14px; }
   .realcard-addslide{
     background:var(--card); border:1px dashed rgba(255,255,255,0.25); cursor:pointer; color:#fff;
   }
@@ -4152,7 +4175,7 @@ let state = {
   favorites:[],
   favoritesOpen:false,
   moneyTransferOpen:false,
-  walletCardIndex:(()=>{ try{ return (JSON.parse(localStorage.getItem('story-cards') || '[]') || []).length ? 1 : 0; }catch(e){ return 0; } })(),
+  walletCardIndex:(()=>{ try{ const l = JSON.parse(localStorage.getItem('story-cards') || '[]') || []; const a = localStorage.getItem('story-card-active'); const i = l.findIndex(c=>c.id === a); return i >= 0 ? i + 1 : (a === '' || !l.length ? 0 : 1); }catch(e){ return 0; } })(),
   txHistoryBackTarget:'wallet',
   sendAmount:'',
   sendToContactId:null,
@@ -4514,10 +4537,12 @@ window.storyMoneyNew = function(){
   const a = document.activeElement;
   if(MONEY_PAGES.includes(state.current) && !(a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA')) && !pageSwipeAnimating) renderDevice();
 };
+// Money shows the card that's showing in Wallet (all your payments when no card is picked).
+function moneyView(){ const c = activeCard(); return c ? moneyTx().filter(t=>cardMatches(c, t)) : moneyTx(); }
 function moneyAccessOk(){ try{ return !NATIVE || !window.StoryNative.moneyAccess || !!window.StoryNative.moneyAccess(); }catch(e){ return true; } }
 // The currency most of your payments are in (before any payment: the phone's region).
 function moneyMainCur(){
-  const n = {}; moneyTx().forEach(t=>{ n[t.cur] = (n[t.cur] || 0) + 1; });
+  const n = {}; (moneyView().length ? moneyView() : moneyTx()).forEach(t=>{ n[t.cur] = (n[t.cur] || 0) + 1; });
   const best = Object.keys(n).sort((a, b)=>n[b] - n[a])[0];
   if(best) return best;
   const reg = ((navigator.language || '').split('-')[1] || '').toUpperCase();
@@ -4546,7 +4571,7 @@ const monthShort = key=>{ const [y, m] = key.split('-').map(Number); return new 
 function moneyMonth(){ return state.moneyMonth || monthKey(Date.now()); }
 function monthTotals(key, cur){
   let inA = 0, outA = 0;
-  moneyTx().forEach(t=>{ if(t.cur === cur && monthKey(t.ts) === key){ if(t.amt > 0) inA += t.amt; else outA -= t.amt; } });
+  moneyView().forEach(t=>{ if(t.cur === cur && monthKey(t.ts) === key){ if(t.amt > 0) inA += t.amt; else outA -= t.amt; } });
   return { inA, outA };
 }
 // What the money went on - worked out from who you paid.
@@ -4559,16 +4584,16 @@ const MONEY_CATS = [
 function moneyCat(t){ const s = (t.who || '') + ' ' + (t.text || ''); const c = MONEY_CATS.find(c=>c[2].test(s)); return c ? c : ['Other', '#9aa0a6']; }
 function expensesFor(key, cur){
   const tot = {}; let all = 0;
-  moneyTx().forEach(t=>{ if(t.amt < 0 && t.cur === cur && monthKey(t.ts) === key){ const c = moneyCat(t); tot[c[0]] = tot[c[0]] || { label:c[0], color:c[1], amt:0 }; tot[c[0]].amt -= t.amt; all -= t.amt; } });
+  moneyView().forEach(t=>{ if(t.amt < 0 && t.cur === cur && monthKey(t.ts) === key){ const c = moneyCat(t); tot[c[0]] = tot[c[0]] || { label:c[0], color:c[1], amt:0 }; tot[c[0]].amt -= t.amt; all -= t.amt; } });
   const list = Object.values(tot).sort((a, b)=>b.amt - a.amt);
   if(!all) return [{ label:'No spending yet', pct:100, color:'#2a2a2a', empty:true }];
   let left = 100;
   return list.map((e, i)=>{ const pct = i === list.length - 1 ? left : Math.round(e.amt / all * 100); left -= pct; return { label:e.label, pct, color:e.color }; });
 }
 // Balances your bank says in its messages (newest per account); a negative one is money you owe.
-function moneyBalances(){
+function moneyBalances(forCard){
   const seen = {}, out = [];
-  moneyTx().forEach(t=>{
+  (forCard ? moneyView() : moneyTx()).forEach(t=>{
     if(t.bal == null) return;
     const k = t.pkg + '|' + (t.card || '');
     if(seen[k]) return; seen[k] = 1;
@@ -4582,7 +4607,7 @@ function tradeAssets(){
   let last = {}; try{ last = JSON.parse(localStorage.getItem(TRADE_LAST_KEY) || '{}') || {}; }catch(e){}
   return tradeAccounts().map(a=>{ const l = last[a.id]; return l && l.eq != null ? { name:a.name, bal:+l.eq, cur:a.currency || 'USD', ts:l.ts, icon:'📈' } : null; }).filter(Boolean);
 }
-function moneyAssets(){ return moneyBalances().concat(tradeAssets()); }
+function moneyAssets(){ return activeCard() ? moneyBalances(true) : moneyBalances().concat(tradeAssets()); }
 function netWorth(cur){ return moneyAssets().filter(a=>a.cur === cur).reduce((s, a)=>s + a.bal, 0); }
 // This month's change, from the real net worth STORY saw each day (kept on the phone).
 function netWorthPct(nw, cur){
@@ -4624,7 +4649,7 @@ function moneyCompute(){
 }
 function paymentCardsHTML(){
   if(!moneyAccessOk()) return `<div class="notif-card" data-action="money-access"><div class="notif-icon-wrap">🔔</div><div class="notif-mid"><div class="notif-source">STORY</div><div class="notif-label">Allow STORY to see your payments</div></div><div class="notif-right"><div class="notif-amt">Turn on</div><div class="notif-time">&nbsp;</div></div></div>`;
-  const list = moneyTx().slice(0, 30);
+  const list = moneyView().slice(0, 30);
   if(!list.length) return `<div class="notif-card notif-empty"><div class="notif-icon-wrap">💳</div><div class="notif-mid"><div class="notif-source">No payments yet</div><div class="notif-label">They show as your bank apps send them</div></div><div class="notif-right"><div class="notif-amt">&nbsp;</div><div class="notif-time">&nbsp;</div></div></div>`;
   return list.map(t=>`
         <div class="notif-card" data-notif="${escText(t.id)}">
@@ -4661,6 +4686,7 @@ function moneyScreen(){
     ${pageArrows()}
     <div class="big-num">${fmtCur(nw, cur)}</div>
     <div style="color:${pctNeg?'var(--red)':'var(--green)'};font-size:12px;font-weight:600;${pctNow == null ? 'visibility:hidden;' : ''}">${pctNeg?'-':'+'}${Math.abs(pctNow || 0)}% this month</div>
+    ${(c=>`<div class="row-sub" style="margin-top:2px;${c ? '' : 'visibility:hidden;'}">${c ? escText(c.bank || 'Card') + ' ••' + escText(c.last4 || '') : 'All'}</div>`)(activeCard())}
 
     <div class="section-title">PAYMENTS</div>
     <div class="notif-scroll-wrap">
@@ -6044,28 +6070,33 @@ function chartFullscreenTemplate(){
 // red (money out) or green (money in) for the first 10 minutes after it lands, then white
 // for good -- it never goes back to color even if looked at again much later.
 const WALLET_ACTIVITY_COLOR_WINDOW_MS = 10 * 60 * 1000;
-// ---- Wallet: YOUR cards (owner: the Wallet page just shows your card; Tap to Pay pays for real) ----
-// STORY can't read a card out of your bank, so you add how it looks: the bank / name, the last 4 digits, expiry,
-// network and colour (never the full number). Kept on this phone (localStorage story-cards).
+// ---- Wallet: YOUR real cards (owner: the card shown is the exact same as the real one, with real logos) ----
+// Two ways to add one (owner: both): TAKE A PICTURE of the card's front - STORY reads it on the phone (CardScan.kt,
+// offline) for the last 4 / expiry / network and COVERS the long number before the picture is kept, and the Wallet
+// shows that exact card; or ADD MANUALLY - STORY draws it with your bank's real logo (its app's icon on your phone)
+// and the real Visa / Mastercard / Amex logo. Never the full number. Kept on this phone (localStorage story-cards;
+// photos in STORY's private files). The card showing in Wallet is the card Money shows (story-card-active).
 const CARDS_KEY = 'story-cards';
 const CARD_NETS = ['Visa', 'Mastercard', 'Amex', 'Other'];
-const CARD_COLORS = [['Blue', 'linear-gradient(135deg, #1c3f8f, #0d1f4d)'], ['Black', 'linear-gradient(135deg, #1f2422, #0a0b0a)'], ['Green', 'linear-gradient(135deg, #1f6f43, #0b2e1c)'], ['Red', 'linear-gradient(135deg, #8f1c2c, #3d0a12)'], ['Gold', 'linear-gradient(135deg, #a8842c, #4a3910)'], ['Purple', 'linear-gradient(135deg, #5b2a8f, #230d3d)']];
-function cardFormVals(){
-  const v = id=>((document.getElementById(id) || {}).value || '').trim();
-  return { bank: v('card-bank'), last4: v('card-last4').replace(/[^0-9]/g, ''), exp: v('card-exp'), msg:'' };
-}
+const CARD_COLORS = [['Blue', 'linear-gradient(135deg, #1c3f8f, #0d1f4d)'], ['Black', 'linear-gradient(135deg, #1f2422, #0a0b0a)'], ['Green', 'linear-gradient(135deg, #1f6f43, #0b2e1c)'], ['Red', 'linear-gradient(135deg, #8f1c2c, #3d0a12)'], ['Gold', 'linear-gradient(135deg, #a8842c, #4a3910)'], ['Purple', 'linear-gradient(135deg, #5b2a8f, #230d3d)'], ['Silver', 'linear-gradient(135deg, #9aa0a6, #4b5055)']];
+// The card networks' real logos (Visa / Amex marks from Simple Icons, CC0; Mastercard's two circles in its colours).
+const NET_LOGOS = {
+  Visa: '<svg viewBox="0 7.6 24 8.8" height="18" aria-label="Visa"><path fill="#ffffff" d="M9.112 8.262L5.97 15.758H3.92L2.374 9.775c-.094-.368-.175-.503-.461-.658C1.447 8.864.677 8.627 0 8.479l.046-.217h3.3a.904.904 0 01.894.764l.817 4.338 2.018-5.102zm8.033 5.049c.008-1.979-2.736-2.088-2.717-2.972.006-.269.262-.555.822-.628a3.66 3.66 0 011.913.336l.34-1.59a5.207 5.207 0 00-1.814-.333c-1.917 0-3.266 1.02-3.278 2.479-.012 1.079.963 1.68 1.698 2.04.756.367 1.01.603 1.006.931-.005.504-.602.725-1.16.734-.975.015-1.54-.263-1.992-.473l-.351 1.642c.453.208 1.289.39 2.156.398 2.037 0 3.37-1.006 3.377-2.564m5.061 2.447H24l-1.565-7.496h-1.656a.883.883 0 00-.826.55l-2.909 6.946h2.036l.405-1.12h2.488zm-2.163-2.656l1.02-2.815.588 2.815zm-8.16-4.84l-1.603 7.496H8.34l1.605-7.496z"/></svg>',
+  Mastercard: '<svg viewBox="0 0 38 24" height="24" aria-label="Mastercard"><circle cx="13" cy="12" r="10" fill="#EB001B"/><circle cx="25" cy="12" r="10" fill="#F79E1B"/><path d="M19 4a10 10 0 0 1 0 16a10 10 0 0 1 0-16z" fill="#FF5F00"/></svg>',
+  Amex: '<svg viewBox="0 0 24 24" height="26" aria-label="American Express"><rect x="0.5" y="0.5" width="23" height="23" rx="3" fill="#ffffff"/><path fill="#2E77BC" d="M16.015 14.378c0-.32-.135-.496-.344-.622-.21-.12-.464-.135-.81-.135h-1.543v2.82h.675v-1.027h.72c.24 0 .39.024.478.125.12.13.104.38.104.55v.35h.66v-.555c-.002-.25-.017-.376-.108-.516-.06-.08-.18-.18-.33-.234l.02-.008c.18-.072.48-.297.48-.747zm-.87.407l-.028-.002c-.09.053-.195.058-.33.058h-.81v-.63h.824c.12 0 .24 0 .33.05.098.048.156.147.15.255 0 .12-.045.215-.134.27zM20.297 15.837H19v.6h1.304c.676 0 1.05-.278 1.05-.884 0-.28-.066-.448-.187-.582-.153-.133-.392-.193-.73-.207l-.376-.015c-.104 0-.18 0-.255-.03-.09-.03-.15-.105-.15-.21 0-.09.017-.166.09-.21.083-.046.177-.066.272-.06h1.23v-.602h-1.35c-.704 0-.958.437-.958.84 0 .9.776.855 1.407.87.104 0 .18.015.225.06.046.03.082.106.082.18 0 .077-.035.15-.08.18-.06.053-.15.07-.277.07zM0 0v10.096L.81 8.22h1.75l.225.464V8.22h2.043l.45 1.02.437-1.013h6.502c.295 0 .56.057.756.236v-.23h1.787v.23c.307-.17.686-.23 1.12-.23h2.606l.24.466v-.466h1.918l.254.465v-.466h1.858v3.948H20.87l-.36-.6v.585h-2.353l-.256-.63h-.583l-.27.614h-1.213c-.48 0-.84-.104-1.08-.24v.24h-2.89v-.884c0-.12-.03-.12-.105-.135h-.105v1.036H6.067v-.48l-.21.48H4.69l-.202-.48v.465H2.235l-.256-.624H1.4l-.256.624H0V24h23.786v-7.108c-.27.135-.613.18-.973.18H21.09v-.255c-.21.165-.57.255-.914.255H14.71v-.9c0-.12-.018-.12-.12-.12h-.075v1.022h-1.8v-1.066c-.298.136-.643.15-.928.136h-.214v.915h-2.18l-.54-.617-.57.6H4.742v-3.93h3.61l.518.602.554-.6h2.412c.28 0 .74.03.942.225v-.24h2.177c.202 0 .644.045.903.225v-.24h3.265v.24c.163-.164.508-.24.803-.24h1.89v.24c.194-.15.464-.24.84-.24h1.176V0H0zM21.156 14.955c.004.005.006.012.01.016.01.01.024.01.032.02l-.042-.035zM23.828 13.082h.065v.555h-.065zM23.865 15.03v-.005c-.03-.025-.046-.048-.075-.07-.15-.153-.39-.215-.764-.225l-.36-.012c-.12 0-.194-.007-.27-.03-.09-.03-.15-.105-.15-.21 0-.09.03-.16.09-.204.076-.045.15-.05.27-.05h1.223v-.588h-1.283c-.69 0-.96.437-.96.84 0 .9.78.855 1.41.87.104 0 .18.015.224.06.046.03.076.106.076.18 0 .07-.034.138-.09.18-.045.056-.136.07-.27.07h-1.288v.605h1.287c.42 0 .734-.118.9-.36h.03c.09-.134.135-.3.135-.523 0-.24-.045-.39-.135-.526zM18.597 14.208v-.583h-2.235V16.458h2.235v-.585h-1.57v-.57h1.533v-.584h-1.532v-.51M13.51 8.787h.685V11.6h-.684zM13.126 9.543l-.007.006c0-.314-.13-.5-.34-.624-.217-.125-.47-.135-.81-.135H10.43v2.82h.674v-1.034h.72c.24 0 .39.03.487.12.122.136.107.378.107.548v.354h.677v-.553c0-.25-.016-.375-.11-.516-.09-.107-.202-.19-.33-.237.172-.07.472-.3.472-.75zm-.855.396h-.015c-.09.054-.195.056-.33.056H11.1v-.623h.825c.12 0 .24.004.33.05.09.04.15.128.15.25s-.047.22-.134.266zM15.92 9.373h.632v-.6h-.644c-.464 0-.804.105-1.02.33-.286.3-.362.69-.362 1.11 0 .512.123.833.36 1.074.232.238.645.31.97.31h.78l.255-.627h1.39l.262.627h1.36v-2.11l1.272 2.11h.95l.002.002V8.786h-.684v1.963l-1.18-1.96h-1.02V11.4L18.11 8.744h-1.004l-.943 2.22h-.3c-.177 0-.362-.03-.468-.134-.125-.15-.186-.36-.186-.662 0-.285.08-.51.194-.63.133-.135.272-.165.516-.165zm1.668-.108l.464 1.118v.002h-.93l.466-1.12zM2.38 10.97l.254.628H4V9.393l.972 2.205h.584l.973-2.202.015 2.202h.69v-2.81H6.118l-.807 1.904-.876-1.905H3.343v2.663L2.205 8.787h-.997L.01 11.597h.72l.26-.626h1.39zm-.688-1.705l.46 1.118-.003.002h-.915l.457-1.12zM11.856 13.62H9.714l-.85.923-.825-.922H5.346v2.82H8l.855-.932.824.93h1.302v-.94h.838c.6 0 1.17-.164 1.17-.945l-.006-.003c0-.78-.598-.93-1.128-.93zM7.67 15.853l-.014-.002H6.02v-.557h1.47v-.574H6.02v-.51H7.7l.733.82-.764.824zm2.642.33l-1.03-1.147 1.03-1.108v2.253zm1.553-1.258h-.885v-.717h.885c.24 0 .42.098.42.344 0 .243-.15.372-.42.372zM9.967 9.373v-.586H7.73V11.6h2.237v-.58H8.4v-.564h1.527V9.88H8.4v-.507"/></svg>',
+};
 function walletCards(){ try{ return JSON.parse(localStorage.getItem(CARDS_KEY) || '[]') || []; }catch(e){ return []; } }
 function saveWalletCards(l){ try{ localStorage.setItem(CARDS_KEY, JSON.stringify(l)); }catch(e){} }
-function cardSlideHTML(c, i){
-  const idx = state.walletCardIndex;
-  const cls = i === idx ? '' : (idx !== 0 && Math.abs(i - idx) === 1 ? 'inactive' : 'inactive hidden-peek');
-  const bg = (CARD_COLORS.find(k=>k[0] === c.color) || CARD_COLORS[0])[1];
-  const net = c.net === 'Other' ? '' : c.net === 'Mastercard' ? 'MASTERCARD' : (c.net || '').toUpperCase();
+// The card that's showing in Wallet (null on the + slide or with no cards) - Money shows this card's money.
+function activeCard(){ const l = walletCards(); return state.walletCardIndex > 0 ? (l[state.walletCardIndex - 1] || null) : null; }
+function setWalletCardIndex(i){ state.walletCardIndex = i; const c = activeCard(); try{ localStorage.setItem('story-card-active', c ? c.id : ''); }catch(e){} }
+function bankApp(pkg){ return pkg ? (state.installedApps || []).find(a=>a.pkg === pkg) : null; }
+function cardFaceHTML(c){
+  if(c.photo) return `<img class="realcard-photo" src="${escText(c.photo)}" alt="">`;
+  const app = bankApp(c.pkg);
   return `
-        <div class="paycard-slide">
-        <div class="realcard ${cls}" data-keep-color data-wcard="${escText(c.id)}" style="background:${bg};border:1px solid rgba(255,255,255,0.08);">
           <div class="realcard-top">
-            <span class="realcard-brand">${escText(c.bank || 'Card')}</span>
+            <span class="realcard-brand">${app && app.iconUrl ? `<img class="realcard-banklogo" src="${app.iconUrl}" alt="">` : ''}${escText(c.bank || 'Card')}</span>
             <div class="realcard-chip"></div>
           </div>
           <div class="realcard-num">••••  &nbsp; ••••  &nbsp; ••••  &nbsp; ${escText(c.last4 || '••••')}</div>
@@ -6074,29 +6105,64 @@ function cardSlideHTML(c, i){
               <div class="realcard-label">EXPIRES</div>
               <div class="realcard-name">${escText(c.exp || '--/--')}</div>
             </div>
-            <div class="realcard-logo ${c.net === 'Amex' ? 'realcard-logo-amex' : 'realcard-logo-visa'}">${net}</div>
-          </div>
+            <div class="realcard-netlogo">${NET_LOGOS[c.net] || ''}</div>
+          </div>`;
+}
+function cardSlideHTML(c, i){
+  const idx = state.walletCardIndex;
+  const cls = i === idx ? '' : (idx !== 0 && Math.abs(i - idx) === 1 ? 'inactive' : 'inactive hidden-peek');
+  const bg = c.photo ? '#000000' : (CARD_COLORS.find(k=>k[0] === c.color) || CARD_COLORS[0])[1];
+  return `
+        <div class="paycard-slide">
+        <div class="realcard ${cls}${c.photo ? ' realcard-isphoto' : ''}" data-keep-color data-wcard="${escText(c.id)}" style="background:${bg};border:1px solid rgba(255,255,255,0.08);">${cardFaceHTML(c)}
         </div>
         </div>`;
 }
+function cardFormVals(){
+  const v = id=>((document.getElementById(id) || {}).value || '').trim();
+  return { bank: v('card-bank'), last4: v('card-last4').replace(/[^0-9]/g, ''), exp: v('card-exp'), msg:'' };
+}
+// Bank apps for the logo + linking payments: the apps your payments came from first, then the rest of your apps.
+function bankAppChoices(){
+  const apps = (state.installedApps || []).filter(a=>a.pkg);
+  const paid = []; moneyTx().forEach(t=>{ if(!paid.includes(t.pkg)) paid.push(t.pkg); });
+  return apps.slice().sort((a, b)=>{ const pa = paid.indexOf(a.pkg), pb = paid.indexOf(b.pkg); return (pa < 0 ? 1e6 : pa) - (pb < 0 ? 1e6 : pb) || String(a.name).localeCompare(String(b.name)); });
+}
 function addCardTemplate(){
   const f = state.addCard || {};
+  const app = bankApp(f.pkg);
+  if(f.pickApp){
+    const q = (f.appQuery || '').toLowerCase();
+    const list = bankAppChoices().filter(a=>!q || String(a.name).toLowerCase().includes(q)).slice(0, 80);
+    return `
+    <div class="modal-overlay" data-action="add-card-close">
+      <div class="modal-sheet" onclick="event.stopPropagation()">
+        <div class="modal-head"><span class="modal-title">Your bank's app</span><button class="modal-close" data-action="card-app-back">×</button></div>
+        <input class="field-input" id="card-app-search" type="text" autocomplete="off" placeholder="Search your apps" value="${escText(f.appQuery || '')}">
+        <div class="card-app-list">${list.map(a=>`<button class="card-app-row" data-cardapp="${escText(a.pkg)}">${a.iconUrl ? `<img src="${a.iconUrl}" alt="">` : '<span class="card-app-ph"></span>'}<span>${escText(a.name)}</span></button>`).join('') || '<div class="note" style="padding:10px 2px;">No apps found.</div>'}</div>
+      </div>
+    </div>`;
+  }
   return `
     <div class="modal-overlay" data-action="add-card-close">
       <div class="modal-sheet" onclick="event.stopPropagation()">
         <div class="modal-head"><span class="modal-title">Add card</span><button class="modal-close" data-action="add-card-close">×</button></div>
-        <div class="section-title" style="margin-top:4px;">BANK / CARD NAME</div>
+        <button class="btn-wide" style="margin-top:2px;" data-action="card-photo">${f.photo ? 'Retake the picture' : 'Take a picture of your card'}</button>
+        ${f.photo ? `<div class="card-photo-preview" data-keep-color><img src="${escText(f.photo)}" alt=""></div>` : ''}
+        <div class="section-title" style="margin-top:12px;">BANK / CARD NAME</div>
         <input class="field-input" id="card-bank" type="text" autocomplete="off" placeholder="e.g. FNB Cheque" value="${escText(f.bank || '')}">
+        <div class="section-title" style="margin-top:12px;">YOUR BANK'S APP</div>
+        <button class="card-app-row card-app-pick" data-action="card-app-open">${app && app.iconUrl ? `<img src="${app.iconUrl}" alt="">` : '<span class="card-app-ph"></span>'}<span>${app ? escText(app.name) : 'Pick it - its logo goes on the card and its payments show on Money'}</span></button>
         <div class="grid2" style="grid-template-columns:1fr 1fr;gap:8px;">
           <div><div class="section-title" style="margin-top:12px;">LAST 4 DIGITS</div><input class="field-input" id="card-last4" type="text" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="1234" value="${escText(f.last4 || '')}"></div>
           <div><div class="section-title" style="margin-top:12px;">EXPIRES</div><input class="field-input" id="card-exp" type="text" inputmode="numeric" maxlength="5" autocomplete="off" placeholder="MM/YY" value="${escText(f.exp || '')}"></div>
         </div>
         <div class="section-title" style="margin-top:12px;">NETWORK</div>
         <div class="acct-seg" style="grid-template-columns:repeat(4,1fr);margin-bottom:8px;">${CARD_NETS.map(n=>`<button class="acct-seg-btn${(f.net || 'Visa') === n ? ' on' : ''}" data-cardnet="${n}">${n}</button>`).join('')}</div>
-        <div class="section-title" style="margin-top:4px;">COLOUR</div>
-        <div style="display:flex;gap:10px;margin:6px 0 4px;">${CARD_COLORS.map(([n, bg])=>`<button data-keep-color data-cardcolor="${n}" title="${n}" style="width:30px;height:30px;border-radius:50%;background:${bg};border:2px solid ${(f.color || 'Blue') === n ? '#ffffff' : 'transparent'};padding:0;"></button>`).join('')}</div>
+        ${f.photo ? '' : `<div class="section-title" style="margin-top:4px;">COLOUR</div>
+        <div style="display:flex;gap:10px;margin:6px 0 4px;flex-wrap:wrap;">${CARD_COLORS.map(([n, bg])=>`<button data-keep-color data-cardcolor="${n}" title="${n}" style="width:30px;height:30px;border-radius:50%;background:${bg};border:2px solid ${(f.color || 'Blue') === n ? '#ffffff' : 'transparent'};padding:0;"></button>`).join('')}</div>`}
         <div class="acct-msg">${escText(f.msg || '')}</div>
-        <div class="note" style="margin-top:6px;">Only what you type here is kept, on this phone - never your full card number. Paying uses your phone's own tap to pay.</div>
+        <div class="note" style="margin-top:6px;">Only this is kept, on this phone - never your full card number (a picture has it covered). Paying uses your phone's own tap to pay.</div>
         <button class="btn-wide btn-primary" style="margin-top:12px;" data-action="add-card-save">Add card</button>
       </div>
     </div>`;
@@ -6115,6 +6181,89 @@ function cardSheetTemplate(){
       </div>
     </div>`;
 }
+// ---- Take a picture of your card: STORY's own camera, a card-shaped frame, then read + cover the number ----
+let cardAccessWaiting = false;
+function openCardCamera(){
+  closeCardCamera();
+  const wrap = document.createElement('div'); wrap.id = 'card-cam'; wrap.setAttribute('data-keep-color', '');
+  document.body.appendChild(wrap);
+  if(NATIVE && window.StoryNative.noteCameraAccess && !window.StoryNative.noteCameraAccess()){
+    wrap.innerHTML = '<div class="card-cam-ask"><div>Let STORY use the camera to take a picture of your card.</div><button class="note-panel-btn">Allow</button><button class="card-cam-x" aria-label="Close">×</button></div>';
+    wrap.querySelector('.note-panel-btn').addEventListener('click', ()=>{ cardAccessWaiting = true; window.StoryNative.noteAsk('camera'); });
+    wrap.querySelector('.card-cam-x').addEventListener('click', closeCardCamera);
+    return;
+  }
+  wrap.innerHTML = '<video autoplay playsinline muted></video><div class="card-cam-frame"></div><div class="card-cam-hint">Fit the front of your card in the frame</div><div class="card-cam-msg" hidden></div><button class="card-cam-x" aria-label="Close">×</button><button class="card-cam-shutter" aria-label="Take picture"></button>';
+  const video = wrap.querySelector('video'), frame = wrap.querySelector('.card-cam-frame'), msg = wrap.querySelector('.card-cam-msg');
+  navigator.mediaDevices && navigator.mediaDevices.getUserMedia ? navigator.mediaDevices.getUserMedia({ video:{ facingMode:{ ideal:'environment' }, width:{ ideal:1920 }, height:{ ideal:1440 } }, audio:false })
+    .then(s=>{ if(!document.getElementById('card-cam')){ s.getTracks().forEach(t=>t.stop()); return; } wrap._stream = s; video.srcObject = s; })
+    .catch(e=>{ msg.hidden = false; msg.textContent = 'Camera problem: ' + (e && (e.message || e.name) || 'it didn’t open'); })
+    : (msg.hidden = false, msg.textContent = 'The camera isn’t available here');
+  wrap.querySelector('.card-cam-x').addEventListener('click', closeCardCamera);
+  wrap.querySelector('.card-cam-shutter').addEventListener('click', ()=>{
+    if(!video.videoWidth) return;
+    // The part of the camera picture inside the frame (the video fills the screen like object-fit: cover).
+    const W = wrap.clientWidth, H = wrap.clientHeight, vw = video.videoWidth, vh = video.videoHeight;
+    const sc = Math.max(W / vw, H / vh), ox = (W - vw * sc) / 2, oy = (H - vh * sc) / 2;
+    const fr = frame.getBoundingClientRect(), wr = wrap.getBoundingClientRect();
+    const sx = (fr.left - wr.left - ox) / sc, sy = (fr.top - wr.top - oy) / sc, sw = fr.width / sc, sh = fr.height / sc;
+    const c = document.createElement('canvas'); c.width = 1012; c.height = 638;
+    c.getContext('2d').drawImage(video, sx, sy, sw, sh, 0, 0, c.width, c.height);
+    closeCardCamera();
+    cardPhotoRead(c);
+  });
+}
+function closeCardCamera(){ const w = document.getElementById('card-cam'); if(w){ if(w._stream) w._stream.getTracks().forEach(t=>t.stop()); w.remove(); } }
+const cardScanWait = {};
+window.storyCardScan = function(id, json){ const w = cardScanWait[id]; if(w){ delete cardScanWait[id]; w(json); } };
+function cardPhotoRead(canvas){
+  const raw = canvas.toDataURL('image/jpeg', 0.92);
+  showToast('Reading your card…');
+  const finish = json=>{
+    let r = {}; try{ r = JSON.parse(json || '{}') || {}; }catch(e){}
+    const lines = r.lines || [];
+    const sx = canvas.width / (r.w || canvas.width), sy = canvas.height / (r.h || canvas.height);
+    const all = lines.map(l=>l.text).join('\n');
+    // The long card number: the line with 12+ digits. Cover every part of it except the last 4.
+    const pan = lines.find(l=>(l.text.match(/\d/g) || []).length >= 12);
+    const covers = [];
+    let last4 = '';
+    if(pan){
+      const digits = (pan.text.match(/\d/g) || []).join(''); last4 = digits.slice(-4);
+      const els = (pan.els || []).filter(e=>/\d/.test(e.text));
+      els.forEach((e, k)=>{ if(k < els.length - 1 || e.text.replace(/\D/g, '').length > 4) covers.push(e.box); });
+      if(!covers.length) covers.push(pan.box);
+    }
+    const x = canvas.getContext('2d');
+    const cover = b=>{
+      const [l, t, rr, bb] = b; const px = l * sx - 8, py = t * sy - 8, pw = (rr - l) * sx + 16, ph = (bb - t) * sy + 16;
+      const d = x.getImageData(Math.max(0, px | 0), Math.max(0, py | 0), Math.max(1, pw | 0), Math.max(1, ph | 0)).data;
+      let R = 0, G = 0, B = 0, n = 0; for(let i = 0; i < d.length; i += 16){ R += d[i]; G += d[i + 1]; B += d[i + 2]; n++; }
+      x.fillStyle = 'rgb(' + (R / n | 0) + ',' + (G / n | 0) + ',' + (B / n | 0) + ')';
+      x.beginPath(); x.roundRect ? x.roundRect(px, py, pw, ph, 8) : x.rect(px, py, pw, ph); x.fill();
+    };
+    if(covers.length) covers.forEach(cover);
+    else { // couldn't find the number: cover the band where card numbers sit (the middle of the card)
+      x.save(); x.filter = 'blur(18px)'; x.drawImage(canvas, 0, canvas.height * 0.46, canvas.width, canvas.height * 0.22, 0, canvas.height * 0.46, canvas.width, canvas.height * 0.22); x.restore();
+      const g = x.getImageData(0, canvas.height * 0.5 | 0, 1, 1).data; x.fillStyle = 'rgba(' + g[0] + ',' + g[1] + ',' + g[2] + ',0.92)'; x.fillRect(canvas.width * 0.05, canvas.height * 0.47, canvas.width * 0.9, canvas.height * 0.2);
+    }
+    const exp = (all.match(/\b(0[1-9]|1[0-2])\s?\/\s?(\d{2})\b/) || []);
+    const first = pan ? (pan.text.match(/\d/) || [''])[0] : '';
+    const net = /american\s*express|amex/i.test(all) ? 'Amex' : /master\s*card/i.test(all) ? 'Mastercard' : /visa/i.test(all) ? 'Visa' : first === '4' ? 'Visa' : (first === '5' || first === '2') ? 'Mastercard' : first === '3' ? 'Amex' : (state.addCard || {}).net;
+    const safe = canvas.toDataURL('image/jpeg', 0.9);
+    const photo = NATIVE && window.StoryNative.noteSavePhoto ? (n=>n ? NOTE_FILE_BASE + encodeURIComponent(n) : null)(window.StoryNative.noteSavePhoto(safe)) : safe;
+    const f = state.addCard = Object.assign(state.addCard || {}, { photo, msg: pan ? '' : 'Couldn’t read the card number - type the last 4 digits' });
+    if(last4) f.last4 = last4;
+    if(exp[0]) f.exp = exp[1] + '/' + exp[2];
+    if(net) f.net = net;
+    state.addCardOpen = true;
+    renderDevice();
+  };
+  if(NATIVE && window.StoryNative.cardScan){ const id = 'c' + Date.now(); cardScanWait[id] = finish; window.StoryNative.cardScan(id, raw); setTimeout(()=>{ if(cardScanWait[id]){ delete cardScanWait[id]; finish('{}'); } }, 15000); }
+  else finish('{}');
+}
+// Money follows the card showing in Wallet: that card's payments (by its last 4, or from its bank's app).
+function cardMatches(c, t){ if(!c) return true; if(t.card && c.last4) return t.card === c.last4; return !!c.pkg && t.pkg === c.pkg; }
 const walletActivityList = ()=>moneyTx().slice(0, 5);
 function walletActivityColor(amt, ts){
   const age = Date.now() - ts;
@@ -8326,6 +8475,7 @@ let noteAccessWaiting = null;
 window.storyNoteAccessDone = function(kind){
   const w = noteAccessWaiting; noteAccessWaiting = null;
   if(w && w.kind === kind && document.getElementById('note-panel')) w.then();
+  if(cardAccessWaiting && kind === 'camera'){ cardAccessWaiting = false; if(document.getElementById('card-cam')) openCardCamera(); }
 };
 // Picture: the phone's real pictures in STORY's own grid (thumbnails straight from the phone); tap one -> in the note.
 function openNotePictures(){
@@ -11085,16 +11235,27 @@ function attachHandlers(){
     });
   });
 
+  document.querySelectorAll('[data-cardapp]').forEach(el=>el.addEventListener('click', ()=>{
+    const a = bankApp(el.getAttribute('data-cardapp'));
+    state.addCard = Object.assign(state.addCard || {}, { pkg: el.getAttribute('data-cardapp'), pickApp:false });
+    if(a && !state.addCard.bank) state.addCard.bank = a.name;
+    renderDevice();
+  }));
+  { const q = document.getElementById('card-app-search'); if(q) q.addEventListener('input', ()=>{
+    state.addCard.appQuery = q.value;
+    const box = q.parentElement.querySelector('.card-app-list'); const v = q.value.toLowerCase();
+    box.querySelectorAll('[data-cardapp]').forEach(r=>{ r.style.display = r.textContent.toLowerCase().includes(v) ? '' : 'none'; });
+  }); }
   document.querySelectorAll('[data-cardnet]').forEach(el=>el.addEventListener('click', ()=>{ state.addCard = Object.assign(state.addCard || {}, cardFormVals(), { net: el.getAttribute('data-cardnet') }); renderDevice(); }));
   document.querySelectorAll('[data-cardcolor]').forEach(el=>el.addEventListener('click', ()=>{ state.addCard = Object.assign(state.addCard || {}, cardFormVals(), { color: el.getAttribute('data-cardcolor') }); renderDevice(); }));
   document.querySelectorAll('[data-wcard]').forEach(el=>el.addEventListener('click', ()=>{
     const i = walletCards().findIndex(c=>c.id === el.getAttribute('data-wcard')) + 1;
-    if(i === state.walletCardIndex) state.cardSheetId = el.getAttribute('data-wcard'); else state.walletCardIndex = i;
+    if(i === state.walletCardIndex) state.cardSheetId = el.getAttribute('data-wcard'); else setWalletCardIndex(i);
     renderDevice();
   }));
   document.querySelectorAll('[data-cardidx]').forEach(el=>{
     el.addEventListener('click', ()=>{
-      state.walletCardIndex = parseInt(el.getAttribute('data-cardidx'), 10);
+      setWalletCardIndex(parseInt(el.getAttribute('data-cardidx'), 10));
       renderDevice();
     });
   });
@@ -11107,8 +11268,8 @@ function attachHandlers(){
       pActive=false;
       const dx = pLastX - pStartX, dy = pLastY - pStartY;
       if(Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)){
-        if(dx < 0) state.walletCardIndex = Math.min(cardCount-1, state.walletCardIndex+1);
-        if(dx > 0) state.walletCardIndex = Math.max(0, state.walletCardIndex-1);
+        if(dx < 0) setWalletCardIndex(Math.min(cardCount-1, state.walletCardIndex+1));
+        if(dx > 0) setWalletCardIndex(Math.max(0, state.walletCardIndex-1));
         renderDevice();
       }
       pStartX=null; pStartY=null; pid=null;
@@ -12515,6 +12676,9 @@ function attachHandlers(){
           break;
         case 'cal-open': state.calOpen = true; break;
         case 'add-card': state.addCard = { net:'Visa', color:'Blue' }; state.addCardOpen = true; break;
+        case 'card-photo': state.addCard = Object.assign(state.addCard || {}, cardFormVals()); state.addCardOpen = false; renderDevice(); openCardCamera(); return;
+        case 'card-app-open': state.addCard = Object.assign(state.addCard || {}, cardFormVals(), { pickApp:true, appQuery:'' }); break;
+        case 'card-app-back': state.addCard.pickApp = false; break;
         case 'add-card-close': state.addCardOpen = false; break;
         case 'add-card-save': {
           const f = state.addCard = Object.assign(state.addCard || {}, cardFormVals());
@@ -12522,9 +12686,9 @@ function attachHandlers(){
           if(!f.bank){ f.msg = 'Type the bank or card name'; break; }
           if(!/^\d{4}$/.test(f.last4)){ f.msg = 'Type the last 4 digits of the card'; break; }
           if(!/^(0[1-9]|1[0-2])\/\d{2}$/.test(f.exp)){ f.msg = 'Type the expiry like 09/28'; break; }
-          const list = walletCards(); list.push({ id:'card' + Date.now(), bank:f.bank, last4:f.last4, exp:f.exp, net:f.net || 'Visa', color:f.color || 'Blue' });
+          const list = walletCards(); list.push({ id:'card' + Date.now(), bank:f.bank, pkg:f.pkg || '', last4:f.last4, exp:f.exp, net:f.net || 'Visa', color:f.color || 'Blue', photo:f.photo || '' });
           saveWalletCards(list);
-          state.addCardOpen = false; state.addCard = null; state.walletCardIndex = list.length;
+          state.addCardOpen = false; state.addCard = null; setWalletCardIndex(list.length);
           showToast('Card added');
           break;
         }
@@ -12532,7 +12696,7 @@ function attachHandlers(){
         case 'card-remove': {
           const list = walletCards().filter(c=>c.id !== state.cardSheetId);
           saveWalletCards(list); state.cardSheetId = null;
-          state.walletCardIndex = Math.min(state.walletCardIndex, list.length);
+          setWalletCardIndex(Math.min(state.walletCardIndex, list.length));
           showToast('Card removed');
           break;
         }
