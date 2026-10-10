@@ -4639,7 +4639,7 @@ function netWorthPct(nw, cur){
 // Fills the Money page's numbers from your real payments (same places the page always read them from).
 // ---- The period Money shows (owner): the calendar button under Summary - a day, a set of days, or Day / Week /
 // 3 months / 6 months / Year / 2 years / 3 years / From day 1. Everything below the big number follows it. ----
-const MONEY_RANGES = [['month', 'This month'], ['day', 'Day'], ['week', 'Week'], ['3m', '3 months'], ['6m', '6 months'], ['1y', 'Year'], ['2y', '2 years'], ['3y', '3 years']];
+const MONEY_RANGES = [['month', 'This month'], ['day', 'Today'], ['week', 'This week'], ['3m', '3 months'], ['6m', '6 months'], ['1y', 'Year'], ['2y', '2 years'], ['3y', '3 years']];
 // The calendar only goes from the card's first day of history to today (owner).
 function moneyFirstDay(){ const l = moneyView(); return l.length ? dayStart(l[l.length - 1].ts) : dayStart(Date.now()); }
 state.moneyRange = (()=>{ try{ const r = JSON.parse(localStorage.getItem('story-money-range') || 'null'); return r && r.kind !== 'all' ? r : { kind:'month' }; }catch(e){ return { kind:'month' }; } })();
