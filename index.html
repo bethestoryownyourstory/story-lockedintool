@@ -981,6 +981,8 @@
   .broker-name{ font-size:13px; font-weight:700; }
   .broker-sub{ font-size:10.5px; color:var(--muted); }
   .acct-broker{ margin-top:12px; font-size:15px; font-weight:800; }
+  .acct-title{ font:inherit; letter-spacing:inherit; color:inherit; text-transform:inherit; background:transparent; border:1px solid var(--line); border-radius:999px; padding:3px 10px; margin-left:-4px; cursor:pointer; }
+  .acct-title:active{ opacity:0.6; }
   .acct-dots{ display:flex; justify-content:center; gap:6px; margin:8px 0 2px; }
   .acct-dots span{ width:6px; height:6px; border-radius:50%; background:var(--line); }
   .acct-dots span.on{ background:var(--text); }
@@ -5114,7 +5116,7 @@ function tradingScreen(){
       ${['1H','4H','1D','1W'].map(r=>`<div class="tab${state.chartRes===r?' active':''}" data-chartres="${r}">${r}</div>`).join('')}
     </div>
     <div class="live-pl-zone" style="background:${positions.length ? `linear-gradient(180deg, transparent 0%, rgba(${zoneColor},0.09) 26%, rgba(${zoneColor},0.07) 48%, rgba(${zoneColor},0.04) 78%, transparent 100%)` : 'transparent'};">
-    <div class="section-title">${acc ? escText((acc.platform === 'mt5' ? 'MT5' : 'TRADELOCKER') + (acc.env === 'demo' ? ' DEMO' : '') + ' · ' + acc.name) : 'ACCOUNT'}</div>
+    <div class="section-title"><button class="acct-title" data-action="broker-panel-open">${acc && acc.platform === 'tradelocker' ? 'TRADELOCKER' : 'MT5'}${acc && acc.env === 'demo' ? ' DEMO' : ''} ACCOUNT</button></div>
     <div class="mt5-card-wrap" id="acct-swipe">
       <div class="row-card mt5-card">
         <div class="row"><div class="row-name">Balance</div><div class="row-amt">${val(fmtMoney(live.balance, cur))}</div></div>
@@ -10224,10 +10226,6 @@ function attachHandlers(){
         box.querySelectorAll('[data-symbol]').forEach(el=>el.addEventListener('click', ()=>{ state.focusSymbol = el.getAttribute('data-symbol'); state.focusName = state.focusSymbol; try{ localStorage.setItem('story-trade-symbol', state.focusSymbol); }catch(err){} state.symbolPickerOpen = false; state.focusQuote = null; state.focusBars = []; renderDevice(); tradeRefreshNow(true); })); } }
     });
   }
-  const swipeCardTime = ()=>{ const w = document.querySelector('#content-area #acct-swipe'); return w && w.__swiped && Date.now() - w.__swiped < 500; };
-  // Tap the account card -> the brokers pop up in its place (owner).
-  const tapCard = document.querySelector('#content-area #acct-swipe .mt5-card');
-  if(tapCard) tapCard.addEventListener('click', ()=>{ if(swipeCardTime() ) return; state.brokerPanelOpen = true; state.brokerQuery = ''; renderDevice(); });
   document.querySelectorAll('[data-broker-platform]').forEach(el=>el.addEventListener('click', ()=>{
     state.brokerPanelOpen = false;
     state.addAccount.platform = el.getAttribute('data-broker-platform');
@@ -11038,6 +11036,8 @@ function attachHandlers(){
         case 'trade-sell': tradeDo('Sold ' + state.lotSize.toFixed(2) + ' ' + state.focusSymbol, acc=>TRADE.order(acc, { side:'sell', type:'market', qty: state.lotSize })); break;
         case 'add-account-open': state.addAccountOpen = true; state.accountSwitcherOpen = false; state.brokerPanelOpen = false; state.addAccount.msg = ''; break;
         case 'broker-panel-close': state.brokerPanelOpen = false; break;
+        // Tap the words "MT5 ACCOUNT" -> the brokers you can use pop up in the card's place (owner).
+        case 'broker-panel-open': state.brokerPanelOpen = !state.brokerPanelOpen; state.brokerQuery = ''; break;
         case 'add-account-close': case 'add-account-bg': if(!state.addAccount.busy){ state.addAccountOpen = false; state.addAccount.pass = ''; } break;
         case 'add-account-go': {
           const v = id=>((document.getElementById(id) || {}).value || '').trim();
