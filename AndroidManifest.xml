@@ -18,6 +18,8 @@
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <!-- Notes > Audio File: STORY's own list of the audio on the phone. -->
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
     <!-- Station 3 > Create: the camera (pictures, video) and the microphone (video sound). -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
@@ -64,7 +66,7 @@
             android:taskAffinity=""
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
-        <!-- Notes: pick a picture / take a photo / pick an audio file / print or save as PDF / save as text (see-through). -->
+        <!-- Notes > Print: the phone's own print screen (everything else in Notes happens inside STORY). -->
         <activity
             android:name=".NoteMediaActivity"
             android:exported="false"
@@ -111,7 +113,6 @@
             </intent-filter>
         </receiver>
         <receiver android:name=".InstallResultReceiver" android:exported="false" />
-        <receiver android:name=".ShareChosenReceiver" android:exported="false" />
 
         <!-- Lets Android's own installer open a downloaded update (plan B when the quiet install fails). -->
         <provider

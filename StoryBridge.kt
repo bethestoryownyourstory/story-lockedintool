@@ -49,8 +49,11 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         fun requestPhotoAccess()
         fun useProfilePhoto(id: Long)
         fun profileTyping(on: Boolean)
-        fun noteMedia(kind: String, title: String, text: String)
-        fun shareContent(title: String, text: String, files: ArrayList<String>)
+        fun noteAsk(kind: String)
+        fun noteResult(kind: String, status: String, json: String)
+        fun noteSavePdf(title: String, pages: List<String>)
+        fun noteShareTo(pkg: String, cls: String, title: String, text: String, files: List<java.io.File>)
+        fun notePrint(title: String, html: String)
     }
 
     /** The phone's real launchable apps, with their real icons -- kept ready, so the Apps area opens instantly. */
@@ -152,25 +155,79 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         return saved
     }
 
-    /** Share to any app (the phone's own share screen): text, plus pictures as PNG data URLs (JSON list). */
+    // ---- Notes, all inside STORY (owner: real actions, never leaving STORY). The Pages only. ----
+    private val pages get() = !station3 && !profile
+
+    /** Asks Android once (its own question) for what a note needs: "photos", "audio" or "camera". */
     @JavascriptInterface
-    fun share(title: String, text: String, imagesJson: String) {
-        if (station3 || profile) return
+    fun noteAsk(kind: String) { if (pages) host.noteAsk(kind) }
+
+    @JavascriptInterface
+    fun noteAudioAccess(): Boolean = NoteTools.audioAccess(ctx)
+
+    @JavascriptInterface
+    fun noteListAudio(): String = NoteTools.listAudio(ctx)
+
+    @JavascriptInterface
+    fun noteCameraAccess(): Boolean = ctx.checkSelfPermission(android.Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+
+    /** A picture tapped in STORY's grid: copied into the note (answer: window.storyNoteMedia('picture', ...)). */
+    @JavascriptInterface
+    fun noteUsePhoto(id: String) {
+        if (!pages) return
+        val n = id.toLongOrNull() ?: return
+        Thread { val f = NoteTools.usePhoto(ctx, n); host.noteResult("picture", if (f != null) "ok" else "error", JSONObject().put("file", f ?: "").toString()) }.start()
+    }
+
+    /** An audio file tapped in STORY's list: copied into the note (answer: window.storyNoteMedia('audio', ...)). */
+    @JavascriptInterface
+    fun noteUseAudio(id: String) {
+        if (!pages) return
+        val n = id.toLongOrNull() ?: return
+        Thread { val j = NoteTools.useAudio(ctx, n); host.noteResult("audio", if (j != null) "ok" else "error", (j ?: JSONObject()).toString()) }.start()
+    }
+
+    /** A photo from STORY's own camera (JPEG data URL): saved as the note's picture; returns its file name ("" = failed). */
+    @JavascriptInterface
+    fun noteSavePhoto(dataUrl: String): String = if (pages) NoteTools.savePhotoData(ctx, dataUrl) ?: "" else ""
+
+    /** Save As > Text file: straight into the phone's Documents/STORY. Returns the folder ("" = failed). */
+    @JavascriptInterface
+    fun noteSaveText(title: String, text: String): String =
+        if (pages) NoteTools.saveToDocuments(ctx, NoteTools.safeName(title) + ".txt", "text/plain", text.toByteArray()) ?: "" else ""
+
+    /** PDF / Save As > PDF: STORY makes the PDF itself (pages = JSON list of laid-out page HTML) and saves it in
+     *  Documents/STORY (answer: window.storyNoteMedia('pdf', ...)). */
+    @JavascriptInterface
+    fun noteSavePdf(title: String, pagesJson: String) {
+        if (!pages) return
+        val list = runCatching { JSONArray(pagesJson) }.getOrNull() ?: return
+        host.noteSavePdf(title, (0 until list.length()).map { list.getString(it) })
+    }
+
+    /** STORY's own list of apps to share to ("text", "image" or "images"), with their real icons. */
+    @JavascriptInterface
+    fun noteShareTargets(type: String): String = if (pages) runCatching { NoteTools.shareTargets(ctx, type) }.getOrDefault("[]") else "[]"
+
+    /** Opens the app you picked in STORY's share list with the note (text + pictures as PNG data URLs). */
+    @JavascriptInterface
+    fun noteShareTo(pkg: String, cls: String, title: String, text: String, imagesJson: String) {
+        if (!pages) return
         val dir = java.io.File(ctx.cacheDir, "share").apply { deleteRecursively(); mkdirs() }
-        val files = ArrayList<String>()
+        val files = ArrayList<java.io.File>()
         val list = runCatching { JSONArray(imagesJson) }.getOrNull() ?: JSONArray()
         val base = title.replace(Regex("[^A-Za-z0-9 _-]"), " ").trim().take(40).ifBlank { "Drawing" }
         for (i in 0 until list.length()) {
             val bytes = runCatching { Base64.decode(list.getString(i).substringAfter("base64,"), Base64.DEFAULT) }.getOrNull() ?: continue
             val f = java.io.File(dir, base + (if (list.length() > 1) " ${i + 1}" else "") + ".png")
-            if (runCatching { f.writeBytes(bytes) }.isSuccess) files.add(f.path)
+            if (runCatching { f.writeBytes(bytes) }.isSuccess) files.add(f)
         }
-        host.shareContent(title, text, files)
+        host.noteShareTo(pkg, cls, title, text, files)
     }
 
-    /** Notes (the Pages only): "picture" / "camera" / "audio" / "print" (html = the laid-out note) / "savetext". */
+    /** Print (paper): the phone's own print screen - the one thing that can't happen inside STORY. */
     @JavascriptInterface
-    fun noteMedia(kind: String, title: String, text: String) { if (!station3 && !profile) host.noteMedia(kind, title, text) }
+    fun notePrint(title: String, html: String) { if (pages) host.notePrint(title, html) }
 
     @JavascriptInterface
     fun openRecents() {

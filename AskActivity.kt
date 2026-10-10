@@ -9,7 +9,9 @@ class AskActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (savedInstanceState != null) return
-        val perms = intent.getStringArrayExtra(EXTRA_PERMS)?.filter { checkSelfPermission(it) != android.content.pm.PackageManager.PERMISSION_GRANTED }
+        val all = intent.getStringArrayExtra(EXTRA_PERMS)?.toList()
+        // force: ask even if allowed (Android 14 "selected photos" - choose more pictures)
+        val perms = if (intent.getBooleanExtra(EXTRA_FORCE, false)) all else all?.filter { checkSelfPermission(it) != android.content.pm.PackageManager.PERMISSION_GRANTED }
         if (perms.isNullOrEmpty()) { done(); return }
         requestPermissions(perms.toTypedArray(), 4)
     }
@@ -30,5 +32,5 @@ class AskActivity : Activity() {
         super.onDestroy()
     }
 
-    companion object { const val EXTRA_PERMS = "perms" }
+    companion object { const val EXTRA_PERMS = "perms"; const val EXTRA_FORCE = "force" }
 }

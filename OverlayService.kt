@@ -492,6 +492,15 @@ class OverlayService : Service(), StoryBridge.Host {
                 v.onApplyWindowInsets(insets)
             }
         }
+        // Notes' camera runs inside STORY's own page (owner: never leaving STORY): the page may use the camera once
+        // Android has allowed STORY to.
+        wv.webChromeClient = object : android.webkit.WebChromeClient() {
+            override fun onPermissionRequest(r: android.webkit.PermissionRequest) { ui.post {
+                val wantsCam = r.resources.contains(android.webkit.PermissionRequest.RESOURCE_VIDEO_CAPTURE)
+                if (wantsCam && checkSelfPermission(android.Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED)
+                    r.grant(arrayOf(android.webkit.PermissionRequest.RESOURCE_VIDEO_CAPTURE)) else r.deny()
+            } }
+        }
         wv.webViewClient = object : WebViewClient() {
             override fun onPageStarted(v: WebView, url: String, favicon: android.graphics.Bitmap?) {
                 if (small) paneRef?.let { it.loading = true; it.frame.alpha = 0f; syncBarBg() }
@@ -1062,7 +1071,9 @@ class OverlayService : Service(), StoryBridge.Host {
         runCatching { startActivity(Intent(this, AskActivity::class.java).putExtra(AskActivity.EXTRA_PERMS, perms).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)) }
             .onFailure { comeBackFromSystem() }
     }
-    fun permissionsDone() { ui.post { comeBackFromSystem(); Thread { CallHistory.finishFromLog(this); ui.post { tellCalls() } }.start() } }
+    fun permissionsDone() { ui.post { comeBackFromSystem()
+        if (noteAsking.isNotEmpty()) { val k = noteAsking; noteAsking = ""; pagesPane?.web?.evaluateJavascript("window.storyNoteAccessDone&&window.storyNoteAccessDone('$k')", null) }
+        Thread { CallHistory.finishFromLog(this); ui.post { tellCalls() } }.start() } }
 
     // ---- Profile and Messages: Station 3's profile / messages buttons open them in ONE window attached to Station 3
     //      (same gap, line and scene). Its own button closes it; the other button switches straight over. ----
@@ -1155,7 +1166,7 @@ class OverlayService : Service(), StoryBridge.Host {
             "capture" -> CreateCameraActivity.currentCapture(this)
             "post" -> seg.getOrNull(2)?.let { CreateCameraActivity.postFile(this, it) }
             "postthumb" -> seg.getOrNull(2)?.let { CreateCameraActivity.postThumb(this, it) }
-            "note" -> seg.getOrNull(2)?.let { NoteMediaActivity.file(this, it) }
+            "note" -> seg.getOrNull(2)?.let { NoteTools.file(this, it) }
             else -> null
         }
         if (file != null) return fileResponse(file, r.requestHeaders)
@@ -1172,7 +1183,7 @@ class OverlayService : Service(), StoryBridge.Host {
         } else WebResourceResponse("image/jpeg", null, 404, "Not Found", mapOf(), java.io.ByteArrayInputStream(ByteArray(0)))
     }
     private fun fileResponse(f: java.io.File, headers: Map<String, String>): WebResourceResponse {
-        val mime = if (f.extension == "mp4") "video/mp4" else if (f.parentFile?.name == "notes") NoteMediaActivity.mimeOf(f) else "image/jpeg"
+        val mime = if (f.extension == "mp4") "video/mp4" else if (f.parentFile?.name == "notes") NoteTools.mimeOf(f) else "image/jpeg"
         val len = f.length()
         val range = headers.entries.firstOrNull { it.key.equals("Range", true) }?.value
         val m = range?.let { Regex("bytes=(\\d*)-(\\d*)").find(it) }
@@ -1258,50 +1269,60 @@ class OverlayService : Service(), StoryBridge.Host {
         for (p in back) if (!p.shown) setShown(p, true)
         if (profilePane in back) tellProfileStation3()
     }
-    // ---- Notes: a picture / photo / audio file goes into the note; print / Save as PDF / save as text. The Pages step
-    //      aside for the phone's own screen and come straight back. ----
-    override fun noteMedia(kind: String, title: String, text: String) {
-        if (kind == "print") runCatching { java.io.File(cacheDir, "note_print.html").writeText(text) }
-        ui.post {
-            if (pickerHid.isNotEmpty()) return@post
-            snapNoteBackdrop()
-            val i = Intent(this, NoteMediaActivity::class.java).putExtra(NoteMediaActivity.EXTRA_KIND, kind).putExtra(NoteMediaActivity.EXTRA_TITLE, title)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
-            if (kind == "savetext") i.putExtra(NoteMediaActivity.EXTRA_TEXT, text)
-            runCatching { startActivity(i) }.onFailure { noteMediaDone(kind, "error", "{}") }
+    // ---- Notes, all inside STORY (owner: real actions): Android's one-time permission questions, results back to the
+    //      note, the PDF made by STORY, opening the app picked in STORY's share list, and paper printing. ----
+    override fun noteAsk(kind: String) { ui.post {
+        val perms = when (kind) {
+            "photos" -> when {
+                Build.VERSION.SDK_INT >= 34 -> arrayOf(android.Manifest.permission.READ_MEDIA_IMAGES, android.Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
+                Build.VERSION.SDK_INT >= 33 -> arrayOf(android.Manifest.permission.READ_MEDIA_IMAGES)
+                else -> arrayOf(android.Manifest.permission.READ_EXTERNAL_STORAGE)
+            }
+            "audio" -> arrayOf(NoteTools.audioPermission())
+            "camera" -> arrayOf(android.Manifest.permission.CAMERA)
+            else -> return@post
         }
-    }
-    override fun shareContent(title: String, text: String, files: ArrayList<String>) { ui.post {
-        if (pickerHid.isNotEmpty()) return@post
-        snapNoteBackdrop()
-        val i = Intent(this, NoteMediaActivity::class.java).putExtra(NoteMediaActivity.EXTRA_KIND, "share")
-            .putExtra(NoteMediaActivity.EXTRA_TITLE, title).putExtra(NoteMediaActivity.EXTRA_TEXT, text)
-            .putStringArrayListExtra(NoteMediaActivity.EXTRA_FILES, files)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
-        runCatching { startActivity(i) }.onFailure { noteMediaDone("share", "error", "{}") }
+        noteAsking = kind
+        // Android 14 "selected photos": asking again lets you choose more pictures, even though access is already partial.
+        if (kind == "photos" && Build.VERSION.SDK_INT >= 34 && ProfilePhotoActivity.photoAccess(this) == "partial") {
+            if (!stepAsideForSystem()) return@post
+            runCatching { startActivity(Intent(this, AskActivity::class.java).putExtra(AskActivity.EXTRA_PERMS, perms).putExtra(AskActivity.EXTRA_FORCE, true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)) }
+                .onFailure { permissionsDone() }
+            return@post
+        }
+        askPermissions(perms)
     } }
-    /** A picture of the Pages exactly as they are now, shown behind the phone's own screen (so you see your note, not apps). */
-    private fun snapNoteBackdrop() {
-        NoteMediaActivity.backdrop = null
-        val p = pagesPane?.takeIf { it.shown } ?: return
-        val v = p.frame
-        if (v.width <= 0 || v.height <= 0) return
-        runCatching {
-            val bmp = android.graphics.Bitmap.createBitmap(v.width, v.height, android.graphics.Bitmap.Config.ARGB_8888)
-            android.graphics.Canvas(bmp).apply { drawColor(android.graphics.Color.BLACK); v.draw(this) }
-            val loc = IntArray(2); v.getLocationOnScreen(loc)
-            NoteMediaActivity.backdropX = loc[0]; NoteMediaActivity.backdropY = loc[1]
-            NoteMediaActivity.backdrop = bmp
-        }
-    }
-    /** NoteMediaActivity: your note's picture is on screen, the Pages can step aside now. */
-    fun noteStepAside() { if (pickerHid.isEmpty()) stepAsideForSystem() }
-    fun noteMediaDone(kind: String, status: String, json: String) { ui.post {
-        // Shared to an app: you're in that app now, so the Pages stay away (your note is kept as it is for next time).
-        if (kind == "share" && status == "shared") { pickerHid = listOf(); updateBubble(); return@post }
-        comeBackFromSystem()
+    private var noteAsking = ""
+    override fun noteResult(kind: String, status: String, json: String) { ui.post {
         pagesPane?.web?.evaluateJavascript("window.storyNoteMedia&&window.storyNoteMedia(" + org.json.JSONObject.quote(kind) + "," +
             org.json.JSONObject.quote(status) + "," + json + ")", null)
+    } }
+    override fun noteSavePdf(title: String, pages: List<String>) { ui.post {
+        NoteTools.makePdf(this, pagesPane?.frame, pages) { bytes ->
+            Thread {
+                val folder = bytes?.let { NoteTools.saveToDocuments(this, NoteTools.safeName(title) + ".pdf", "application/pdf", it) }
+                noteResult("pdf", if (folder != null) "ok" else "error", org.json.JSONObject().put("folder", folder ?: "").toString())
+            }.start()
+        }
+    } }
+    /** The app you picked in STORY's share list opens with the note in it; the Pages step back (your note is kept as
+     *  it is, like any app you open from STORY). */
+    override fun noteShareTo(pkg: String, cls: String, title: String, text: String, files: List<java.io.File>) { ui.post {
+        if (NoteTools.shareTo(this, pkg, cls, title, text, files)) { pagesPane?.takeIf { it.shown }?.let { setShown(it, false) }; updateBubble() }
+        else showToast("Couldn't open that app - try another one")
+    } }
+    override fun notePrint(title: String, html: String) {
+        runCatching { java.io.File(cacheDir, "note_print.html").writeText(html) }
+        ui.post {
+            if (!stepAsideForSystem()) return@post
+            val i = Intent(this, NoteMediaActivity::class.java).putExtra(NoteMediaActivity.EXTRA_TITLE, title)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
+            runCatching { startActivity(i) }.onFailure { noteMediaDone("print", "error", "{}") }
+        }
+    }
+    fun noteMediaDone(kind: String, status: String, json: String) { ui.post {
+        comeBackFromSystem()
+        noteResult(kind, status, json)
     } }
     override fun removeProfilePhoto() { ui.post {
         runCatching { ProfilePhotoActivity.file(this).delete() }
