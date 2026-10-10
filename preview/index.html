@@ -1222,6 +1222,7 @@
   .realcard-isphoto{ padding:0; }
   .realcard-photo{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; border-radius:inherit; }
   .realcard-brand{ display:flex; align-items:center; gap:8px; }
+  .range-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:10px; }
   .card-opts{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:4px 0 6px; }
   .card-opt{ display:flex; flex-direction:column; align-items:center; text-align:center; gap:8px; padding:20px 12px; border:1px solid var(--line); border-radius:16px; background:var(--card); color:var(--text); }
   .card-opt-t{ font-size:15px; font-weight:700; }
@@ -4624,33 +4625,85 @@ function netWorthPct(nw, cur){
   return Math.round((nw - snaps[cur][first]) / Math.abs(snaps[cur][first]) * 1000) / 10;
 }
 // Fills the Money page's numbers from your real payments (same places the page always read them from).
+// ---- The period Money shows (owner): the calendar button under Summary - a day, a set of days, or Day / Week /
+// 3 months / 6 months / Year / 2 years / 3 years / From day 1. Everything below the big number follows it. ----
+const MONEY_RANGES = [['month', 'This month'], ['day', 'Day'], ['week', 'Week'], ['3m', '3 months'], ['6m', '6 months'], ['1y', 'Year'], ['2y', '2 years'], ['3y', '3 years'], ['all', 'From day 1']];
+state.moneyRange = (()=>{ try{ return JSON.parse(localStorage.getItem('story-money-range') || 'null') || { kind:'month' }; }catch(e){ return { kind:'month' }; } })();
+function setMoneyRange(r){ state.moneyRange = r; try{ localStorage.setItem('story-money-range', JSON.stringify(r)); }catch(e){} }
+const dayStart = t=>{ const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); };
+function moneyRangeSpan(){
+  const r = state.moneyRange || { kind:'month' }, now = Date.now(), today = dayStart(now), D = 864e5;
+  const back = m=>{ const d = new Date(today); d.setMonth(d.getMonth() - m); return d.getTime(); };
+  switch(r.kind){
+    case 'day': return { from: today, to: now, label: 'TODAY' };
+    case 'week': return { from: today - 6 * D, to: now, label: 'THIS WEEK' };
+    case '3m': return { from: back(3), to: now, label: 'LAST 3 MONTHS' };
+    case '6m': return { from: back(6), to: now, label: 'LAST 6 MONTHS' };
+    case '1y': return { from: back(12), to: now, label: 'LAST YEAR' };
+    case '2y': return { from: back(24), to: now, label: 'LAST 2 YEARS' };
+    case '3y': return { from: back(36), to: now, label: 'LAST 3 YEARS' };
+    case 'all': { const l = moneyView(); return { from: l.length ? dayStart(l[l.length - 1].ts) : today, to: now, label: 'FROM DAY 1' }; }
+    case 'date': { const f = dayStart(r.from), t = dayStart(r.to || r.from) + D - 1; const fmt = x=>new Date(x).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' }).toUpperCase(); return { from: f, to: t, label: dayStart(r.from) === dayStart(r.to || r.from) ? fmt(f) : fmt(f) + ' – ' + fmt(t) }; }
+    default: { const d = new Date(today); d.setDate(1); return { from: d.getTime(), to: now, label: 'THIS MONTH' }; }
+  }
+}
+function spanTotals(from, to, cur){
+  let inA = 0, outA = 0;
+  moneyView().forEach(t=>{ if(t.cur === cur && t.ts >= from && t.ts <= to){ if(t.amt > 0) inA += t.amt; else outA -= t.amt; } });
+  return { inA, outA };
+}
+function spanExpenses(from, to, cur){
+  const tot = {}; let all = 0;
+  moneyView().forEach(t=>{ if(t.amt < 0 && t.cur === cur && t.ts >= from && t.ts <= to){ const c = moneyCat(t); tot[c[0]] = tot[c[0]] || { label:c[0], color:c[1], amt:0 }; tot[c[0]].amt -= t.amt; all -= t.amt; } });
+  const list = Object.values(tot).sort((a, b)=>b.amt - a.amt);
+  if(!all) return [{ label:'No spending yet', pct:100, color:'#2a2a2a', empty:true }];
+  let left = 100;
+  return list.map((e, i)=>{ const pct = i === list.length - 1 ? left : Math.round(e.amt / all * 100); left -= pct; return { label:e.label, pct, color:e.color }; });
+}
+// The period split into equal parts for the charts, each with a short label fitting its length.
+function spanBuckets(from, to, n){
+  const len = Math.max(1, to - from), D = 864e5, out = [];
+  for(let i = 0; i < n; i++){
+    const a = from + len * i / n, b = from + len * (i + 1) / n - 1, d = new Date(a);
+    const label = len <= 1.01 * D ? String(d.getHours()).padStart(2, '0') + 'h'
+      : len <= 10 * D ? d.toLocaleDateString('en-US', { weekday:'short' })
+      : len <= 100 * D ? d.getDate() + ' ' + d.toLocaleDateString('en-US', { month:'short' })
+      : len <= 800 * D ? d.toLocaleDateString('en-US', { month:'short' })
+      : "'" + String(d.getFullYear()).slice(2);
+    out.push({ a, b, label });
+  }
+  return out;
+}
+// Fills the Money page's numbers from your real payments in the period you picked.
 function moneyCompute(){
-  const cur = moneyMainCur(), key = moneyMonth();
+  const cur = moneyMainCur(), sp = moneyRangeSpan();
   state.moneyCur = cur;
-  const m = monthTotals(key, cur);
+  const m = spanTotals(sp.from, sp.to, cur);
   state.moneyIn = m.inA; state.moneyOut = m.outA;
-  state.thisMonthLabel = key === monthKey(Date.now()) ? 'THIS MONTH' : (()=>{ const [y, mo] = key.split('-').map(Number); return new Date(y, mo - 1, 1).toLocaleString('en-US', { month:'long', year:'numeric' }).toUpperCase(); })();
-  state.analyticsMonths = [5, 4, 3, 2, 1, 0].map(b=>{ const k = monthBack(key, b), t = monthTotals(k, cur); return { label: monthShort(k), net: t.inA - t.outA }; });
-  state.expensesBreakdown = expensesFor(key, cur);
-  let run = 0; const cum = [6, 5, 4, 3, 2, 1, 0].map(b=>{ const t = monthTotals(monthBack(key, b), cur); run += t.inA - t.outA; return run; });
+  state.thisMonthLabel = sp.label;
+  state.analyticsMonths = spanBuckets(sp.from, sp.to, 6).map(k=>{ const t = spanTotals(k.a, k.b, cur); return { label: k.label, net: t.inA - t.outA }; });
+  state.expensesBreakdown = spanExpenses(sp.from, sp.to, cur);
+  let run = 0; const cum = spanBuckets(sp.from, sp.to, 7).map(k=>{ const t = spanTotals(k.a, k.b, cur); run += t.inA - t.outA; return run; });
   const lo = Math.min(...cum), hi = Math.max(...cum);
   state.savingsSeries = cum.map(v=>hi === lo ? 10 : Math.round(10 + (v - lo) / (hi - lo) * 70));
   state.savingsPeakValue = fmtCur(Math.max(0, hi), cur);
-  const spends = [5, 4, 3, 2, 1, 0].map(b=>monthTotals(monthBack(key, b), cur).outA).filter(v=>v > 0);
-  state.moneyAvgSpend = spends.length ? spends.reduce((s, v)=>s + v, 0) / spends.length : 0;
+  const months = Math.max(1, (sp.to - sp.from) / (30.44 * 864e5));
+  state.moneyAvgSpend = m.outA / months;
   state.moneySavingsRate = m.inA > 0 ? Math.round((m.inA - m.outA) / m.inA * 100) : null;
-  const p = monthTotals(monthBack(key, 1), cur);
+  const p = spanTotals(sp.from - (sp.to - sp.from) - 1, sp.from - 1, cur);   // the same length of time just before
   state.summaryIncomes = m.inA; state.summaryOutcomes = m.outA;
   state.summaryIncomesPct = p.inA > 0 ? Math.round((m.inA - p.inA) / p.inA * 100) : null;
   state.summaryOutcomesPct = p.outA > 0 ? Math.round((m.outA - p.outA) / p.outA * 100) : null;
-  state.expenseSpent = m.outA;
+  state.expenseSpent = spanTotals(dayStart(new Date().setDate(1)), Date.now(), cur).outA;   // the monthly limit is always this month
+  state.moneySpan = sp;
   let lim = null; try{ lim = JSON.parse(localStorage.getItem('story-spend-limit') || '{}')[cur]; }catch(e){}
   state.expenseLimit = lim > 0 ? +lim : null;
 }
 function paymentCardsHTML(){
   if(!moneyAccessOk()) return `<div class="notif-card" data-action="money-access"><div class="notif-icon-wrap">🔔</div><div class="notif-mid"><div class="notif-source">STORY</div><div class="notif-label">Allow STORY to see your payments</div></div><div class="notif-right"><div class="notif-amt">Turn on</div><div class="notif-time">&nbsp;</div></div></div>`;
-  const list = moneyView().slice(0, 30);
-  if(!list.length) return `<div class="notif-card notif-empty"><div class="notif-icon-wrap">💳</div><div class="notif-mid"><div class="notif-source">No payments yet</div><div class="notif-label">They show as your bank apps send them</div></div><div class="notif-right"><div class="notif-amt">&nbsp;</div><div class="notif-time">&nbsp;</div></div></div>`;
+  const sp = state.moneySpan || moneyRangeSpan();
+  const list = moneyView().filter(t=>t.ts >= sp.from && t.ts <= sp.to).slice(0, 300);
+  if(!list.length) return `<div class="notif-card notif-empty"><div class="notif-icon-wrap">💳</div><div class="notif-mid"><div class="notif-source">${moneyView().length ? 'No payments in this time' : 'No payments yet'}</div><div class="notif-label">They show as your bank apps send them</div></div><div class="notif-right"><div class="notif-amt">&nbsp;</div><div class="notif-time">&nbsp;</div></div></div>`;
   return list.map(t=>`
         <div class="notif-card" data-notif="${escText(t.id)}">
           <div class="notif-icon-wrap">${moneyIcon(t)}</div>
@@ -4684,7 +4737,7 @@ function moneyScreen(){
     <div class="page-shell">
     ${topBar('Money', true, '<button class="order-corner-btn" data-nav="money-summary" title="Summary"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9"></path><path d="M21 12 12 12 12 3"></path></svg></button>')}
     ${pageArrows()}
-    <div class="big-num">${fmtCur(nw, cur)}</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;"><div class="big-num">${fmtCur(nw, cur)}</div><button class="order-corner-btn" data-action="cal-open" title="Pick the days to show"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg></button></div>
     <div style="color:${pctNeg?'var(--red)':'var(--green)'};font-size:12px;font-weight:600;${pctNow == null ? 'visibility:hidden;' : ''}">${pctNeg?'-':'+'}${Math.abs(pctNow || 0)}% this month</div>
     ${(c=>`<div class="row-sub" style="margin-top:2px;${c ? '' : 'visibility:hidden;'}">${c ? escText(c.bank || 'Card') + ' ••' + escText(c.last4 || '') : 'All'}</div>`)(activeCard())}
 
@@ -4705,7 +4758,7 @@ function moneyScreen(){
     </div>
     <div class="section-title-row">
       <div class="section-title" style="margin:0;">${state.thisMonthLabel}</div>
-      <button class="order-corner-btn" data-action="cal-open" title="Jump to date"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg></button>
+      <button class="order-corner-btn" style="visibility:hidden;" tabindex="-1" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg></button>
     </div>
     <div class="grid2" style="grid-template-columns:1fr 1fr 1fr;">
       <div class="row-card" style="text-align:center;padding:12px 0;"><div class="row-sub">IN</div><div class="row-amt" style="color:var(--green);">${fmtCur(state.moneyIn, cur, false, 0)}</div></div>
@@ -4850,15 +4903,21 @@ function moneySummaryScreen(){
 }
 
 function calPopupTemplate(){
+  const r = state.moneyRange || { kind:'month' };
+  const iso = t=>{ const d = new Date(t); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
   return `
     <div class="modal-overlay" data-action="cal-bg">
       <div class="confirm-sheet" onclick="event.stopPropagation()">
-        <div class="confirm-title">Jump to Date</div>
-        <div class="confirm-sub">View your money summary for any month.</div>
-        <input type="date" id="cal-date-input" class="field-input" value="${state.selectedDate}" style="margin-bottom:14px;">
-        <div class="confirm-btn-row">
+        <div class="confirm-title">Show activity for</div>
+        <div class="range-grid">${MONEY_RANGES.map(([k, l])=>`<button class="acct-seg-btn${r.kind === k ? ' on' : ''}" data-moneyrange="${k}">${l}</button>`).join('')}</div>
+        <div class="section-title" style="margin-top:14px;">A DAY, OR FROM - TO</div>
+        <div class="grid2" style="grid-template-columns:1fr 1fr;gap:8px;">
+          <input type="date" id="cal-from" class="field-input" value="${r.kind === 'date' ? iso(r.from) : ''}" max="${iso(Date.now())}">
+          <input type="date" id="cal-to" class="field-input" value="${r.kind === 'date' && r.to && dayStart(r.to) !== dayStart(r.from) ? iso(r.to) : ''}" max="${iso(Date.now())}">
+        </div>
+        <div class="confirm-btn-row" style="margin-top:14px;">
           <button class="btn-wide" style="margin-top:0;" data-action="cal-cancel">Cancel</button>
-          <button class="btn-wide btn-primary" style="margin-top:0;" data-action="cal-go">Go</button>
+          <button class="btn-wide btn-primary" style="margin-top:0;" data-action="cal-go">Show</button>
         </div>
       </div>
     </div>
@@ -11283,6 +11342,7 @@ function attachHandlers(){
     });
   });
 
+  document.querySelectorAll('[data-moneyrange]').forEach(el=>el.addEventListener('click', ()=>{ setMoneyRange({ kind: el.getAttribute('data-moneyrange') }); state.calOpen = false; renderDevice(); }));
   // Your card: tap turns it over (when STORY has its back), hold it -> Remove.
   document.querySelectorAll('[data-wcard]').forEach(el=>{
     const id = el.getAttribute('data-wcard'); let hold = null, held = false;
@@ -12773,11 +12833,11 @@ function attachHandlers(){
         case 'cal-cancel':
         case 'cal-bg': state.calOpen = false; break;
         case 'cal-go': {
-          const val = document.getElementById('cal-date-input')?.value;
-          if(val){
-            const d = new Date(val+'T00:00:00');
-            state.selectedDate = val;
-            state.moneyMonth = monthKey(d.getTime());
+          const a = document.getElementById('cal-from')?.value, b = document.getElementById('cal-to')?.value;
+          if(a){
+            let f = new Date(a + 'T00:00:00').getTime(), t = b ? new Date(b + 'T00:00:00').getTime() : f;
+            if(t < f){ const x = f; f = t; t = x; }
+            setMoneyRange({ kind:'date', from:f, to:t });
           }
           state.calOpen = false;
           break;
