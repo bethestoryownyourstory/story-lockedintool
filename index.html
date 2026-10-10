@@ -4945,7 +4945,6 @@ function calPopupTemplate(){
         <div class="cal">
           <div class="cal-head"><button class="cal-nav" data-calnav="-1"${canPrev ? '' : ' disabled'}>‹</button><span>${start.toLocaleDateString('en-US', { month:'long', year:'numeric' })}</span><button class="cal-nav" data-calnav="1"${canNext ? '' : ' disabled'}>›</button></div>
           <div class="cal-grid">${['M','T','W','T','F','S','S'].map(x=>`<span class="cal-dow">${x}</span>`).join('')}${cells.join('')}</div>
-          <div class="note" style="text-align:center;margin-top:6px;">Tap a day, or two days for everything between them</div>
         </div>
         <div class="confirm-btn-row" style="margin-top:12px;">
           <button class="btn-wide" style="margin-top:0;" data-action="cal-cancel">Cancel</button>
