@@ -922,6 +922,47 @@
     border:1px solid rgba(0,0,0,0.4); box-shadow:0 1px 3px rgba(0,0,0,0.4); transform:translate(-50%,-50%); pointer-events:none;
   }
 
+  /* Notes' own picture grid / audio list / camera (inside STORY, over the note). */
+  .note-panel{ position:fixed; inset:0; z-index:9000; background:#000; color:#e8e6e1; display:flex; flex-direction:column; }
+  .note-panel-head{ flex-shrink:0; display:flex; align-items:center; justify-content:space-between; padding:14px 16px 10px; }
+  .note-panel-title{ font-size:17px; font-weight:800; }
+  .note-panel-x{ width:36px; height:36px; border-radius:10px; border:1px solid #262626; background:#0d0d0d; color:#e8e6e1; display:flex; align-items:center; justify-content:center; padding:0; }
+  .note-panel-body{ flex:1; min-height:0; overflow-y:auto; padding:0 12px 70px; scrollbar-width:none; }
+  .note-panel-body::-webkit-scrollbar{ display:none; }
+  .note-panel-ask{ display:flex; flex-direction:column; align-items:center; gap:16px; text-align:center; padding:60px 24px; font-size:14px; color:#9a9a9a; }
+  .note-panel-btn{ border:none; border-radius:20px; background:#e8e6e1; color:#000; font-weight:800; font-size:13px; padding:10px 26px; }
+  .note-panel-empty{ text-align:center; color:#9a9a9a; font-size:14px; padding:40px 0; }
+  .note-photo-grid{ display:grid; grid-template-columns:repeat(3, 1fr); gap:3px; }
+  .note-photo, .note-photo-more{ aspect-ratio:1/1; border:none; padding:0; margin:0; background:#161616; overflow:hidden; border-radius:4px; }
+  .note-photo img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .note-photo:active{ opacity:0.6; }
+  .note-photo-more{ color:#e8e6e1; font-size:26px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; }
+  .note-photo-more span{ font-size:11px; font-weight:600; color:#9a9a9a; }
+  .note-audio-list{ display:flex; flex-direction:column; }
+  .note-audio-row{ display:flex; align-items:center; gap:12px; padding:10px 4px; border:none; border-bottom:1px solid #161616; background:transparent; color:inherit; text-align:left; }
+  .note-audio-row:active{ opacity:0.6; }
+  .note-audio-ic{ width:38px; height:38px; border-radius:10px; background:#161616; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .note-audio-txt{ display:flex; flex-direction:column; min-width:0; gap:2px; }
+  .note-audio-t{ font-size:14px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .note-audio-s{ font-size:12px; color:#9a9a9a; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .note-panel-cam .note-panel-body{ padding:0; display:flex; flex-direction:column; overflow:hidden; }
+  .note-cam-view{ flex:1; min-height:0; position:relative; background:#000; display:flex; align-items:center; justify-content:center; }
+  .note-cam-view video, .note-cam-shot{ width:100%; height:100%; object-fit:contain; display:block; }
+  .note-cam-view video.mirror{ transform:scaleX(-1); }
+  .note-cam-msg{ position:absolute; left:24px; right:24px; text-align:center; color:#9a9a9a; font-size:13px; }
+  .note-cam-bar{ flex-shrink:0; height:130px; padding-bottom:40px; display:flex; align-items:center; justify-content:center; gap:28px; position:relative; }
+  .note-cam-shutter{ width:68px; height:68px; border-radius:50%; border:4px solid #e8e6e1; background:#e8e6e1; box-shadow:inset 0 0 0 3px #000; padding:0; }
+  .note-cam-shutter:active{ transform:scale(0.94); }
+  .note-cam-flip{ position:absolute; right:28px; top:31px; width:44px; height:44px; border-radius:50%; border:1px solid #262626; background:#0d0d0d; color:#e8e6e1; display:flex; align-items:center; justify-content:center; padding:0; }
+  .note-cam-side{ border:1px solid #262626; background:#0d0d0d; color:#e8e6e1; border-radius:22px; padding:12px 22px; font-size:14px; font-weight:800; }
+  .note-cam-use{ background:#e8e6e1; color:#000; border-color:#e8e6e1; }
+  .share-apps-title{ font-size:11px; font-weight:800; color:var(--muted); letter-spacing:0.4px; margin:12px 2px 8px; }
+  .share-apps{ display:grid; grid-template-columns:repeat(4, 1fr); gap:10px 6px; max-height:230px; overflow-y:auto; scrollbar-width:none; }
+  .share-apps::-webkit-scrollbar{ display:none; }
+  .share-app{ display:flex; flex-direction:column; align-items:center; gap:5px; border:none; background:transparent; color:var(--text); padding:2px 0; min-width:0; }
+  .share-app img{ width:42px; height:42px; border-radius:11px; }
+  .share-app span{ font-size:10px; font-weight:600; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .share-app:active{ opacity:0.6; }
   .note-img{ display:block; max-width:100%; height:auto; border-radius:8px; margin:6px 0; }
   .note-audio{ display:flex; flex-direction:column; gap:4px; margin:6px 0; padding:8px 10px; border-radius:10px; background:rgba(0,0,0,0.06); max-width:100%; }
   .note-audio-name{ font-size:12px; font-weight:700; color:#000; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -7030,30 +7071,6 @@ function noteAudioNode(src, name){
   wrap.appendChild(n); wrap.appendChild(a);
   return wrap;
 }
-// The phone tells the note what came back from its picker / camera / print / save screen.
-window.storyNoteMedia = function(kind, status, data){
-  data = data || {};
-  if(status === 'denied'){ showToast('Allow STORY to use the camera to take a photo'); return; }
-  if(status === 'error'){ showToast(kind === 'savetext' ? "Couldn't save the note - try again" : kind === 'print' ? "Couldn't open printing - try again" : "Couldn't add that - try another one"); return; }
-  if(status !== 'ok') return;
-  if(kind === 'savetext'){ showToast('Note saved'); return; }
-  if(kind === 'print' || !data.file || state.current !== 'notes-canvas') return;
-  const src = NOTE_FILE_BASE + encodeURIComponent(data.file);
-  noteInsertBlock(kind === 'audio' ? noteAudioNode(src, data.name) : noteImageNode(src));
-};
-// In a browser (no phone underneath): the browser's own file picker.
-function noteMediaWebFallback(kind){
-  const inp = document.createElement('input');
-  inp.type = 'file'; inp.accept = kind === 'audio' ? 'audio/*' : 'image/*';
-  if(kind === 'camera') inp.setAttribute('capture', 'environment');
-  inp.onchange = ()=>{
-    const f = inp.files && inp.files[0]; if(!f) return;
-    const rd = new FileReader();
-    rd.onload = ()=>noteInsertBlock(kind === 'audio' ? noteAudioNode(rd.result, f.name.replace(/\.[^.]+$/, '')) : noteImageNode(rd.result));
-    rd.readAsDataURL(f);
-  };
-  inp.click();
-}
 // The note as plain text: tasks as [ ] / [x], pictures and audio named, one blank line between pages.
 function noteAsText(title, pagesIn){
   const toText = html=>{
@@ -7140,6 +7157,177 @@ function saveDrawingImages(pages, bg, title){
       showToast(list.length > 1 ? list.length + ' pages saved' : 'Saved');
     }
   });
+}
+// ---- Notes, all inside STORY (owner: real actions, never leaving STORY) ----
+// STORY's own picture grid, audio list and camera open over the note (never the phone's screens); PDF / text files are
+// made and saved by STORY; sharing is STORY's own list of your apps. Android only shows its one-time permission question.
+const NOTE_PANEL_ICON_X = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+function notePanelClose(){ const p = document.getElementById('note-panel'); if(p){ if(p._stop) p._stop(); p.remove(); } }
+function notePanelOpen(title, cls){
+  notePanelClose();
+  const p = document.createElement('div');
+  p.id = 'note-panel'; p.className = 'note-panel ' + (cls || '');
+  p.innerHTML = `<div class="note-panel-head"><span class="note-panel-title">${escapeHtml(title)}</span><button class="note-panel-x" aria-label="Close">${NOTE_PANEL_ICON_X}</button></div><div class="note-panel-body"></div>`;
+  p.querySelector('.note-panel-x').addEventListener('click', notePanelClose);
+  (document.getElementById('device-wrap') || document.body).appendChild(p);
+  return p.querySelector('.note-panel-body');
+}
+function noteAccessAsk(body, text, kind, then){
+  body.innerHTML = `<div class="note-panel-ask"><div>${escapeHtml(text)}</div><button class="note-panel-btn">Allow</button></div>`;
+  body.querySelector('button').addEventListener('click', ()=>{ noteAccessWaiting = { kind, then }; window.StoryNative.noteAsk(kind); });
+}
+let noteAccessWaiting = null;
+window.storyNoteAccessDone = function(kind){
+  const w = noteAccessWaiting; noteAccessWaiting = null;
+  if(w && w.kind === kind && document.getElementById('note-panel')) w.then();
+};
+// Picture: the phone's real pictures in STORY's own grid (thumbnails straight from the phone); tap one -> in the note.
+function openNotePictures(){
+  const body = notePanelOpen('Pictures', 'note-panel-photos');
+  if(!NATIVE){ noteMediaWebFallback('picture'); notePanelClose(); return; }
+  const access = window.StoryNative.photoAccess();
+  if(access === 'none'){ noteAccessAsk(body, 'Let STORY show your pictures here.', 'photos', openNotePictures); return; }
+  let ids = []; try{ ids = JSON.parse(window.StoryNative.listPhotos() || '[]'); }catch(e){}
+  body.innerHTML = '<div class="note-photo-grid"></div>' + (ids.length ? '' : '<div class="note-panel-empty">No pictures on this phone yet.</div>');
+  const grid = body.querySelector('.note-photo-grid');
+  if(access === 'partial'){
+    const more = document.createElement('button'); more.className = 'note-photo-more'; more.innerHTML = '+<span>More pictures</span>';
+    more.addEventListener('click', ()=>{ noteAccessWaiting = { kind:'photos', then: openNotePictures }; window.StoryNative.noteAsk('photos'); });
+    grid.appendChild(more);
+  }
+  let shown = 0;
+  const addMore = ()=>{
+    const frag = document.createDocumentFragment();
+    ids.slice(shown, shown + 60).forEach(id=>{
+      const b = document.createElement('button'); b.className = 'note-photo';
+      b.innerHTML = `<img loading="lazy" alt="" src="${ProfileThumbBase}thumb/${id}">`;
+      b.addEventListener('click', ()=>{ notePanelClose(); window.StoryNative.noteUsePhoto(String(id)); });
+      frag.appendChild(b);
+    });
+    shown = Math.min(ids.length, shown + 60);
+    grid.appendChild(frag);
+  };
+  addMore();
+  body.addEventListener('scroll', ()=>{ if(shown < ids.length && body.scrollTop + body.clientHeight > body.scrollHeight - 600) addMore(); });
+}
+const ProfileThumbBase = 'https://appassets.androidplatform.net/story-photo/';
+// Audio File: the audio on the phone in STORY's own list; tap one -> in the note with its player.
+function openNoteAudio(){
+  const body = notePanelOpen('Audio', 'note-panel-audio');
+  if(!NATIVE){ noteMediaWebFallback('audio'); notePanelClose(); return; }
+  if(!window.StoryNative.noteAudioAccess()){ noteAccessAsk(body, 'Let STORY show the audio on your phone here.', 'audio', openNoteAudio); return; }
+  let list = []; try{ list = JSON.parse(window.StoryNative.noteListAudio() || '[]'); }catch(e){}
+  if(!list.length){ body.innerHTML = '<div class="note-panel-empty">No audio on this phone yet.</div>'; return; }
+  const fmt = ms=>{ const s = Math.round((ms || 0) / 1000); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+  body.innerHTML = '<div class="note-audio-list"></div>';
+  const ul = body.querySelector('.note-audio-list');
+  let shown = 0;
+  const addMore = ()=>{
+    list.slice(shown, shown + 80).forEach(a=>{
+      const r = document.createElement('button'); r.className = 'note-audio-row';
+      r.innerHTML = `<span class="note-audio-ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span><span class="note-audio-txt"><span class="note-audio-t">${escapeHtml(a.title)}</span><span class="note-audio-s">${escapeHtml([a.artist, fmt(a.dur)].filter(Boolean).join(' · '))}</span></span>`;
+      r.addEventListener('click', ()=>{ notePanelClose(); window.StoryNative.noteUseAudio(String(a.id)); });
+      ul.appendChild(r);
+    });
+    shown = Math.min(list.length, shown + 80);
+  };
+  addMore();
+  body.addEventListener('scroll', ()=>{ if(shown < list.length && body.scrollTop + body.clientHeight > body.scrollHeight - 600) addMore(); });
+}
+// Camera: STORY's own camera, live inside STORY. Shutter -> look at it -> Use photo (in the note) or Retake.
+function openNoteCamera(){
+  const body = notePanelOpen('Camera', 'note-panel-cam');
+  const panel = document.getElementById('note-panel');
+  panel.setAttribute('data-keep-color', '');
+  if(NATIVE && !window.StoryNative.noteCameraAccess()){ noteAccessAsk(body, 'Let STORY use the camera to take photos for your notes.', 'camera', openNoteCamera); return; }
+  body.innerHTML = `<div class="note-cam-view"><video autoplay playsinline muted></video><img class="note-cam-shot" alt="" hidden><div class="note-cam-msg" hidden></div></div>
+    <div class="note-cam-bar">
+      <button class="note-cam-side note-cam-retake" hidden>Retake</button>
+      <button class="note-cam-shutter" aria-label="Take photo"></button>
+      <button class="note-cam-side note-cam-use" hidden>Use photo</button>
+      <button class="note-cam-flip" aria-label="Switch camera"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7h-3l-2-3H9L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2Z"/><path d="M9 13a3 3 0 0 1 5.2-2"/><path d="M15 13a3 3 0 0 1-5.2 2"/><path d="M14 9v2h2"/><path d="M10 17v-2H8"/></svg></button>
+    </div>`;
+  const video = body.querySelector('video'), shot = body.querySelector('.note-cam-shot'), msg = body.querySelector('.note-cam-msg');
+  const shutter = body.querySelector('.note-cam-shutter'), flip = body.querySelector('.note-cam-flip');
+  const retake = body.querySelector('.note-cam-retake'), use = body.querySelector('.note-cam-use');
+  let stream = null, facing = 'environment', dataUrl = null;
+  const stop = ()=>{ if(stream){ stream.getTracks().forEach(t=>t.stop()); stream = null; } };
+  panel._stop = stop;
+  const start = ()=>{
+    stop(); msg.hidden = true;
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ msg.hidden = false; msg.textContent = 'The camera isn’t available here'; return; }
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: facing }, width: { ideal: 1920 }, height: { ideal: 1440 } }, audio: false })
+      .then(s=>{ if(!document.getElementById('note-panel')){ s.getTracks().forEach(t=>t.stop()); return; } stream = s; video.srcObject = s; video.classList.toggle('mirror', facing === 'user'); })
+      .catch(e=>{ msg.hidden = false; msg.textContent = 'Camera problem: ' + (e && (e.message || e.name) || 'it didn’t open'); });
+  };
+  const review = on=>{ shot.hidden = !on; video.hidden = on; retake.hidden = !on; use.hidden = !on; shutter.hidden = on; flip.hidden = on; };
+  shutter.addEventListener('click', ()=>{
+    if(!video.videoWidth) return;
+    const c = document.createElement('canvas'); c.width = video.videoWidth; c.height = video.videoHeight;
+    const x = c.getContext('2d');
+    if(facing === 'user'){ x.translate(c.width, 0); x.scale(-1, 1); }
+    x.drawImage(video, 0, 0);
+    dataUrl = c.toDataURL('image/jpeg', 0.9);
+    shot.src = dataUrl; review(true);
+  });
+  retake.addEventListener('click', ()=>{ dataUrl = null; review(false); });
+  flip.addEventListener('click', ()=>{ facing = facing === 'environment' ? 'user' : 'environment'; start(); });
+  use.addEventListener('click', ()=>{
+    if(!dataUrl) return;
+    const src = NATIVE ? (n=>n ? NOTE_FILE_BASE + encodeURIComponent(n) : null)(window.StoryNative.noteSavePhoto(dataUrl)) : dataUrl;
+    notePanelClose();
+    if(src) noteInsertBlock(noteImageNode(src)); else showToast("Couldn't save the photo - try again");
+  });
+  start();
+}
+// PDF: made by STORY and saved straight into the phone's Documents/STORY - one note page per sheet.
+function noteSavePdf(){
+  noteFlushOpen();
+  const title = state.currentNoteTitle.trim() || 'Untitled';
+  if(!NATIVE){ const w = window.open('', '_blank'); if(w){ w.document.write(notePrintHTML(title)); w.document.close(); } return; }
+  showToast('Making the PDF…');
+  window.StoryNative.noteSavePdf(title, JSON.stringify(notePdfPages(title)));
+}
+// Each note page as its own A4 page (794 px wide), the title on the first.
+function notePdfPages(title){
+  const doc = notePrintHTML(title);
+  const d = document.createElement('div'); d.innerHTML = doc.slice(doc.indexOf('<body>') + 6, doc.lastIndexOf('</body>'));
+  const style = doc.slice(doc.indexOf('<style>'), doc.indexOf('</style>') + 8).replace('@page{ size:A4; margin:16mm; }', '');
+  const head = d.querySelector('h1') ? d.querySelector('h1').outerHTML : '';
+  return [...d.querySelectorAll('section.page')].map((sec, i)=>`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=794">${style}<style>body{ width:794px; padding:60px; } .page{ page-break-after:auto; }</style></head><body>${i === 0 ? head : ''}${sec.outerHTML}</body></html>`);
+}
+// The phone tells the note what came back (a picture / audio copied in, the PDF saved, printing...).
+window.storyNoteMedia = function(kind, status, data){
+  data = data || {};
+  if(status === 'error'){ showToast(kind === 'pdf' ? "Couldn't make the PDF - try again" : kind === 'print' ? "Couldn't open printing - try again" : "Couldn't add that - try another one"); return; }
+  if(status !== 'ok') return;
+  if(kind === 'pdf'){ showToast('PDF saved to ' + (data.folder || 'Documents/STORY')); return; }
+  if(kind === 'print' || !data.file || state.current !== 'notes-canvas') return;
+  const src = NOTE_FILE_BASE + encodeURIComponent(data.file);
+  noteInsertBlock(kind === 'audio' ? noteAudioNode(src, data.name) : noteImageNode(src));
+};
+// In a browser (no phone underneath, for building STORY): the browser's own file picker.
+function noteMediaWebFallback(kind){
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = kind === 'audio' ? 'audio/*' : 'image/*';
+  inp.onchange = ()=>{
+    const f = inp.files && inp.files[0]; if(!f) return;
+    const rd = new FileReader();
+    rd.onload = ()=>noteInsertBlock(kind === 'audio' ? noteAudioNode(rd.result, f.name.replace(/\.[^.]+$/, '')) : noteImageNode(rd.result));
+    rd.readAsDataURL(f);
+  };
+  inp.click();
+}
+// STORY's own share list: the apps on your phone that take what you're sharing, with their real icons.
+let shareTargetsCache = {};
+function shareTargetsFor(type){
+  if(!NATIVE || !window.StoryNative.noteShareTargets) return [];
+  if(!shareTargetsCache[type]){ try{ shareTargetsCache[type] = JSON.parse(window.StoryNative.noteShareTargets(type) || '[]'); }catch(e){ shareTargetsCache[type] = []; } }
+  return shareTargetsCache[type];
+}
+function shareSheetType(s){
+  const n = (s.images || (s.imageDataUrl ? [s.imageDataUrl] : [])).filter(Boolean).length;
+  return n > 1 ? 'images' : n === 1 ? 'image' : 'text';
 }
 function resolveLineColor(pageBg, chosen){
   if(!chosen || chosen === 'auto') return contrastLineColor(pageBg);
@@ -10647,13 +10835,13 @@ function attachHandlers(){
           state.plusMenuOpen = false;
           break;
         }
-        // Print and PDF: the phone's own print screen (it prints, or saves the note as a PDF - "Save as PDF").
-        case 'note-print':
-        case 'note-export-pdf': {
+        // PDF: STORY makes it and saves it in Documents/STORY. Print (paper): the phone's own print screen.
+        case 'note-export-pdf': state.plusMenuOpen = false; state.noteSaveAsOpen = false; noteSavePdf(); break;
+        case 'note-print': {
           state.plusMenuOpen = false; state.noteSaveAsOpen = false;
           noteFlushOpen();
           const title = state.currentNoteTitle.trim() || 'Untitled';
-          if(NATIVE && window.StoryNative.noteMedia) window.StoryNative.noteMedia('print', title, notePrintHTML(title));
+          if(NATIVE && window.StoryNative.notePrint) window.StoryNative.notePrint(title, notePrintHTML(title));
           else { const w = window.open('', '_blank'); if(w){ w.document.write(notePrintHTML(title)); w.document.close(); w.onload = ()=>w.print(); } }
           break;
         }
@@ -10663,17 +10851,17 @@ function attachHandlers(){
           noteFlushOpen();
           const title = state.currentNoteTitle.trim() || 'Untitled';
           const text = noteAsText(title);
-          if(NATIVE && window.StoryNative.noteMedia) window.StoryNative.noteMedia('savetext', title, text);
+          if(NATIVE && window.StoryNative.noteSaveText){ const folder = window.StoryNative.noteSaveText(title, text); showToast(folder ? 'Saved to ' + folder : "Couldn't save the note - try again"); }
           else { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], {type:'text/plain'})); a.download = title.replace(/[\\/:*?"<>|]/g, ' ') + '.txt'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href), 4000); }
           break;
         }
-        // Picture / Camera / Audio File: the phone's own picker or camera; what you choose goes in the note where your cursor was.
+        // Picture / Camera / Audio File: STORY's own grid, camera and list, over the note (never the phone's screens);
+        // what you choose goes in the note where your cursor was.
         case 'note-media': {
           const kind = el.getAttribute('data-kind');
           state.plusMenuOpen = false;
           noteFlushOpen();
-          if(NATIVE && window.StoryNative.noteMedia) window.StoryNative.noteMedia(kind, '', '');
-          else noteMediaWebFallback(kind);
+          setTimeout(()=>{ if(kind === 'camera') openNoteCamera(); else if(kind === 'audio') openNoteAudio(); else openNotePictures(); }, 0);
           break;
         }
         case 'note-unavailable': break;
@@ -11124,6 +11312,21 @@ function attachHandlers(){
           state.shareSheet = null;
           break;
         }
+        // An app tapped in STORY's own share list: it opens with the whole note (text + drawings as pictures).
+        case 'share-sheet-app': {
+          const s = state.shareSheet;
+          const a = s && shareTargetsFor(shareSheetType(s))[parseInt(el.getAttribute('data-i'), 10)];
+          if(s && a){
+            const cap = (document.getElementById('share-caption-input') || {}).value || '';
+            const text = [cap.trim(), s.fullText != null ? s.fullText : (s.textContent || '')].filter(Boolean).join('\n\n');
+            drawingPagesToPNG(s.images || (s.imageDataUrl ? [s.imageDataUrl] : []), s.bg).then(list=>{
+              if(!text.trim() && !list.length){ showToast('Nothing to share yet'); return; }
+              window.StoryNative.noteShareTo(a.pkg, a.cls, s.title || 'STORY', text, JSON.stringify(list));
+            });
+          }
+          state.shareSheet = null;
+          break;
+        }
         case 'share-sheet-via': {
           // Share to ANY app (owner): the phone's own share screen with the whole note's text and its drawings as
           // pictures (a drawing: all its pages). The caption, if written, goes with it.
@@ -11134,7 +11337,6 @@ function attachHandlers(){
             const imgs = s.images || (s.imageDataUrl ? [s.imageDataUrl] : []);
             drawingPagesToPNG(imgs, s.bg).then(list=>{
               if(!text.trim() && !list.length){ showToast('Nothing to share yet'); return; }
-              if(NATIVE && window.StoryNative.share){ window.StoryNative.share(s.title || 'STORY', text, JSON.stringify(list)); return; }
               const files = list.map((u, i)=>{ const bin = atob(u.split(',')[1]); const arr = new Uint8Array(bin.length); for(let k = 0; k < bin.length; k++) arr[k] = bin.charCodeAt(k); return new File([arr], (s.title || 'Drawing') + (list.length > 1 ? ' ' + (i + 1) : '') + '.png', {type:'image/png'}); });
               const data = { title: s.title || 'STORY', text };
               if(files.length && navigator.canShare && navigator.canShare({ files })) data.files = files;
@@ -11880,8 +12082,10 @@ function shareSheetTemplate(){
         ${s.allowCommunity !== false ? `<input id="share-caption-input" class="share-caption-input" placeholder="Add a caption (optional)" maxlength="140">` : ''}
         <div class="plus-menu-list" style="margin-top:8px;">
           ${s.allowCommunity !== false ? `<div class="plus-menu-list-item" data-action="share-sheet-to-community">Share to Stories</div>` : ''}
-          <div class="plus-menu-list-item" data-action="share-sheet-via">Share via…</div>
         </div>
+        ${(()=>{ const apps = shareTargetsFor(shareSheetType(s)); return apps.length ? `
+        <div class="share-apps-title">Share to</div>
+        <div class="share-apps">${apps.map((a, i)=>`<button class="share-app" data-action="share-sheet-app" data-i="${i}"><img alt="" src="data:image/png;base64,${a.icon}"><span>${escText(a.label === a.app || !a.app ? a.label : a.app)}</span></button>`).join('')}</div>` : `<div class="plus-menu-list"><div class="plus-menu-list-item" data-action="share-sheet-via">Share via…</div></div>`; })()}
       </div>
     </div>
   `;
