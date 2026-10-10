@@ -207,6 +207,13 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         return if (nfc.isEnabled) "none" else "nfcoff"
     }
 
+    /** Wallet: reads a card photo on the phone (CardScan); answers window.storyCardScan(id, json). */
+    @JavascriptInterface
+    fun cardScan(id: String, dataUrl: String) {
+        if (!pages) return
+        CardScan.scan(dataUrl) { json -> host.evalPages("window.storyCardScan&&window.storyCardScan(" + JSONObject.quote(id) + "," + JSONObject.quote(json) + ")") }
+    }
+
     /** Drawings: saves each picture (PNG data URLs, JSON list) straight into the phone's photos (Pictures/STORY).
      *  Returns how many were saved. */
     @JavascriptInterface
