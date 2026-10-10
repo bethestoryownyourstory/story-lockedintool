@@ -1210,7 +1210,7 @@
   .realcard-brand{ font-size:13px; font-weight:700; letter-spacing:0.3px; }
   .realcard-chip{ width:30px; height:22px; border-radius:5px; background:linear-gradient(135deg,#e8d99a,#c9a94f); }
   .realcard-chip-amex{ background:linear-gradient(135deg,#cfd6d6,#9aa5a5); }
-  .realcard-num{ font-family:var(--font-mono); font-size:15px; letter-spacing:1.5px; font-weight:600; }
+  .realcard-num{ font-family:var(--font-mono); font-size:15px; letter-spacing:1.5px; font-weight:600; white-space:nowrap; display:flex; justify-content:space-between; }
   .realcard-bottom{ display:flex; align-items:flex-end; justify-content:space-between; }
   .realcard-label{ font-size:7.5px; color:rgba(255,255,255,0.6); letter-spacing:0.5px; }
   .realcard-name{ font-size:11px; font-weight:700; margin-top:2px; }
@@ -6083,8 +6083,15 @@ const CARD_NETS = ['Visa', 'Mastercard', 'Amex', 'Other'];
 function walletCards(){ try{ return (JSON.parse(localStorage.getItem(CARDS_KEY) || '[]') || []).filter(c=>c && c.checked); }catch(e){ return []; } }
 function saveWalletCards(l){ try{ localStorage.setItem(CARDS_KEY, JSON.stringify(l)); }catch(e){} }
 // The card that's showing in Wallet (null on the + slide or with no cards) - Money shows this card's money.
-function activeCard(){ const l = walletCards(); return state.walletCardIndex > 0 ? (l[state.walletCardIndex - 1] || null) : null; }
-function setWalletCardIndex(i){ state.walletCardIndex = i; const c = activeCard(); try{ localStorage.setItem('story-card-active', c ? c.id : ''); }catch(e){} }
+// There is always ONE card showing (owner): the + slide doesn't change it - Money keeps the last card you were on
+// (or your first card). Only with no cards at all does Money show everything.
+function activeCard(){
+  const l = walletCards(); if(!l.length) return null;
+  if(state.walletCardIndex > 0 && l[state.walletCardIndex - 1]) return l[state.walletCardIndex - 1];
+  let id = ''; try{ id = localStorage.getItem('story-card-active') || ''; }catch(e){}
+  return l.find(c=>c.id === id) || l[0];
+}
+function setWalletCardIndex(i){ state.walletCardIndex = i; const c = walletCards()[i - 1]; if(c) try{ localStorage.setItem('story-card-active', c.id); }catch(e){} }
 function cardFaceHTML(c){
   if(c.photo) return `<img class="realcard-photo" src="${escText(state.cardFlip === c.id && c.photoBack ? c.photoBack : c.photo)}" alt="">`;
   return `
@@ -6092,7 +6099,7 @@ function cardFaceHTML(c){
             <span class="realcard-brand">${escText(c.bank || '')}</span>
             <div class="realcard-chip"></div>
           </div>
-          <div class="realcard-num">••••  &nbsp; ••••  &nbsp; ••••  &nbsp; ${escText(c.last4 || '••••')}</div>
+          <div class="realcard-num"><span>••••</span><span>••••</span><span>••••</span><span>${escText(c.last4 || '••••')}</span></div>
           <div class="realcard-bottom">
             <div>
               <div class="realcard-label">EXPIRES</div>
