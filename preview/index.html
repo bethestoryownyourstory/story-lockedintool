@@ -5445,6 +5445,7 @@ const COMING_SOON = [
   ['.btn-buy', ()=>'Buy'],
   ['.btn-sell', ()=>'Sell'],
   ['[data-action="notes-unavailable"]', el=>el.textContent.trim()],
+  ['[data-action="note-print"]', ()=>'Print'],   // the phone's WebView can't print yet
   ['.app-row:not([data-native-pkg]):not([data-nav]):not([data-app-launchpopup]):not([data-app-locked]):not([data-app-toast])', el=>(el.querySelector('.row-name')||el).textContent.trim()],
   ['.notif-card', ()=>'Payment details'],
 ];
@@ -7037,12 +7038,24 @@ function colorPickerTemplate(){
   `;
 }
 // Notes > Drawings: each drawing as a card showing its first page (on its page colour), newest first.
+// "Just now" / "14:05" (today) / "Yesterday" / "Sep 20" / "Sep 20, 2025" - worked out when shown, so it stays true.
+function noteDateLabel(x){
+  if(!x || !x.ts) return x ? (x.date || '') : '';
+  const d = new Date(x.ts), now = new Date();
+  if(now - d < 60000) return 'Just now';
+  const day = t=>new Date(t.getFullYear(), t.getMonth(), t.getDate()).getTime();
+  const diff = Math.round((day(now) - day(d)) / 86400000);
+  if(diff === 0) return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  if(diff === 1) return 'Yesterday';
+  const m = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()] + ' ' + d.getDate();
+  return d.getFullYear() === now.getFullYear() ? m : m + ', ' + d.getFullYear();
+}
 function notesDrawingsListHTML(){
   return state.drawings.map(d=>{
     const first = d.pages.find(Boolean);
-    return `<div class="note-card drawing-card" data-opendrawing="${d.id}" style="background:${state.canvasColor};">
+    return `<div class="note-card drawing-card" data-opendrawing="${d.id}" data-holdnote="d:${d.id}" style="background:${state.canvasColor};">
       ${first ? `<img alt="" src="${first}">` : ''}
-      <div class="note-card-date">${d.pages.length > 1 ? d.pages.length + ' pages · ' : ''}${d.date}</div>
+      <div class="note-card-date">${d.pages.length > 1 ? d.pages.length + ' pages · ' : ''}${noteDateLabel(d)}</div>
     </div>`;
   }).join('');
 }
@@ -7060,9 +7073,9 @@ function notesScreen(){
         </div>
         ${state.notesTab === 'drawings' ? notesDrawingsListHTML() : state.notes.map(n=>`
           <div class="note-card" data-opennote="${n.id}" data-holdnote="${n.id}" style="background:${n.cover};">
-            <div class="note-card-title">${n.title}</div>
+            <div class="note-card-title">${escapeHtml(n.title)}</div>
             <div class="note-card-preview">${n.preview}</div>
-            <div class="note-card-date">${n.date}</div>
+            <div class="note-card-date">${noteDateLabel(n)}</div>
           </div>
         `).join('')}
         <div class="notes-ghosts">${('<div class="note-ghost" data-action="' + (state.notesTab === 'drawings' ? 'scratch-new' : 'notes-new') + '"></div>').repeat(8)}</div>
@@ -7538,7 +7551,7 @@ function plusMenuTemplate(){
   const items = [
     {id:'picture', label:'Picture', icon:'🖼️'},
     {id:'camera', label:'Camera', icon:'📷'},
-    {id:'pdf', label:'PDF', icon:'📄', action:'note-export-pdf'},
+    {id:'pdf', label:'PDF', icon:'📄'},
     {id:'audio', label:'Audio File', icon:'🎙️'},
     {id:'table', label:'Table', icon:'▦', action:'note-add-table'},
     {id:'saveas', label:'Save As', icon:'💾'},
@@ -8629,6 +8642,104 @@ function setupCircleAndWheelDrag(){
   }
 }
 
+// Puts the open note (its pages, drawings, title...) into the notes list - a new note is added the first time.
+function commitOpenNote(){
+    const joinedText = state.currentPages.join(' ');
+    const plainPreview = joinedText.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    if(state.currentNoteId){
+      const note = state.notes.find(n=>n.id===state.currentNoteId);
+      if(note){
+        // The date shows when it was last changed - only a real change moves it.
+        const newTitle = state.currentNoteTitle.trim() || 'Untitled';
+        const same = (a, b)=>(a||[]).length === (b||[]).length && (a||[]).every((x, i)=>x === b[i]);
+        if(note.title !== newTitle || !same(note.pages, state.currentPages) || !same(note.canvasPages, state.canvasPages) || note.cover !== state.canvasColor) note.ts = Date.now();
+        note.content = state.canvasSnapshot;
+        note.cover = state.canvasColor;
+        note.pageStyle = state.canvasPageStyle;
+        note.lineColor = state.canvasLineColor;
+        note.pages = state.currentPages.slice();
+        note.canvasPages = state.canvasPages.slice();
+        note.text = state.currentPages[0] || '';
+        note.tasks = state.currentNoteTasks.map(t=>({...t}));
+        note.title = state.currentNoteTitle.trim() || 'Untitled';
+        note.favorite = state.currentNoteFavorite;
+        note.preview = plainPreview ? plainPreview.slice(0, 60) : (state.currentNoteTasks[0] ? state.currentNoteTasks[0].text : note.preview);
+      }
+    } else {
+      // A new note you left without writing, naming or drawing anything isn't kept (like an untouched drawing).
+      const blank = !plainPreview.replace(/​/g, '').trim() && !state.currentNoteTitle.trim() && !state.canvasPages.some(Boolean) &&
+        !state.currentPages.some(h=>/inline-task|note-table|sticky-note|<img/.test(h || ''));
+      if(blank) return;
+      const newNote = {
+        id: 'n' + Date.now(),
+        title: state.currentNoteTitle.trim() || 'Untitled',
+        preview: plainPreview ? plainPreview.slice(0, 60) : 'Tap to continue editing…',
+        date: 'Just now',
+        ts: Date.now(),
+        cover: state.canvasColor,
+        pageStyle: state.canvasPageStyle,
+        lineColor: state.canvasLineColor,
+        content: state.canvasSnapshot,
+        pages: state.currentPages.slice(),
+        canvasPages: state.canvasPages.slice(),
+        text: state.currentPages[0] || '',
+        tasks: state.currentNoteTasks.map(t=>({...t})),
+        favorite: state.currentNoteFavorite,
+      };
+      state.notes = [newNote, ...state.notes];
+      state.currentNoteId = newNote.id;
+    }
+  }
+// ---- Notes are kept on the phone (owner: notes never disappear) - IndexedDB 'story-notes', saved as you type / draw,
+// loaded at start, so updates, restarts and screen reloads never lose a note or a drawing. ----
+let notesDbP = null, notesLoaded = false, notesSaveT = null;
+function notesDb(){
+  if(!notesDbP) notesDbP = new Promise((res, rej)=>{
+    try{ const r = indexedDB.open('story-notes', 1); r.onupgradeneeded = ()=>r.result.createObjectStore('kv'); r.onsuccess = ()=>res(r.result); r.onerror = ()=>rej(r.error); }catch(e){ rej(e); }
+  });
+  return notesDbP;
+}
+function persistNotesNow(){
+  clearTimeout(notesSaveT); notesSaveT = null;
+  if(!notesLoaded) return;
+  const data = { v:1, notes: state.notes, drawings: state.drawings.filter(d=>d.pages && d.pages.some(Boolean)) };
+  notesDb().then(db=>{ db.transaction('kv', 'readwrite').objectStore('kv').put(data, 'notes'); }).catch(()=>{});
+}
+function persistNotes(){ clearTimeout(notesSaveT); notesSaveT = setTimeout(persistNotesNow, 400); }
+// While typing / drawing in a note: keep the list (and the phone) up to date without waiting to leave the note.
+let noteLiveSaveT = null;
+function noteLiveSave(){
+  clearTimeout(noteLiveSaveT);
+  noteLiveSaveT = setTimeout(()=>{
+    if(state.current === 'notes-canvas'){
+      const area = document.getElementById('note-content-area');
+      if(area && area.getAttribute('data-search-highlighted') !== 'true'){ state.currentNoteText = area.innerHTML; state.currentPages[state.currentPageIndex] = state.currentNoteText; }
+      const canvas = document.getElementById('draw-canvas') || document.getElementById('inline-draw-canvas');
+      if(canvas && canvas.dataset.ready === '1' && !canvas.classList.contains('idle')){ state.canvasSnapshot = canvas.toDataURL(); state.canvasPages[state.currentPageIndex] = state.canvasSnapshot; }
+      const title = document.getElementById('note-title-input');
+      if(title) state.currentNoteTitle = title.value;
+      commitOpenNote();
+    } else if(state.current === 'scratch-draw'){
+      const c = document.getElementById('scratch-draw-canvas');
+      if(c && c.dataset.ready === '1') state.scratchPages[state.scratchPageIndex] = c.toDataURL();
+    }
+    persistNotesNow();
+  }, 600);
+}
+notesDb().then(db=>new Promise(res=>{
+  const r = db.transaction('kv').objectStore('kv').get('notes'); r.onsuccess = ()=>res(r.result); r.onerror = ()=>res(null);
+})).then(data=>{
+  notesLoaded = true;
+  if(data && Array.isArray(data.notes)){
+    const editing = state.current === 'notes-canvas' || state.current === 'scratch-draw';
+    const extra = editing ? state.notes.filter(n=>!data.notes.some(m=>m.id === n.id)) : [];
+    state.notes = extra.concat(data.notes);
+    const extraD = editing ? state.drawings.filter(d=>!(data.drawings||[]).some(m=>m.id === d.id)) : [];
+    state.drawings = extraD.concat(data.drawings || []);
+    if(state.current === 'notes') renderDevice();
+  }
+}).catch(()=>{ notesLoaded = true; });
+document.addEventListener('visibilitychange', ()=>{ if(document.hidden){ if(noteLiveSaveT){ clearTimeout(noteLiveSaveT); noteLiveSaveT = null; } persistNotesNow(); } });
 function renderDevice(){
   trackRecent();
   // Either the full Draw page's canvas or the in-notes inline drawing overlay canvas -- never
@@ -8684,43 +8795,9 @@ function renderDevice(){
   if(wasOnNoteEditor && state.suppressNoteAutoSave){
     state.suppressNoteAutoSave = false;
   } else if(wasOnNoteEditor){
-    const joinedText = state.currentPages.join(' ');
-    const plainPreview = joinedText.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-    if(state.currentNoteId){
-      const note = state.notes.find(n=>n.id===state.currentNoteId);
-      if(note){
-        note.content = state.canvasSnapshot;
-        note.cover = state.canvasColor;
-        note.pageStyle = state.canvasPageStyle;
-        note.lineColor = state.canvasLineColor;
-        note.pages = state.currentPages.slice();
-        note.canvasPages = state.canvasPages.slice();
-        note.text = state.currentPages[0] || '';
-        note.tasks = state.currentNoteTasks.map(t=>({...t}));
-        note.title = state.currentNoteTitle.trim() || 'Untitled';
-        note.favorite = state.currentNoteFavorite;
-        note.preview = plainPreview ? plainPreview.slice(0, 60) : (state.currentNoteTasks[0] ? state.currentNoteTasks[0].text : note.preview);
-      }
-    } else {
-      const newNote = {
-        id: 'n' + Date.now(),
-        title: state.currentNoteTitle.trim() || 'Untitled',
-        preview: plainPreview ? plainPreview.slice(0, 60) : 'Tap to continue editing…',
-        date: 'Just now',
-        cover: state.canvasColor,
-        pageStyle: state.canvasPageStyle,
-        lineColor: state.canvasLineColor,
-        content: state.canvasSnapshot,
-        pages: state.currentPages.slice(),
-        canvasPages: state.canvasPages.slice(),
-        text: state.currentPages[0] || '',
-        tasks: state.currentNoteTasks.map(t=>({...t})),
-        favorite: state.currentNoteFavorite,
-      };
-      state.notes = [newNote, ...state.notes];
-      state.currentNoteId = newNote.id;
-    }
+    commitOpenNote();
   }
+  if(wasOnNoteEditor || oldScratchCanvas || /^(notes|scratch)/.test(state.current)) persistNotes();
   // Capture the OUTGOING scroll position (and which screen it belonged to) before the DOM
   // underneath it gets torn down and rebuilt -- see currentScreenKey()/lastScreenKey above.
   const oldContentAreaForScroll = document.getElementById('content-area');
@@ -8909,8 +8986,8 @@ function initCanvas(canvasId, isOverlay){
     const p = getPos(e);
     lastX = p.x; lastY = p.y;
     const erasing = state.canvasTool==='eraser';
-    ctx.globalCompositeOperation = (erasing && isOverlay) ? 'destination-out' : 'source-over';
-    ctx.fillStyle = (erasing && !isOverlay) ? state.canvasColor : state.canvasPenColor;
+    ctx.globalCompositeOperation = erasing ? 'destination-out' : 'source-over';
+    ctx.fillStyle = state.canvasPenColor;
     ctx.beginPath();
     ctx.arc(p.x, p.y, (erasing ? state.canvasPenSize*4 : state.canvasPenSize)/2, 0, Math.PI*2);
     ctx.fill();
@@ -8919,18 +8996,20 @@ function initCanvas(canvasId, isOverlay){
     if(!drawing || e.pointerId !== activePointer) return;
     const p = getPos(e);
     const erasing = state.canvasTool==='eraser';
-    ctx.globalCompositeOperation = (erasing && isOverlay) ? 'destination-out' : 'source-over';
-    ctx.strokeStyle = (erasing && !isOverlay) ? state.canvasColor : state.canvasPenColor;
+    ctx.globalCompositeOperation = erasing ? 'destination-out' : 'source-over';
+    ctx.strokeStyle = state.canvasPenColor;
     ctx.lineWidth = erasing ? state.canvasPenSize*4 : state.canvasPenSize;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
+    // Every point the finger passed since the last frame (coalesced events), so fast strokes stay smooth.
+    const pts = (e.getCoalescedEvents && e.getCoalescedEvents().length) ? e.getCoalescedEvents().map(getPos) : [p];
     ctx.beginPath();
     ctx.moveTo(lastX, lastY);
-    ctx.lineTo(p.x, p.y);
+    pts.forEach(q=>ctx.lineTo(q.x, q.y));
     ctx.stroke();
-    lastX = p.x; lastY = p.y;
+    lastX = pts[pts.length - 1].x; lastY = pts[pts.length - 1].y;
   });
-  const stop = e=>{ if(e.pointerId===activePointer){ drawing=false; activePointer=null; } };
+  const stop = e=>{ if(e.pointerId===activePointer){ drawing=false; activePointer=null; noteLiveSave(); } };
   canvas.addEventListener('pointerup', stop);
   canvas.addEventListener('pointercancel', stop);
   canvas.addEventListener('pointerleave', stop);
@@ -8991,6 +9070,7 @@ function attachHandlers(){
         document.removeEventListener('pointerup', onUp);
         const area = document.getElementById('note-content-area');
         if(area){ state.currentNoteText = area.innerHTML; state.currentPages[state.currentPageIndex] = state.currentNoteText; }
+      noteLiveSave();
       };
       document.addEventListener('pointermove', onMove);
       document.addEventListener('pointerup', onUp);
@@ -9015,6 +9095,7 @@ function attachHandlers(){
         document.removeEventListener('pointerup', onUp);
         const area = document.getElementById('note-content-area');
         if(area){ state.currentNoteText = area.innerHTML; state.currentPages[state.currentPageIndex] = state.currentNoteText; }
+      noteLiveSave();
       };
       document.addEventListener('pointermove', onMove);
       document.addEventListener('pointerup', onUp);
@@ -9560,6 +9641,7 @@ function attachHandlers(){
       noteTaskTick(cb);
       const area = document.getElementById('note-content-area');
       if(area){ state.currentNoteText = area.innerHTML; state.currentPages[state.currentPageIndex] = state.currentNoteText; }
+      noteLiveSave();
     });
   });
 
@@ -9677,7 +9759,7 @@ function attachHandlers(){
 
   const noteTitleInput = document.getElementById('note-title-input');
   if(noteTitleInput){
-    noteTitleInput.addEventListener('input', ()=>{ state.currentNoteTitle = noteTitleInput.value; });
+    noteTitleInput.addEventListener('input', ()=>{ state.currentNoteTitle = noteTitleInput.value; noteLiveSave(); });
     const titleConfirmBtn = document.getElementById('note-title-confirm-btn');
     noteTitleInput.addEventListener('focus', ()=>{ if(titleConfirmBtn) titleConfirmBtn.style.display = 'flex'; });
     noteTitleInput.addEventListener('blur', ()=>{ if(titleConfirmBtn) titleConfirmBtn.style.display = 'none'; });
@@ -9723,6 +9805,7 @@ function attachHandlers(){
         state.currentNoteText = noteContentArea.innerHTML;
         state.currentPages[state.currentPageIndex] = state.currentNoteText;
         updateNotePageMeter(noteContentArea.textContent.length);
+        noteLiveSave();
       });
     } else {
       const caretFromPoint = (x,y)=>{
@@ -10186,7 +10269,7 @@ function attachHandlers(){
           // "Create" opens the separate pure-drawing space -- it never touches state.notes,
           // state.currentNoteId, currentPages or canvasPages, and never creates a note.
           // Each Create is a NEW drawing, kept in Notes > Drawings (an empty one is dropped when you leave).
-          const d = { id: 'd' + Date.now(), pages: [null], date: 'Just now' };
+          const d = { id: 'd' + Date.now(), pages: [null], date: 'Just now', ts: Date.now() };
           state.drawings.unshift(d);
           state.scratchId = d.id; state.scratchPages = d.pages; state.scratchPageIndex = 0;
           resetScratchUndoStack();
@@ -10292,7 +10375,10 @@ function attachHandlers(){
           // its saved drawing snapshot when it has no text at all -- again just opens the sheet.
           const id = el.getAttribute('data-id');
           const note = state.notes.find(n=>n.id===id);
-          if(note){
+          const drawing = id.indexOf('d:') === 0 ? state.drawings.find(d=>'d:' + d.id === id) : null;
+          if(drawing){
+            state.shareSheet = { source:'note-list', title:'Drawing', type:'drawing', textContent:'', imageDataUrl: drawing.pages.find(Boolean) || null, allowCommunity: true };
+          } else if(note){
             const plainText = (note.text || '').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
             const isDrawingOnly = !plainText && note.content;
             state.shareSheet = {
@@ -10307,7 +10393,7 @@ function attachHandlers(){
         }
         case 'note-actionsheet-delete': {
           const id = el.getAttribute('data-id');
-          state.confirmDialog = { message: 'Delete this note? This cannot be undone.', action: 'confirm-delete-note-by-id', actionData: id };
+          state.confirmDialog = { message: id.indexOf('d:') === 0 ? 'Delete this drawing? This cannot be undone.' : 'Delete this note? This cannot be undone.', action: 'confirm-delete-note-by-id', actionData: id };
           state.noteActionSheetId = null;
           break;
         }
@@ -10347,6 +10433,7 @@ function attachHandlers(){
         case 'note-add-sticky': {
           const el = document.getElementById('note-content-area');
           if(el && !state.readMode){
+            pushNoteUndoSnapshot();
             el.innerHTML += `<div class="sticky-note-embed" contenteditable="true" data-placeholder="Write a sticky note…" style="background:${state.stickyNoteColor};"></div>`;
             state.currentNoteText = el.innerHTML;
           }
@@ -10356,6 +10443,7 @@ function attachHandlers(){
         case 'note-add-table': {
           const el = document.getElementById('note-content-area');
           if(el && !state.readMode){
+            pushNoteUndoSnapshot();
             el.innerHTML += tableWrapHTML(3, 3, null);
             state.currentNoteText = el.innerHTML;
           }
@@ -10513,11 +10601,23 @@ function attachHandlers(){
             if(titleEl) titleEl.value = state.currentNoteTitle;
           }
           {
+            // A template never wipes what you wrote: on a page that already has something, it goes on a new page.
             const tplHTML = buildTemplateContent(tplId);
             const contentEl = document.getElementById('note-content-area');
-            if(contentEl) contentEl.innerHTML = tplHTML;
+            const hasText = contentEl ? !!(contentEl.textContent.replace(/[​\s]/g, '') || contentEl.querySelector('.inline-task,.note-table-wrap,.sticky-note-embed,img')) : !!(state.currentPages[state.currentPageIndex] || '').replace(/<[^>]+>|[​\s]|&nbsp;/g, '');
+            if(hasText){
+              if(contentEl){ state.currentPages[state.currentPageIndex] = contentEl.innerHTML; }
+              pendingPageFlushIndex = state.currentPageIndex;
+              state.currentPages.push(tplHTML);
+              state.canvasPages.push(null);
+              state.currentPageIndex = state.currentPages.length - 1;
+              resetNoteUndoStack();
+            } else {
+              pushNoteUndoSnapshot();
+              if(contentEl) contentEl.innerHTML = tplHTML;
+              state.currentPages[state.currentPageIndex] = tplHTML;
+            }
             state.currentNoteText = tplHTML;
-            state.currentPages[state.currentPageIndex] = tplHTML;
           }
           state.moreMenuOpen = false;
           state.moreMenuSection = null;
@@ -10938,15 +11038,20 @@ function clampFloatPopovers(){
 }
 
 function deleteNoteById(id){
+  if(String(id).indexOf('d:') === 0){ state.drawings = state.drawings.filter(d=>'d:' + d.id !== id); return; }
   state.notes = state.notes.filter(n=>n.id!==id);
 }
 function noteActionSheetTemplate(){
-  const note = state.notes.find(n=>n.id===state.noteActionSheetId);
+  // Held a drawing (id "d:<id>"): the same sheet - Share / Delete.
+  const isDrawing = String(state.noteActionSheetId).indexOf('d:') === 0;
+  const note = isDrawing
+    ? (d=>d ? { id: 'd:' + d.id, title: 'Drawing' } : null)(state.drawings.find(d=>'d:' + d.id === state.noteActionSheetId))
+    : state.notes.find(n=>n.id===state.noteActionSheetId);
   if(!note) return '';
   return `
     <div class="notes-popover-overlay" data-action="note-actionsheet-bg" style="align-items:center;justify-content:center;padding:0;">
       <div class="notes-popover-sheet" style="width:78%;max-width:260px;max-height:none;" onclick="event.stopPropagation()">
-        <div class="modal-head"><span class="modal-title">${note.title}</span><button class="modal-close" data-action="note-actionsheet-close">×</button></div>
+        <div class="modal-head"><span class="modal-title">${escapeHtml(note.title)}</span><button class="modal-close" data-action="note-actionsheet-close">×</button></div>
         <div class="plus-menu-list">
           <div class="plus-menu-list-item" data-action="note-actionsheet-share" data-id="${note.id}">Share</div>
           <div class="plus-menu-list-item" style="color:#e63946;" data-action="note-actionsheet-delete" data-id="${note.id}">Delete</div>
