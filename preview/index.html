@@ -4809,8 +4809,44 @@ function secretSet(k, v){ try{ if(NATIVE && window.StoryNative.secretSet) window
 
 function tradeAccounts(){ try{ return JSON.parse(localStorage.getItem(TRADE_ACCOUNTS_KEY) || '[]') || []; }catch(e){ return []; } }
 function saveTradeAccounts(list){ try{ localStorage.setItem(TRADE_ACCOUNTS_KEY, JSON.stringify(list)); }catch(e){} }
+// An account you logged in to but didn't save (owner) is yours only while you're on it: go to another account and it's
+// gone (its sign-in keys thrown away) - next time you log in again. It also never outlives STORY being restarted
+// (sessionStorage survives a screen reload, not a restart; anything left over is wiped at start).
+const TRADE_TEMP_KEY = 'story-trade-temp';
+state.tempAccount = (()=>{ try{ return JSON.parse(sessionStorage.getItem(TRADE_TEMP_KEY) || 'null'); }catch(e){ return null; } })();
+function forgetAccountKeys(a){
+  const saved = tradeAccounts();
+  if(!a || saved.some(b=>b.id === a.id)) return;
+  if(a.platform === 'mt5' || a.platform === 'mt4') mt5Call(a, 'DELETE', '/mt5/' + a.accId).catch(()=>{}).then(()=>secretSet('mt5key:' + a.accId, ''));
+  else if(a.platform === 'tradelocker'){ if(!saved.some(b=>b.platform === 'tradelocker' && tlKey(b) === tlKey(a))) secretSet(tlKey(a), ''); }
+  else secretSet('keys:' + a.id, '');
+}
+function setTempAccount(a){
+  const old = state.tempAccount;
+  if(old && (!a || old.id !== a.id)){ forgetAccountKeys(old); delete state.live[old.id]; }
+  state.tempAccount = a || null;
+  try{
+    if(a){ sessionStorage.setItem(TRADE_TEMP_KEY, JSON.stringify(a)); localStorage.setItem(TRADE_TEMP_KEY, JSON.stringify(a)); }
+    else { sessionStorage.removeItem(TRADE_TEMP_KEY); localStorage.removeItem(TRADE_TEMP_KEY); }
+  }catch(e){}
+}
+// Left over from before STORY restarted: throw its keys away.
+try{ if(!state.tempAccount){ const left = JSON.parse(localStorage.getItem(TRADE_TEMP_KEY) || 'null'); if(left){ localStorage.removeItem(TRADE_TEMP_KEY); setTimeout(()=>forgetAccountKeys(left), 0); } } }catch(e){}
+// Every account you can be on: your saved ones, plus the unsaved one you're on now.
+function tradeList(){ const l = tradeAccounts(); const t = state.tempAccount; return t && !l.some(a=>a.id === t.id) ? l.concat([t]) : l; }
+// Go to an account; leaving the unsaved one drops it.
+function setActiveTrade(id){
+  state.activeTradeId = id || null;
+  try{ localStorage.setItem('story-trade-active', state.activeTradeId || ''); }catch(e){}
+  if(state.tempAccount && state.tempAccount.id !== id) setTempAccount(null);
+}
+function rememberSymbol(sym){
+  const a = activeTradeAccount(); if(!a) return;
+  if(state.tempAccount && state.tempAccount.id === a.id){ state.tempAccount.symbol = sym; setTempAccount(state.tempAccount); return; }
+  const l = tradeAccounts(); const s = l.find(x=>x.id === a.id); if(s){ s.symbol = sym; saveTradeAccounts(l); }
+}
 function activeTradeAccount(){
-  const list = tradeAccounts();
+  const list = tradeList();
   return list.find(a=>a.id === state.activeTradeId) || list[0] || null;
 }
 state.activeTradeId = (()=>{ try{ return localStorage.getItem('story-trade-active') || null; }catch(e){ return null; } })();
@@ -4828,7 +4864,9 @@ const fmtPrice = p=> (p == null || isNaN(p)) ? '—' : Number(p).toFixed(p < 10 
 
 // ---- TradeLocker ----
 const tlKey = a=>'tl:' + a.env + ':' + (a.email || '').toLowerCase() + ':' + a.server;
-async function tlLogin(env, email, password, server){
+// One login = ONE account (owner): only the account number you typed is kept - STORY never sees or touches the
+// other accounts on that login.
+async function tlLogin(env, email, password, server, accNo){
   const r = await httpReq('POST', TL_BASE[env] + '/auth/jwt/token', {}, { email, password, server });
   const j = parseJ(r.body);
   if(r.code === 0) throw 'No connection - check your internet';
@@ -4838,8 +4876,11 @@ async function tlLogin(env, email, password, server){
   const j2 = parseJ(r2.body);
   const accs = (j2 && j2.accounts) || [];
   if(!accs.length) throw 'No trading accounts found for this login';
+  const n = String(accNo || '').replace(/[^0-9]/g, '');
+  const one = accs.filter(a=>String(a.id) === n || (n.length > 2 && new RegExp('(^|[^0-9])' + n + '([^0-9]|$)').test(String(a.name || ''))));
+  if(!one.length) throw 'That account number isn’t on this login - check it in TradeLocker';
   secretSet(tlKey({ env, email, server }), JSON.stringify(tok));
-  return accs.map(a=>({ id: 'tl:' + env + ':' + a.id, platform:'tradelocker', env, server, email, accId: String(a.id), accNum: String(a.accNum), name: a.name || ('#' + a.id), currency: a.currency || 'USD' }));
+  return one.slice(0, 1).map(a=>({ id: 'tl:' + env + ':' + a.id, platform:'tradelocker', env, server, email, accId: String(a.id), accNum: String(a.accNum), name: a.name || ('#' + a.id), currency: a.currency || 'USD' }));
 }
 async function tlToken(acc){
   let t = parseJ(secretGet(tlKey(acc)));
@@ -4970,7 +5011,7 @@ async function mt5Call(acc, method, path, body){
 const PLATFORMS = {
   mt5:        { hidden:true, label:'MT5', group:'Forex & CFDs', sym:'EURUSD', env:true, fields:[['login','MT5 LOGIN (ACCOUNT NUMBER)','e.g. 48213390','numeric'],['password','PASSWORD','Your MT5 password','password'],['server','BROKER SERVER','Your broker’s MT5 server (from your broker)']], note:'STORY connects your MT5 account through MetaApi (the only way an app can reach MT5). Your password is only used to connect - it can take up to a minute the first time.' },
   mt4:        { hidden:true, label:'MT4', group:'Forex & CFDs', sym:'EURUSD', env:true, fields:[['login','MT4 LOGIN (ACCOUNT NUMBER)','e.g. 48213390','numeric'],['password','PASSWORD','Your MT4 password','password'],['server','BROKER SERVER','Your broker’s MT4 server (from your broker)']], note:'STORY connects your MT4 account through MetaApi. Your password is only used to connect - it can take up to a minute the first time.' },
-  tradelocker:{ label:'TradeLocker', group:'Forex & CFDs', sym:'EURUSD', env:true, fields:[['email','TRADELOCKER EMAIL','you@email.com','email'],['password','PASSWORD','Your TradeLocker password','password'],['server','BROKER SERVER','Your broker’s server name (from your broker)']], note:'STORY signs in to your broker directly. Your password is not kept - only a sign-in key, on this phone.' },
+  tradelocker:{ label:'TradeLocker', group:'Forex & CFDs', sym:'EURUSD', env:true, fields:[['email','TRADELOCKER EMAIL','you@email.com','email'],['password','PASSWORD','Your TradeLocker password','password'],['server','BROKER SERVER','Your broker’s server name (from your broker)'],['accNo','ACCOUNT NUMBER','The account’s number in TradeLocker (e.g. 1234567)','numeric']], note:'STORY signs in to your broker directly. Your password is not kept - only a sign-in key, on this phone.' },
   ctrader:    { label:'cTrader', group:'Forex & CFDs', soon:'cTrader connects once STORY’s cTrader app is registered with Spotware' },
   dxtrade:    { label:'DXtrade', group:'Forex & CFDs', soon:'DXtrade is being connected' },
   matchtrader:{ label:'Match-Trader', group:'Forex & CFDs', soon:'Match-Trader is being connected' },
@@ -5418,7 +5459,7 @@ async function tradeAddAccount(f){
     let added = [];
     const P = PLATFORMS[f.platform] || {};
     if(P.soon) throw P.soon;
-    if(f.platform === 'tradelocker') added = await tlLogin(f.env, f.email, f.password, f.server);
+    if(f.platform === 'tradelocker') added = await tlLogin(f.env, f.email, f.password, f.server, f.accNo);
     else if(f.platform === 'mt5' || f.platform === 'mt4'){
       const j = await mt5Call(null, 'POST', '/mt5/connect', { login: f.login, password: f.password, server: f.server, platform: f.platform });
       secretSet('mt5key:' + j.accountId, j.key);
@@ -5439,21 +5480,20 @@ function savePendingAccounts(){
   if(!added.length) return;
   const list = tradeAccounts().filter(a=>!added.some(b=>b.id === a.id)).concat(added);
   saveTradeAccounts(list);
-  state.activeTradeId = added[0].id; try{ localStorage.setItem('story-trade-active', state.activeTradeId); }catch(e){}
+  setActiveTrade(added[0].id);
   state.focusSymbol = added[0].symbol; state.focusName = null; state.focusQuote = null; state.focusBars = [];
   showToast(added.length > 1 ? added.length + ' accounts saved' : 'Account saved');
   renderDevice(); tradeRefreshNow(true);
 }
-// Cancel: nothing is kept - the sign-in keys are thrown away (and an MT4/MT5 connection is removed).
+// Cancel: not saved - you're on it now, but only until you go to another account (then you log in again).
 function cancelPendingAccounts(){
   const added = state.pendingAccounts || []; state.pendingAccounts = null;
-  const saved = tradeAccounts();
-  added.filter(a=>!saved.some(b=>b.id === a.id)).forEach(a=>{
-    if(a.platform === 'mt5' || a.platform === 'mt4') mt5Call(a, 'DELETE', '/mt5/' + a.accId).catch(()=>{}).then(()=>secretSet('mt5key:' + a.accId, ''));
-    else if(a.platform === 'tradelocker'){ if(!saved.some(b=>b.platform === 'tradelocker' && tlKey(b) === tlKey(a))) secretSet(tlKey(a), ''); }
-    else secretSet('keys:' + a.id, '');
-  });
-  renderDevice();
+  if(!added.length){ renderDevice(); return; }
+  const a = added[0];
+  if(!tradeAccounts().some(b=>b.id === a.id)) setTempAccount(a);
+  setActiveTrade(a.id);
+  state.focusSymbol = a.symbol; state.focusName = null; state.focusQuote = null; state.focusBars = [];
+  renderDevice(); tradeRefreshNow(true);
 }
 function saveAccountTemplate(){
   const added = state.pendingAccounts || [];
@@ -5461,7 +5501,7 @@ function saveAccountTemplate(){
     <div class="modal-overlay" data-action="save-acct-cancel">
       <div class="confirm-sheet" onclick="event.stopPropagation()">
         <div class="confirm-title">Save ${added.length > 1 ? added.length + ' accounts' : 'account'}?</div>
-        <div class="confirm-sub">${added.map(a=>escText(a.name)).join('<br>')}<br><span style="opacity:0.7;">Saved accounts stay under Accounts - tap one to go to it.</span></div>
+        <div class="confirm-sub">${added.map(a=>escText(a.name)).join('<br>')}<br><span style="opacity:0.7;">Saved accounts stay under Accounts - tap one to go to it. Not saved: you use it now, and once you go to another account you log in again.</span></div>
         <div class="confirm-btn-row">
           <button class="btn-wide btn-primary" style="margin-top:0;" data-action="save-acct-save">Save account${added.length > 1 ? 's' : ''}</button>
           <button class="btn-wide" style="margin-top:0;" data-action="save-acct-cancel">Cancel</button>
@@ -5476,13 +5516,13 @@ function tradeRemoveAccount(id){
   const list = tradeAccounts().filter(a=>a.id !== id);
   saveTradeAccounts(list);
   delete state.live[id];
-  if(state.activeTradeId === id){ state.activeTradeId = list[0] ? list[0].id : null; try{ localStorage.setItem('story-trade-active', state.activeTradeId || ''); }catch(e){} }
+  if(state.activeTradeId === id) setActiveTrade(state.tempAccount ? state.tempAccount.id : list[0] ? list[0].id : null);
 }
 function tradeSwitch(dir){
-  const list = tradeAccounts(); if(list.length < 2) return;
+  const list = tradeList(); if(list.length < 2) return;
   const i = Math.max(0, list.findIndex(a=>a.id === (activeTradeAccount() || {}).id));
   const n = list[(i + dir + list.length) % list.length];
-  state.activeTradeId = n.id; try{ localStorage.setItem('story-trade-active', n.id); }catch(e){}
+  setActiveTrade(n.id);
   state.focusSymbol = n.symbol || (PLATFORMS[n.platform] || {}).sym || state.focusSymbol; state.focusName = null;
   state.focusQuote = null; state.focusBars = [];
   renderDevice(); tradeRefreshNow(true);
@@ -5583,7 +5623,8 @@ function tvMount(){
     });
     TV.series = TV.chart.addCandlestickSeries({ upColor:'#3ecf6a', downColor:'#ef5b5b', borderVisible:false, wickUpColor:'#3ecf6a', wickDownColor:'#ef5b5b',
       // Every SL / TP line stays on the chart (so you can always reach it to drag it).
-      autoscaleInfoProvider: orig=>{ const r = orig(); if(!r || !r.priceRange) return r; TV.lines.forEach(l=>{ const p = l.line.options().price; if(p > 0){ r.priceRange.minValue = Math.min(r.priceRange.minValue, p); r.priceRange.maxValue = Math.max(r.priceRange.maxValue, p); } }); return r; } });
+      // Every line stays in view - except while you're holding one: then the scale stays still under your finger.
+      autoscaleInfoProvider: orig=>{ if(TV.drag && TV.dragRange) return { priceRange: Object.assign({}, TV.dragRange) }; const r = orig(); if(!r || !r.priceRange) return r; TV.lines.forEach(l=>{ const p = l.line.options().price; if(p > 0){ r.priceRange.minValue = Math.min(r.priceRange.minValue, p); r.priceRange.maxValue = Math.max(r.priceRange.maxValue, p); } }); TV.dragRange = Object.assign({}, r.priceRange); return r; } });
     tvDragSetup();
   }
   if(TV.host.parentNode !== slot) slot.appendChild(TV.host);
@@ -5683,7 +5724,7 @@ function tradingScreen(){
   const barsFs = (state.focusBars || []).slice(-20);
   const barH = list=>{ const lo = Math.min(...list.map(b=>b.l)), hi = Math.max(...list.map(b=>b.h)); return b=> Math.max(6, Math.round(((b.c - lo) / ((hi - lo) || 1)) * 90) + 8); };
   const hb = bars.length ? barH(bars) : null;
-  const list = tradeAccounts();
+  const list = tradeList();
   const idx = acc ? list.findIndex(a=>a.id === acc.id) : -1;
   const val = v=> acc && live.status === 'ok' ? v : '—';
   const status = !acc ? '' : live.status === 'signin' ? `<div class="acct-status">Signed out - <button class="acct-link" data-action="add-account-open">sign in again</button></div>` : live.status === 'error' ? `<div class="acct-status">${escText(live.err || '')}</div>` : !live.status ? `<div class="acct-status">Connecting…</div>` : '';
@@ -5717,7 +5758,7 @@ function tradingScreen(){
       </div>
       <div class="acct-foot">${acc ? status : `<button class="btn-wide btn-primary acct-add-btn" data-action="add-account-open">Add account</button>`}</div>
       ${state.brokerPanelOpen ? brokerPanelHTML() : ''}
-      <button class="mt5-corner-btn left" data-action="mt5-open">Open ${acc ? escText(acc.broker || platformAppName(acc)) : 'broker'}</button>
+      <button class="mt5-corner-btn left" data-action="mt5-open">Open ${acc ? escText(platformAppName(acc)) : 'broker'}</button>
       <button class="mt5-corner-btn right" data-action="mt5-switch">Accounts ⌄</button>
     </div>
     ${list.length > 1 ? `<div class="acct-dots">${list.map((a, i)=>`<span class="${i===idx?'on':''}"></span>`).join('')}</div>` : ''}
@@ -5819,7 +5860,7 @@ function launchPopupTemplate(){
   const isApp = state.launchPopup === 'mt5';
   const acc = activeTradeAccount();
   const tl = acc && acc.platform === 'tradelocker';
-  const title = isApp ? 'Open ' + (acc ? (acc.broker || platformAppName(acc)) : 'your broker') : 'Open TradingView';
+  const title = isApp ? 'Open ' + (acc ? platformAppName(acc) : 'your broker') : 'Open TradingView';
   const sub = isApp ? (acc ? `Currently active: ${escText(acc.name)}${acc.server ? ' · ' + escText(acc.server) : ''}` : 'Opens the app on your phone.') : 'View this chart in the full TradingView app.';
   return `
     <div class="modal-overlay" data-action="launch-popup-bg">
@@ -10787,8 +10828,7 @@ function attachHandlers(){
   document.querySelectorAll('[data-account]').forEach(el=>{
     el.addEventListener('click', e=>{
       if(e.target.closest('[data-removeacct]')) return;
-      state.activeTradeId = el.getAttribute('data-account');
-      try{ localStorage.setItem('story-trade-active', state.activeTradeId); }catch(err){}
+      setActiveTrade(el.getAttribute('data-account'));
       state.accountSwitcherOpen = false; state.focusQuote = null; state.focusBars = [];
       renderDevice(); tradeRefreshNow(true);
     });
@@ -10809,7 +10849,7 @@ function attachHandlers(){
   document.querySelectorAll('[data-chartres]').forEach(el=>el.addEventListener('click', ()=>{ state.chartRes = el.getAttribute('data-chartres'); state.focusBars = []; renderDevice(); tradeRefreshNow(true); }));
   document.querySelectorAll('[data-symbol]').forEach(el=>el.addEventListener('click', ()=>{
     state.focusSymbol = el.getAttribute('data-symbol'); state.focusName = state.focusSymbol;
-    { const l = tradeAccounts(); const a = l.find(x=>x.id === (activeTradeAccount() || {}).id); if(a){ a.symbol = state.focusSymbol; saveTradeAccounts(l); } }
+    rememberSymbol(state.focusSymbol);
     state.symbolPickerOpen = false; state.focusQuote = null; state.focusBars = [];
     renderDevice(); tradeRefreshNow(true);
   }));
@@ -10819,7 +10859,7 @@ function attachHandlers(){
       state.symbolQuery = symSearch.value;
       const box = document.querySelector('.symbol-list');
       if(box){ const tmp = document.createElement('div'); tmp.innerHTML = symbolPickerTemplate(); const nb = tmp.querySelector('.symbol-list'); if(nb){ box.innerHTML = nb.innerHTML;
-        box.querySelectorAll('[data-symbol]').forEach(el=>el.addEventListener('click', ()=>{ state.focusSymbol = el.getAttribute('data-symbol'); state.focusName = state.focusSymbol; { const l = tradeAccounts(); const a = l.find(x=>x.id === (activeTradeAccount() || {}).id); if(a){ a.symbol = state.focusSymbol; saveTradeAccounts(l); } } state.symbolPickerOpen = false; state.focusQuote = null; state.focusBars = []; renderDevice(); tradeRefreshNow(true); })); } }
+        box.querySelectorAll('[data-symbol]').forEach(el=>el.addEventListener('click', ()=>{ state.focusSymbol = el.getAttribute('data-symbol'); state.focusName = state.focusSymbol; rememberSymbol(state.focusSymbol); state.symbolPickerOpen = false; state.focusQuote = null; state.focusBars = []; renderDevice(); tradeRefreshNow(true); })); } }
     });
   }
   document.querySelectorAll('[data-broker-other]').forEach(el=>el.addEventListener('click', ()=>{
@@ -11679,9 +11719,9 @@ function attachHandlers(){
           const kind = state.launchPopup; state.launchPopup = null;
           if(kind === 'mt5'){
             const acc = activeTradeAccount();
-            const name = acc ? (acc.broker || platformAppName(acc)) : 'your broker';
-            // Your broker's own app first, then the platform's app (e.g. MetaTrader 5) - found among your installed apps.
-            const want = acc ? [acc.broker, platformAppName(acc), (PLATFORMS[acc.platform] || {}).label].concat(acc.platform === 'mt5' ? ['MetaTrader 5'] : acc.platform === 'mt4' ? ['MetaTrader 4'] : []).filter(Boolean) : ['MetaTrader 5'];
+            const name = acc ? platformAppName(acc) : 'your broker';
+            // The account's platform app (owner: a TradeLocker account opens TradeLocker) - found among your installed apps.
+            const want = acc ? [platformAppName(acc)].concat(acc.platform === 'mt5' ? ['MetaTrader 5'] : acc.platform === 'mt4' ? ['MetaTrader 4'] : []) : [];
             let apps = []; try{ apps = JSON.parse((NATIVE && window.StoryNative.getApps && window.StoryNative.getApps()) || '[]'); }catch(err){}
             const hit = apps.find(a=>want.some(w=>w && String(a.label || '').toLowerCase().includes(String(w).toLowerCase())));
             const ok = hit && window.StoryNative.openPackage && window.StoryNative.openPackage(hit.pkg);
