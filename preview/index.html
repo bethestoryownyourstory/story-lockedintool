@@ -4609,13 +4609,9 @@ function tradeAssets(){
 }
 function moneyAssets(){ return activeCard() ? moneyBalances(true) : moneyBalances().concat(tradeAssets()); }
 function netWorth(cur){ return moneyAssets().filter(a=>a.cur === cur).reduce((s, a)=>s + a.bal, 0); }
-// Money's big number (owner): ALWAYS your total - every bank / card balance + your trading accounts - like one bank
-// balance for everything, whichever card is showing in Wallet.
-function moneyTotalAssets(){ return moneyBalances().concat(tradeAssets()); }
-function netWorthTotal(cur){ return moneyTotalAssets().filter(a=>a.cur === cur).reduce((s, a)=>s + a.bal, 0); }
 // This month's change, from the real net worth STORY saw each day (kept on the phone).
 function netWorthPct(nw, cur){
-  if(!moneyTotalAssets().length) return null;
+  if(!moneyAssets().length) return null;
   let snaps = {}; try{ snaps = JSON.parse(localStorage.getItem('story-networth') || '{}') || {}; }catch(e){}
   const today = new Date().toISOString().slice(0, 10);
   if(!snaps[cur] || typeof snaps[cur] !== 'object') snaps[cur] = {};
@@ -4679,7 +4675,7 @@ function moneyAssetRows(neg){
 function moneyScreen(){
   moneyCompute();
   const cur = state.moneyCur;
-  const nw = netWorthTotal(cur);
+  const nw = netWorth(cur);
   const pctNow = netWorthPct(nw, cur);
   const pctNeg = pctNow != null && pctNow < 0;
   const net = state.moneyIn - state.moneyOut;
@@ -4690,9 +4686,9 @@ function moneyScreen(){
     ${pageArrows()}
     <div class="big-num">${fmtCur(nw, cur)}</div>
     <div style="color:${pctNeg?'var(--red)':'var(--green)'};font-size:12px;font-weight:600;${pctNow == null ? 'visibility:hidden;' : ''}">${pctNeg?'-':'+'}${Math.abs(pctNow || 0)}% this month</div>
-    <div class="row-sub" style="margin-top:2px;visibility:hidden;">Total</div>
+    ${(c=>`<div class="row-sub" style="margin-top:2px;${c ? '' : 'visibility:hidden;'}">${c ? escText(c.bank || 'Card') + ' ••' + escText(c.last4 || '') : 'All'}</div>`)(activeCard())}
 
-    <div class="section-title">PAYMENTS${(c=>c ? ' · ' + escText((c.bank || 'Card').toUpperCase()) + ' ••' + escText(c.last4 || '') : '')(activeCard())}</div>
+    <div class="section-title">PAYMENTS</div>
     <div class="notif-scroll-wrap">
     <div class="notif-scroll" id="pay-scroll">
       ${paymentCardsHTML()}
