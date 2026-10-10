@@ -6893,6 +6893,122 @@ function findTaskInLine(area){
   }
   return null;
 }
+// ---- Task lines (owner): a task is a whole line - [box] text. ----
+const NOTE_ZW = '​';
+const isNoteTask = n => n && n.nodeType === 1 && n.classList && n.classList.contains('inline-task');
+const isNoteTaskLabel = n => n && n.nodeType === 1 && n.classList && n.classList.contains('inline-task-text');
+const isNoteLineEnd = n => n && n.nodeType === 1 && (n.nodeName === 'BR' || /^(DIV|P|LI|UL|OL|TABLE)$/.test(n.nodeName));
+function noteMakeTask(labelNodes){
+  const wrap = document.createElement('span');
+  wrap.className = 'inline-task'; wrap.contentEditable = 'false';
+  const cb = document.createElement('input'); cb.type = 'checkbox'; cb.className = 'inline-task-checkbox';
+  wrap.appendChild(cb);
+  const label = document.createElement('span');
+  label.className = 'inline-task-text'; label.contentEditable = 'true';
+  (labelNodes || []).forEach(n=>label.appendChild(n));
+  if(!label.textContent.replace(/​/g, '')) { label.textContent = NOTE_ZW; }
+  return { wrap, label };
+}
+function notePlaceCaret(node, offset){
+  const sel = window.getSelection(), r = document.createRange();
+  r.setStart(node, Math.max(0, Math.min(offset, node.nodeType === 3 ? node.length : node.childNodes.length)));
+  r.collapse(true); sel.removeAllRanges(); sel.addRange(r);
+}
+function noteCaretAtEnd(el){
+  let n = el; while(n && n.lastChild) n = n.lastChild;
+  if(n && n.nodeType === 3) notePlaceCaret(n, n.length); else notePlaceCaret(el, el.childNodes.length);
+}
+// The line the caret is on: the nodes between the line breaks around it (inside the area or inside a block line).
+function noteCaretLine(area){
+  const sel = window.getSelection();
+  if(!sel || !sel.rangeCount || !area.contains(sel.anchorNode)) return null;
+  const marker = document.createElement('span');
+  const r = sel.getRangeAt(0).cloneRange(); r.collapse(true);
+  // Inside a task's label: the line is that task.
+  let lab = sel.anchorNode.nodeType === 1 ? sel.anchorNode : sel.anchorNode.parentElement;
+  lab = lab && lab.closest ? lab.closest('.inline-task-text') : null;
+  if(lab && area.contains(lab)){ r.setStartBefore(lab); r.collapse(true); }
+  r.insertNode(marker);
+  let node = marker;
+  while(node.parentNode !== area && !/^(DIV|P|LI)$/.test(node.parentNode.nodeName)) node = node.parentNode;
+  const container = node.parentNode;
+  let start = node; while(start.previousSibling && !isNoteLineEnd(start.previousSibling)) start = start.previousSibling;
+  let end = node; while(end.nextSibling && !isNoteLineEnd(end.nextSibling)) end = end.nextSibling;
+  const nodes = []; for(let n = start; ; n = n.nextSibling){ nodes.push(n); if(n === end) break; }
+  const anchorBefore = start.previousSibling;   // the line break before the line (or null = container start)
+  const lineNodes = nodes.filter(n=>n !== marker);
+  marker.remove();
+  return { container, nodes: lineNodes, anchorBefore };
+}
+// Turns the caret's line into a task, or a task line back into plain text. Returns false if nothing changed.
+function noteToggleTaskLine(area){
+  const line = noteCaretLine(area); if(!line) return false;
+  const first = line.nodes.find(n=>!(n.nodeType === 3 && !n.textContent.replace(/​/g, '').trim()));
+  if(isNoteTask(first)){
+    const label = first.nextSibling && isNoteTaskLabel(first.nextSibling) ? first.nextSibling : null;
+    const moved = label ? [...label.childNodes] : [];
+    let lastText = null;
+    if(label){ moved.forEach(n=>{ if(n.nodeType === 3) n.textContent = n.textContent.replace(/​/g, ''); label.parentNode.insertBefore(n, label); lastText = n; }); label.remove(); }
+    const keep = document.createTextNode(NOTE_ZW); first.parentNode.insertBefore(keep, first); first.remove();
+    if(lastText && lastText.nodeType === 3) notePlaceCaret(lastText, lastText.length);
+    else if(lastText) noteCaretAtEnd(lastText);
+    else notePlaceCaret(keep, keep.length);
+    return true;
+  }
+  if(area.textContent.length >= NOTE_PAGE_CHAR_LIMIT){ flashNotePageFull(); return false; }
+  const content = line.nodes.filter(n=>!(n.nodeType === 3 && !n.textContent.replace(/​/g, '')));
+  const t = noteMakeTask([]);
+  const ref = line.anchorBefore ? line.anchorBefore.nextSibling : line.container.firstChild;
+  line.container.insertBefore(t.wrap, ref || null);
+  line.container.insertBefore(t.label, t.wrap.nextSibling);
+  if(content.length){ t.label.textContent = ''; content.forEach(n=>t.label.appendChild(n)); }
+  line.nodes.forEach(n=>{ if(n.parentNode && n !== t.wrap && n !== t.label && !t.label.contains(n)) n.remove(); });
+  noteCaretAtEnd(t.label);
+  return true;
+}
+// Inside a task: Enter starts the next task (an empty task + Enter ends the list); Backspace at its very start
+// takes the box away (the text stays).
+function noteTaskKey(area, e){
+  const sel = window.getSelection(); if(!sel || !sel.rangeCount) return false;
+  let lab = sel.anchorNode && (sel.anchorNode.nodeType === 1 ? sel.anchorNode : sel.anchorNode.parentElement);
+  lab = lab && lab.closest ? lab.closest('.inline-task-text') : null;
+  if(!lab || !area.contains(lab)) return false;
+  const box = lab.previousSibling && isNoteTask(lab.previousSibling) ? lab.previousSibling : null;
+  if(!box) return false;
+  const empty = !lab.textContent.replace(/​/g, '').trim();
+  if(e.inputType === 'insertParagraph' || e.inputType === 'insertLineBreak'){
+    e.preventDefault();
+    if(empty){
+      const keep = document.createTextNode(NOTE_ZW);
+      lab.parentNode.insertBefore(keep, box); box.remove(); lab.remove();
+      notePlaceCaret(keep, keep.length);
+    } else {
+      const r = sel.getRangeAt(0).cloneRange(); r.setEndAfter(lab.lastChild || lab);
+      const rest = r.extractContents();
+      const t = noteMakeTask([...rest.childNodes]);
+      const br = document.createElement('br');
+      lab.parentNode.insertBefore(br, lab.nextSibling);
+      lab.parentNode.insertBefore(t.wrap, br.nextSibling);
+      lab.parentNode.insertBefore(t.label, t.wrap.nextSibling);
+      const firstText = t.label.firstChild;
+      if(firstText && firstText.nodeType === 3) notePlaceCaret(firstText, firstText.textContent.charAt(0) === NOTE_ZW ? 1 : 0); else notePlaceCaret(t.label, 0);
+    }
+    return true;
+  }
+  if(e.inputType === 'deleteContentBackward' && sel.isCollapsed){
+    const r = document.createRange(); r.setStart(lab, 0); r.setEnd(sel.anchorNode, sel.anchorOffset);
+    if(r.toString().replace(/​/g, '') === ''){
+      e.preventDefault();
+      const moved = [...lab.childNodes]; let firstMoved = null;
+      moved.forEach(n=>{ if(n.nodeType === 3) n.textContent = n.textContent.replace(/​/g, ''); lab.parentNode.insertBefore(n, lab); if(!firstMoved) firstMoved = n; });
+      const keep = document.createTextNode(NOTE_ZW); lab.parentNode.insertBefore(keep, box);
+      box.remove(); lab.remove();
+      notePlaceCaret(keep, keep.length);
+      return true;
+    }
+  }
+  return false;
+}
 function resolveLineColor(pageBg, chosen){
   if(!chosen || chosen === 'auto') return contrastLineColor(pageBg);
   return chosen;
@@ -9623,6 +9739,12 @@ function attachHandlers(){
     noteContentArea.style.fontSize = state.fontSizeValue + 'px';
     if(!state.readMode){
       noteContentArea.addEventListener('beforeinput', (e)=>{
+        if(noteTaskKey(noteContentArea, e)){
+          state.currentNoteText = noteContentArea.innerHTML;
+          state.currentPages[state.currentPageIndex] = state.currentNoteText;
+          updateNotePageMeter(noteContentArea.textContent.length);
+          return;
+        }
         const isInsert = e.inputType && e.inputType.indexOf('insert') === 0;
         const isDelete = e.inputType && e.inputType.indexOf('delete') === 0;
         if(isInsert || isDelete){
@@ -10131,113 +10253,14 @@ function attachHandlers(){
           break;
         }
         case 'note-add-task': {
+          // The task button turns the LINE you're on into a task (box at its start, the line's text beside it), and
+          // back into plain text when pressed again on a task line (owner). Never a stray box mid-line or stacking.
           const area = document.getElementById('note-content-area');
           if(area && !state.readMode){
             pushNoteUndoSnapshot();
             area.focus();
             ensureFormattingSelection(area);
-            // Pressing the button again with the caret on/next to an existing task box
-            // cancels it: unwrap the checkbox + label back into plain editable text.
-            const existingTask = findTaskInLine(area);
-            if(existingTask){
-              const textSpan = existingTask.nextElementSibling && existingTask.nextElementSibling.classList.contains('inline-task-text')
-                ? existingTask.nextElementSibling : null;
-              // A blank label was given a leading zero-width space when it was created (see the
-              // insertion branch below), purely so the caret had a real character to anchor to.
-              // Strip it back off here so cancelling doesn't leave that invisible character
-              // sitting in front of whatever the user actually typed into the label.
-              let restoredText = textSpan ? textSpan.textContent : '';
-              if(restoredText.charAt(0) === '​') restoredText = restoredText.slice(1);
-              // If that leaves no label text at all, fall back to a zero-width space rather than
-              // a truly empty text node: saveContentSelection/restoreContentSelection persist the
-              // caret as a plain-text character OFFSET, which cannot distinguish "no text here
-              // at all" from "position 0" once a render tears this node down and rebuilds it --
-              // without at least one real character to anchor to, the caret would silently snap
-              // back to the very start of the note on the next formatting action.
-              const textNode = document.createTextNode(restoredText || '​');
-              if(textSpan) textSpan.replaceWith(textNode);
-              existingTask.remove();
-              const sel0 = window.getSelection();
-              const r0 = document.createRange();
-              r0.setStart(textNode, textNode.length);
-              r0.collapse(true);
-              sel0.removeAllRanges();
-              sel0.addRange(r0);
-              state.currentNoteText = area.innerHTML;
-              pendingSelectionRestore = saveContentSelection();
-              break;
-            }
-            // Notes pages don't auto-flow overflowing content onto a new page today -- typing
-            // past NOTE_PAGE_CHAR_LIMIT is simply blocked (see the beforeinput handler) and the
-            // page counter flashes. A task box adds real characters too (its label, even if
-            // blank, holds at least the zero-width-space placeholder), so pressing Add Task on
-            // an already-full page should be blocked the same way typing would be, rather than
-            // silently exceeding the limit just because it goes through insertNode instead of
-            // an insertText input event.
-            if(area.textContent.length >= NOTE_PAGE_CHAR_LIMIT){
-              flashNotePageFull();
-              break;
-            }
-            const sel = window.getSelection();
-            let selectedText = '';
-            let range = null;
-            if(sel && sel.rangeCount && area.contains(sel.anchorNode)){
-              range = sel.getRangeAt(0);
-              if(!range.collapsed){
-                selectedText = range.toString();
-                range.deleteContents();
-              }
-            }
-            // Built as real DOM nodes (not an innerHTML string) so the caret can be placed
-            // precisely relative to them afterward. A trailing <br> always follows the task,
-            // and the caret is explicitly moved to right after it -- a fresh, task-free line --
-            // so a repeated press inserts ANOTHER task below instead of finding this one "on
-            // the current line" and cancelling it (see findTaskInLine).
-            const inlineTask = document.createElement('span');
-            inlineTask.className = 'inline-task';
-            inlineTask.contentEditable = 'false';
-            const checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.className = 'inline-task-checkbox';
-            inlineTask.appendChild(checkbox);
-            const textSpan = document.createElement('span');
-            textSpan.className = 'inline-task-text';
-            textSpan.contentEditable = 'true';
-            // A blank label gets a zero-width space rather than being left truly empty, for the
-            // same reason the fresh-line marker below does: the offset-based selection scheme
-            // (saveContentSelection/restoreContentSelection) can't tell "inside this specific
-            // empty label" apart from any other zero-character position once a render tears this
-            // node down and rebuilds it. Without a real character to anchor to, a later click
-            // meant to land back inside an empty label (to cancel it) can restore to the wrong
-            // place instead.
-            textSpan.textContent = selectedText || '​';
-            const trailingBr = document.createElement('br');
-            // A zero-width space right after the <br> gives the fresh empty line a real
-            // character to place the caret in. Without it the caret can only be expressed as
-            // "position 0 in the container" once this render is torn down and rebuilt (see
-            // saveContentSelection/restoreContentSelection, which persist the caret as a plain-
-            // text offset) -- and position 0 is indistinguishable from "right before the task",
-            // which is exactly the position findTaskInLine treats as being on the task's line.
-            // That false match is what made a second press cancel the task instead of adding
-            // another one below it.
-            const freshLineAnchor = document.createTextNode('​');
-            const frag = document.createDocumentFragment();
-            frag.appendChild(inlineTask);
-            frag.appendChild(textSpan);
-            frag.appendChild(trailingBr);
-            frag.appendChild(freshLineAnchor);
-            if(range){
-              range.collapse(false);
-              range.insertNode(frag);
-            } else {
-              area.appendChild(frag);
-            }
-            const sel2 = window.getSelection();
-            const newRange = document.createRange();
-            newRange.setStart(freshLineAnchor, freshLineAnchor.length);
-            newRange.collapse(true);
-            sel2.removeAllRanges();
-            sel2.addRange(newRange);
+            if(!noteToggleTaskLine(area)) break;
             state.currentNoteText = area.innerHTML;
             pendingSelectionRestore = saveContentSelection();
           }
