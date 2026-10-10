@@ -746,6 +746,21 @@
   /* Pencil closed: the drawing stays on the page (owner), it just lets taps/typing through. */
   .inline-draw-canvas.idle{ pointer-events:none; touch-action:auto; cursor:auto; }
   .inline-draw-popover{ min-width:172px; position:relative; }
+  .pen-popover{ width:272px; }
+  .pen-tools-row{ display:grid; grid-template-columns:repeat(6, 1fr); gap:5px; }
+  .pen-tool-btn{ width:auto; height:44px; flex-direction:column; gap:3px; padding:0; }
+  .pen-tool-btn span{ font-size:8.5px; font-weight:700; line-height:1; letter-spacing:0.1px; }
+  .pen-size-row{ display:flex; align-items:center; gap:8px; margin-top:10px; }
+  .pen-preview{ flex:1; height:36px; border-radius:9px; border:1px solid var(--line); overflow:hidden; }
+  .pen-preview-svg{ width:100%; height:100%; display:block; }
+  .pen-size-num{ min-width:30px; text-align:center; font-size:13px; font-weight:800; color:var(--text); font-variant-numeric:tabular-nums; }
+  .pen-slider-row{ display:flex; align-items:center; gap:8px; margin-top:8px; }
+  .pen-slider-row .pen-size-slider{ flex:1; margin:0; }
+  .pen-slider-dot{ border-radius:50%; background:var(--text); flex-shrink:0; }
+  .pen-color-grid{ display:grid; grid-template-columns:repeat(10, 22px); justify-content:space-between; row-gap:8px; margin-top:12px; }
+  .pen-color-grid .canvas-swatch{ border-color:rgba(128,128,128,0.35); }
+  .pen-color-grid .canvas-swatch.selected{ border-color:#e8e6e1; box-shadow:0 0 0 1px #000; }
+  .pen-color-grid .color-plus-btn{ padding:0; display:flex; align-items:center; justify-content:center; font-size:13px; line-height:1; }
   .inline-draw-popover.has-close{ padding-top:26px; }
   .inline-draw-popover .canvas-swatch-row{ margin-bottom:8px; }
   .inline-draw-popover .canvas-toolbar{ margin-bottom:0; }
@@ -7005,6 +7020,7 @@ function colorPickerCurrentHex(target){
     case 'highlight': { const hl = ['rainbow','#fff176','#a5d8ff','#ffb3c1','#b2f2bb','#ffd8a8']; return hl.includes(state.highlighterColor) ? '#ffeb3b' : state.highlighterColor; }
     case 'fontcolor': return state.fontColor;
     case 'stickycolor': return state.stickyNoteColor;
+    case 'pencolor': return /^#[0-9a-f]{6}$/i.test(state.canvasPenColor) ? state.canvasPenColor : '#000000';
     default: return '#ffffff';
   }
 }
@@ -7294,27 +7310,55 @@ function fontColorPopoverHTML(){
     </div>
   `;
 }
+// Pencil tools (owner: more pencil options + a better thickness scale): Pen, Pencil, Marker, Highlighter, Eraser,
+// a 1-40 thickness slider with a live preview of the real stroke, 18 colours + any colour. One panel for the note's
+// pencil, the Draw page and the drawing space.
+const PEN_TOOLS = [
+  {id:'pen', label:'Pen', icon:'<path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path>'},
+  {id:'pencil', label:'Pencil', icon:'<path d="M15 4l5 5L9 20H4v-5Z"></path><path d="M13 6l5 5"></path><path d="M4 15l5 5"></path>'},
+  {id:'marker', label:'Marker', icon:'<path d="M14 3l7 7-7 7-7-7Z"></path><path d="M7 10l-4 4v4h4l4-4"></path>'},
+  {id:'highlighter', label:'Highlighter', icon:'<path d="M9 11l6 6"></path><path d="M15 5l4 4-8 8-4-4Z"></path><path d="M7 13l-4 7h6l1-2"></path>'},
+  {id:'eraser', label:'Eraser', icon:'<path d="M20 20H8l-6-6a2 2 0 0 1 0-3l9-9a2 2 0 0 1 3 0l7 7a2 2 0 0 1 0 3l-8 8"></path>'},
+];
+const PEN_COLORS = ['#000','#e8e6e1','#7a7a7a','#e63946','#ff7a59','#f4a261','#ffd60a','#a7c957','#2a9d8f','#06d6a0','#4cc9f0','#457b9d','#3a5bd9','#7b2cbf','#c77dff','#ff4d9d','#8d5524','#5e3a1a'];
+const PEN_SIZE_MIN = 1, PEN_SIZE_MAX = 40;
+// How each tool lays down ink: its real line width from the chosen size, and how see-through it is.
+function penStyle(tool, size){
+  switch(tool){
+    case 'pencil': return { width: Math.max(1, size * 0.6), alpha: 0.75, cap: 'round' };
+    case 'marker': return { width: size * 1.8, alpha: 0.88, cap: 'round' };
+    case 'highlighter': return { width: size * 3.5, alpha: 0.35, cap: 'butt' };
+    case 'eraser': return { width: Math.max(6, size * 3), alpha: 1, cap: 'round' };
+    default: return { width: size, alpha: 1, cap: 'round' };
+  }
+}
+function penPreviewSVG(){
+  const st = penStyle(state.canvasTool, state.canvasPenSize);
+  const w = Math.min(26, st.width);
+  const eraser = state.canvasTool === 'eraser';
+  return `<svg class="pen-preview-svg" viewBox="0 0 120 32" preserveAspectRatio="none"><path d="M8 20 C 30 4, 52 30, 74 14 S 104 10, 112 16" fill="none" stroke="${eraser ? '#7a7a7a' : state.canvasPenColor}" stroke-opacity="${eraser ? 0.6 : st.alpha}" stroke-width="${w}" stroke-linecap="${st.cap}" stroke-linejoin="round" vector-effect="non-scaling-stroke"${eraser ? ' stroke-dasharray="3 4"' : ''}></path></svg>`;
+}
 function inlineDrawPopoverHTML(showCloseButton){
-  const penColors = ['#000','#e63946','#2a9d8f','#457b9d','#f4a261','#e8e6e1'];
+  const custom = !PEN_COLORS.includes(state.canvasPenColor);
   return `
-    <div class="float-popover inline-draw-popover${showCloseButton?' has-close':''}" onclick="event.stopPropagation()">
+    <div class="float-popover inline-draw-popover pen-popover${showCloseButton?' has-close':''}" onclick="event.stopPropagation()">
       ${showCloseButton ? `<button class="float-popover-close" data-action="note-inlinedraw-close" title="Stop drawing">×</button>` : ''}
-      <div class="canvas-toolbar">
-        <button class="canvas-tool-btn${state.canvasTool==='pen'?' active':''}" data-canvastool="pen" title="Pen">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>
-        </button>
-        <button class="canvas-tool-btn${state.canvasTool==='eraser'?' active':''}" data-canvastool="eraser" title="Eraser">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20H8l-6-6a2 2 0 0 1 0-3l9-9a2 2 0 0 1 3 0l7 7a2 2 0 0 1 0 3l-8 8"></path></svg>
-        </button>
-        <div class="canvas-size-row">
-          ${[2,4,7].map(s=>`<button class="canvas-size-btn${state.canvasPenSize===s?' active':''}" data-setpensize="${s}"><span style="width:${s+3}px;height:${s+3}px;"></span></button>`).join('')}
-        </div>
-        <button class="canvas-tool-btn" data-action="canvas-clear" title="Clear">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path></svg>
-        </button>
+      <div class="pen-tools-row">
+        ${PEN_TOOLS.map(t=>`<button class="canvas-tool-btn pen-tool-btn${state.canvasTool===t.id?' active':''}" data-canvastool="${t.id}" title="${t.label}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${t.icon}</svg><span>${t.label}</span></button>`).join('')}
+        <button class="canvas-tool-btn pen-tool-btn" data-action="canvas-clear" title="Clear"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path></svg><span>Clear</span></button>
       </div>
-      <div class="canvas-swatch-row" style="margin-top:8px;">
-        ${penColors.map(c=>`<span class="canvas-swatch${state.canvasPenColor===c?' selected':''}" style="background:${c};" data-setpencolor="${c}"></span>`).join('')}
+      <div class="pen-size-row">
+        <div class="pen-preview" id="pen-preview" data-keep-color style="background:${state.canvasColor};">${penPreviewSVG()}</div>
+        <span class="pen-size-num" id="pen-size-num">${state.canvasPenSize}</span>
+      </div>
+      <div class="pen-slider-row">
+        <span class="pen-slider-dot" style="width:4px;height:4px;"></span>
+        <input type="range" id="pen-size-slider" class="brightness-slider pen-size-slider" min="${PEN_SIZE_MIN}" max="${PEN_SIZE_MAX}" step="1" value="${state.canvasPenSize}">
+        <span class="pen-slider-dot" style="width:14px;height:14px;"></span>
+      </div>
+      <div class="pen-color-grid">
+        ${PEN_COLORS.map(c=>`<span class="canvas-swatch${state.canvasPenColor===c?' selected':''}" style="background:${c};" data-setpencolor="${c}"></span>`).join('')}
+        <button class="canvas-swatch color-plus-btn${custom?' selected':''}" data-openpicker="pencolor" title="Any colour" style="${custom?`background:${state.canvasPenColor};color:#fff;`:''}">+</button>
       </div>
     </div>
   `;
@@ -7434,6 +7478,7 @@ function scratchDrawScreen(){
       <canvas id="scratch-draw-canvas" class="draw-canvas"></canvas>
     </div>
     </div>
+    ${state.colorPickerTarget && state.colorPickerTarget !== 'fontcolor' ? colorPickerTemplate() : ''}
   `;
 }
 function notesCanvasScreen(){
@@ -8971,9 +9016,20 @@ function initCanvas(canvasId, isOverlay){
     img.src = pageSnapshot;
   } else canvas.dataset.ready = '1';
   let drawing = false, lastX = 0, lastY = 0, activePointer = null;
+  // See-through tools (pencil, highlighter) draw the whole stroke on a temporary layer above the page, then lay it down
+  // once at the end - so a stroke never gets darker where it crosses itself.
+  let layer = null, lctx = null, pts = [], st = null, tool = 'pen';
   const getPos = e => {
     const r = canvas.getBoundingClientRect();
     return { x: e.clientX - r.left, y: e.clientY - r.top };
+  };
+  const paintLayer = ()=>{
+    lctx.clearRect(0, 0, layer.width, layer.height);
+    lctx.beginPath();
+    lctx.moveTo(pts[0].x, pts[0].y);
+    if(pts.length === 1) lctx.lineTo(pts[0].x + 0.01, pts[0].y);
+    for(let i = 1; i < pts.length; i++) lctx.lineTo(pts[i].x, pts[i].y);
+    lctx.stroke();
   };
   canvas.addEventListener('pointerdown', e=>{
     // One undo step per stroke: snapshot the canvas as it looked right before this stroke starts,
@@ -8985,31 +9041,55 @@ function initCanvas(canvasId, isOverlay){
     canvas.setPointerCapture(e.pointerId);
     const p = getPos(e);
     lastX = p.x; lastY = p.y;
-    const erasing = state.canvasTool==='eraser';
-    ctx.globalCompositeOperation = erasing ? 'destination-out' : 'source-over';
+    tool = state.canvasTool;
+    st = penStyle(tool, state.canvasPenSize);
+    if(st.alpha < 1){
+      layer = document.createElement('canvas');
+      layer.width = canvas.width; layer.height = canvas.height;
+      const par = canvas.parentNode;
+      if(getComputedStyle(par).position === 'static') par.style.position = 'relative';
+      const pr = par.getBoundingClientRect(), cr = canvas.getBoundingClientRect();
+      layer.style.cssText = `position:absolute; left:${cr.left - pr.left - par.clientLeft}px; top:${cr.top - pr.top - par.clientTop}px; width:${cr.width}px; height:${cr.height}px; pointer-events:none; z-index:6; opacity:${st.alpha};`;
+      par.insertBefore(layer, canvas.nextSibling);
+      lctx = layer.getContext('2d');
+      lctx.strokeStyle = state.canvasPenColor; lctx.lineWidth = st.width; lctx.lineCap = st.cap; lctx.lineJoin = 'round';
+      pts = [p];
+      paintLayer();
+      return;
+    }
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = tool === 'eraser' ? 'destination-out' : 'source-over';
     ctx.fillStyle = state.canvasPenColor;
     ctx.beginPath();
-    ctx.arc(p.x, p.y, (erasing ? state.canvasPenSize*4 : state.canvasPenSize)/2, 0, Math.PI*2);
+    ctx.arc(p.x, p.y, st.width/2, 0, Math.PI*2);
     ctx.fill();
   });
   canvas.addEventListener('pointermove', e=>{
     if(!drawing || e.pointerId !== activePointer) return;
-    const p = getPos(e);
-    const erasing = state.canvasTool==='eraser';
-    ctx.globalCompositeOperation = erasing ? 'destination-out' : 'source-over';
-    ctx.strokeStyle = state.canvasPenColor;
-    ctx.lineWidth = erasing ? state.canvasPenSize*4 : state.canvasPenSize;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
     // Every point the finger passed since the last frame (coalesced events), so fast strokes stay smooth.
-    const pts = (e.getCoalescedEvents && e.getCoalescedEvents().length) ? e.getCoalescedEvents().map(getPos) : [p];
+    const got = (e.getCoalescedEvents && e.getCoalescedEvents().length) ? e.getCoalescedEvents().map(getPos) : [getPos(e)];
+    if(layer){ got.forEach(q=>pts.push(q)); paintLayer(); return; }
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = tool === 'eraser' ? 'destination-out' : 'source-over';
+    ctx.strokeStyle = state.canvasPenColor;
+    ctx.lineWidth = st.width;
+    ctx.lineCap = st.cap;
+    ctx.lineJoin = 'round';
     ctx.beginPath();
     ctx.moveTo(lastX, lastY);
-    pts.forEach(q=>ctx.lineTo(q.x, q.y));
+    got.forEach(q=>ctx.lineTo(q.x, q.y));
     ctx.stroke();
-    lastX = pts[pts.length - 1].x; lastY = pts[pts.length - 1].y;
+    lastX = got[got.length - 1].x; lastY = got[got.length - 1].y;
   });
-  const stop = e=>{ if(e.pointerId===activePointer){ drawing=false; activePointer=null; noteLiveSave(); } };
+  const finishLayer = ()=>{
+    if(!layer) return;
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = st.alpha;
+    ctx.drawImage(layer, 0, 0);
+    ctx.globalAlpha = 1;
+    layer.remove(); layer = null; lctx = null; pts = [];
+  };
+  const stop = e=>{ if(e.pointerId===activePointer){ drawing=false; activePointer=null; finishLayer(); noteLiveSave(); } };
   canvas.addEventListener('pointerup', stop);
   canvas.addEventListener('pointercancel', stop);
   canvas.addEventListener('pointerleave', stop);
@@ -9603,11 +9683,16 @@ function attachHandlers(){
   document.querySelectorAll('[data-canvastool]').forEach(el=>{
     el.addEventListener('click', ()=>{ state.canvasTool = el.getAttribute('data-canvastool'); renderDevice(); });
   });
-  document.querySelectorAll('[data-setpensize]').forEach(el=>{
-    el.addEventListener('click', ()=>{ state.canvasPenSize = parseInt(el.getAttribute('data-setpensize'), 10); renderDevice(); });
-  });
   document.querySelectorAll('[data-setpencolor]').forEach(el=>{
-    el.addEventListener('click', ()=>{ state.canvasPenColor = el.getAttribute('data-setpencolor'); renderDevice(); });
+    el.addEventListener('click', ()=>{ state.canvasPenColor = el.getAttribute('data-setpencolor'); if(state.canvasTool === 'eraser') state.canvasTool = 'pen'; renderDevice(); });
+  });
+  // Thickness slider: live, no re-render while sliding (the preview and number follow the finger).
+  document.querySelectorAll('#pen-size-slider').forEach(sl=>{
+    sl.addEventListener('input', ()=>{
+      state.canvasPenSize = Math.max(PEN_SIZE_MIN, Math.min(PEN_SIZE_MAX, parseInt(sl.value, 10) || 1));
+      const num = document.getElementById('pen-size-num'); if(num) num.textContent = state.canvasPenSize;
+      const pv = document.getElementById('pen-preview'); if(pv) pv.innerHTML = penPreviewSVG();
+    });
   });
   document.querySelectorAll('[data-setcanvascolor]').forEach(el=>{
     el.addEventListener('click', ()=>{ state.canvasColor = el.getAttribute('data-setcanvascolor'); renderDevice(); });
@@ -10339,6 +10424,7 @@ function attachHandlers(){
               break;
             }
             case 'stickycolor': state.stickyNoteColor = hex; break;
+            case 'pencolor': state.canvasPenColor = hex; if(state.canvasTool === 'eraser') state.canvasTool = 'pen'; break;
           }
           state.colorPickerTarget = null;
           break;
