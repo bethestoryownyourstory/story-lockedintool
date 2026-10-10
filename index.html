@@ -5435,7 +5435,7 @@ function addAccountTemplate(){
   return `
     <div class="modal-overlay" data-action="add-account-bg">
       <div class="modal-sheet" onclick="event.stopPropagation()">
-        <div class="modal-head"><span class="modal-title">Add ${escText(f.broker || P.label)} account</span><button class="modal-close" data-action="add-account-close">×</button></div>
+        <div class="modal-head"><span class="modal-title">Log in to ${escText(f.broker || P.label)}</span><button class="modal-close" data-action="add-account-close">×</button></div>
         ${(()=>{ const b = brokerByName(f.broker); if(!b) return ''; return `<div class="acct-broker-sub">${escText(b.regs)}${b.fsca ? ' · FSCA' : ''}${b.note ? ' · ' + escText(b.note) : ''}</div>` + (b.platforms.length > 1 ? `<div class="acct-seg acct-seg-n" style="grid-template-columns:repeat(${b.platforms.length},1fr);margin-bottom:8px;">${b.platforms.map(p=>`<button class="acct-seg-btn${f.platform===p?' on':''}" data-addacct-platform="${p}">${escText((PLATFORMS[p] || {}).label || p)}</button>`).join('')}</div>` : ''); })()}
         ${P.env ? `<div class="acct-seg">
           <button class="acct-seg-btn${f.env==='live'?' on':''}" data-addacct-env="live">Real</button>
@@ -5446,7 +5446,7 @@ function addAccountTemplate(){
           <input class="field-input" data-addacct-field="${k}" type="${kind === 'password' ? 'password' : kind === 'email' ? 'email' : 'text'}" inputmode="${kind === 'numeric' ? 'numeric' : kind === 'email' ? 'email' : 'text'}" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="${escText(k === 'server' && f.broker ? f.broker + ' server (from your broker’s email)' : (ph || ''))}" value="${escText(v[k] || '')}">`).join('')}
         ${P.note && !P.soon ? `<div class="acct-note">${escText(P.note)}</div>` : ''}
         ${f.msg ? `<div class="acct-msg">${escText(f.msg)}</div>` : ''}
-        ${P.soon ? '' : `<button class="btn-wide btn-primary" style="margin-top:12px;" data-action="add-account-go"${f.busy?' disabled':''}>${f.busy ? 'Connecting…' : 'Connect'}</button>`}
+        ${P.soon ? '' : `<button class="btn-wide btn-primary" style="margin-top:12px;" data-action="add-account-go"${f.busy?' disabled':''}>${f.busy ? 'Logging in…' : 'Log in'}</button>`}
       </div>
     </div>`;
 }
@@ -5468,17 +5468,15 @@ function symbolPickerTemplate(){
 // The words "MT5 ACCOUNT": every platform and broker you can use pops up IN THE CARD'S PLACE, the same size (owner).
 // Platforms by group, then the real brokers that offer MT4 / MT5. Tap one to add your account.
 function brokerPanelHTML(){
-  const mine = tradeAccounts();
-  const act = activeTradeAccount();
-  const yours = mine.length ? `<div class="broker-group">Your accounts</div>` + mine.map(a=>`<div class="broker-row${act && a.id === act.id ? ' on' : ''}" data-switchacct="${escText(a.id)}"><span class="broker-name">${escText(a.name)}</span><span class="broker-sub">${escText(a.broker || (PLATFORMS[a.platform] || {}).label || '')}${act && a.id === act.id ? ' · now' : ''}</span></div>`).join('') + `<div class="broker-group">Add another</div>` : '';
+  // Brokers only (owner): you search your broker, then log in to it with your account details.
   const row = b=>`<div class="broker-row broker-row2" data-broker-name="${escText(b.name)}"><span class="broker-l"><span class="broker-name">${escText(b.name)}</span><span class="broker-regs">${escText(b.regs)}${b.fsca ? ' · FSCA' : ''}</span></span><span class="broker-sub">${b.platforms.map(p=>escText((PLATFORMS[p] || {}).label || p)).join(' · ')}</span></div>`;
   const fx = BROKERS.filter(b=>!b.crypto && !['Alpaca','Interactive Brokers'].includes(b.name));
   const stocks = BROKERS.filter(b=>['Alpaca','Interactive Brokers'].includes(b.name));
   const crypto = BROKERS.filter(b=>b.crypto);
   return `<div class="broker-panel" onclick="event.stopPropagation()">
-    <div class="broker-head"><span>${mine.length ? 'Your accounts and brokers' : 'Search broker'}</span><button class="broker-x" data-action="broker-panel-close" aria-label="Close">×</button></div>
+    <div class="broker-head"><span>Search broker</span><button class="broker-x" data-action="broker-panel-close" aria-label="Close">×</button></div>
     <input class="broker-search" id="broker-search" type="text" placeholder="Search broker" autocomplete="off" spellcheck="false" value="${escText(state.brokerQuery || '')}">
-    <div class="broker-list">${yours}
+    <div class="broker-list">
       <div class="broker-group">Forex & CFDs</div>${fx.map(row).join('')}
       <div class="broker-group">Stocks</div>${stocks.map(row).join('')}
       <div class="broker-group">Crypto</div>${crypto.map(row).join('')}
@@ -10646,18 +10644,11 @@ function attachHandlers(){
     state.addAccount.msg = ''; state.addAccountOpen = true;
     renderDevice();
   }));
-  document.querySelectorAll('[data-switchacct]').forEach(el=>el.addEventListener('click', ()=>{
-    const id = el.getAttribute('data-switchacct'); const a = tradeAccounts().find(x=>x.id === id);
-    state.brokerPanelOpen = false; if(!a) return;
-    state.activeTradeId = id; try{ localStorage.setItem('story-trade-active', id); }catch(err){}
-    state.focusSymbol = a.symbol || (PLATFORMS[a.platform] || {}).sym || state.focusSymbol; state.focusName = null; state.focusQuote = null; state.focusBars = [];
-    renderDevice(); tradeRefreshNow(true);
-  }));
   const brokerSearch = document.getElementById('broker-search');
   if(brokerSearch) brokerSearch.addEventListener('input', ()=>{
     state.brokerQuery = brokerSearch.value;
     const q = brokerSearch.value.toLowerCase();
-    document.querySelectorAll('.broker-row2, .broker-row[data-switchacct]').forEach(r=>{ r.style.display = (!q || r.textContent.toLowerCase().includes(q)) ? '' : 'none'; });
+    document.querySelectorAll('.broker-row2').forEach(r=>{ r.style.display = (!q || r.textContent.toLowerCase().includes(q)) ? '' : 'none'; });
     document.querySelectorAll('.broker-group').forEach(g=>{ g.style.display = q ? 'none' : ''; });
   });
   // Swipe the account card left / right to go through your accounts (owner).
