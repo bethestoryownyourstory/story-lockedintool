@@ -1222,6 +1222,34 @@
   .realcard-isphoto{ padding:0; }
   .realcard-photo{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; border-radius:inherit; }
   .realcard-brand{ display:flex; align-items:center; gap:8px; }
+  .community-group-card2 .group-live-dot, .community-trend-card2 .group-live-dot, .community-browse-card .group-live-dot, .group-live-dot{ position:absolute !important; top:8px; right:8px; left:auto; margin:0; width:12px; height:12px; border-radius:50%; background:#22c55e; box-shadow:0 0 0 2px #000000, 0 0 10px rgba(34,197,94,0.8); z-index:2; }
+  .community-group-card2, .community-trend-card2, .community-browse-card{ position:relative; }
+  .community-call-btn{ display:inline-flex; align-items:center; gap:5px; }
+  .community-live-call{ display:flex; align-items:center; gap:10px; margin:6px 0 12px; padding:12px; border:1px solid rgba(34,197,94,0.5); border-radius:14px; }
+  .community-live-dot{ width:10px; height:10px; border-radius:50%; background:#22c55e; flex-shrink:0; box-shadow:0 0 10px rgba(34,197,94,0.8); }
+  .community-live-call-t{ flex:1; display:flex; flex-direction:column; gap:2px; font-size:12px; }
+  .community-live-call-t span{ color:var(--muted); font-size:11px; }
+  #story-profile .pf-chat-call{ margin-left:auto; width:38px; height:38px; border-radius:50%; border:1px solid rgba(255,255,255,0.25); background:none; color:inherit; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  #story-profile .pf-chat-call[hidden]{ display:none; }
+  #story-profile .pf-chat-sheet{ margin:6px 12px; padding:10px; border:1px solid rgba(255,255,255,0.2); border-radius:14px; display:flex; flex-direction:column; gap:6px; }
+  #story-profile .pf-chat-sheet[hidden]{ display:none; }
+  #story-profile .pf-chat-sheet-t{ font-weight:700; font-size:13px; }
+  #story-profile .pf-chat-sheet button{ text-align:left; padding:10px; border-radius:10px; border:1px solid rgba(255,255,255,0.2); background:none; color:inherit; font-size:13px; }
+  #story-profile .pf-chat-sheet button.on{ background:#ffffff; color:#000000; font-weight:700; }
+  #story-profile .pf-chat-sheet-n{ font-size:11px; opacity:0.6; }
+  #story-profile .pf-newgroup{ padding:4px 0 6px; }
+  #story-profile .pf-newgroup[hidden]{ display:none; }
+  #story-profile .pf-newgroup-btn{ width:100%; padding:11px; border-radius:12px; border:1px dashed rgba(255,255,255,0.35); background:none; color:inherit; font-weight:700; font-size:13px; }
+  #story-profile .pf-newgroup-btn[hidden]{ display:none; }
+  #story-profile .pf-newgroup-form{ display:flex; gap:8px; }
+  #story-profile .pf-newgroup-form[hidden]{ display:none; }
+  #story-profile .pf-newgroup-form input{ flex:1; min-width:0; padding:10px 12px; border-radius:12px; border:1px solid rgba(255,255,255,0.3); background:none; color:inherit; font-size:14px; }
+  #story-profile .pf-newgroup-form button{ padding:0 14px; border-radius:12px; border:0; background:#ffffff; color:#000000; font-weight:700; }
+  #story-profile .msg-lock{ display:inline-flex; margin-right:4px; vertical-align:-1px; opacity:0.8; font-style:normal; }
+  .privacy-pick{ width:100%; display:flex; gap:6px; }
+  .privacy-pick .theme-opt{ flex:1; padding-left:4px; padding-right:4px; white-space:nowrap; }
+  .privacy-check{ width:22px; height:22px; border-radius:50%; border:1px solid var(--line); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:800; }
+  .privacy-check.on{ background:#e8e6e1; color:#0a0a0a; border-color:#e8e6e1; }
   .range-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:10px; }
   .range-grid .acct-seg-btn{ padding-left:2px; padding-right:2px; font-size:12px; }
   .cal{ margin-top:14px; }
@@ -6776,6 +6804,32 @@ function saveQuickAccess(patch){
   if(NATIVE && window.StoryNative.setQuickAccess) window.StoryNative.setQuickAccess(JSON.stringify(q));
   else { try{ localStorage.setItem('story-quick-access', JSON.stringify(q)); }catch(e){} }
 }
+// Profile privacy (owner) - the same for everyone: a person or a company profile is no different. Who can call you:
+// Everyone (anyone who opens your profile and taps Message sees the call button in their chat), Specific people
+// (picked from your chats) or No one. Kept in 'story-privacy' (calls, callPeople) and sent to the message server.
+function storyPrivacy(){ try{ return JSON.parse(localStorage.getItem('story-privacy') || '{}') || {}; }catch(e){ return {}; } }
+function setStoryPrivacy(p){ try{ localStorage.setItem('story-privacy', JSON.stringify(p)); }catch(e){} try{ const q = JSON.parse(localStorage.getItem('story-msg-outbox') || '[]') || []; q.push({ at: Date.now(), type:'privacy', privacy: p }); localStorage.setItem('story-msg-outbox', JSON.stringify(q.slice(-500))); }catch(e){} }
+function privacySettingsHTML(){
+  const p = storyPrivacy(), calls = p.calls || 'everyone', picked = p.callPeople || [];
+  let people = []; try{ people = (JSON.parse(localStorage.getItem('story-messages') || '[]') || []).filter(c=>c && c.kind !== 'group'); }catch(e){}
+  return `
+    <div class="section-title">PRIVACY</div>
+    <div class="row-card">
+      <div class="row" style="flex-wrap:wrap;gap:8px;">
+        <div class="row-left"><div class="row-name">Who can call you</div><div class="row-sub">${calls === 'everyone' ? 'Anyone who messages you sees the call button' : calls === 'people' ? 'Only the people you pick' : 'No one can call you'}</div></div>
+        <div class="theme-pick privacy-pick">
+          <button class="theme-opt${calls === 'everyone' ? ' on' : ''}" data-action="privacy-calls" data-value="everyone">Everyone</button>
+          <button class="theme-opt${calls === 'people' ? ' on' : ''}" data-action="privacy-calls" data-value="people">Specific people</button>
+          <button class="theme-opt${calls === 'nobody' ? ' on' : ''}" data-action="privacy-calls" data-value="nobody">No one</button>
+        </div>
+      </div>
+      ${calls === 'people' ? (people.length ? people.map(c=>`
+        <div class="row" data-action="privacy-call-person" data-value="${escText(c.id)}" style="cursor:pointer;">
+          <div class="row-left"><div class="row-name">${escText(c.name || (c.username ? '@' + c.username : 'Chat'))}</div></div>
+          <span class="privacy-check${picked.includes(c.id) ? ' on' : ''}">${picked.includes(c.id) ? '✓' : ''}</span>
+        </div>`).join('') : `<div class="row"><div class="row-left"><div class="row-sub">People you chat with show here to pick from.</div></div></div>`) : ''}
+    </div>`;
+}
 function settingsHubScreen(){
   return `
     <div class="page-shell">
@@ -6794,6 +6848,7 @@ function settingsHubScreen(){
       </div>
     </div>
     ${quickAccessSettingsHTML()}
+    ${privacySettingsHTML()}
     <div class="section-title">CATEGORIES</div>
     <div class="row-card" style="cursor:pointer;" data-nav="notif-settings">
       <div class="row"><div class="row-left"><div class="row-name">Notifications</div></div><span class="chev-right">›</span></div>
@@ -7141,6 +7196,10 @@ window.storyProfileOnly = function(){
         <button class="pf-mf" data-pf="mf-sub" data-f="public">Public</button>
         <button class="pf-mf" data-pf="mf-sub" data-f="private">Private</button>
       </div>
+      <div class="pf-newgroup" hidden>
+        <button class="pf-newgroup-btn" data-pf="newgroup-open">+ New private group</button>
+        <div class="pf-newgroup-form" hidden><input type="text" maxlength="40" placeholder="Group name" autocomplete="off" enterkeyhint="done"><button data-pf="newgroup-make">Create</button></div>
+      </div>
       <div class="pf-msgs-list"></div>
       <div class="pf-msgs-menu" hidden><button data-pf="msg-archive"></button></div>
       <div class="pf-msgs-empty">
@@ -7159,7 +7218,14 @@ window.storyProfileOnly = function(){
       <div class="pf-chat-head">
         <button class="pf-ed-back" data-pf="chat-back" aria-label="Back">‹</button>
         <span class="msg-pic"></span>
-        <div class="pf-chat-names"><div class="pf-chat-name"></div><div class="pf-chat-user"></div></div>
+        <div class="pf-chat-names" data-pf="chat-info"><div class="pf-chat-name"></div><div class="pf-chat-user"></div></div>
+        <button class="pf-chat-call" data-pf="chat-call" aria-label="Call" hidden><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/></svg></button>
+      </div>
+      <div class="pf-chat-sheet" hidden>
+        <div class="pf-chat-sheet-t">Group calls</div>
+        <button data-pf="callmode" data-m="open">Everyone in the group can join</button>
+        <button data-pf="callmode" data-m="ask">Ask to join - others can still listen</button>
+        <div class="pf-chat-sheet-n">You can't hide a call - everyone in the group always sees it.</div>
       </div>
       <div class="pf-chat-list"></div>
       <div class="pf-chat-bar">
@@ -7273,6 +7339,11 @@ window.storyProfileOnly = function(){
     else if(k === 'msg-open') openChat(b.getAttribute('data-id'));
     else if(k === 'chat-back') closeChat();
     else if(k === 'chat-send') sendChatMessage();
+    else if(k === 'chat-call') showToast('Calls — coming soon');   // needs STORY's call server (like Messages)
+    else if(k === 'chat-info'){ const c = msgChats().find(x=>x.id === msgView.chat); const sh = document.querySelector('#story-profile .pf-chat-sheet'); if(c && sh && c.groupType === 'private' && (c.leaders || []).includes('me')){ sh.hidden = !sh.hidden; renderChat(); } }
+    else if(k === 'callmode'){ const c = msgChats().find(x=>x.id === msgView.chat); if(c){ c.callJoin = b.getAttribute('data-m'); saveMsgChats(); msgOut({ type:'callmode', chatId:c.id, mode:c.callJoin }); } document.querySelector('#story-profile .pf-chat-sheet').hidden = true; renderChat(); }
+    else if(k === 'newgroup-open'){ const f = document.querySelector('#story-profile .pf-newgroup-form'); f.hidden = false; b.hidden = true; const i = f.querySelector('input'); i.value = ''; profileTypingOn(); i.focus(); }
+    else if(k === 'newgroup-make') makePrivateGroup();
     else if(k === 'msg-archive'){
       const c = msgChats().find(x=>x.id === msgView.menuFor);
       if(c){ c.archived = !c.archived; saveMsgChats(); }
@@ -7519,7 +7590,31 @@ function msgChats(){
   return msgChatsCache;
 }
 function saveMsgChats(){ try{ localStorage.setItem(MSG_KEY, JSON.stringify(msgChatsCache || [])); }catch(e){} }
-window.addEventListener('storage', e=>{ if(e.key === MSG_KEY){ msgChatsCache = null; renderMsgList(); renderChat(); } });
+// Community groups you're part of show in your chats too (owner) - public group chats, from 'story-community-chats'.
+function mergeCommunityChats(){
+  let groups = []; try{ groups = JSON.parse(localStorage.getItem('story-community-chats') || '[]') || []; }catch(e){}
+  const list = msgChats(), ids = groups.map(g=>'cg:' + g.id);
+  let changed = false;
+  groups.forEach(g=>{
+    const c = list.find(x=>x.id === 'cg:' + g.id);
+    if(!c){ list.push({ id:'cg:' + g.id, kind:'group', groupType:'public', community:true, name:g.name, photo:g.image || '', messages:[] }); changed = true; }
+    else if(c.name !== g.name){ c.name = g.name; changed = true; }
+  });
+  // Left a group (and never chatted in it): it leaves your chats too.
+  for(let i = list.length - 1; i >= 0; i--) if(list[i].community && !ids.includes(list[i].id) && !(list[i].messages || []).length){ list.splice(i, 1); changed = true; }
+  if(changed) saveMsgChats();
+}
+// Private groups are made only here in Messages (owner) - never in Community, never shown there.
+function makePrivateGroup(){
+  const f = document.querySelector('#story-profile .pf-newgroup-form'); if(!f) return;
+  const name = f.querySelector('input').value.trim(); if(!name){ f.querySelector('input').focus(); return; }
+  const c = { id:'pg' + Date.now(), kind:'group', groupType:'private', name, creator:'me', leaders:['me'], members:['me'], callJoin:'open', messages:[] };
+  msgChats().push(c); saveMsgChats(); msgOut({ type:'group-create', chatId:c.id, name, groupType:'private' });
+  f.hidden = true; document.querySelector('#story-profile [data-pf="newgroup-open"]').hidden = false;
+  renderMsgList(); openChat(c.id);
+}
+document.addEventListener('keydown', e=>{ if(e.key === 'Enter' && e.target.closest && e.target.closest('.pf-newgroup-form')){ e.preventDefault(); makePrivateGroup(); } });
+window.addEventListener('storage', e=>{ if(e.key === MSG_KEY){ msgChatsCache = null; renderMsgList(); renderChat(); } if(e.key === 'story-community-chats'){ mergeCommunityChats(); renderMsgList(); } });
 // Requests only exist when your privacy setting says messages from new people come in as requests.
 function msgRequestsOn(){ try{ return (JSON.parse(localStorage.getItem('story-privacy') || '{}') || {}).messages === 'requests'; }catch(e){ return false; } }
 function msgTime(at){
@@ -7539,6 +7634,8 @@ function renderMsgList(){
   const sub = box.querySelector('.pf-msgs-sub');
   sub.hidden = msgView.filter !== 'groups';
   sub.querySelectorAll('[data-pf="mf-sub"]').forEach(b=>b.classList.toggle('on', b.getAttribute('data-f') === msgView.sub));
+  mergeCommunityChats();
+  const ng = box.querySelector('.pf-newgroup'); if(ng) ng.hidden = !(msgView.filter === 'groups' && msgView.sub === 'private');
   const q = msgView.q.trim().toLowerCase();
   let list = msgChats().filter(c=>{
     if(msgView.filter === 'archive') return c.archived;
@@ -7566,7 +7663,7 @@ function renderMsgList(){
       : (last.from === 'me' ? 'You: ' : '') + escText(last.text || '');
     return '<button class="msg-row" data-pf="msg-open" data-id="' + escText(c.id) + '">' +
       '<span class="msg-pic">' + pic + '</span>' +
-      '<span class="msg-mid"><span class="msg-who">' + escText(who) + '</span><span class="msg-last">' + lastHtml + '</span></span>' +
+      '<span class="msg-mid"><span class="msg-who">' + (c.groupType === 'private' ? '<i class="msg-lock"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></i>' : '') + escText(who) + '</span><span class="msg-last">' + lastHtml + '</span></span>' +
       '<span class="msg-end"><span class="msg-time">' + msgTime(last.at) + '</span>' + (mine ? '<span class="msg-status msg-' + last.status + '">' + STATUS[last.status] + '</span>' : '') + '</span>' +
     '</button>';
   }).join('');
@@ -7619,7 +7716,13 @@ function renderChat(toEnd){
   // Only the values, never label words: the name (or @username if there's no name), the @username under it.
   el.querySelector('.pf-chat-head .msg-pic').innerHTML = c.photo ? '<img alt="" src="' + escText(c.photo) + '">' : PF_PHOTO_PLACEHOLDER;
   el.querySelector('.pf-chat-name').textContent = c.name || (c.username ? '@' + c.username : '');
-  const u = el.querySelector('.pf-chat-user'); u.textContent = c.name && c.username ? '@' + c.username : ''; u.hidden = !u.textContent;
+  const u = el.querySelector('.pf-chat-user');
+  u.textContent = c.groupType === 'private' ? 'Private group' + ((c.leaders || []).includes('me') ? ' · tap for call settings' : '') : c.kind === 'group' ? 'Public group' : (c.name && c.username ? '@' + c.username : '');
+  u.hidden = !u.textContent;
+  // Calls (owner): any profile you chat with (their privacy decides - the server says canCall:false when they don't
+  // take calls from you); in a public group only its creator and members start calls; private groups too.
+  el.querySelector('.pf-chat-call').hidden = c.kind !== 'group' && c.canCall === false;
+  el.querySelectorAll('.pf-chat-sheet [data-pf="callmode"]').forEach(x=>x.classList.toggle('on', x.getAttribute('data-m') === (c.callJoin || 'open')));
   const ms = c.messages || [];
   let lastMine = -1; ms.forEach((m, i)=>{ if(m.from === 'me') lastMine = i; });
   const list = el.querySelector('.pf-chat-list');
@@ -12824,6 +12927,8 @@ function attachHandlers(){
           state.sendToContactId = null;
           state.current = 'wallet';
           break;
+        case 'privacy-calls': { const p = storyPrivacy(); p.calls = el.getAttribute('data-value'); setStoryPrivacy(p); break; }
+        case 'privacy-call-person': { const p = storyPrivacy(), id = el.getAttribute('data-value'); const l = p.callPeople || []; p.callPeople = l.includes(id) ? l.filter(x=>x !== id) : l.concat(id); setStoryPrivacy(p); break; }
         case 'cal-open': state.calOpen = true; state.calSel = null; state.calView = null; break;
         case 'add-card': state.addCard = {}; state.addCardOpen = true; break;
         case 'card-scan': cardScanSides = {}; state.addCard = Object.assign(state.addCard || {}, state.addCard && state.addCard.mode ? cardFormVals() : {}); state.addCardOpen = false; renderDevice(); openCardCamera('front'); return;
@@ -13014,6 +13119,18 @@ function attachHandlers(){
           }
           break;
         }
+        case 'community-share-group': {
+          // Share a group as many times as you like; it stays public for people to find (owner).
+          const g = findCommunityGroupById(el.getAttribute('data-groupid'));
+          if(g){
+            g.trendingStats = g.trendingStats || {}; g.trendingStats.shares = (g.trendingStats.shares || 0) + 1;
+            state.shareSheet = { source:'group', title: g.name, type:'text', textContent: g.name + ' - join this group on STORY.' + (g.description ? '\n' + g.description : ''), imageDataUrl:null, allowCommunity:false };
+          }
+          break;
+        }
+        // Group calls need STORY's call server (the same server Messages waits on) - until then they say so.
+        case 'community-group-call': showToast('Group calls — coming soon'); break;
+        case 'community-join-call': showToast('Joining calls — coming soon'); break;
         case 'community-open-group': {
           const id = el.getAttribute('data-groupid');
           state.communityActiveGroupId = id;
@@ -13025,6 +13142,7 @@ function attachHandlers(){
           const g = findCommunityGroupById(el.getAttribute('data-groupid'));
           if(g && g.type==='public' && !g.members.includes('You')){
             g.members.push('You');
+            saveCommunity();
             showToast('Joined ' + g.name);
           }
           break;
@@ -13138,12 +13256,13 @@ function attachHandlers(){
             break;
           }
           const newGroup = {
-            id: 'ug' + Date.now(), name, description: desc || 'A group on STORY.', type: state.groupDraftType, builtin:false,
+            id: 'ug' + Date.now(), name, description: desc || 'A group on STORY.', type: 'public', builtin:false,
             category:'Community', country: state.groupDraftCountry || 'Global',
             banned:false, warned:false, creator:'You', leaders:['You'], members:['You'],
             pendingRequests:[], liveDataKind:null, posts:[], image: state.groupDraftImage || null,
           };
           state.communityGroups = [newGroup, ...state.communityGroups];
+          saveCommunity();
           state.communityCreateGroupOpen = false;
           showToast('Group created');
           break;
@@ -13234,6 +13353,34 @@ function confirmDialogTemplate(){
 
 /* ---------- COMMUNITY ---------- */
 function escText(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+// A live group call shows a green icon on the group's card (owner) - set only by STORY's call server
+// (window.storyGroupLive), never made up.
+function groupLiveDotHTML(g){ return g && g.liveCall ? '<i class="group-live-dot" title="Live call"></i>' : ''; }
+window.storyGroupLive = function(groupId, live){
+  const g = findCommunityGroupById(groupId); if(!g) return;
+  g.liveCall = live ? (typeof live === 'object' ? live : {}) : null;
+  if(state.current === 'community' || state.current === 'community-group') renderDevice();
+};
+// Your groups are kept on the phone: groups you made + the ones you joined ('story-community'); the groups you're in
+// also show in Messages > Groups ('story-community-chats', read by the Messages window).
+const COMMUNITY_KEY = 'story-community';
+function saveCommunity(){
+  try{
+    const mine = state.communityGroups.filter(g=>!g.builtin);
+    const joined = state.communityGroups.filter(g=>g.builtin && g.members.includes('You')).map(g=>g.id);
+    localStorage.setItem(COMMUNITY_KEY, JSON.stringify({ mine, joined }));
+    localStorage.setItem('story-community-chats', JSON.stringify(state.communityGroups.filter(g=>g.members.includes('You') && g.id !== 'g-stories').map(g=>({ id:g.id, name:g.name, image: g.image && String(g.image).length < 200000 ? g.image : null }))));
+  }catch(e){}
+}
+(function loadCommunity(){
+  try{
+    const saved = JSON.parse(localStorage.getItem(COMMUNITY_KEY) || 'null'); if(!saved) return;
+    (saved.joined || []).forEach(id=>{ const g = state.communityGroups.find(x=>x.id === id); if(g && !g.members.includes('You')) g.members.push('You'); });
+    const mine = (saved.mine || []).filter(g=>g && g.id && g.type === 'public' && !state.communityGroups.some(x=>x.id === g.id));
+    state.communityGroups = mine.concat(state.communityGroups);
+  }catch(e){}
+})();
+saveCommunity();   // the groups you're in, for Messages
 function communityGroupTypeBadge(type){
   if(type==='public') return 'Public';
   if(type==='private-request') return 'Private · Request to join';
@@ -13286,7 +13433,7 @@ function communityHeadSearchBtnHTML(extraClass, action, title){
 }
 function communityGroupCard2HTML(g){
   const style = g.image ? ` style="background-image:url('${g.image}')"` : '';
-  return `<div class="community-group-card2" data-action="community-open-group" data-groupid="${g.id}"${style}><span>${escText(g.name)}</span></div>`;
+  return `<div class="community-group-card2" data-action="community-open-group" data-groupid="${g.id}"${style}>${groupLiveDotHTML(g)}<span>${escText(g.name)}</span></div>`;
 }
 // Trending groups -- top section of the stack.
 // A group only counts as "trending" once it has real traction -- strictly more than
@@ -13305,7 +13452,7 @@ function postMeetsStoryBar(p){
   return (p.likes||0) > 40000 && comments > 18000 && (p.shares||0) > 22000;
 }
 function communityTrendingSectionHTML(){
-  const trending = state.communityGroups.filter(g=>g.id!=='g-stories' && groupMeetsTrendingBar(g)).slice(0,3);
+  const trending = state.communityGroups.filter(g=>g.id!=='g-stories' && g.type==='public' && groupMeetsTrendingBar(g)).slice(0,3);
   return `
     <div class="community-section community-section-trending">
       <div class="community-colhead-wrap">
@@ -13330,8 +13477,7 @@ function trendingSearchResultsHTML(query){
     if(g.id === 'g-stories') return false;
     if(!groupMeetsTrendingBar(g)) return false;
     if(q && !g.name.toLowerCase().includes(q)) return false;
-    if(type==='public' && g.type!=='public') return false;
-    if(type==='private' && g.type==='public') return false;
+    if(g.type!=='public') return false;   // private groups never show in Community
     if(f.category!=='All' && (g.category||'Community')!==f.category) return false;
     if(f.country!=='All' && (g.country||'Global')!==f.country) return false;
     return true;
@@ -13361,10 +13507,6 @@ function trendingSearchTemplate(){
     <div class="notes-popover-overlay" data-action="community-trending-search-close-bg" style="align-items:flex-start;justify-content:center;padding-top:40px;">
       <div class="notes-popover-sheet" style="width:90%;max-width:320px;max-height:76vh;overflow-y:auto;" onclick="event.stopPropagation()">
         <div class="modal-head"><span class="modal-title">Trending Groups</span><button class="modal-close" data-action="community-trending-search-close">×</button></div>
-        <div class="community-filter-tabs2" style="margin-bottom:10px;">
-          <button class="community-filter-tab2${type==='public'?' active':''}" data-action="community-trending-set-type" data-value="public">Public</button>
-          <button class="community-filter-tab2${type==='private'?' active':''}" data-action="community-trending-set-type" data-value="private">Private</button>
-        </div>
         <div class="community-browse-toolbar">
           <input id="community-trending-search-input" class="community-browse-search-input" placeholder="Search trending groups…" value="${escText(state.communityTrendingSearchQuery)}">
           <button class="community-browse-filter-btn" data-action="community-trending-filter-open">
@@ -13382,7 +13524,7 @@ function communityTrendCard2HTML(g){
   const style = g.image ? ` style="background-image:url('${g.image}')"` : '';
   return `
     <div class="community-trend-card2" data-action="community-open-group" data-groupid="${g.id}"${style}>
-      <span class="community-cat-tag2">${escText(g.category || 'Community')}</span>
+      ${groupLiveDotHTML(g)}<span class="community-cat-tag2">${escText(g.category || 'Community')}</span>
       <span class="community-trend-name2">${escText(g.name)}</span>
     </div>
   `;
@@ -13390,27 +13532,23 @@ function communityTrendCard2HTML(g){
 // Community groups -- middle section of the stack, the main focus area, sized up. Stays a
 // vertical list (not a horizontal scroller) with a picture + centered name on each card.
 function communityGroupsSectionHTML(){
-  const filter = state.communityGroupFilter;
+  // No Public / Private switch (owner): Community only ever shows public groups - private ones live in Messages.
   const myGroups = state.communityGroups.filter(g=>{
     if(!g.members.includes('You')) return false;
     if(g.id === 'g-stories') return false; // its posts already feed the Stories section below
-    return filter==='public' ? g.type==='public' : g.type!=='public';
+    return g.type==='public';
   });
   return `
     <div class="community-section community-section-groups">
       <div class="community-colhead-wrap">
         <div class="community-colhead-box"><h1>COMMUNITY GROUPS</h1></div>
       </div>
-      <div class="community-filter-row2">
-        <div class="community-filter-tabs2">
-          <button class="community-filter-tab2${filter==='public'?' active':''}" data-action="community-set-filter" data-value="public">Public</button>
-          <button class="community-filter-tab2${filter==='private'?' active':''}" data-action="community-set-filter" data-value="private">Private</button>
-        </div>
+      <div class="community-filter-row2" style="justify-content:flex-end;">
         ${communityHeadSearchBtnHTML()}
       </div>
       <div class="community-group-list2">
         <div class="community-group-card2 community-group-card2-add" data-action="community-create-group-open">+ Create Group</div>
-        ${myGroups.length ? myGroups.map(g=>communityGroupCard2HTML(g)).join('') : `<div class="community-empty-note">No ${filter} groups yet.</div>`}
+        ${myGroups.length ? myGroups.map(g=>communityGroupCard2HTML(g)).join('') : `<div class="community-empty-note">No groups yet.</div>`}
       </div>
       <button class="community-view-more-btn" data-action="community-search-toggle">
         View more
@@ -13496,8 +13634,16 @@ function communityGroupScreen(){
         ${g.warned ? `<span class="community-group-badge warn">Warned</span>` : ''}
         ${g.banned ? `<span class="community-group-badge warn">Banned</span>` : ''}
         ${g.id !== 'g-stories' && g.id !== 'g-story' ? communityGroupJoinActionHTML(g) : ''}
+        ${g.id !== 'g-stories' && g.id !== 'g-story' ? `<button class="community-join-btn" data-action="community-share-group" data-groupid="${g.id}">Share</button>` : ''}
+        ${(isMember || isLeader) && g.id !== 'g-stories' && g.id !== 'g-story' && !g.liveCall ? `<button class="community-join-btn community-call-btn" data-action="community-group-call" data-groupid="${g.id}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/></svg> Call</button>` : ''}
       </div>
     </div>
+    ${g.liveCall ? `
+      <div class="community-live-call">
+        <span class="community-live-dot"></span>
+        <div class="community-live-call-t"><b>Live call happening</b><span>${g.liveCall.count ? g.liveCall.count + ' in the call' : 'Anyone can join - this is a public group'}</span></div>
+        <button class="community-join-btn" data-action="community-join-call" data-groupid="${g.id}">Join call</button>
+      </div>` : ''}
 
     ${isLeader && g.type==='private-request' ? `
       <div class="section-title">JOIN REQUESTS (${g.pendingRequests.length})</div>
@@ -13554,7 +13700,7 @@ function groupBrowseCardHTML(g){
   const style = g.image ? ` style="background-image:url('${g.image}')"` : '';
   return `
     <div class="community-browse-card" data-action="community-open-group" data-groupid="${g.id}"${style}>
-      <span class="community-browse-cat">${escText(g.category || 'Community')}</span>
+      ${groupLiveDotHTML(g)}<span class="community-browse-cat">${escText(g.category || 'Community')}</span>
       <span>${escText(g.name)}</span>
     </div>
   `;
@@ -13564,6 +13710,7 @@ function groupSearchResultsHTML(query){
   const f = state.groupBrowseFilter;
   const results = state.communityGroups.filter(g=>{
     if(g.id === 'g-stories') return false; // Stories isn't a browsable/joinable group here
+    if(g.type!=='public') return false;    // private groups never show in Community
     if(q && !g.name.toLowerCase().includes(q)) return false;
     if(f.category!=='All' && (g.category||'Community')!==f.category) return false;
     if(f.country!=='All' && (g.country||'Global')!==f.country) return false;
@@ -13626,13 +13773,8 @@ function createGroupTemplate(){
         <select id="group-draft-country" class="share-caption-input" style="margin-bottom:8px;">
           ${COMMUNITY_COUNTRIES.filter(c=>c!=='All').map(c=>`<option value="${escText(c)}" ${state.groupDraftCountry===c?'selected':''}>${escText(c)}</option>`).join('')}
         </select>
-        <div class="section-title" style="margin-top:2px;">GROUP TYPE</div>
-        <div class="notes-style-row" style="flex-wrap:wrap;margin-bottom:8px;">
-          ${chip('public','Public')}
-          ${chip('private-request','Private · Request to join')}
-        </div>
-        <!-- "Private · Invite only" is intentionally not offered here yet -- it's coming back
-             later as something accessible from Messages, not from this form. -->
+        <!-- Community groups are always PUBLIC - free to join, no request (owner). Private groups are made only
+             in Messages and never show in Community. -->
         <div class="community-policy-box">
           By creating this group you agree not to post adult content, nudity, porn, ads, or links to adult sites. Violating groups will be banned and the account will receive a warning. (Enforcement here is a basic keyword check on the name/description, not a full moderation system.)
         </div>
