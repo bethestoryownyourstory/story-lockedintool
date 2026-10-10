@@ -983,6 +983,11 @@
   .acct-broker{ margin-top:12px; font-size:15px; font-weight:800; }
   .acct-broker-sub{ font-size:11px; color:var(--muted); margin:-6px 0 10px; font-weight:700; }
   .broker-row.on .broker-name{ text-decoration:underline; text-underline-offset:3px; }
+  .broker-row2{ align-items:center; gap:10px; }
+  .broker-l{ display:flex; flex-direction:column; min-width:0; gap:2px; }
+  .broker-regs{ font-size:9.5px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .broker-row2 .broker-sub{ flex-shrink:0; text-align:right; font-size:9.5px; }
+  .broker-legit{ font-size:10px; color:var(--muted); line-height:1.45; padding:12px 2px 4px; }
   .broker-group{ font-size:9.5px; font-weight:800; letter-spacing:0.6px; color:var(--muted); text-transform:uppercase; padding:10px 2px 2px; }
   .acct-title{ font:inherit; letter-spacing:inherit; color:inherit; text-transform:inherit; background:transparent; border:1px solid var(--line); border-radius:999px; padding:3px 10px; margin:0; cursor:pointer; display:inline-flex; align-items:center; gap:6px; max-width:100%; overflow:hidden; white-space:nowrap; }
   .acct-title-caret{ font-size:10px; opacity:0.7; }
@@ -4960,9 +4965,44 @@ const PLATFORMS = {
   alpaca:     { label:'Alpaca', group:'Stocks', sym:'AAPL', env:true, fields:[['key','API KEY ID','From Alpaca: Your API keys','text'],['secret','SECRET KEY','','password']], note:'US stocks and ETFs. Make API keys in Alpaca (Real or Paper). Lot = number of shares. The keys stay on this phone.' },
   ibkr:       { label:'Interactive Brokers', group:'Stocks', soon:'Interactive Brokers needs their approval for apps - being connected' },
 };
-// Real brokers that offer MT4 / MT5 (picking one only fills in its name; your server comes from your broker).
+// Search broker: ONLY real, regulated brokers (owner: STORY is a big company - everything legit). In = at least one
+// top-tier or onshore licence (FCA, ASIC, CySEC, BaFin, FINMA, MAS, Central Bank of Ireland, NFA/CFTC, SEC/FINRA, DFSA,
+// MFSA, FMA NZ) or FSCA, and no serious unresolved enforcement. Left out on purpose: offshore-only brokers and brokers
+// with serious cases (e.g. RoboForex, Octa, FBS and FXTM until their licences are confirmed, Binance, Bybit, OKX).
+// fsca = authorised by the FSCA (South Africa). platforms = the ones STORY can connect for that broker.
 const platformAppName = acc=>acc.platform === 'mt5' ? 'MT5' : acc.platform === 'mt4' ? 'MT4' : ((PLATFORMS[acc.platform] || {}).label || 'app');
-const MT5_BROKERS = ['IC Markets','Pepperstone','Exness','XM','FBS','HFM','FXTM','RoboForex','Tickmill','Admirals','Deriv','Vantage','FP Markets','Eightcap','ThinkMarkets','AvaTrade','FxPro','Octa'];
+const BROKERS = [
+  { name:'IC Markets', regs:'ASIC · CySEC', platforms:['mt5','mt4','ctrader'] },
+  { name:'Pepperstone', regs:'FCA · ASIC · CySEC · BaFin · DFSA', platforms:['mt5','mt4','ctrader'] },
+  { name:'Exness', regs:'CySEC · FCA', fsca:true, platforms:['mt5','mt4'] },
+  { name:'XM', regs:'CySEC · DFSA', fsca:true, platforms:['mt5','mt4'] },
+  { name:'HFM', regs:'FCA · CySEC · DFSA', fsca:true, platforms:['mt5','mt4'] },
+  { name:'Tickmill', regs:'FCA · CySEC · DFSA', platforms:['mt5','mt4'] },
+  { name:'Admirals', regs:'FCA · CySEC', platforms:['mt5','mt4'] },
+  { name:'Deriv', regs:'MFSA (EU) · SCA (UAE)', platforms:['deriv','mt5'] },
+  { name:'Vantage', regs:'ASIC · FCA', fsca:true, platforms:['mt5','mt4'] },
+  { name:'FP Markets', regs:'ASIC · CySEC', platforms:['mt5','mt4','ctrader'] },
+  { name:'Eightcap', regs:'ASIC · FCA · CySEC', platforms:['mt5','mt4','tradelocker'] },
+  { name:'ThinkMarkets', regs:'FCA · ASIC · CySEC', fsca:true, platforms:['mt5','mt4'] },
+  { name:'AvaTrade', regs:'Central Bank of Ireland · ASIC · CySEC · JFSA', fsca:true, platforms:['mt5','mt4'] },
+  { name:'FxPro', regs:'FCA · CySEC', fsca:true, platforms:['mt5','mt4','ctrader'] },
+  { name:'IG', regs:'FCA · ASIC · BaFin · FINMA · MAS · NFA', note:'Listed on the London Stock Exchange', platforms:['mt4'] },
+  { name:'CMC Markets', regs:'FCA · ASIC · BaFin · MAS', note:'Listed on the London Stock Exchange', platforms:['mt4'] },
+  { name:'OANDA', regs:'NFA/CFTC · FCA · ASIC · MAS · JFSA', platforms:['mt5','mt4'] },
+  { name:'Swissquote', regs:'FINMA (Swiss bank) · FCA · CySEC · DFSA · MAS', note:'Listed on SIX Swiss Exchange', platforms:['mt5','mt4'] },
+  { name:'City Index', regs:'FCA · ASIC · MAS', note:'Owned by StoneX (Nasdaq)', platforms:['mt4'] },
+  { name:'Axi', regs:'FCA · ASIC · DFSA · FMA NZ', platforms:['mt4'] },
+  { name:'Fusion Markets', regs:'ASIC', platforms:['mt5','mt4','ctrader'] },
+  { name:'BlackBull Markets', regs:'FMA NZ', platforms:['mt5','mt4','ctrader'] },
+  { name:'Capital.com', regs:'FCA · CySEC · ASIC', platforms:['mt4'] },
+  { name:'Interactive Brokers', regs:'SEC/FINRA · NFA · FCA · ASIC · Central Bank of Ireland', note:'Listed on Nasdaq', platforms:['ibkr'] },
+  { name:'Alpaca', regs:'SEC/FINRA member · SIPC', note:'US stocks', platforms:['alpaca'] },
+  { name:'Coinbase', regs:'NYDFS BitLicense · FCA-registered · MiCA', note:'Listed on Nasdaq', platforms:['coinbase'], crypto:true },
+  { name:'Kraken', regs:'FinCEN + US state licences · FCA-registered · MiCA', platforms:['kraken'], crypto:true },
+  { name:'Luno', regs:'FSCA crypto licence (CASP)', fsca:true, platforms:['luno'], crypto:true },
+  { name:'VALR', regs:'FSCA crypto licence (CASP)', fsca:true, platforms:['valr'], crypto:true },
+];
+const brokerByName = n=>BROKERS.find(b=>b.name === n);
 
 // ---- signing for exchanges (keys stay on the phone; requests go out from the phone itself) ----
 const enc = new TextEncoder();
@@ -5357,6 +5397,7 @@ async function tradeAddAccount(f){
       secretSet('mt5key:' + j.accountId, j.key);
       added = [{ id: f.platform + ':' + j.accountId, platform:f.platform, env: f.env, server: f.server, login: f.login, accId: j.accountId, name: (f.broker ? f.broker + ' ' : P.label + ' ') + '#' + f.login, broker: f.broker || '', currency: j.currency || 'USD' }];
     } else added = await ADAPTERS[f.platform].connect(f);
+    if(f.broker) added.forEach(a=>{ a.broker = f.broker; if(f.platform === 'tradelocker' || f.platform === 'deriv') a.name = f.broker + ' ' + String(a.name).replace(/^Deriv\s*/, ''); });
     added.forEach(a=>{ a.symbol = a.symbol || P.sym; });
     const list = tradeAccounts().filter(a=>!added.some(b=>b.id === a.id)).concat(added);
     saveTradeAccounts(list);
@@ -5395,7 +5436,7 @@ function addAccountTemplate(){
     <div class="modal-overlay" data-action="add-account-bg">
       <div class="modal-sheet" onclick="event.stopPropagation()">
         <div class="modal-head"><span class="modal-title">Add ${escText(f.broker || P.label)} account</span><button class="modal-close" data-action="add-account-close">×</button></div>
-        ${f.broker ? `<div class="acct-broker-sub">${escText(P.label)}</div>` : ''}
+        ${(()=>{ const b = brokerByName(f.broker); if(!b) return ''; return `<div class="acct-broker-sub">${escText(b.regs)}${b.fsca ? ' · FSCA' : ''}${b.note ? ' · ' + escText(b.note) : ''}</div>` + (b.platforms.length > 1 ? `<div class="acct-seg acct-seg-n" style="grid-template-columns:repeat(${b.platforms.length},1fr);margin-bottom:8px;">${b.platforms.map(p=>`<button class="acct-seg-btn${f.platform===p?' on':''}" data-addacct-platform="${p}">${escText((PLATFORMS[p] || {}).label || p)}</button>`).join('')}</div>` : ''); })()}
         ${P.env ? `<div class="acct-seg">
           <button class="acct-seg-btn${f.env==='live'?' on':''}" data-addacct-env="live">Real</button>
           <button class="acct-seg-btn${f.env==='demo'?' on':''}" data-addacct-env="demo">${f.platform === 'alpaca' ? 'Paper' : 'Demo'}</button>
@@ -5427,17 +5468,22 @@ function symbolPickerTemplate(){
 // The words "MT5 ACCOUNT": every platform and broker you can use pops up IN THE CARD'S PLACE, the same size (owner).
 // Platforms by group, then the real brokers that offer MT4 / MT5. Tap one to add your account.
 function brokerPanelHTML(){
-  const groups = ['Forex & CFDs', 'Crypto', 'Stocks'];
-  const plat = groups.map(g=>`<div class="broker-group">${g}</div>` + Object.entries(PLATFORMS).filter(([, p])=>p.group === g).map(([id, p])=>
-    `<div class="broker-row" data-broker="${escText(p.label)}" data-broker-platform="${id}"><span class="broker-name">${escText(p.label)}</span><span class="broker-sub">${p.soon ? 'Coming soon' : (id === 'tradelocker' ? 'Any broker on TradeLocker' : id === 'mt5' || id === 'mt4' ? 'Any ' + p.label + ' broker' : '')}</span></div>`).join('')).join('');
-  const brokers = `<div class="broker-group">MT4 / MT5 brokers</div>` + MT5_BROKERS.map(n=>`<div class="broker-row" data-broker="${escText(n)}" data-broker-platform="mt5" data-broker-name="${escText(n)}"><span class="broker-name">${escText(n)}</span><span class="broker-sub">MT5</span></div>`).join('');
   const mine = tradeAccounts();
   const act = activeTradeAccount();
-  const yours = mine.length ? `<div class="broker-group">Your accounts</div>` + mine.map(a=>`<div class="broker-row${act && a.id === act.id ? ' on' : ''}" data-switchacct="${escText(a.id)}"><span class="broker-name">${escText(a.name)}</span><span class="broker-sub">${escText((PLATFORMS[a.platform] || {}).label || '')}${act && a.id === act.id ? ' · now' : ''}</span></div>`).join('') + `<div class="broker-group">Add another</div>` : '';
+  const yours = mine.length ? `<div class="broker-group">Your accounts</div>` + mine.map(a=>`<div class="broker-row${act && a.id === act.id ? ' on' : ''}" data-switchacct="${escText(a.id)}"><span class="broker-name">${escText(a.name)}</span><span class="broker-sub">${escText(a.broker || (PLATFORMS[a.platform] || {}).label || '')}${act && a.id === act.id ? ' · now' : ''}</span></div>`).join('') + `<div class="broker-group">Add another</div>` : '';
+  const row = b=>`<div class="broker-row broker-row2" data-broker-name="${escText(b.name)}"><span class="broker-l"><span class="broker-name">${escText(b.name)}</span><span class="broker-regs">${escText(b.regs)}${b.fsca ? ' · FSCA' : ''}</span></span><span class="broker-sub">${b.platforms.map(p=>escText((PLATFORMS[p] || {}).label || p)).join(' · ')}</span></div>`;
+  const fx = BROKERS.filter(b=>!b.crypto && !['Alpaca','Interactive Brokers'].includes(b.name));
+  const stocks = BROKERS.filter(b=>['Alpaca','Interactive Brokers'].includes(b.name));
+  const crypto = BROKERS.filter(b=>b.crypto);
   return `<div class="broker-panel" onclick="event.stopPropagation()">
     <div class="broker-head"><span>${mine.length ? 'Your accounts and brokers' : 'Search broker'}</span><button class="broker-x" data-action="broker-panel-close" aria-label="Close">×</button></div>
     <input class="broker-search" id="broker-search" type="text" placeholder="Search broker" autocomplete="off" spellcheck="false" value="${escText(state.brokerQuery || '')}">
-    <div class="broker-list">${yours}${plat}${brokers}</div>
+    <div class="broker-list">${yours}
+      <div class="broker-group">Forex & CFDs</div>${fx.map(row).join('')}
+      <div class="broker-group">Stocks</div>${stocks.map(row).join('')}
+      <div class="broker-group">Crypto</div>${crypto.map(row).join('')}
+      <div class="broker-legit">Only regulated brokers: each holds a licence from a top regulator (FCA, ASIC, CySEC, BaFin, FINMA, MAS…) or the FSCA, with no serious unresolved cases. Always check your broker’s licence on the regulator’s own register.</div>
+    </div>
   </div>`;
 }
 function tradingScreen(){
@@ -10571,6 +10617,7 @@ function attachHandlers(){
     });
   });
 
+  document.querySelectorAll('[data-addacct-platform]').forEach(el=>el.addEventListener('click', ()=>{ state.addAccount.platform = el.getAttribute('data-addacct-platform'); state.addAccount.msg = ''; state.addAccount.vals = {}; renderDevice(); }));
   document.querySelectorAll('[data-addacct-env]').forEach(el=>el.addEventListener('click', ()=>{
     const vals = Object.assign({}, state.addAccount.vals || {}); document.querySelectorAll('#content-area [data-addacct-field]').forEach(i=>{ vals[i.getAttribute('data-addacct-field')] = i.value; }); state.addAccount.vals = vals;
     state.addAccount.env = el.getAttribute('data-addacct-env'); renderDevice(); }));
@@ -10590,10 +10637,11 @@ function attachHandlers(){
         box.querySelectorAll('[data-symbol]').forEach(el=>el.addEventListener('click', ()=>{ state.focusSymbol = el.getAttribute('data-symbol'); state.focusName = state.focusSymbol; { const l = tradeAccounts(); const a = l.find(x=>x.id === (activeTradeAccount() || {}).id); if(a){ a.symbol = state.focusSymbol; saveTradeAccounts(l); } } state.symbolPickerOpen = false; state.focusQuote = null; state.focusBars = []; renderDevice(); tradeRefreshNow(true); })); } }
     });
   }
-  document.querySelectorAll('[data-broker-platform]').forEach(el=>el.addEventListener('click', ()=>{
+  document.querySelectorAll('.broker-row2[data-broker-name]').forEach(el=>el.addEventListener('click', ()=>{
+    const b = brokerByName(el.getAttribute('data-broker-name')); if(!b) return;
     state.brokerPanelOpen = false;
-    state.addAccount.platform = el.getAttribute('data-broker-platform');
-    state.addAccount.broker = el.getAttribute('data-broker-name') || '';
+    state.addAccount.broker = b.name;
+    state.addAccount.platform = b.platforms.find(p=>!(PLATFORMS[p] || {}).soon) || b.platforms[0];
     state.addAccount.vals = {};
     state.addAccount.msg = ''; state.addAccountOpen = true;
     renderDevice();
@@ -10609,7 +10657,7 @@ function attachHandlers(){
   if(brokerSearch) brokerSearch.addEventListener('input', ()=>{
     state.brokerQuery = brokerSearch.value;
     const q = brokerSearch.value.toLowerCase();
-    document.querySelectorAll('.broker-row[data-broker]').forEach(r=>{ r.style.display = (!q || r.textContent.toLowerCase().includes(q)) ? '' : 'none'; });
+    document.querySelectorAll('.broker-row2, .broker-row[data-switchacct]').forEach(r=>{ r.style.display = (!q || r.textContent.toLowerCase().includes(q)) ? '' : 'none'; });
     document.querySelectorAll('.broker-group').forEach(g=>{ g.style.display = q ? 'none' : ''; });
   });
   // Swipe the account card left / right to go through your accounts (owner).
