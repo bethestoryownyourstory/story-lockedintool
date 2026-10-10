@@ -111,6 +111,7 @@
             </intent-filter>
         </receiver>
         <receiver android:name=".InstallResultReceiver" android:exported="false" />
+        <receiver android:name=".ShareChosenReceiver" android:exported="false" />
 
         <!-- Lets Android's own installer open a downloaded update (plan B when the quiet install fails). -->
         <provider

@@ -1270,7 +1270,17 @@ class OverlayService : Service(), StoryBridge.Host {
             runCatching { startActivity(i) }.onFailure { noteMediaDone(kind, "error", "{}") }
         }
     }
+    override fun shareContent(title: String, text: String, files: ArrayList<String>) { ui.post {
+        if (!stepAsideForSystem()) return@post
+        val i = Intent(this, NoteMediaActivity::class.java).putExtra(NoteMediaActivity.EXTRA_KIND, "share")
+            .putExtra(NoteMediaActivity.EXTRA_TITLE, title).putExtra(NoteMediaActivity.EXTRA_TEXT, text)
+            .putStringArrayListExtra(NoteMediaActivity.EXTRA_FILES, files)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
+        runCatching { startActivity(i) }.onFailure { noteMediaDone("share", "error", "{}") }
+    } }
     fun noteMediaDone(kind: String, status: String, json: String) { ui.post {
+        // Shared to an app: you're in that app now, so the Pages stay away (your note is kept as it is for next time).
+        if (kind == "share" && status == "shared") { pickerHid = listOf(); updateBubble(); return@post }
         comeBackFromSystem()
         pagesPane?.web?.evaluateJavascript("window.storyNoteMedia&&window.storyNoteMedia(" + org.json.JSONObject.quote(kind) + "," +
             org.json.JSONObject.quote(status) + "," + json + ")", null)

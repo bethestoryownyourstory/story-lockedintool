@@ -50,6 +50,7 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         fun useProfilePhoto(id: Long)
         fun profileTyping(on: Boolean)
         fun noteMedia(kind: String, title: String, text: String)
+        fun shareContent(title: String, text: String, files: ArrayList<String>)
     }
 
     /** The phone's real launchable apps, with their real icons -- kept ready, so the Apps area opens instantly. */
@@ -149,6 +150,22 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
             if (ok) saved++
         }
         return saved
+    }
+
+    /** Share to any app (the phone's own share screen): text, plus pictures as PNG data URLs (JSON list). */
+    @JavascriptInterface
+    fun share(title: String, text: String, imagesJson: String) {
+        if (station3 || profile) return
+        val dir = java.io.File(ctx.cacheDir, "share").apply { deleteRecursively(); mkdirs() }
+        val files = ArrayList<String>()
+        val list = runCatching { JSONArray(imagesJson) }.getOrNull() ?: JSONArray()
+        val base = title.replace(Regex("[^A-Za-z0-9 _-]"), " ").trim().take(40).ifBlank { "Drawing" }
+        for (i in 0 until list.length()) {
+            val bytes = runCatching { Base64.decode(list.getString(i).substringAfter("base64,"), Base64.DEFAULT) }.getOrNull() ?: continue
+            val f = java.io.File(dir, base + (if (list.length() > 1) " ${i + 1}" else "") + ".png")
+            if (runCatching { f.writeBytes(bytes) }.isSuccess) files.add(f.path)
+        }
+        host.shareContent(title, text, files)
     }
 
     /** Notes (the Pages only): "picture" / "camera" / "audio" / "print" (html = the laid-out note) / "savetext". */

@@ -57,6 +57,7 @@ class NoteMediaActivity : Activity() {
                     .putExtra(Intent.EXTRA_TITLE, safeName(title) + ".txt"), null)
             }
             "print" -> startPrint()
+            "share" -> startShare()
             else -> done("cancel", null)
         }
     }
@@ -88,6 +89,11 @@ class NoteMediaActivity : Activity() {
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (kind == "share") {
+            // The phone tells STORY which app you picked a moment after the share screen closes.
+            window.decorView.postDelayed({ done(if (ShareChosenReceiver.at >= shareAt) "shared" else "cancel", null) }, 450)
+            return
+        }
         if (resultCode != RESULT_OK) { cameraFile?.delete(); done("cancel", null); return }
         Thread {
             val out: JSONObject? = runCatching {
@@ -145,6 +151,34 @@ class NoteMediaActivity : Activity() {
         return JSONObject().put("file", name).put("name", display.substringBeforeLast('.').ifBlank { "Audio" })
     }
 
+    /** Share to any app: the phone's own share screen with the note's text and / or the drawing's pictures. */
+    private var shareAt = 0L
+    private fun startShare() {
+        val title = intent.getStringExtra(EXTRA_TITLE) ?: ""
+        val text = intent.getStringExtra(EXTRA_TEXT) ?: ""
+        val uris = ArrayList<Uri>()
+        for (path in intent.getStringArrayListExtra(EXTRA_FILES) ?: arrayListOf()) {
+            runCatching { FileProvider.getUriForFile(this, "com.story.launcher.files", File(path)) }.getOrNull()?.let { uris.add(it) }
+        }
+        val send = when {
+            uris.size > 1 -> Intent(Intent.ACTION_SEND_MULTIPLE).setType("image/png").putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+            uris.size == 1 -> Intent(Intent.ACTION_SEND).setType("image/png").putExtra(Intent.EXTRA_STREAM, uris[0])
+            else -> Intent(Intent.ACTION_SEND).setType("text/plain")
+        }
+        if (text.isNotBlank()) send.putExtra(Intent.EXTRA_TEXT, text)
+        if (title.isNotBlank()) send.putExtra(Intent.EXTRA_SUBJECT, title)
+        if (uris.isNotEmpty()) {
+            send.clipData = android.content.ClipData.newUri(contentResolver, title.ifBlank { "Drawing" }, uris[0]).apply { for (u in uris.drop(1)) addItem(android.content.ClipData.Item(u)) }
+            send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        // Knows whether you picked an app (then you stay in it) or backed out (then the note comes back).
+        val chosen = android.app.PendingIntent.getBroadcast(this, 11, Intent(this, ShareChosenReceiver::class.java),
+            android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_MUTABLE)
+        shareAt = System.currentTimeMillis()
+        val chooser = Intent.createChooser(send, title.ifBlank { "Share" }, chosen.intentSender)
+        runCatching { startActivityForResult(chooser, 2) }.onFailure { done("error", null) }
+    }
+
     /** The note, laid out as pages, handed to the phone's own print screen (which can also save it as a PDF). */
     private fun startPrint() {
         val html = runCatching { File(cacheDir, "note_print.html").readText() }.getOrNull()
@@ -195,6 +229,7 @@ class NoteMediaActivity : Activity() {
         const val EXTRA_KIND = "kind"
         const val EXTRA_TITLE = "title"
         const val EXTRA_TEXT = "text"
+        const val EXTRA_FILES = "files"
         private val AUDIO_EXT = setOf("mp3", "m4a", "aac", "ogg", "oga", "opus", "wav", "flac", "amr", "3gp", "weba", "webm")
         fun dir(c: Context) = File(c.filesDir, "notes").apply { mkdirs() }
         fun file(c: Context, name: String): File? =
@@ -208,4 +243,10 @@ class NoteMediaActivity : Activity() {
         private fun newId() = "n" + System.currentTimeMillis().toString(36) + (100..999).random()
         private fun safeName(s: String) = s.replace(Regex("[\\\\/:*?\"<>|]"), " ").trim().take(60).ifBlank { "Note" }
     }
+}
+
+/** The phone's share screen says an app was picked. */
+class ShareChosenReceiver : android.content.BroadcastReceiver() {
+    override fun onReceive(c: Context, i: Intent) { at = System.currentTimeMillis() }
+    companion object { @Volatile var at = 0L }
 }

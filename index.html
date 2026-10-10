@@ -541,7 +541,8 @@
   .notes-tab.on{ background:#e8e6e1; color:#000; border-color:#e8e6e1; opacity:1; }
   .drawing-card{ position:relative; height:120px; padding:0; overflow:hidden; display:flex; align-items:flex-end; }
   .drawing-card img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:top; }
-  .drawing-card .note-card-date{ position:relative; margin:0 0 8px 10px; }
+  .drawing-card .drawing-card-label{ position:relative; margin:0 10px 8px 10px; min-width:0; }
+  .drawing-card .drawing-card-label .note-card-title{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .notes-ghosts{ flex:1 1 0; min-height:0; overflow:hidden; display:flex; flex-direction:column; gap:8px;
     -webkit-mask-image:linear-gradient(to bottom, #000 45%, transparent); mask-image:linear-gradient(to bottom, #000 45%, transparent); }
   .note-ghost{ flex:0 0 auto; height:82px; border-radius:12px; border:1.5px dashed rgba(255,255,255,0.09); cursor:pointer; }
@@ -7054,7 +7055,7 @@ function noteMediaWebFallback(kind){
   inp.click();
 }
 // The note as plain text: tasks as [ ] / [x], pictures and audio named, one blank line between pages.
-function noteAsText(title){
+function noteAsText(title, pagesIn){
   const toText = html=>{
     const d = document.createElement('div'); d.innerHTML = html || '';
     let out = '';
@@ -7076,7 +7077,7 @@ function noteAsText(title){
     d.childNodes.forEach(walk);
     return out.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
   };
-  const pages = state.currentPages.map(toText).filter(Boolean);
+  const pages = (pagesIn || state.currentPages).map(toText).filter(Boolean);
   return title + '\n\n' + pages.join('\n\n') + '\n';
 }
 // The note laid out for paper: the title, then each page (its drawing under its writing), one page per sheet.
@@ -7109,9 +7110,9 @@ function notePrintHTML(title){
   </style></head><body><h1>${esc(title)}</h1>${body}</body></html>`;
 }
 // A drawing's pages as pictures on their page colour, saved straight into the phone's photos.
-function saveDrawingImages(pages, bg, title){
-  if(!pages.length){ showToast('Nothing drawn yet'); return; }
-  Promise.all(pages.map(src=>new Promise(res=>{
+// Drawing pages (transparent PNG data URLs) -> pictures on their page colour; blank pages left out.
+function drawingPagesToPNG(pages, bg){
+  return Promise.all((pages || []).filter(Boolean).map(src=>new Promise(res=>{
     const img = new Image();
     img.onload = ()=>{
       const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight;
@@ -7126,8 +7127,10 @@ function saveDrawingImages(pages, bg, title){
     };
     img.onerror = ()=>res(null);
     img.src = src;
-  }))).then(list=>{
-    list = list.filter(Boolean);
+  }))).then(list=>list.filter(Boolean));
+}
+function saveDrawingImages(pages, bg, title){
+  drawingPagesToPNG(pages, bg).then(list=>{
     if(!list.length){ showToast('Nothing drawn yet'); return; }
     if(NATIVE && window.StoryNative.saveImages){
       const n = window.StoryNative.saveImages(JSON.stringify(list), title);
@@ -7232,13 +7235,13 @@ function notesDrawingsListHTML(){
     const first = d.pages.find(Boolean);
     return `<div class="note-card drawing-card" data-opendrawing="${d.id}" data-holdnote="d:${d.id}" style="background:${state.canvasColor};">
       ${first ? `<img alt="" src="${first}">` : ''}
-      <div class="note-card-date">${d.pages.length > 1 ? d.pages.length + ' pages · ' : ''}${noteDateLabel(d)}</div>
+      <div class="drawing-card-label">${d.name ? `<div class="note-card-title">${escapeHtml(d.name)}</div>` : ''}<div class="note-card-date">${d.pages.length > 1 ? d.pages.length + ' pages · ' : ''}${noteDateLabel(d)}</div></div>
     </div>`;
   }).join('');
 }
 function notesScreen(){
   // A drawing you opened with Create but never drew on isn't kept.
-  if(state.current === 'notes') state.drawings = state.drawings.filter(d=>d.pages.some(Boolean));
+  if(state.current === 'notes') state.drawings = state.drawings.filter(d=>d.pages.some(Boolean) || d.name);
   return `
     <div class="page-shell notes-shell">
     ${topBar('Notes', false)}
@@ -7630,7 +7633,7 @@ function scratchDrawScreen(){
     <div class="page-shell" id="scratch-draw-shell">
     <div class="notes-editor-head">
       <button class="dash-back" data-nav="notes">‹</button>
-      <span class="note-title-input" style="display:flex;align-items:center;">Drawing</span>
+      <input id="drawing-title-input" class="note-title-input" value="${escapeHtml(((state.drawings.find(x=>x.id === state.scratchId) || {}).name) || '')}" placeholder="Drawing" maxlength="60" autocomplete="off" spellcheck="false" enterkeyhint="done">
     </div>
     <div class="note-page-nav">
       <button class="notes-icon-btn note-page-nav-arrow" data-action="scratch-page-prev" title="Previous page" ${pageIdx===0?'disabled':''}>
@@ -8923,7 +8926,7 @@ function notesDb(){
 function persistNotesNow(){
   clearTimeout(notesSaveT); notesSaveT = null;
   if(!notesLoaded) return;
-  const data = { v:1, notes: state.notes, drawings: state.drawings.filter(d=>d.pages && d.pages.some(Boolean)) };
+  const data = { v:1, notes: state.notes, drawings: state.drawings.filter(d=>(d.pages && d.pages.some(Boolean)) || d.name) };
   notesDb().then(db=>{ db.transaction('kv', 'readwrite').objectStore('kv').put(data, 'notes'); }).catch(()=>{});
 }
 function persistNotes(){ clearTimeout(notesSaveT); notesSaveT = setTimeout(persistNotesNow, 400); }
@@ -10019,6 +10022,15 @@ function attachHandlers(){
     reader.readAsDataURL(file);
   });
 
+  // A drawing's name (owner: rename drawings): typed straight into the drawing space's title, kept with the drawing.
+  const drawingTitleInput = document.getElementById('drawing-title-input');
+  if(drawingTitleInput){
+    drawingTitleInput.addEventListener('input', ()=>{
+      const d = state.drawings.find(x=>x.id === state.scratchId);
+      if(d){ d.name = drawingTitleInput.value.trim().slice(0, 60); persistNotes(); }
+    });
+    drawingTitleInput.addEventListener('keydown', e=>{ if(e.key === 'Enter'){ e.preventDefault(); drawingTitleInput.blur(); } });
+  }
   const noteTitleInput = document.getElementById('note-title-input');
   if(noteTitleInput){
     noteTitleInput.addEventListener('input', ()=>{ state.currentNoteTitle = noteTitleInput.value; noteLiveSave(); });
@@ -10627,7 +10639,11 @@ function attachHandlers(){
           } else {
             shareText = (state.currentPages[state.currentPageIndex] || '').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
           }
-          state.shareSheet = { source:'note-editor', title: state.currentNoteTitle || 'Untitled', type: shareType, textContent: shareText, imageDataUrl: shareImage, allowCommunity: true };
+          // Share via... sends the WHOLE note: every page's writing and every page's drawing.
+          noteFlushOpen();
+          const shareTitle = state.currentNoteTitle.trim() || 'Untitled';
+          state.shareSheet = { source:'note-editor', title: shareTitle, type: shareType, textContent: shareText, imageDataUrl: shareImage, allowCommunity: true,
+            fullText: noteAsText(shareTitle), images: state.canvasPages.slice(), bg: state.canvasColor };
           state.plusMenuOpen = false;
           break;
         }
@@ -10670,7 +10686,8 @@ function attachHandlers(){
           const note = state.notes.find(n=>n.id===id);
           const drawing = id.indexOf('d:') === 0 ? state.drawings.find(d=>'d:' + d.id === id) : null;
           if(drawing){
-            state.shareSheet = { source:'note-list', title:'Drawing', type:'drawing', textContent:'', imageDataUrl: drawing.pages.find(Boolean) || null, allowCommunity: true };
+            state.shareSheet = { source:'note-list', title: drawing.name || 'Drawing', type:'drawing', textContent:'', imageDataUrl: drawing.pages.find(Boolean) || null, allowCommunity: true,
+              fullText: '', images: drawing.pages.slice(), bg: state.canvasColor };
           } else if(note){
             const plainText = (note.text || '').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
             const isDrawingOnly = !plainText && note.content;
@@ -10679,6 +10696,7 @@ function attachHandlers(){
               type: isDrawingOnly ? 'drawing' : 'note',
               textContent: plainText, imageDataUrl: isDrawingOnly ? note.content : null,
               allowCommunity: true,
+              fullText: noteAsText(note.title || 'Untitled', note.pages || [note.text || '']), images: (note.canvasPages || []).slice(), bg: note.cover || '#ffffff',
             };
           }
           state.noteActionSheetId = null;
@@ -10696,12 +10714,13 @@ function attachHandlers(){
           let pages = [], title = 'Drawing';
           if(id){
             const d = state.drawings.find(x=>'d:' + x.id === id);
-            if(d) pages = d.pages.slice();
+            if(d){ pages = d.pages.slice(); title = d.name || 'Drawing'; }
             state.noteActionSheetId = null;
           } else if(state.current === 'scratch-draw'){
             const c = document.getElementById('scratch-draw-canvas');
             if(c && c.dataset.ready === '1') state.scratchPages[state.scratchPageIndex] = c.toDataURL();
             pages = state.scratchPages.slice();
+            const dw = state.drawings.find(x=>x.id === state.scratchId); if(dw && dw.name) title = dw.name;
           } else if(state.current === 'notes-canvas'){
             noteFlushOpen();
             pages = state.canvasPages.slice();
@@ -10715,7 +10734,10 @@ function attachHandlers(){
           // current page's actual canvas, entirely decoupled from the Notes system as always.
           const canvas = document.getElementById('scratch-draw-canvas');
           const imageDataUrl = canvas ? canvas.toDataURL() : (state.scratchPages[state.scratchPageIndex] || null);
-          state.shareSheet = { source:'scratch', title:'Drawing', type:'drawing', textContent:'', imageDataUrl, allowCommunity: true };
+          if(canvas && canvas.dataset.ready === '1') state.scratchPages[state.scratchPageIndex] = imageDataUrl;
+          const dw = state.drawings.find(x=>x.id === state.scratchId);
+          state.shareSheet = { source:'scratch', title: (dw && dw.name) || 'Drawing', type:'drawing', textContent:'', imageDataUrl, allowCommunity: true,
+            fullText: '', images: state.scratchPages.slice(), bg: state.canvasColor };
           break;
         }
         case 'confirm-dialog-cancel': state.confirmDialog = null; break;
@@ -11103,21 +11125,22 @@ function attachHandlers(){
           break;
         }
         case 'share-sheet-via': {
-          // Real external sharing only: navigator.share() when the browser actually offers it,
-          // never a faked "shared to X" success for a platform this app didn't really reach. When
-          // navigator.share isn't available (e.g. this test/dev environment), fall back to
-          // honestly copying a text summary to the clipboard and confirming that with a toast.
+          // Share to ANY app (owner): the phone's own share screen with the whole note's text and its drawings as
+          // pictures (a drawing: all its pages). The caption, if written, goes with it.
           const s = state.shareSheet;
           if(s){
-            const summary = s.type==='drawing'
-              ? `Check out this drawing from ${s.title || 'STORY'}`
-              : `Check out this note: ${s.title || 'Untitled'}${s.textContent ? ' — ' + s.textContent.slice(0,120) : ''}`;
-            if(navigator.share){
-              navigator.share({ title: s.title || 'STORY', text: summary }).catch(()=>{});
-            } else {
-              const copied = copyTextFallback(summary);
-              showToast(copied ? 'Copied to clipboard' : 'Sharing isn’t available here');
-            }
+            const cap = (document.getElementById('share-caption-input') || {}).value || '';
+            const text = [cap.trim(), s.fullText != null ? s.fullText : (s.textContent || '')].filter(Boolean).join('\n\n');
+            const imgs = s.images || (s.imageDataUrl ? [s.imageDataUrl] : []);
+            drawingPagesToPNG(imgs, s.bg).then(list=>{
+              if(!text.trim() && !list.length){ showToast('Nothing to share yet'); return; }
+              if(NATIVE && window.StoryNative.share){ window.StoryNative.share(s.title || 'STORY', text, JSON.stringify(list)); return; }
+              const files = list.map((u, i)=>{ const bin = atob(u.split(',')[1]); const arr = new Uint8Array(bin.length); for(let k = 0; k < bin.length; k++) arr[k] = bin.charCodeAt(k); return new File([arr], (s.title || 'Drawing') + (list.length > 1 ? ' ' + (i + 1) : '') + '.png', {type:'image/png'}); });
+              const data = { title: s.title || 'STORY', text };
+              if(files.length && navigator.canShare && navigator.canShare({ files })) data.files = files;
+              if(navigator.share) navigator.share(data).catch(()=>{});
+              else showToast(copyTextFallback(text) ? 'Copied to clipboard' : 'Sharing isn’t available here');
+            });
           }
           state.shareSheet = null;
           break;
@@ -11358,7 +11381,7 @@ function noteActionSheetTemplate(){
   // Held a drawing (id "d:<id>"): the same sheet - Share / Delete.
   const isDrawing = String(state.noteActionSheetId).indexOf('d:') === 0;
   const note = isDrawing
-    ? (d=>d ? { id: 'd:' + d.id, title: 'Drawing' } : null)(state.drawings.find(d=>'d:' + d.id === state.noteActionSheetId))
+    ? (d=>d ? { id: 'd:' + d.id, title: d.name || 'Drawing' } : null)(state.drawings.find(d=>'d:' + d.id === state.noteActionSheetId))
     : state.notes.find(n=>n.id===state.noteActionSheetId);
   if(!note) return '';
   return `
