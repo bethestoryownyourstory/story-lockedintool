@@ -1566,7 +1566,7 @@
   .chart-fullscreen.landscape .chart-fs-btnrow .lot-setter{ width:100%; }
 
   .notif-scroll{
-    display:flex; flex-direction:column; gap:8px; max-height:260px; overflow-y:auto;
+    display:flex; flex-direction:column; gap:8px; height:260px; overflow-y:auto;
     margin-bottom:4px; padding-right:2px;
     -webkit-overflow-scrolling:touch; scroll-behavior:smooth; overscroll-behavior:contain;
   }
@@ -4142,81 +4142,39 @@ let state = {
   recentsOpen:false,
   accountSwitcherOpen:false,
 
-  netWorthChangePct:2.4,
-  moneyIn:8540,
-  moneyOut:3216,
+  moneyIn:0,
+  moneyOut:0,
   thisMonthLabel:'THIS MONTH',
   calOpen:false,
   selectedDate:'',
-  contacts:[
-    {id:'c1', name:'Lucy', avatar:'👩'},
-    {id:'c2', name:'Jake', avatar:'👨'},
-    {id:'c3', name:'Alex', avatar:'🧑'},
-    {id:'c4', name:'Den', avatar:'👨‍🦱'},
-  ],
-  subscriptions:[
-    {id:'s1', icon:'🎵', name:'Spotify', plan:'Premium', amt:10.99, period:'mo', renews:'Oct 3'},
-    {id:'s2', icon:'🎬', name:'Netflix', plan:'Standard', amt:15.49, period:'mo', renews:'Oct 8'},
-    {id:'s3', icon:'☁️', name:'iCloud+', plan:'200GB', amt:2.99, period:'mo', renews:'Oct 12'},
-    {id:'s4', icon:'📦', name:'Amazon Prime', plan:'Annual', amt:139.00, period:'yr', renews:'Feb 2027'},
-  ],
-  favorites:['c1','c2'],
+  contacts:[],
+  subscriptions:[],
+  favorites:[],
   favoritesOpen:false,
   moneyTransferOpen:false,
-  walletCardIndex:1,
+  walletCardIndex:(()=>{ try{ return (JSON.parse(localStorage.getItem('story-cards') || '[]') || []).length ? 1 : 0; }catch(e){ return 0; } })(),
   txHistoryBackTarget:'wallet',
   sendAmount:'',
   sendToContactId:null,
   sendConfirmOpen:false,
-  // Wallet page's own "WALLET ACTIVITY" card. Each row carries a real timestamp (ts) so its
-  // amount can be colored by how recently it happened rather than just its sign: red/green
-  // for the first 10 minutes after it lands, then white for good after that -- see
-  // walletActivityColor() below. The seed rows here are all already well past that 10-minute
-  // window (hours/days old, matching their displayed "Today"/"Yesterday"/"May 27" labels), so
-  // they render white from the start; only a transaction that happens live (e.g. finishing a
-  // real Send below) gets the brief colored window.
-  walletActivity:[
-    {id:'wa1', icon:'🎵', name:'Spotify', sub:'Today', amt:-10.99, ts: Date.now() - 3*60*60*1000},
-    {id:'wa2', icon:'🏦', name:'Acme Payroll', sub:'Yesterday', amt:3200.00, ts: Date.now() - 24*60*60*1000},
-    {id:'wa3', icon:'☕', name:'Starbucks', sub:'Yesterday', amt:-6.45, ts: Date.now() - 26*60*60*1000},
-    {id:'wa4', icon:'↔️', name:'Transfer to Savings', sub:'May 27', amt:500.00, ts: new Date('2026-05-27T09:00:00').getTime()},
-  ],
-  transactions:[
-    {id:'t1', icon:'🚗', name:'Transport', date:'21 Jan 2022, 12:32 pm', amt:-25.23},
-    {id:'t2', icon:'🍔', name:'Food', date:'21 Jan 2022, 12:32 pm', amt:-25.23},
-    {id:'t3', icon:'🎬', name:'Recreation', date:'21 Jan 2022, 12:32 pm', amt:-25.23},
-    {id:'t4', icon:'↔️', name:'Transfer', date:'21 Jan 2022, 12:32 pm', amt:8000},
-    {id:'t5', icon:'🍔', name:'Food', date:'20 Jan 2022, 9:14 am', amt:-18.40},
-    {id:'t6', icon:'🎵', name:'Spotify', date:'Today', amt:-10.99},
-    {id:'t7', icon:'🏦', name:'Acme Payroll', date:'Yesterday', amt:3200.00},
-    {id:'t8', icon:'☕', name:'Starbucks', date:'Yesterday', amt:-6.45},
-  ],
+  // Wallet / Money show only your real payments (moneyTx - read from your bank apps' notifications); nothing is seeded.
+  walletActivity:[],
+  transactions:[],
   analyticsView:'overview',
-  expensesBreakdown:[
-    {label:'Home purchases', pct:38, color:'#b19cd9'},
-    {label:'Fashion & beauty', pct:29, color:'#f4a261'},
-    {label:'Health care', pct:33, color:'#8ecae6'},
-  ],
-  savingsSeries:[22,34,26,44,58,50,66],
-  savingsPeakValue:'$630.24',
-  summaryIncomes:10500,
-  summaryIncomesPct:2,
-  summaryOutcomes:2000,
-  summaryOutcomesPct:-2,
-  expenseLimit:2500,
-  expenseSpent:2000,
+  expensesBreakdown:[],
+  savingsSeries:[],
+  savingsPeakValue:'',
+  summaryIncomes:0,
+  summaryIncomesPct:null,
+  summaryOutcomes:0,
+  summaryOutcomesPct:null,
+  expenseLimit:null,
+  expenseSpent:0,
   calendarOpen:false,
   calendarViewYear: new Date().getFullYear(),
   calendarViewMonth: new Date().getMonth(),
   selectedDate: null,
-  analyticsMonths:[
-    {label:'Apr', net:2100},
-    {label:'May', net:3400},
-    {label:'Jun', net:-800},
-    {label:'Jul', net:1200},
-    {label:'Aug', net:4600},
-    {label:'Sep', net:5324},
-  ],
+  analyticsMonths:[],
   notifPopupId:null,
   notifApps:[
     {id:'instagram', name:'Instagram', icon:'📷', enabled:true},
@@ -4233,18 +4191,7 @@ let state = {
     {id:'sn5', appId:'gmail', title:'Gmail', body:'Invoice #2291 from Acme Co.', time:'45m ago'},
     {id:'sn6', appId:'spotify', title:'Spotify', body:'New episode from your podcast', time:'3h ago'},
   ],
-  notifications:[
-    {id:'n1', source:'PayPal', label:'Payment received', amount:'+$450.00', time:'2m ago', icon:'💰'},
-    {id:'n2', source:'Shopify', label:'Order #4821 sold', amount:'+$89.00', time:'1h ago', icon:'🛍️'},
-    {id:'n3', source:'MT5', label:'Trade closed in profit', amount:'+$182.40', time:'3h ago', icon:'📈'},
-    {id:'n4', source:'Chase', label:'Direct deposit', amount:'+$3,200.00', time:'Yesterday', icon:'🏦'},
-    {id:'n5', source:'Venmo', label:'Payment from Jordan', amount:'+$65.00', time:'Yesterday', icon:'💸'},
-    {id:'n6', source:'Shopify', label:'Order #4819 sold', amount:'+$142.50', time:'2d ago', icon:'🛍️'},
-    {id:'n7', source:'Coinbase', label:'BTC sale settled', amount:'+$310.20', time:'2d ago', icon:'🪙'},
-    {id:'n8', source:'Exness', label:'Trade closed in profit', amount:'+$97.85', time:'3d ago', icon:'📊'},
-    {id:'n9', source:'Stripe', label:'Payout received', amount:'+$1,020.00', time:'4d ago', icon:'💳'},
-    {id:'n10', source:'Apple Cash', label:'Cash received', amount:'+$40.00', time:'5d ago', icon:'💵'},
-  ],
+  notifications:[],
   installedApps:[
     {id:'tradingview', name:'TradingView', icon:'📈', section:'WORK & TRADING', launchPopup:'tradingview'},
     {id:'mt5', name:'MetaTrader 5', icon:'📊', section:'WORK & TRADING', launchPopup:'mt5'},
@@ -4546,58 +4493,198 @@ function mediaOutputTemplate(){
   `;
 }
 
+// ===================== REAL MONEY (owner: "anything that's money that came in or came out" - no made-up numbers) =====================
+// Every payment comes from the notifications your bank / payment apps (and bank SMS) put on the phone: the app reads
+// them (MoneyLog.kt) and keeps them on this phone; StoryNative.moneyList() hands them over, newest first:
+// { id, ts, pkg, app, amt (+ in / - out), cur, bal?, who?, card?, text }. Nothing is ever made up - no payments yet
+// means empty / 0.
+const MONEY_SYM = { ZAR:'R', USD:'$', EUR:'€', GBP:'£', NGN:'₦', INR:'₹', KES:'KSh ' };
+let moneyCache = null;
+function moneyTx(){
+  if(moneyCache) return moneyCache;
+  let list = [];
+  try{ list = JSON.parse((NATIVE && window.StoryNative.moneyList) ? window.StoryNative.moneyList() : (localStorage.getItem('story-money-test') || '[]')) || []; }catch(e){}
+  moneyCache = list.filter(t=>t && isFinite(t.amt) && t.amt && t.ts).sort((a, b)=>b.ts - a.ts);
+  return moneyCache;
+}
+const MONEY_PAGES = ['money', 'money-summary', 'wallet', 'wallet-overview', 'tx-history'];
+// The app says when a new payment came in: the money pages update straight away.
+window.storyMoneyNew = function(){
+  moneyCache = null;
+  const a = document.activeElement;
+  if(MONEY_PAGES.includes(state.current) && !(a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA')) && !pageSwipeAnimating) renderDevice();
+};
+function moneyAccessOk(){ try{ return !NATIVE || !window.StoryNative.moneyAccess || !!window.StoryNative.moneyAccess(); }catch(e){ return true; } }
+// The currency most of your payments are in (before any payment: the phone's region).
+function moneyMainCur(){
+  const n = {}; moneyTx().forEach(t=>{ n[t.cur] = (n[t.cur] || 0) + 1; });
+  const best = Object.keys(n).sort((a, b)=>n[b] - n[a])[0];
+  if(best) return best;
+  const reg = ((navigator.language || '').split('-')[1] || '').toUpperCase();
+  return { ZA:'ZAR', GB:'GBP', NG:'NGN', IN:'INR', KE:'KES' }[reg] || (['DE','FR','ES','IT','NL','IE','PT','BE','AT','FI','GR'].includes(reg) ? 'EUR' : 'USD');
+}
+function fmtCur(n, cur, signed, dec){
+  const d = dec === 0 ? 0 : 2;
+  const s = Math.abs(n || 0).toLocaleString(undefined, { minimumFractionDigits:d, maximumFractionDigits:d });
+  return (n < 0 ? '-' : signed && n > 0 ? '+' : '') + (MONEY_SYM[cur] || ((cur || '') + ' ')) + s;
+}
+function moneyWhen(ts){
+  const mins = Math.floor((Date.now() - ts) / 60000);
+  if(mins < 1) return 'Just now';
+  if(mins < 60) return mins + 'm ago';
+  if(mins < 24 * 60 && new Date(ts).getDate() === new Date().getDate()) return Math.floor(mins / 60) + 'h ago';
+  const y = new Date(); y.setDate(y.getDate() - 1);
+  if(new Date(ts).toDateString() === y.toDateString()) return 'Yesterday';
+  return new Date(ts).toLocaleDateString(undefined, { day:'numeric', month:'short' });
+}
+const moneyDate = ts=>new Date(ts).toLocaleString(undefined, { day:'numeric', month:'short', year:'numeric', hour:'numeric', minute:'2-digit' });
+const moneyWho = t=>t.who || (t.amt < 0 ? 'Money out' : 'Money in');
+const moneyIcon = t=>t.amt < 0 ? '↗️' : '↙️';
+const monthKey = ts=>{ const d = new Date(ts); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); };
+const monthBack = (key, back)=>{ const [y, m] = key.split('-').map(Number); return monthKey(new Date(y, m - 1 - back, 1).getTime()); };
+const monthShort = key=>{ const [y, m] = key.split('-').map(Number); return new Date(y, m - 1, 1).toLocaleString('en-US', { month:'short' }); };
+function moneyMonth(){ return state.moneyMonth || monthKey(Date.now()); }
+function monthTotals(key, cur){
+  let inA = 0, outA = 0;
+  moneyTx().forEach(t=>{ if(t.cur === cur && monthKey(t.ts) === key){ if(t.amt > 0) inA += t.amt; else outA -= t.amt; } });
+  return { inA, outA };
+}
+// What the money went on - worked out from who you paid.
+const MONEY_CATS = [
+  ['Food & groceries', '#b19cd9', /checkers|woolworths|pick ?n ?pay|spar\b|shoprite|food|kfc|mcdonald|nando|uber ?eats|mr ?d\b|restaurant|caf[eé]|coffee|starbucks|burger|pizza|grocer|bakery/i],
+  ['Transport', '#f4a261', /uber(?! ?eats)|bolt|taxi|fuel|petrol|engen|shell|sasol|\bbp\b|caltex|total ?energies|parking|toll|gautrain|airline|flight/i],
+  ['Shopping', '#8ecae6', /takealot|amazon|shein|temu|mr ?price|edgars|zara|h&m|\bgame\b|makro|clicks|dis-?chem|pep\b|ackermans|store|shop|mall/i],
+  ['Bills & subscriptions', '#e9c46a', /netflix|spotify|showmax|dstv|apple|google|youtube|icloud|vodacom|mtn|telkom|cell ?c|electricity|prepaid|airtime|\bdata\b|insurance|rent|debit order|subscription|municipal/i],
+];
+function moneyCat(t){ const s = (t.who || '') + ' ' + (t.text || ''); const c = MONEY_CATS.find(c=>c[2].test(s)); return c ? c : ['Other', '#9aa0a6']; }
+function expensesFor(key, cur){
+  const tot = {}; let all = 0;
+  moneyTx().forEach(t=>{ if(t.amt < 0 && t.cur === cur && monthKey(t.ts) === key){ const c = moneyCat(t); tot[c[0]] = tot[c[0]] || { label:c[0], color:c[1], amt:0 }; tot[c[0]].amt -= t.amt; all -= t.amt; } });
+  const list = Object.values(tot).sort((a, b)=>b.amt - a.amt);
+  if(!all) return [{ label:'No spending yet', pct:100, color:'#2a2a2a', empty:true }];
+  let left = 100;
+  return list.map((e, i)=>{ const pct = i === list.length - 1 ? left : Math.round(e.amt / all * 100); left -= pct; return { label:e.label, pct, color:e.color }; });
+}
+// Balances your bank says in its messages (newest per account); a negative one is money you owe.
+function moneyBalances(){
+  const seen = {}, out = [];
+  moneyTx().forEach(t=>{
+    if(t.bal == null) return;
+    const k = t.pkg + '|' + (t.card || '');
+    if(seen[k]) return; seen[k] = 1;
+    out.push({ name: t.app + (t.card ? ' ••' + t.card : ''), bal: t.bal, cur: t.cur, ts: t.ts, icon:'🏦' });
+  });
+  return out;
+}
+// Your trading accounts (Trading page) with the last balance STORY saw.
+const TRADE_LAST_KEY = 'story-trade-last';
+function tradeAssets(){
+  let last = {}; try{ last = JSON.parse(localStorage.getItem(TRADE_LAST_KEY) || '{}') || {}; }catch(e){}
+  return tradeAccounts().map(a=>{ const l = last[a.id]; return l && l.eq != null ? { name:a.name, bal:+l.eq, cur:a.currency || 'USD', ts:l.ts, icon:'📈' } : null; }).filter(Boolean);
+}
+function moneyAssets(){ return moneyBalances().concat(tradeAssets()); }
+function netWorth(cur){ return moneyAssets().filter(a=>a.cur === cur).reduce((s, a)=>s + a.bal, 0); }
+// This month's change, from the real net worth STORY saw each day (kept on the phone).
+function netWorthPct(nw, cur){
+  if(!moneyAssets().length) return null;
+  let snaps = {}; try{ snaps = JSON.parse(localStorage.getItem('story-networth') || '{}') || {}; }catch(e){}
+  const today = new Date().toISOString().slice(0, 10);
+  if(!snaps[cur] || typeof snaps[cur] !== 'object') snaps[cur] = {};
+  snaps[cur][today] = nw;
+  const keys = Object.keys(snaps[cur]).sort();
+  if(keys.length > 400) keys.slice(0, keys.length - 400).forEach(k=>delete snaps[cur][k]);
+  try{ localStorage.setItem('story-networth', JSON.stringify(snaps)); }catch(e){}
+  const first = keys.find(k=>k.slice(0, 7) === today.slice(0, 7));
+  if(!first || first === today || !snaps[cur][first]) return null;
+  return Math.round((nw - snaps[cur][first]) / Math.abs(snaps[cur][first]) * 1000) / 10;
+}
+// Fills the Money page's numbers from your real payments (same places the page always read them from).
+function moneyCompute(){
+  const cur = moneyMainCur(), key = moneyMonth();
+  state.moneyCur = cur;
+  const m = monthTotals(key, cur);
+  state.moneyIn = m.inA; state.moneyOut = m.outA;
+  state.thisMonthLabel = key === monthKey(Date.now()) ? 'THIS MONTH' : (()=>{ const [y, mo] = key.split('-').map(Number); return new Date(y, mo - 1, 1).toLocaleString('en-US', { month:'long', year:'numeric' }).toUpperCase(); })();
+  state.analyticsMonths = [5, 4, 3, 2, 1, 0].map(b=>{ const k = monthBack(key, b), t = monthTotals(k, cur); return { label: monthShort(k), net: t.inA - t.outA }; });
+  state.expensesBreakdown = expensesFor(key, cur);
+  let run = 0; const cum = [6, 5, 4, 3, 2, 1, 0].map(b=>{ const t = monthTotals(monthBack(key, b), cur); run += t.inA - t.outA; return run; });
+  const lo = Math.min(...cum), hi = Math.max(...cum);
+  state.savingsSeries = cum.map(v=>hi === lo ? 10 : Math.round(10 + (v - lo) / (hi - lo) * 70));
+  state.savingsPeakValue = fmtCur(Math.max(0, hi), cur);
+  const spends = [5, 4, 3, 2, 1, 0].map(b=>monthTotals(monthBack(key, b), cur).outA).filter(v=>v > 0);
+  state.moneyAvgSpend = spends.length ? spends.reduce((s, v)=>s + v, 0) / spends.length : 0;
+  state.moneySavingsRate = m.inA > 0 ? Math.round((m.inA - m.outA) / m.inA * 100) : null;
+  const p = monthTotals(monthBack(key, 1), cur);
+  state.summaryIncomes = m.inA; state.summaryOutcomes = m.outA;
+  state.summaryIncomesPct = p.inA > 0 ? Math.round((m.inA - p.inA) / p.inA * 100) : null;
+  state.summaryOutcomesPct = p.outA > 0 ? Math.round((m.outA - p.outA) / p.outA * 100) : null;
+  state.expenseSpent = m.outA;
+  let lim = null; try{ lim = JSON.parse(localStorage.getItem('story-spend-limit') || '{}')[cur]; }catch(e){}
+  state.expenseLimit = lim > 0 ? +lim : null;
+}
+function paymentCardsHTML(){
+  if(!moneyAccessOk()) return `<div class="notif-card" data-action="money-access"><div class="notif-icon-wrap">🔔</div><div class="notif-mid"><div class="notif-source">STORY</div><div class="notif-label">Allow STORY to see your payments</div></div><div class="notif-right"><div class="notif-amt">Turn on</div><div class="notif-time">&nbsp;</div></div></div>`;
+  const list = moneyTx().slice(0, 30);
+  if(!list.length) return `<div class="notif-card notif-empty"><div class="notif-icon-wrap">💳</div><div class="notif-mid"><div class="notif-source">No payments yet</div><div class="notif-label">They show as your bank apps send them</div></div><div class="notif-right"><div class="notif-amt">&nbsp;</div><div class="notif-time">&nbsp;</div></div></div>`;
+  return list.map(t=>`
+        <div class="notif-card" data-notif="${escText(t.id)}">
+          <div class="notif-icon-wrap">${moneyIcon(t)}</div>
+          <div class="notif-mid">
+            <div class="notif-source">${escText(t.app || '')}</div>
+            <div class="notif-label">${escText(moneyWho(t))}</div>
+          </div>
+          <div class="notif-right">
+            <div class="notif-amt"${t.amt < 0 ? ' style="color:var(--red);"' : ''}>${fmtCur(t.amt, t.cur, true)}</div>
+            <div class="notif-time">${moneyWhen(t.ts)}</div>
+          </div>
+        </div>
+      `).join('');
+}
+const moneyRowsEmpty = text=>`<div class="row"><div class="row-left"><div class="row-name" style="color:var(--muted);">${text}</div></div></div>`;
+function moneyAssetRows(neg){
+  const list = moneyAssets().filter(a=>neg ? a.bal < 0 : a.bal >= 0);
+  if(!list.length) return moneyRowsEmpty(neg ? 'Nothing owed' : 'Nothing yet');
+  return list.map(a=>`<div class="row"><div class="row-left"><div class="row-icon">${a.icon}</div><div><div class="row-name">${escText(a.name)}</div><div class="row-sub">${moneyWhen(a.ts)}</div></div></div><div class="row-amt"${neg ? ' style="color:var(--red);"' : ''}>${fmtCur(a.bal, a.cur)}</div></div>`).join('');
+}
+
 function moneyScreen(){
-  const pctNeg = state.netWorthChangePct < 0;
+  moneyCompute();
+  const cur = state.moneyCur;
+  const nw = netWorth(cur);
+  const pctNow = netWorthPct(nw, cur);
+  const pctNeg = pctNow != null && pctNow < 0;
   const net = state.moneyIn - state.moneyOut;
   const netNeg = net < 0;
   return `
     <div class="page-shell">
     ${topBar('Money', true, '<button class="order-corner-btn" data-nav="money-summary" title="Summary"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9"></path><path d="M21 12 12 12 12 3"></path></svg></button>')}
     ${pageArrows()}
-    <div class="big-num">$128,940.72</div>
-    <div style="color:${pctNeg?'var(--red)':'var(--green)'};font-size:12px;font-weight:600;">${pctNeg?'-':'+'}${Math.abs(state.netWorthChangePct)}% this month</div>
+    <div class="big-num">${fmtCur(nw, cur)}</div>
+    <div style="color:${pctNeg?'var(--red)':'var(--green)'};font-size:12px;font-weight:600;${pctNow == null ? 'visibility:hidden;' : ''}">${pctNeg?'-':'+'}${Math.abs(pctNow || 0)}% this month</div>
 
     <div class="section-title">PAYMENTS</div>
     <div class="notif-scroll-wrap">
     <div class="notif-scroll" id="pay-scroll">
-      ${state.notifications.map(n=>`
-        <div class="notif-card" data-notif="${n.id}">
-          <div class="notif-icon-wrap">${n.icon}</div>
-          <div class="notif-mid">
-            <div class="notif-source">${n.source}</div>
-            <div class="notif-label">${n.label}</div>
-          </div>
-          <div class="notif-right">
-            <div class="notif-amt">${n.amount}</div>
-            <div class="notif-time">${n.time}</div>
-          </div>
-        </div>
-      `).join('')}
+      ${paymentCardsHTML()}
     </div>
     <div class="pay-scroll-track" id="pay-scroll-track"><div class="pay-scroll-line"><div class="pay-scroll-thumb" id="pay-scroll-thumb"></div></div></div>
     </div>
     <div class="section-title">ASSETS</div>
     <div class="row-card">
-      <div class="row"><div class="row-left"><div class="row-icon">🏦</div><div class="row-name">Chase Checking</div></div><div class="row-amt">$4,820.15</div></div>
-      <div class="row"><div class="row-left"><div class="row-icon">💵</div><div class="row-name">Apple Cash</div></div><div class="row-amt">$231.90</div></div>
-      <div class="row"><div class="row-left"><div class="row-icon">📈</div><div class="row-name">Fidelity Brokerage</div></div><div class="row-amt">$61,204.88</div></div>
-      <div class="row"><div class="row-left"><div class="row-icon">🪙</div><div><div class="row-name">Coinbase</div><div class="row-sub">0.0841 BTC</div></div></div><div class="row-amt">$9,867.22</div></div>
-      <div class="row"><div class="row-left"><div class="row-icon">📊</div><div class="row-name">MT5 Trading</div></div><div class="row-amt">$12,480.52</div></div>
-      <div class="row"><div class="row-left"><div class="row-icon">🚗</div><div><div class="row-name">Car</div><div class="row-sub">est. value</div></div></div><div class="row-amt">$18,000.00</div></div>
+      ${moneyAssetRows(false)}
     </div>
     <div class="section-title">LIABILITIES</div>
     <div class="row-card">
-      <div class="row"><div class="row-left"><div class="row-icon">💳</div><div class="row-name">Chase Freedom Card</div></div><div class="row-amt" style="color:var(--red);">-$1,204.38</div></div>
-      <div class="row"><div class="row-left"><div class="row-icon">🎓</div><div class="row-name">Student Loan</div></div><div class="row-amt" style="color:var(--red);">-$7,412.50</div></div>
+      ${moneyAssetRows(true)}
     </div>
     <div class="section-title-row">
       <div class="section-title" style="margin:0;">${state.thisMonthLabel}</div>
       <button class="order-corner-btn" data-action="cal-open" title="Jump to date"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg></button>
     </div>
     <div class="grid2" style="grid-template-columns:1fr 1fr 1fr;">
-      <div class="row-card" style="text-align:center;padding:12px 0;"><div class="row-sub">IN</div><div class="row-amt" style="color:var(--green);">$${state.moneyIn.toLocaleString()}</div></div>
-      <div class="row-card" style="text-align:center;padding:12px 0;"><div class="row-sub">OUT</div><div class="row-amt" style="color:var(--red);">$${state.moneyOut.toLocaleString()}</div></div>
-      <div class="row-card" style="text-align:center;padding:12px 0;"><div class="row-sub">NET</div><div class="row-amt" style="color:${netNeg?'var(--red)':'var(--green)'};">${netNeg?'-':'+'}$${Math.abs(net).toLocaleString()}</div></div>
+      <div class="row-card" style="text-align:center;padding:12px 0;"><div class="row-sub">IN</div><div class="row-amt" style="color:var(--green);">${fmtCur(state.moneyIn, cur, false, 0)}</div></div>
+      <div class="row-card" style="text-align:center;padding:12px 0;"><div class="row-sub">OUT</div><div class="row-amt" style="color:var(--red);">${fmtCur(state.moneyOut, cur, false, 0)}</div></div>
+      <div class="row-card" style="text-align:center;padding:12px 0;"><div class="row-sub">NET</div><div class="row-amt" style="color:${netNeg?'var(--red)':'var(--green)'};">${fmtCur(net, cur, true, 0)}</div></div>
     </div>
 
     ${(() => {
@@ -4614,7 +4701,7 @@ function moneyScreen(){
         <div class="analytics-chart">
           ${state.analyticsMonths.map(m=>{
             const isNeg = m.net < 0;
-            const h = Math.max(3, Math.round((Math.abs(m.net) / maxAbsNet) * 40));
+            const h = m.net ? Math.max(3, Math.round((Math.abs(m.net) / maxAbsNet) * 40)) : 0;
             return `
               <div class="analytics-col">
                 <div class="analytics-track">
@@ -4634,7 +4721,7 @@ function moneyScreen(){
           })()});"><div class="donut-hole"></div></div>
           <div class="donut-legend">
             ${state.expensesBreakdown.map(e=>`
-              <div class="legend-row"><span class="legend-dot" style="background:${e.color};"></span><span class="legend-label">${e.label}</span><span class="legend-pct">${e.pct}%</span></div>
+              <div class="legend-row"><span class="legend-dot" style="background:${e.color};"></span><span class="legend-label">${e.label}</span><span class="legend-pct">${e.empty ? '' : e.pct + '%'}</span></div>
             `).join('')}
           </div>
         </div>`;
@@ -4671,8 +4758,8 @@ function moneyScreen(){
       `;
     })()}
     <div class="grid2" style="grid-template-columns:1fr 1fr;margin-top:8px;">
-      <div class="row-card" style="text-align:center;padding:12px 0;"><div class="row-sub">AVG MONTHLY SPEND</div><div class="row-amt">$2,940</div></div>
-      <div class="row-card" style="text-align:center;padding:12px 0;"><div class="row-sub">SAVINGS RATE</div><div class="row-amt" style="color:var(--green);">32%</div></div>
+      <div class="row-card" style="text-align:center;padding:12px 0;"><div class="row-sub">AVG MONTHLY SPEND</div><div class="row-amt">${fmtCur(state.moneyAvgSpend, cur, false, 0)}</div></div>
+      <div class="row-card" style="text-align:center;padding:12px 0;"><div class="row-sub">SAVINGS RATE</div><div class="row-amt" style="color:${state.moneySavingsRate != null && state.moneySavingsRate < 0 ? 'var(--red)' : 'var(--green)'};">${state.moneySavingsRate == null ? '—' : state.moneySavingsRate + '%'}</div></div>
     </div>
 
     <div class="money-transfer-fab-wrap">
@@ -4689,8 +4776,11 @@ function moneyScreen(){
 }
 
 function moneySummaryScreen(){
-  const spent = state.expenseSpent, limit = state.expenseLimit, left = Math.max(0, limit-spent);
-  const pct = Math.min(100, Math.round(spent/limit*100));
+  moneyCompute();
+  const cur = state.moneyCur;
+  const spent = state.expenseSpent, limit = state.expenseLimit, left = limit ? Math.max(0, limit-spent) : 0;
+  const pct = limit ? Math.min(100, Math.round(spent/limit*100)) : 0;
+  const pctTxt = v=>v == null ? '' : (v > 0 ? '+' : '') + v + '%';
   const donutGradient = (() => {
     let acc=0; return state.expensesBreakdown.map(e=>{
       const start=acc; acc+=e.pct;
@@ -4702,33 +4792,34 @@ function moneySummaryScreen(){
     ${topBar('Summary', false, '', 'money')}
     <div class="grid2" style="grid-template-columns:1fr 1fr;">
       <div class="row-card" style="padding:12px;">
-        <div class="row-sub" style="display:flex;justify-content:space-between;">INCOMES <span style="color:var(--green);">+${state.summaryIncomesPct}%</span></div>
-        <div class="big-num" style="font-size:20px;margin:6px 0 2px;">+$${state.summaryIncomes.toLocaleString()}</div>
+        <div class="row-sub" style="display:flex;justify-content:space-between;">INCOMES <span style="color:var(--green);">${pctTxt(state.summaryIncomesPct)}</span></div>
+        <div class="big-num" style="font-size:20px;margin:6px 0 2px;">${fmtCur(state.summaryIncomes, cur, true, 0)}</div>
       </div>
       <div class="row-card" style="padding:12px;">
-        <div class="row-sub" style="display:flex;justify-content:space-between;">OUTCOMES <span style="color:var(--red);">${state.summaryOutcomesPct}%</span></div>
-        <div class="big-num" style="font-size:20px;margin:6px 0 2px;">-$${state.summaryOutcomes.toLocaleString()}</div>
+        <div class="row-sub" style="display:flex;justify-content:space-between;">OUTCOMES <span style="color:var(--red);">${pctTxt(state.summaryOutcomesPct)}</span></div>
+        <div class="big-num" style="font-size:20px;margin:6px 0 2px;">${fmtCur(-state.summaryOutcomes, cur, false, 0)}</div>
       </div>
     </div>
     <div class="section-title">SPENDING BREAKDOWN</div>
     <div class="row-card">
-      <div class="note" style="margin-bottom:8px;">You have spent $${spent.toLocaleString()} this month.</div>
+      <div class="note" style="margin-bottom:8px;">You have spent ${fmtCur(spent, cur)} ${state.thisMonthLabel === 'THIS MONTH' ? 'this month' : 'in ' + state.thisMonthLabel.charAt(0) + state.thisMonthLabel.slice(1).toLowerCase()}.</div>
       <div class="donut-row">
         <div class="donut" style="background:conic-gradient(${donutGradient});"><div class="donut-hole"></div></div>
         <div class="donut-legend">
           ${state.expensesBreakdown.map(e=>`
-            <div class="legend-row"><span class="legend-dot" style="background:${e.color};"></span><span class="legend-label">${e.label}</span><span class="legend-pct">${e.pct}%</span></div>
+            <div class="legend-row"><span class="legend-dot" style="background:${e.color};"></span><span class="legend-label">${e.label}</span><span class="legend-pct">${e.empty ? '' : e.pct + '%'}</span></div>
           `).join('')}
         </div>
       </div>
     </div>
     <div class="section-title">MONTHLY EXPENSE LIMIT</div>
-    <div class="row-card">
-      <div class="big-num" style="font-size:20px;">$${limit.toLocaleString()}</div>
+    <div class="row-card" data-action="spend-limit-open">
+      <div class="big-num" style="font-size:20px;">${limit ? fmtCur(limit, cur, false, 0) : 'No limit set'}</div>
       <div class="limit-bar-track"><div class="limit-bar-fill" style="width:${pct}%;"></div></div>
-      <div class="note" style="margin-top:8px;">You have got only $${left.toLocaleString()} to spend this month.</div>
+      <div class="note" style="margin-top:8px;">${!limit ? 'Tap to set your monthly limit.' : spent > limit ? 'You are ' + fmtCur(spent - limit, cur) + ' over your limit this month.' : 'You have got only ' + fmtCur(left, cur) + ' to spend this month.'}</div>
     </div>
     </div>
+    ${state.spendLimitOpen ? spendLimitTemplate() : ''}
   `;
 }
 
@@ -4749,15 +4840,31 @@ function calPopupTemplate(){
 }
 
 function notifDetailTemplate(){
-  const n = state.notifications.find(x=>x.id===state.notifPopupId);
-  if(!n) return '';
+  const t = moneyTx().find(x=>x.id===state.notifPopupId);
+  if(!t) return '';
   return `
     <div class="modal-overlay" data-action="notif-popup-bg">
       <div class="confirm-sheet" onclick="event.stopPropagation()">
-        <div class="confirm-title">${n.source} — ${n.amount}</div>
-        <div class="confirm-sub">${n.label} · ${n.time}</div>
+        <div class="confirm-title">${escText(moneyWho(t))} — ${fmtCur(t.amt, t.cur, true)}</div>
+        <div class="confirm-sub">${escText(t.app || '')} · ${moneyDate(t.ts)}${t.bal != null ? '<br>Balance after: ' + fmtCur(t.bal, t.cur) : ''}${t.card ? '<br>Card / account ••' + escText(t.card) : ''}<br><span style="opacity:0.7;">${escText(t.text || '')}</span></div>
         <div class="confirm-btn-row">
           <button class="btn-wide btn-primary" style="margin-top:0;" data-action="notif-popup-close">Close</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+function spendLimitTemplate(){
+  const cur = state.moneyCur || moneyMainCur();
+  return `
+    <div class="modal-overlay" data-action="spend-limit-close">
+      <div class="confirm-sheet" onclick="event.stopPropagation()">
+        <div class="confirm-title">Monthly expense limit</div>
+        <div class="confirm-sub">How much you want to spend at most each month (${MONEY_SYM[cur] || cur}).</div>
+        <input class="field-input" id="spend-limit-input" type="text" inputmode="decimal" placeholder="${MONEY_SYM[cur] || ''}0" value="${state.expenseLimit || ''}" style="margin-bottom:14px;">
+        <div class="confirm-btn-row">
+          <button class="btn-wide btn-primary" style="margin-top:0;" data-action="spend-limit-save">Save</button>
+          <button class="btn-wide" style="margin-top:0;" data-action="spend-limit-close">Cancel</button>
         </div>
       </div>
     </div>
@@ -5427,6 +5534,8 @@ async function tradeRefreshNow(force){
   try{
     const live = await TRADE.refresh(acc);
     state.live[acc.id] = Object.assign({ status:'ok' }, live);
+    // Money shows your trading accounts with the last balance STORY saw.
+    try{ const l = JSON.parse(localStorage.getItem(TRADE_LAST_KEY) || '{}') || {}; const eq = live.equity != null ? live.equity : live.balance; if(eq != null && isFinite(eq)){ l[acc.id] = { eq:+eq, ts:Date.now() }; localStorage.setItem(TRADE_LAST_KEY, JSON.stringify(l)); } }catch(e){}
     const f = await TRADE.focus(acc);
     state.focusQuote = f.quote; state.focusBars = f.bars || [];
     if(f.name) state.focusName = f.name;
@@ -5935,6 +6044,78 @@ function chartFullscreenTemplate(){
 // red (money out) or green (money in) for the first 10 minutes after it lands, then white
 // for good -- it never goes back to color even if looked at again much later.
 const WALLET_ACTIVITY_COLOR_WINDOW_MS = 10 * 60 * 1000;
+// ---- Wallet: YOUR cards (owner: the Wallet page just shows your card; Tap to Pay pays for real) ----
+// STORY can't read a card out of your bank, so you add how it looks: the bank / name, the last 4 digits, expiry,
+// network and colour (never the full number). Kept on this phone (localStorage story-cards).
+const CARDS_KEY = 'story-cards';
+const CARD_NETS = ['Visa', 'Mastercard', 'Amex', 'Other'];
+const CARD_COLORS = [['Blue', 'linear-gradient(135deg, #1c3f8f, #0d1f4d)'], ['Black', 'linear-gradient(135deg, #1f2422, #0a0b0a)'], ['Green', 'linear-gradient(135deg, #1f6f43, #0b2e1c)'], ['Red', 'linear-gradient(135deg, #8f1c2c, #3d0a12)'], ['Gold', 'linear-gradient(135deg, #a8842c, #4a3910)'], ['Purple', 'linear-gradient(135deg, #5b2a8f, #230d3d)']];
+function cardFormVals(){
+  const v = id=>((document.getElementById(id) || {}).value || '').trim();
+  return { bank: v('card-bank'), last4: v('card-last4').replace(/[^0-9]/g, ''), exp: v('card-exp'), msg:'' };
+}
+function walletCards(){ try{ return JSON.parse(localStorage.getItem(CARDS_KEY) || '[]') || []; }catch(e){ return []; } }
+function saveWalletCards(l){ try{ localStorage.setItem(CARDS_KEY, JSON.stringify(l)); }catch(e){} }
+function cardSlideHTML(c, i){
+  const idx = state.walletCardIndex;
+  const cls = i === idx ? '' : (idx !== 0 && Math.abs(i - idx) === 1 ? 'inactive' : 'inactive hidden-peek');
+  const bg = (CARD_COLORS.find(k=>k[0] === c.color) || CARD_COLORS[0])[1];
+  const net = c.net === 'Other' ? '' : c.net === 'Mastercard' ? 'MASTERCARD' : (c.net || '').toUpperCase();
+  return `
+        <div class="paycard-slide">
+        <div class="realcard ${cls}" data-keep-color data-wcard="${escText(c.id)}" style="background:${bg};border:1px solid rgba(255,255,255,0.08);">
+          <div class="realcard-top">
+            <span class="realcard-brand">${escText(c.bank || 'Card')}</span>
+            <div class="realcard-chip"></div>
+          </div>
+          <div class="realcard-num">••••  &nbsp; ••••  &nbsp; ••••  &nbsp; ${escText(c.last4 || '••••')}</div>
+          <div class="realcard-bottom">
+            <div>
+              <div class="realcard-label">EXPIRES</div>
+              <div class="realcard-name">${escText(c.exp || '--/--')}</div>
+            </div>
+            <div class="realcard-logo ${c.net === 'Amex' ? 'realcard-logo-amex' : 'realcard-logo-visa'}">${net}</div>
+          </div>
+        </div>
+        </div>`;
+}
+function addCardTemplate(){
+  const f = state.addCard || {};
+  return `
+    <div class="modal-overlay" data-action="add-card-close">
+      <div class="modal-sheet" onclick="event.stopPropagation()">
+        <div class="modal-head"><span class="modal-title">Add card</span><button class="modal-close" data-action="add-card-close">×</button></div>
+        <div class="section-title" style="margin-top:4px;">BANK / CARD NAME</div>
+        <input class="field-input" id="card-bank" type="text" autocomplete="off" placeholder="e.g. FNB Cheque" value="${escText(f.bank || '')}">
+        <div class="grid2" style="grid-template-columns:1fr 1fr;gap:8px;">
+          <div><div class="section-title" style="margin-top:12px;">LAST 4 DIGITS</div><input class="field-input" id="card-last4" type="text" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="1234" value="${escText(f.last4 || '')}"></div>
+          <div><div class="section-title" style="margin-top:12px;">EXPIRES</div><input class="field-input" id="card-exp" type="text" inputmode="numeric" maxlength="5" autocomplete="off" placeholder="MM/YY" value="${escText(f.exp || '')}"></div>
+        </div>
+        <div class="section-title" style="margin-top:12px;">NETWORK</div>
+        <div class="acct-seg" style="grid-template-columns:repeat(4,1fr);margin-bottom:8px;">${CARD_NETS.map(n=>`<button class="acct-seg-btn${(f.net || 'Visa') === n ? ' on' : ''}" data-cardnet="${n}">${n}</button>`).join('')}</div>
+        <div class="section-title" style="margin-top:4px;">COLOUR</div>
+        <div style="display:flex;gap:10px;margin:6px 0 4px;">${CARD_COLORS.map(([n, bg])=>`<button data-keep-color data-cardcolor="${n}" title="${n}" style="width:30px;height:30px;border-radius:50%;background:${bg};border:2px solid ${(f.color || 'Blue') === n ? '#ffffff' : 'transparent'};padding:0;"></button>`).join('')}</div>
+        <div class="acct-msg">${escText(f.msg || '')}</div>
+        <div class="note" style="margin-top:6px;">Only what you type here is kept, on this phone - never your full card number. Paying uses your phone's own tap to pay.</div>
+        <button class="btn-wide btn-primary" style="margin-top:12px;" data-action="add-card-save">Add card</button>
+      </div>
+    </div>`;
+}
+function cardSheetTemplate(){
+  const c = walletCards().find(x=>x.id === state.cardSheetId); if(!c) return '';
+  return `
+    <div class="modal-overlay" data-action="card-sheet-close">
+      <div class="confirm-sheet" onclick="event.stopPropagation()">
+        <div class="confirm-title">${escText(c.bank || 'Card')} ••${escText(c.last4 || '')}</div>
+        <div class="confirm-sub">Remove this card from STORY? Nothing changes at your bank.</div>
+        <div class="confirm-btn-row">
+          <button class="btn-wide" style="margin-top:0;color:var(--red);" data-action="card-remove">Remove card</button>
+          <button class="btn-wide btn-primary" style="margin-top:0;" data-action="card-sheet-close">Close</button>
+        </div>
+      </div>
+    </div>`;
+}
+const walletActivityList = ()=>moneyTx().slice(0, 5);
 function walletActivityColor(amt, ts){
   const age = Date.now() - ts;
   if(age >= WALLET_ACTIVITY_COLOR_WINDOW_MS) return 'var(--text)';
@@ -5953,62 +6134,47 @@ function walletActivitySubLabel(entry){
   return Math.floor(hrs / 24) + 'd ago';
 }
 function walletActivityRowsHTML(){
-  return state.walletActivity.map(t=>`
-    <div class="row"><div class="row-left"><div class="row-icon">${t.icon}</div><div><div class="row-name">${t.name}</div><div class="row-sub">${walletActivitySubLabel(t)}</div></div></div><div class="row-amt" style="color:${walletActivityColor(t.amt, t.ts)};">${t.amt<0?'-':'+'}$${Math.abs(t.amt).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div></div>
+  if(!moneyAccessOk()) return `<div class="row" data-action="money-access" style="cursor:pointer;"><div class="row-left"><div class="row-icon">🔔</div><div class="row-name">Allow STORY to see your payments</div></div><div class="row-amt">Turn on</div></div>`;
+  const list = walletActivityList();
+  if(!list.length) return moneyRowsEmpty('No activity yet');
+  return list.map(t=>({ icon: moneyIcon(t), name: escText(moneyWho(t)), sub: moneyWhen(t.ts), amt: t.amt, ts: t.ts, cur: t.cur })).map(t=>`
+    <div class="row"><div class="row-left"><div class="row-icon">${t.icon}</div><div><div class="row-name">${t.name}</div><div class="row-sub">${walletActivitySubLabel(t)}</div></div></div><div class="row-amt" style="color:${walletActivityColor(t.amt, t.ts)};">${fmtCur(t.amt, t.cur, true)}</div></div>
   `).join('');
 }
+// Subscriptions = the same payee paid in 2+ different months (worked out from your real payments).
+function walletSubscriptions(){
+  const by = {};
+  moneyTx().forEach(t=>{ if(t.amt >= 0 || !t.who) return; const k = t.who.toLowerCase() + '|' + t.cur; (by[k] = by[k] || []).push(t); });
+  return Object.values(by).map(l=>{
+    const months = new Set(l.map(t=>monthKey(t.ts)));
+    if(months.size < 2) return null;
+    const last = l[0];
+    return { icon: moneyCat(last)[0] === 'Bills & subscriptions' ? '🔁' : '🧾', name: last.who, plan: 'Monthly', last: moneyWhen(last.ts), amt: -last.amt, cur: last.cur };
+  }).filter(Boolean);
+}
 function walletScreen(){
+  const cards = walletCards();
+  const nSlides = cards.length + 1;
+  if(state.walletCardIndex > cards.length) state.walletCardIndex = cards.length;
+  const subs = walletSubscriptions();
   return `
     <div class="page-shell">
     ${topBar('Wallet', true, '<button class="order-corner-btn" data-action="open-tx-from-wallet" title="Transaction History"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg></button>')}
     ${pageArrows()}
     <div class="paycard-carousel" id="paycard-swipe" style="width:122%;margin-left:-11%;">
-      <div class="paycard-track" style="transform:translateX(calc(-${state.walletCardIndex} * 33.3333%));">
-        <div class="paycard-slide">
+      <div class="paycard-track" style="width:${nSlides * 100}%;transform:translateX(calc(-${state.walletCardIndex} * ${100 / nSlides}%));">
+        <div class="paycard-slide" style="width:${100 / nSlides}%;">
         <div class="realcard realcard-addslide ${state.walletCardIndex===0?'':(state.walletCardIndex===1?'inactive':'inactive hidden-peek')}" data-action="add-card" title="Add Card">
           <div class="addslide-inner"><div class="avatar-circle avatar-add">+</div></div>
         </div>
         </div>
-        <div class="paycard-slide">
-        <div class="realcard realcard-chase ${state.walletCardIndex===1?'':'inactive hidden-peek'}">
-          <div class="realcard-top">
-            <span class="realcard-brand">Chase</span>
-            <div class="realcard-chip"></div>
-          </div>
-          <div class="realcard-num">4821  &nbsp; ••••  &nbsp; ••••  &nbsp; ••••</div>
-          <div class="realcard-bottom">
-            <div>
-              <div class="realcard-label">EXPIRES</div>
-              <div class="realcard-name">09/28</div>
-            </div>
-            <div class="realcard-logo realcard-logo-visa">VISA</div>
-          </div>
-        </div>
-        </div>
-        <div class="paycard-slide">
-        <div class="realcard realcard-amex ${state.walletCardIndex===2?'':(state.walletCardIndex===1?'inactive':'inactive hidden-peek')}">
-          <div class="realcard-top">
-            <span class="realcard-brand">American Express</span>
-            <div class="realcard-chip realcard-chip-amex"></div>
-          </div>
-          <div class="realcard-num">••••  &nbsp; ••••  &nbsp; 1177</div>
-          <div class="realcard-bottom">
-            <div>
-              <div class="realcard-label">EXPIRES</div>
-              <div class="realcard-name">03/29</div>
-            </div>
-            <div class="realcard-logo realcard-logo-amex">AMEX</div>
-          </div>
-        </div>
-        </div>
+        ${cards.map((c, k)=>cardSlideHTML(c, k + 1).replace('<div class="paycard-slide">', `<div class="paycard-slide" style="width:${100 / nSlides}%;">`)).join('')}
       </div>
     </div>
     <div class="paycard-dots">
-      <span class="dot${state.walletCardIndex===0?' active':''}" data-cardidx="0"></span>
-      <span class="dot${state.walletCardIndex===1?' active':''}" data-cardidx="1"></span>
-      <span class="dot${state.walletCardIndex===2?' active':''}" data-cardidx="2"></span>
+      ${Array.from({ length:nSlides }, (_, k)=>`<span class="dot${state.walletCardIndex===k?' active':''}" data-cardidx="${k}"></span>`).join('')}
     </div>
-    <div class="btn-row"><button class="btn btn-row-action" style="background:#e8e6e1;color:#0a0a0a;">Tap to Pay<svg class="row-action-ico" viewBox="0 0 70 46" fill="none" stroke="currentColor" stroke-linecap="round">
+    <div class="btn-row"><button class="btn btn-row-action" data-action="tap-to-pay" style="background:#e8e6e1;color:#0a0a0a;">Tap to Pay<svg class="row-action-ico" viewBox="0 0 70 46" fill="none" stroke="currentColor" stroke-linecap="round">
               <!-- Recentered + scaled to the same footprint as the Wallet icon below (same
                    viewBox center, similar width/height) -- drawn full-size on its own axis
                    above, it sat taller and a couple px left of center, which is what made
@@ -6037,22 +6203,21 @@ function walletScreen(){
     </div>
     <div class="section-title">MEMBERSHIPS</div>
     <div class="membership-grid">
-      <div class="membership"><span class="ico">🏋️</span>Equinox</div>
-      <div class="membership"><span class="ico">🫙</span>Blue Bottle</div>
-      <div class="membership"><span class="ico">✈️</span>Delta</div>
+      <div class="membership membership-add"><span class="ico">＋</span>Add</div>
     </div>
     <div class="section-title">SUBSCRIPTIONS</div>
     <div class="row-card">
-      ${state.subscriptions.map(s=>`
+      ${subs.length ? subs.map(s=>`
         <div class="row">
-          <div class="row-left"><div class="row-icon">${s.icon}</div><div><div class="row-name">${s.name}</div><div class="row-sub">${s.plan} · renews ${s.renews}</div></div></div>
-          <div class="row-amt">$${s.amt.toFixed(2)}/${s.period}</div>
+          <div class="row-left"><div class="row-icon">${s.icon}</div><div><div class="row-name">${escText(s.name)}</div><div class="row-sub">${s.plan} · last paid ${s.last}</div></div></div>
+          <div class="row-amt">${fmtCur(s.amt, s.cur)}/mo</div>
         </div>
-      `).join('')}
+      `).join('') : moneyRowsEmpty('None yet')}
     </div>
     </div>
 
-    ${state.favoritesOpen ? favoritesPopupTemplate() : ''}
+    ${state.addCardOpen ? addCardTemplate() : ''}
+    ${state.cardSheetId ? cardSheetTemplate() : ''}
   `;
 }
 
@@ -6106,9 +6271,9 @@ function walletOverviewScreen(){
   return `
     <div class="page-shell">
     ${topBar('Overview', false, '', 'wallet', '', false, true)}
-    <div class="note" style="margin-bottom:2px;margin-top:-11px;text-align:left;">Welcome back, Percy!</div>
+    <div class="note" style="margin-bottom:2px;margin-top:-11px;text-align:left;">Welcome back${(()=>{ let p = {}; try{ p = JSON.parse(localStorage.getItem('story-profile') || '{}') || {}; }catch(e){} const n = (p.name || '').trim() || ((p.username || '').trim() ? '@' + p.username.trim() : ''); return n ? ', ' + escText(n.split(' ')[0]) : ''; })()}!</div>
     <div class="row-sub" style="font-size:11px;">Current balance</div>
-    <div class="big-num" style="font-size:32px;margin-top:2px;">$24,850<span style="font-size:16px;color:var(--muted);">.00</span></div>
+    ${(()=>{ const cur = moneyMainCur(); const b = moneyBalances().filter(a=>a.cur === cur).reduce((x, a)=>x + a.bal, 0); const t = fmtCur(b, cur); const k = t.lastIndexOf('.'); return `<div class="big-num" style="font-size:32px;margin-top:2px;">${t.slice(0, k)}<span style="font-size:16px;color:var(--muted);">${t.slice(k)}</span></div>`; })()}
     <div class="btn-row" style="margin-top:14px;">
       <button class="btn" style="background:#b6f27a;color:#0a2a05;" data-action="send-open">↗ Send</button>
       <button class="btn" style="background:#e8e6e1;color:#000;" data-nav="wallet">⧉ Scan</button>
@@ -6120,21 +6285,15 @@ function walletOverviewScreen(){
         <div class="avatar-circle avatar-add">+</div>
         <div class="row-sub" style="margin-top:4px;">Add</div>
       </div>
-      ${state.contacts.map(c=>`
-        <div style="text-align:center;flex-shrink:0;">
-          <div class="avatar-circle">${c.avatar}</div>
-          <div class="row-sub" style="margin-top:4px;">${c.name}</div>
-        </div>
-      `).join('')}
     </div>
     <div class="section-title-row">
       <div class="section-title" style="margin:0;">TRANSACTIONS</div>
       <span style="font-size:10.5px;color:var(--green);cursor:pointer;font-weight:700;" data-action="open-tx-from-overview">More</span>
     </div>
     <div class="row-card">
-      ${state.transactions.slice(0,4).map(t=>`
-        <div class="row"><div class="row-left"><div class="row-icon">${t.icon}</div><div><div class="row-name">${t.name}</div><div class="row-sub">${t.date}</div></div></div><div class="row-amt" style="color:${t.amt<0?'var(--red)':'var(--green)'};">${t.amt<0?'-':'+'}$${Math.abs(t.amt).toFixed(2)}</div></div>
-      `).join('')}
+      ${moneyTx().slice(0,4).length ? moneyTx().slice(0,4).map(t=>`
+        <div class="row"><div class="row-left"><div class="row-icon">${moneyIcon(t)}</div><div><div class="row-name">${escText(moneyWho(t))}</div><div class="row-sub">${escText(t.app || '')} · ${moneyDate(t.ts)}</div></div></div><div class="row-amt" style="color:${t.amt<0?'var(--red)':'var(--green)'};">${fmtCur(t.amt, t.cur, true)}</div></div>
+      `).join('') : moneyRowsEmpty('No transactions yet')}
     </div>
     </div>
   `;
@@ -6195,14 +6354,14 @@ function txHistoryScreen(){
     ${topBar('<span style="font-size:25px;line-height:1.3;margin-left:6px;display:inline-block;">Transaction History</span>', false, `<button class="big-x-btn" data-nav="${state.txHistoryBackTarget}" title="Back">✕</button>`, state.txHistoryBackTarget, '', true)}
     <div class="tx-balance-card">
       <div class="tx-balance-label">Total Balance</div>
-      <div class="tx-balance-amt">$24,850.00</div>
-      <div class="tx-balance-num">•••• •••• •••• 4821</div>
+      <div class="tx-balance-amt">${(()=>{ const cur = moneyMainCur(); return fmtCur(moneyBalances().filter(a=>a.cur === cur).reduce((x, a)=>x + a.bal, 0), cur); })()}</div>
+      <div class="tx-balance-num" style="${walletCards().length ? '' : 'visibility:hidden;'}">•••• •••• •••• ${escText((walletCards()[Math.max(0, state.walletCardIndex - 1)] || walletCards()[0] || {}).last4 || '0000')}</div>
     </div>
     <div class="section-title">TRANSACTION HISTORY</div>
     <div class="row-card">
-      ${state.transactions.map(t=>`
-        <div class="row"><div class="row-left"><div class="row-icon">${t.icon}</div><div><div class="row-name">${t.name}</div><div class="row-sub">${t.date}</div></div></div><div class="row-amt" style="color:${t.amt<0?'var(--red)':'var(--green)'};">${t.amt<0?'-':'+'}$${Math.abs(t.amt).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div></div>
-      `).join('')}
+      ${moneyTx().slice(0,200).length ? moneyTx().slice(0,200).map(t=>`
+        <div class="row"><div class="row-left"><div class="row-icon">${moneyIcon(t)}</div><div><div class="row-name">${escText(moneyWho(t))}</div><div class="row-sub">${escText(t.app || '')} · ${moneyDate(t.ts)}</div></div></div><div class="row-amt" style="color:${t.amt<0?'var(--red)':'var(--green)'};">${fmtCur(t.amt, t.cur, true)}</div></div>
+      `).join('') : moneyRowsEmpty('No transactions yet')}
     </div>
     </div>
   `;
@@ -6485,11 +6644,14 @@ window.storyAppsChanged = function(){
 const COMING_SOON = [
   ['[data-dash]', el=>el.textContent.trim()],
   ['.search-row', ()=>'Search'],
-  ['[data-action="add-card"], .avatar-add', ()=>'Add card'],
-  ['.btn-row-action', el=>el.textContent.trim()],
+  ['.avatar-add:not([data-action="add-card"] .avatar-add)', ()=>'Add'],
+  ['.btn-row-action:not([data-action])', el=>el.textContent.trim()],
+  ['[data-action="send-open"]', ()=>'Send money'],
+  ['[data-action="receive-open"]', ()=>'Receive money'],
+  ['[data-action="favorites-open"]', ()=>'Favorites'],
+  ['.membership-add', ()=>'Memberships'],
   ['[data-action="notes-unavailable"]', el=>el.textContent.trim()],
   ['.app-row:not([data-native-pkg]):not([data-nav]):not([data-app-launchpopup]):not([data-app-locked]):not([data-app-toast])', el=>(el.querySelector('.row-name')||el).textContent.trim()],
-  ['.notif-card', ()=>'Payment details'],
 ];
 let comingSoonDown = null;
 document.addEventListener('pointerdown', e=>{ comingSoonDown = { x:e.clientX, y:e.clientY }; }, true);
@@ -9750,7 +9912,7 @@ function buildPhone(){
   // Style's own flag.
   const pageStyleActive = state.pageStyleOn && state.pageStyleViewOpen;
   const fullScreenTakeoverActive = pageStyleActive || state.rowsViewOpen;
-  const showFloatBar = ['wallet','wallet-overview'].includes(state.current) && !fullScreenTakeoverActive;
+  const showFloatBar = ['wallet','wallet-overview'].includes(state.current) && !fullScreenTakeoverActive && !state.addCardOpen && !state.cardSheetId;
   return `
     <div class="phone-frame">
       <div class="phone-notch"></div>
@@ -9796,7 +9958,7 @@ function buildPhone(){
 function buildLaptop(){
   const pageStyleActive = state.pageStyleOn && state.pageStyleViewOpen;
   const fullScreenTakeoverActive = pageStyleActive || state.rowsViewOpen;
-  const showFloatBar = ['wallet','wallet-overview'].includes(state.current) && !fullScreenTakeoverActive;
+  const showFloatBar = ['wallet','wallet-overview'].includes(state.current) && !fullScreenTakeoverActive && !state.addCardOpen && !state.cardSheetId;
   return `
     <div>
       <div class="laptop-frame">
@@ -10923,6 +11085,13 @@ function attachHandlers(){
     });
   });
 
+  document.querySelectorAll('[data-cardnet]').forEach(el=>el.addEventListener('click', ()=>{ state.addCard = Object.assign(state.addCard || {}, cardFormVals(), { net: el.getAttribute('data-cardnet') }); renderDevice(); }));
+  document.querySelectorAll('[data-cardcolor]').forEach(el=>el.addEventListener('click', ()=>{ state.addCard = Object.assign(state.addCard || {}, cardFormVals(), { color: el.getAttribute('data-cardcolor') }); renderDevice(); }));
+  document.querySelectorAll('[data-wcard]').forEach(el=>el.addEventListener('click', ()=>{
+    const i = walletCards().findIndex(c=>c.id === el.getAttribute('data-wcard')) + 1;
+    if(i === state.walletCardIndex) state.cardSheetId = el.getAttribute('data-wcard'); else state.walletCardIndex = i;
+    renderDevice();
+  }));
   document.querySelectorAll('[data-cardidx]').forEach(el=>{
     el.addEventListener('click', ()=>{
       state.walletCardIndex = parseInt(el.getAttribute('data-cardidx'), 10);
@@ -10931,7 +11100,7 @@ function attachHandlers(){
   });
   const paycardSwipe = document.getElementById('paycard-swipe');
   if(paycardSwipe){
-    const cardCount = 3;
+    const cardCount = walletCards().length + 1;
     let pStartX=null, pStartY=null, pLastX=null, pLastY=null, pActive=false, pid=null;
     const finish = ()=>{
       if(!pActive || pStartX===null) return;
@@ -12345,6 +12514,47 @@ function attachHandlers(){
           state.current = 'wallet';
           break;
         case 'cal-open': state.calOpen = true; break;
+        case 'add-card': state.addCard = { net:'Visa', color:'Blue' }; state.addCardOpen = true; break;
+        case 'add-card-close': state.addCardOpen = false; break;
+        case 'add-card-save': {
+          const f = state.addCard = Object.assign(state.addCard || {}, cardFormVals());
+          let exp = f.exp.replace(/[^0-9]/g, ''); if(exp.length === 4) exp = exp.slice(0, 2) + '/' + exp.slice(2); f.exp = exp;
+          if(!f.bank){ f.msg = 'Type the bank or card name'; break; }
+          if(!/^\d{4}$/.test(f.last4)){ f.msg = 'Type the last 4 digits of the card'; break; }
+          if(!/^(0[1-9]|1[0-2])\/\d{2}$/.test(f.exp)){ f.msg = 'Type the expiry like 09/28'; break; }
+          const list = walletCards(); list.push({ id:'card' + Date.now(), bank:f.bank, last4:f.last4, exp:f.exp, net:f.net || 'Visa', color:f.color || 'Blue' });
+          saveWalletCards(list);
+          state.addCardOpen = false; state.addCard = null; state.walletCardIndex = list.length;
+          showToast('Card added');
+          break;
+        }
+        case 'card-sheet-close': state.cardSheetId = null; break;
+        case 'card-remove': {
+          const list = walletCards().filter(c=>c.id !== state.cardSheetId);
+          saveWalletCards(list); state.cardSheetId = null;
+          state.walletCardIndex = Math.min(state.walletCardIndex, list.length);
+          showToast('Card removed');
+          break;
+        }
+        case 'tap-to-pay': {
+          const r = NATIVE && window.StoryNative.payApp ? window.StoryNative.payApp() : 'none';
+          if(r === 'nonfc') showToast('This phone has no tap to pay (NFC)');
+          else if(r === 'nfcoff') showToast('Turn on NFC to tap to pay');
+          else if(r === 'none') showToast('Pick your tap to pay app (e.g. Google Wallet) in Contactless payments');
+          break;
+        }
+        case 'money-access': { if(NATIVE && window.StoryNative.moneyAccessOpen) window.StoryNative.moneyAccessOpen(); else showToast('Turn on notification access for STORY'); break; }
+        case 'spend-limit-open': state.spendLimitOpen = true; break;
+        case 'spend-limit-close': state.spendLimitOpen = false; break;
+        case 'spend-limit-save': {
+          const v = parseFloat(((document.getElementById('spend-limit-input') || {}).value || '').replace(/[^0-9.]/g, ''));
+          const cur = state.moneyCur || moneyMainCur();
+          let all = {}; try{ all = JSON.parse(localStorage.getItem('story-spend-limit') || '{}') || {}; }catch(e){}
+          if(v > 0) all[cur] = v; else delete all[cur];
+          try{ localStorage.setItem('story-spend-limit', JSON.stringify(all)); }catch(e){}
+          state.spendLimitOpen = false;
+          break;
+        }
         case 'cal-cancel':
         case 'cal-bg': state.calOpen = false; break;
         case 'cal-go': {
@@ -12352,10 +12562,7 @@ function attachHandlers(){
           if(val){
             const d = new Date(val+'T00:00:00');
             state.selectedDate = val;
-            state.thisMonthLabel = d.toLocaleString('en-US',{month:'long', year:'numeric'}).toUpperCase();
-            const amounts = seededMonthAmounts(val);
-            state.moneyIn = amounts.inAmt;
-            state.moneyOut = amounts.outAmt;
+            state.moneyMonth = monthKey(d.getTime());
           }
           state.calOpen = false;
           break;

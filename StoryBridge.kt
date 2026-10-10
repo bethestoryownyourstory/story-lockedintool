@@ -167,6 +167,46 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); host.hidePanel(); ctx.startActivity(i); return true
     }
 
+    /** Money / Wallet: every payment STORY read from your bank / payment apps' notifications (MoneyLog, JSON, newest first). */
+    @JavascriptInterface
+    fun moneyList(): String = if (pages) MoneyLog.list(ctx) else "[]"
+
+    /** Whether STORY may read notifications (needed to see payments). */
+    @JavascriptInterface
+    fun moneyAccess(): Boolean = runCatching {
+        (Settings.Secure.getString(ctx.contentResolver, "enabled_notification_listeners") ?: "").contains(ctx.packageName + "/")
+    }.getOrDefault(false)
+
+    /** Opens Android's own notification-access switch for STORY. */
+    @JavascriptInterface
+    fun moneyAccessOpen() {
+        if (!pages) return
+        val cn = android.content.ComponentName(ctx, StoryMediaListener::class.java).flattenToString()
+        val i = if (android.os.Build.VERSION.SDK_INT >= 30) Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS).putExtra(Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME, cn)
+            else Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); host.hidePanel()
+        runCatching { ctx.startActivity(i) }.onFailure { runCatching { ctx.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
+    }
+
+    /** Wallet > Tap to Pay: opens the phone's own tap-to-pay app (the one set under Contactless payments) so you pay
+     *  for real; "none" if the phone has no tap-to-pay app set (then its Contactless payments screen opens), "nonfc"
+     *  if the phone has no NFC. */
+    @JavascriptInterface
+    fun payApp(): String {
+        if (!pages) return ""
+        val nfc = android.nfc.NfcAdapter.getDefaultAdapter(ctx) ?: return "nonfc"
+        val comp = runCatching { Settings.Secure.getString(ctx.contentResolver, "nfc_payment_default_component") }.getOrNull()
+        val pkg = comp?.let { android.content.ComponentName.unflattenFromString(it)?.packageName }
+        val launch = pkg?.let { ctx.packageManager.getLaunchIntentForPackage(it) }
+        if (launch != null) {
+            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); host.hidePanel(); ctx.startActivity(launch)
+            return if (nfc.isEnabled) "ok" else "nfcoff"
+        }
+        val i = Intent(if (nfc.isEnabled) Settings.ACTION_NFC_PAYMENT_SETTINGS else Settings.ACTION_NFC_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        host.hidePanel(); runCatching { ctx.startActivity(i) }.onFailure { runCatching { ctx.startActivity(Intent(Settings.ACTION_NFC_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
+        return if (nfc.isEnabled) "none" else "nfcoff"
+    }
+
     /** Drawings: saves each picture (PNG data URLs, JSON list) straight into the phone's photos (Pictures/STORY).
      *  Returns how many were saved. */
     @JavascriptInterface
