@@ -67,7 +67,7 @@ class OverlayService : Service(), StoryBridge.Host {
         override fun onReceive(c: Context, i: Intent) {
             userPresentAt = System.currentTimeMillis()
             AodActivity.instance?.finish()  // unlocked (e.g. fingerprint) while the Always On Display was up
-            ui.post { syncLockDial() }
+            ui.post { syncLockDial(); profileLayer(false) }   // unlocked: Station 3's window back where the keyboard works
             for (d in longArrayOf(300, 1000, 2500)) ui.postDelayed({ syncLockDial(); updateBubble() }, d)
             Updater.check(this@OverlayService); checkScreens()
         }
@@ -1126,6 +1126,7 @@ class OverlayService : Service(), StoryBridge.Host {
         p.web.evaluateJavascript(profileGeometryJs(), null)
         profileGapPane?.web?.evaluateJavascript(profileGeometryJs(), null)
         p.web.evaluateJavascript("window.storyProfileRefresh&&window.storyProfileRefresh();window.storyProfilePhotoChanged&&window.storyProfilePhotoChanged()", null)  // always the latest real numbers and picture
+        profileLayer(keyguardLocked())   // the same on the lock screen (owner)
         setShown(p, true)
         tellProfileStation3()
     } }
@@ -1340,6 +1341,7 @@ class OverlayService : Service(), StoryBridge.Host {
                 dialPane?.takeIf { it.shown }?.let { hideOne(it) }
                 p.web.evaluateJavascript(profileGeometryJs(), null)
                 profileGapPane?.web?.evaluateJavascript(profileGeometryJs(), null)
+                profileLayer(keyguardLocked())   // an incoming call shows on the lock screen too
                 setShown(p, true); tellProfileStation3()
             }
         } else {
@@ -1505,6 +1507,26 @@ class OverlayService : Service(), StoryBridge.Host {
         ui.postDelayed({ runCatching { getSystemService(android.view.inputmethod.InputMethodManager::class.java).showSoftInput(p.web, 0) } }, 120)
     } }
 
+    /** Station 3's window (Messages, Profile, Create, Call history) works the same on the lock screen (owner): while
+     *  the phone is locked it sits in STORY's top layer (the normal layer is under the lock screen); unlocked it goes
+     *  back to the normal layer (where the keyboard shows above it). The gap, strip, bar, Station 3, dial pad and the
+     *  button are put back on top of it, in their usual order. */
+    private fun profileLayer(top: Boolean) {
+        val p = profilePane ?: return
+        val want = if (top) layerWm else wm
+        if (p.wm === want) return
+        runCatching { p.wm.removeView(p.frame) }
+        p.lp.type = if (top) layerType else WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY; p.wm = want
+        runCatching { want.addView(p.frame, p.lp) }
+        if (top) {
+            profileGapPane?.let { g -> runCatching { g.wm.removeView(g.frame); g.wm.addView(g.frame, g.lp) } }
+            profileStrip?.let { v -> profileStripLp?.let { lp -> runCatching { (profileStripWm ?: layerWm).removeView(v); (profileStripWm ?: layerWm).addView(v, lp) } } }
+            barBg?.let { v -> barBgLp?.let { lp -> runCatching { (barBgWm ?: wm).removeView(v); (barBgWm ?: wm).addView(v, lp) } } }
+            for (q in listOfNotNull(s3Pane, dialPane)) runCatching { q.wm.removeView(q.frame); q.wm.addView(q.frame, q.lp) }
+            raiseBubble(); addBar()
+        }
+    }
+
     /** The Pages (showing) drop to the normal overlay layer, below the keyboard and the notification panel. */
     private fun lowerPages(): Boolean {
         val p = pagesPane ?: return false
@@ -1539,7 +1561,6 @@ class OverlayService : Service(), StoryBridge.Host {
     //      step aside while it's up; STORY comes back when you save or go back. ----
     private var contactDialWasOpen = false
     override fun newContact(number: String) { ui.post {
-        if (keyguardLocked()) { showToast("Unlock your phone to add a contact"); return@post }
         contactDialWasOpen = dialPane?.shown == true
         dialPane?.takeIf { it.shown }?.let { hideOne(it) }
         if (!stepAsideForSystem()) return@post

@@ -11,6 +11,22 @@ class ContactAddActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (savedInstanceState != null) return
+        // On the lock screen (owner: Station 3 works the same there): Android asks for your PIN / fingerprint first,
+        // then the new-contact screen opens.
+        val km = getSystemService(android.app.KeyguardManager::class.java)
+        if (km != null && km.isKeyguardLocked && android.os.Build.VERSION.SDK_INT >= 27) {
+            setShowWhenLocked(true)
+            km.requestDismissKeyguard(this, object : android.app.KeyguardManager.KeyguardDismissCallback() {
+                override fun onDismissSucceeded() { open() }
+                override fun onDismissCancelled() { done(false) }
+                override fun onDismissError() { done(false) }
+            })
+            return
+        }
+        open()
+    }
+
+    private fun open() {
         val i = Intent(Intent.ACTION_INSERT, ContactsContract.Contacts.CONTENT_URI)
             .putExtra(ContactsContract.Intents.Insert.PHONE, intent.getStringExtra(EXTRA_NUMBER).orEmpty())
             .putExtra("finishActivityOnSaveCompleted", true)

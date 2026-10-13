@@ -37,6 +37,8 @@ class CreateCameraActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         instance = this
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        // Create works on the lock screen too (owner), like the phone's own camera.
+        if (android.os.Build.VERSION.SDK_INT >= 27) setShowWhenLocked(true)
         val preview = PreviewView(this).apply {
             // The same frame as the picture / video you get (4:3), shown whole - what you see is what you get.
             scaleType = PreviewView.ScaleType.FIT_CENTER; setBackgroundColor(Color.BLACK)
