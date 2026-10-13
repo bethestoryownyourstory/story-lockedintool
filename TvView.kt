@@ -104,7 +104,8 @@ class TvView(ctx: Context, private val onSymbol: (String) -> Unit) : FrameLayout
 
     /** Where the chart goes (from the page, in CSS px; dpr = the page's pixels per CSS px). */
     fun place(o: JSONObject) {
-        if (!o.optBoolean("show")) { if (visibility != View.GONE) visibility = View.GONE; return }
+        // Cooling (owner): TradingView rests while it isn't on screen and wakes when it is (same chart, no reload).
+        if (!o.optBoolean("show")) { if (visibility != View.GONE) { visibility = View.GONE; runCatching { web.onPause() } }; return }
         val k = o.optDouble("dpr", 1.0).toFloat()
         val x = (o.optDouble("x") * k).toFloat(); val y = (o.optDouble("y") * k).toFloat()
         val w = Math.round(o.optDouble("w") * k).toInt().coerceAtLeast(1); val h = Math.round(o.optDouble("h") * k).toInt().coerceAtLeast(1)
@@ -118,7 +119,7 @@ class TvView(ctx: Context, private val onSymbol: (String) -> Unit) : FrameLayout
             holes.add(RectF((b.optDouble(0) * k).toFloat() + x, (b.optDouble(1) * k).toFloat() + y, ((b.optDouble(0) + b.optDouble(2)) * k).toFloat() + x, ((b.optDouble(1) + b.optDouble(3)) * k).toFloat() + y))
         } }
         dim = o.optDouble("dim", 0.0).toFloat()
-        if (visibility != View.VISIBLE) visibility = View.VISIBLE
+        if (visibility != View.VISIBLE) { runCatching { web.onResume() }; visibility = View.VISIBLE }
         invalidate()
     }
 

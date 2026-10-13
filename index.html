@@ -15346,15 +15346,18 @@ document.addEventListener('contextmenu', (e)=>{
 // target is currently being fed (smoothing out raw sensor jitter), which keeps this to two
 // CSS custom-property writes per frame no matter how many elements the depth tiers touch --
 // that's what makes "the whole app" tractable instead of per-element JS on every card.
-let tiltBaseline = null, tiltTargetX = 0, tiltTargetY = 0, tiltCurX = 0, tiltCurY = 0;
+let tiltBaseline = null, tiltTargetX = 0, tiltTargetY = 0, tiltCurX = 0, tiltCurY = 0, tiltRunning = false;
+// Cooling (owner): this loop only runs while something is actually moving it (it used to redraw 60 times a second in
+// every STORY window forever). Nothing on screen moves with the phone (owner), so on the phone it never runs.
 function tiltLoop(){
   tiltCurX += (tiltTargetX - tiltCurX) * 0.12;
   tiltCurY += (tiltTargetY - tiltCurY) * 0.12;
+  if(Math.abs(tiltTargetX - tiltCurX) < 0.01 && Math.abs(tiltTargetY - tiltCurY) < 0.01){ tiltCurX = tiltTargetX; tiltCurY = tiltTargetY; tiltRunning = false; }
   document.documentElement.style.setProperty('--tilt-x', tiltCurX.toFixed(2));
   document.documentElement.style.setProperty('--tilt-y', tiltCurY.toFixed(2));
-  requestAnimationFrame(tiltLoop);
+  if(tiltRunning) requestAnimationFrame(tiltLoop);
 }
-requestAnimationFrame(tiltLoop);
+function tiltKick(){ if(!tiltRunning){ tiltRunning = true; requestAnimationFrame(tiltLoop); } }
 
 function handleDeviceOrientation(e){
   if(e.beta === null || e.gamma === null) return;
@@ -15363,6 +15366,7 @@ function handleDeviceOrientation(e){
   const clampedGamma = Math.max(-18, Math.min(18, e.gamma - tiltBaseline.gamma));
   tiltTargetX = (clampedBeta / 18) * 10;
   tiltTargetY = (clampedGamma / 18) * 10;
+  tiltKick();
 }
 
 function enableTilt(){
@@ -15393,7 +15397,7 @@ function disableTilt(){
   window.removeEventListener('deviceorientation', handleDeviceOrientation);
   state.tiltEnabled = false;
   tiltBaseline = null;
-  tiltTargetX = 0; tiltTargetY = 0;
+  tiltTargetX = 0; tiltTargetY = 0; tiltKick();
 }
 // Laptop/desktop mock has no gyroscope, so cursor position over the frame stands in for tilt
 // -- always on, no toggle needed, purely cosmetic for the preview.
@@ -15404,7 +15408,7 @@ document.addEventListener('pointermove', (e)=>{
   const rect = frame.getBoundingClientRect();
   const margin = 60;
   if(e.clientX < rect.left-margin || e.clientX > rect.right+margin || e.clientY < rect.top-margin || e.clientY > rect.bottom+margin){
-    tiltTargetX = 0; tiltTargetY = 0;
+    if(tiltTargetX || tiltTargetY){ tiltTargetX = 0; tiltTargetY = 0; tiltKick(); }
     return;
   }
   const cx = rect.left + rect.width/2, cy = rect.top + rect.height/2;
@@ -15412,6 +15416,7 @@ document.addEventListener('pointermove', (e)=>{
   const ny = Math.max(-1, Math.min(1, (e.clientY - cy) / (rect.height/2)));
   tiltTargetX = ny * -8;
   tiltTargetY = nx * 8;
+  tiltKick();
 });
 
 // ===== HOME GESTURE -- swipe up from the bottom pill to OPEN a picker that stays open =====
@@ -15536,7 +15541,7 @@ document.addEventListener('pointercancel', endRecentDrag, true);
 // periodically re-renders so a red/green amount actually flips to white live, without
 // needing some other interaction to happen to trigger it first.
 setInterval(()=>{
-  if(state.current !== 'wallet' || pageSwipeAnimating) return;
+  if(state.current !== 'wallet' || pageSwipeAnimating || document.visibilityState === 'hidden') return;
   if((state.pageStyleOn && state.pageStyleViewOpen) || state.rowsViewOpen) return;
   const active = document.activeElement;
   if(active && (active.tagName === 'INPUT')) return;

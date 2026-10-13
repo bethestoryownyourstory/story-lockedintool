@@ -646,6 +646,13 @@ class OverlayService : Service(), StoryBridge.Host {
 
     private fun setShown(p: Pane, shown: Boolean) {
         p.shown = shown
+        // Cooling (owner): a hidden Pages / Profile window rests (its page counts as hidden: no drawing, no animation
+        // frames, timers slowed) and wakes the moment it shows. Never during a call (Profile carries the call), and
+        // Station 3 / the dial pads are left exactly as they are.
+        if (p === pagesPane || p === profilePane || p === profileGapPane) {
+            if (shown) runCatching { p.web.onResume() }
+            else if (!(p !== pagesPane && callActive)) runCatching { p.web.onPause() }
+        }
         // Profile's main window takes the keyboard like the Pages do (so typing a name / username / bio just works).
         p.lp.flags = if (p.gap) flagsFor(true, false) else if (p.profile) flagsFor(false, shown) else flagsFor(p.small, shown)
         // Lock screen dial pad: hear touches anywhere else on the lock screen (swipe up to unlock...) to step away.
@@ -666,7 +673,8 @@ class OverlayService : Service(), StoryBridge.Host {
             if (!shown) profileGapPane?.web?.evaluateJavascript("window.storyProfileS3&&window.storyProfileS3(true)", null)
         }
         if (shown && (!p.small || (p.profile && !p.gap))) p.web.requestFocus()
-        if (p === pagesPane) { quietApps(shown); updateBarLine(); if (!shown && pagesTyping) pagesBackToTop(); updateBubble() }
+        if (p === pagesPane) { quietApps(shown); updateBarLine(); if (!shown && pagesTyping) pagesBackToTop(); updateBubble()
+            if (!shown) tvView?.place(org.json.JSONObject().put("show", false)) }
     }
 
     // While Pages is open, STORY silences the app underneath itself (a TikTok video, YouTube...), like the
@@ -1022,9 +1030,10 @@ class OverlayService : Service(), StoryBridge.Host {
         val aodUp = aodShowing()
         // The phone's own PIN / password / pattern page is on screen right now: never on top of it.
         val awake = getSystemService(android.os.PowerManager::class.java).isInteractive
-        val entry = if (QuickAccess.lockDial(this) && locked && awake) StoryAccessibilityService.unlockEntryShowing() else null
+        // (Not while the Always On Display is up - nothing of the phone's can show under it; cooling, owner.)
+        val entry = if (QuickAccess.lockDial(this) && locked && awake && !aodUp) StoryAccessibilityService.unlockEntryShowing() else null
         // The phone's own quick settings / notifications pulled down over the lock screen: out of the way (owner).
-        val shade = if (QuickAccess.lockDial(this) && locked && awake && entry != true) StoryAccessibilityService.shadeShowing() == true else false
+        val shade = if (QuickAccess.lockDial(this) && locked && awake && entry != true && !aodUp) StoryAccessibilityService.shadeShowing() == true else false
         // It never moves (owner): it simply stays put through screen off / Always On Display / lock screen, so it's
         // already there the instant anything shows. Only hidden on the Always On Display if that's switched off for it.
         val onAod = aodUp || (!awake && AodActivity.enabled(this))
@@ -1335,6 +1344,7 @@ class OverlayService : Service(), StoryBridge.Host {
     override fun callUi(on: Boolean) { ui.post {
         val p = profilePane ?: return@post
         callActive = on
+        if (on) runCatching { p.web.onResume() } else if (!p.shown) runCatching { p.web.onPause() }
         if (on) {
             if (!p.shown) {
                 callOpenedProfile = true

@@ -40,8 +40,20 @@ class AodActivity : Activity() {
         }
         instance = this
         OverlayService.instance?.setAod(true)
-        handler.post(unlockWatch)
+        // Cooling (owner): on Android 13+ Android itself says the moment the lock goes away (no checking 5 times a
+        // second all night); older phones keep the quick check.
+        val km = getSystemService(android.app.KeyguardManager::class.java)
+        if (Build.VERSION.SDK_INT >= 33 && km != null) {
+            wasLocked = km.isKeyguardLocked
+            val l = android.app.KeyguardManager.KeyguardLockedStateListener { locked ->
+                if (locked) wasLocked = true
+                else if (wasLocked && !isFinishing) { finish(); overridePendingTransition(0, 0) }
+            }
+            lockListener = l
+            runCatching { km.addKeyguardLockedStateListener(mainExecutor, l) }.onFailure { lockListener = null; handler.post(unlockWatch) }
+        } else handler.post(unlockWatch)
     }
+    private var lockListener: Any? = null
 
     // Unlocked (fingerprint, face...) while this is up: Android unlocks the phone but leaves this black screen on
     // top of it. Watch for the lock going away and step aside at once - you land straight in the phone.
@@ -58,6 +70,8 @@ class AodActivity : Activity() {
 
     override fun onDestroy() {
         handler.removeCallbacks(unlockWatch)
+        if (Build.VERSION.SDK_INT >= 33) (lockListener as? android.app.KeyguardManager.KeyguardLockedStateListener)?.let { l ->
+            runCatching { getSystemService(android.app.KeyguardManager::class.java)?.removeKeyguardLockedStateListener(l) } }
         if (instance === this) instance = null
         OverlayService.instance?.setAod(false)
         super.onDestroy()
