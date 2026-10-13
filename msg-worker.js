@@ -9,6 +9,9 @@
 //  - Live delivery over a WebSocket (Delivered / Seen / Read, typing), and a queue for phones that are offline.
 //  - Calls: it only passes the call set-up between the two phones (WebRTC offer / answer / network paths) - the
 //    call itself goes phone to phone, encrypted. "Who can call you" / "who can message you" are checked here.
+//  - Groups (owner): public groups (Community - anyone can find and join them) and private groups (made in Messages -
+//    only people a leader adds; never listed anywhere). Private group messages are locked for each member; public
+//    group posts and chat are public by nature (anyone can join).
 // Everything lives in ONE Durable Object (SQLite storage) so every phone's connection meets in the same place.
 
 const JSONH = { 'content-type': 'application/json', 'access-control-allow-origin': '*', 'access-control-allow-headers': 'content-type, authorization', 'access-control-allow-methods': 'GET, POST, OPTIONS' };
@@ -36,6 +39,13 @@ export class Hub {
     this.sql.exec(`CREATE TABLE IF NOT EXISTS joins (ip TEXT PRIMARY KEY, hour INTEGER, n INTEGER)`);
     this.sql.exec(`CREATE TABLE IF NOT EXISTS queue (seq INTEGER PRIMARY KEY AUTOINCREMENT, uid TEXT, body TEXT, at INTEGER)`);
     this.sql.exec(`CREATE INDEX IF NOT EXISTS queue_uid ON queue(uid)`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS groups (id TEXT PRIMARY KEY, name TEXT, about TEXT, type TEXT, image TEXT, category TEXT, country TEXT, creator TEXT, calljoin TEXT, created INTEGER)`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS gmembers (gid TEXT, uid TEXT, role TEXT, joined INTEGER, PRIMARY KEY (gid, uid))`);
+    this.sql.exec(`CREATE INDEX IF NOT EXISTS gmembers_uid ON gmembers(uid)`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS gposts (id TEXT PRIMARY KEY, gid TEXT, uid TEXT, text TEXT, image TEXT, at INTEGER, likes INTEGER DEFAULT 0, shares INTEGER DEFAULT 0)`);
+    this.sql.exec(`CREATE INDEX IF NOT EXISTS gposts_gid ON gposts(gid, at)`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS glikes (pid TEXT, uid TEXT, PRIMARY KEY (pid, uid))`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS gcomments (id TEXT PRIMARY KEY, pid TEXT, uid TEXT, text TEXT, at INTEGER)`);
   }
 
   one(q, ...a) { const r = this.sql.exec(q, ...a).toArray(); return r[0] || null; }
@@ -59,6 +69,7 @@ export class Hub {
       if (path === '/v1/verify') return this.verify(me, body);
       if (path === '/v1/me') return this.saveMe(me, body);
       if (path === '/v1/find') return this.find(me, url.searchParams.get('q') || '');
+      if (path.startsWith('/v1/groups/')) return this.groups(me, path.slice(11), body, url.searchParams);
       if (path === '/v1/user') { const u = this.one('SELECT * FROM users WHERE id = ?', url.searchParams.get('id') || ''); return u ? json(this.pubView(u, me)) : json({ error: 'notfound' }, 404); }
       return json({ error: 'notfound' }, 404);
     } catch (e) { return json({ error: 'server', detail: String(e && e.message || e).slice(0, 200) }, 500); }
@@ -158,6 +169,125 @@ export class Hub {
     return json({ people: rows.map(u => this.pubView(u, me)) });
   }
 
+  // ---- Groups ----
+  member(gid, uid) { return this.one('SELECT role FROM gmembers WHERE gid = ? AND uid = ?', gid, uid); }
+  memberIds(gid) { return this.sql.exec('SELECT uid FROM gmembers WHERE gid = ?', gid).toArray().map(r => r.uid); }
+  groupView(g, me, full) {
+    const count = this.one('SELECT COUNT(*) AS n FROM gmembers WHERE gid = ?', g.id).n;
+    const mine = me ? this.member(g.id, me.id) : null;
+    const v = { id: g.id, name: g.name, about: g.about || '', type: g.type, image: g.image || '', category: g.category || 'Community', country: g.country || 'Global',
+      creator: g.creator, callJoin: g.calljoin || 'open', created: g.created, count, member: !!mine, leader: !!mine && mine.role === 'leader' };
+    if (full) v.members = this.sql.exec('SELECT m.uid, m.role, u.name, u.username, u.pub FROM gmembers m JOIN users u ON u.id = m.uid WHERE m.gid = ? ORDER BY m.role = \'leader\' DESC, m.joined LIMIT 500', g.id).toArray()
+      .map(r => ({ id: r.uid, role: r.role, name: r.name || '', username: r.username || '', pub: g.type === 'private' ? r.pub : undefined }));
+    return v;
+  }
+  // Tell everyone in the group (and anyone just added / removed) what the group looks like now.
+  groupTell(gid, extra = []) {
+    const g = this.one('SELECT * FROM groups WHERE id = ?', gid);
+    const ids = new Set(this.memberIds(gid).concat(extra));
+    for (const uid of ids) {
+      const u = this.one('SELECT * FROM users WHERE id = ?', uid);
+      if (!u) continue;
+      this.deliver(uid, { t: 'group', g: g ? this.groupView(g, u, true) : { id: gid, gone: true } });
+    }
+  }
+  async groups(me, op, b, q) {
+    const now = Date.now();
+    const str = (v, n) => String(v || '').trim().slice(0, n);
+    const get = id => this.one('SELECT * FROM groups WHERE id = ?', String(id || ''));
+    if (op === 'create') {
+      const name = str(b.name, 60), type = b.type === 'private' ? 'private' : 'public';
+      if (!name) return json({ error: 'name' }, 400);
+      const image = String(b.image || '');
+      const id = 'grp' + rand(9);
+      this.sql.exec('INSERT INTO groups (id, name, about, type, image, category, country, creator, calljoin, created) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        id, name, str(b.about, 500), type, image.length < 300000 ? image : '', str(b.category, 30) || 'Community', str(b.country, 40) || 'Global', me.id, 'open', now);
+      this.sql.exec('INSERT INTO gmembers (gid, uid, role, joined) VALUES (?, ?, ?, ?)', id, me.id, 'leader', now);
+      for (const uid of (Array.isArray(b.members) ? b.members : []).map(String).slice(0, 255))
+        if (uid !== me.id && this.one('SELECT id FROM users WHERE id = ?', uid)) this.sql.exec('INSERT OR IGNORE INTO gmembers (gid, uid, role, joined) VALUES (?, ?, ?, ?)', id, uid, 'member', now);
+      this.groupTell(id);
+      return json(this.groupView(get(id), me, true));
+    }
+    if (op === 'mine') {
+      const rows = this.sql.exec('SELECT g.* FROM groups g JOIN gmembers m ON m.gid = g.id WHERE m.uid = ? ORDER BY g.created DESC', me.id).toArray();
+      return json({ groups: rows.map(g => this.groupView(g, me, g.type === 'private')) });
+    }
+    if (op === 'public') {
+      // Private groups are never listed (owner). Busiest first.
+      const t = str(q.get('q'), 40).toLowerCase(), like = '%' + t.replace(/[%_\\]/g, m => '\\' + m) + '%';
+      const rows = this.sql.exec(`SELECT g.*, (SELECT COUNT(*) FROM gmembers m WHERE m.gid = g.id) AS n FROM groups g WHERE g.type = 'public' AND (? = '' OR lower(g.name) LIKE ? ESCAPE '\') ORDER BY n DESC, g.created DESC LIMIT 200`, t, like).toArray();
+      return json({ groups: rows.map(g => this.groupView(g, me, false)) });
+    }
+    const g = get(b.id || q.get('id'));
+    if (!g) return json({ error: 'notfound' }, 404);
+    const mine = this.member(g.id, me.id);
+    if (g.type === 'private' && !mine) return json({ error: 'notfound' }, 404);   // private groups: members only
+    if (op === 'get') return json(this.groupView(g, me, true));
+    if (op === 'join') {
+      if (g.type !== 'public') return json({ error: 'private' }, 403);   // public = free to join (owner)
+      if (!mine) { this.sql.exec('INSERT INTO gmembers (gid, uid, role, joined) VALUES (?, ?, ?, ?)', g.id, me.id, 'member', now); this.groupTell(g.id); }
+      return json(this.groupView(g, me, true));
+    }
+    if (!mine) return json({ error: 'member' }, 403);
+    if (op === 'leave') {
+      this.sql.exec('DELETE FROM gmembers WHERE gid = ? AND uid = ?', g.id, me.id);
+      const left = this.memberIds(g.id);
+      if (!left.length) { this.sql.exec('DELETE FROM groups WHERE id = ?', g.id); this.sql.exec('DELETE FROM gposts WHERE gid = ?', g.id); }
+      else if (!this.one("SELECT uid FROM gmembers WHERE gid = ? AND role = 'leader'", g.id)) {
+        const next = this.one('SELECT uid FROM gmembers WHERE gid = ? ORDER BY joined LIMIT 1', g.id);
+        this.sql.exec("UPDATE gmembers SET role = 'leader' WHERE gid = ? AND uid = ?", g.id, next.uid);   // someone always leads
+      }
+      this.groupTell(g.id, [me.id]);
+      return json({ ok: true });
+    }
+    if (op === 'add') {
+      // Private: only its leaders add people. Public: any member can bring people in.
+      if (g.type === 'private' && mine.role !== 'leader') return json({ error: 'leader' }, 403);
+      const added = [];
+      for (const uid of (Array.isArray(b.members) ? b.members : []).map(String).slice(0, 255))
+        if (this.one('SELECT id FROM users WHERE id = ?', uid) && !this.member(g.id, uid)) { this.sql.exec('INSERT INTO gmembers (gid, uid, role, joined) VALUES (?, ?, ?, ?)', g.id, uid, 'member', now); added.push(uid); }
+      this.groupTell(g.id);
+      return json(this.groupView(g, me, true));
+    }
+    if (op === 'update') {
+      if (mine.role !== 'leader') return json({ error: 'leader' }, 403);
+      if (b.name !== undefined && str(b.name, 60)) this.sql.exec('UPDATE groups SET name = ? WHERE id = ?', str(b.name, 60), g.id);
+      if (b.about !== undefined) this.sql.exec('UPDATE groups SET about = ? WHERE id = ?', str(b.about, 500), g.id);
+      if (b.callJoin === 'open' || b.callJoin === 'ask') this.sql.exec('UPDATE groups SET calljoin = ? WHERE id = ?', b.callJoin, g.id);
+      if (b.leader && this.member(g.id, String(b.leader))) this.sql.exec("UPDATE gmembers SET role = 'leader' WHERE gid = ? AND uid = ?", g.id, String(b.leader));
+      this.groupTell(g.id);
+      return json(this.groupView(get(g.id), me, true));
+    }
+    if (op === 'posts') return json({ posts: this.postsOf(g.id, me) });
+    if (op === 'post') {
+      if (g.type !== 'public') return json({ error: 'public' }, 400);
+      const text = str(b.text, 600); if (!text) return json({ error: 'empty' }, 400);
+      this.sql.exec('INSERT INTO gposts (id, gid, uid, text, image, at) VALUES (?, ?, ?, ?, ?, ?)', 'p' + rand(9), g.id, me.id, text, '', now);
+      return json({ posts: this.postsOf(g.id, me) });
+    }
+    if (op === 'like') {
+      const pid = String(b.post || ''); if (!this.one('SELECT id FROM gposts WHERE id = ? AND gid = ?', pid, g.id)) return json({ error: 'notfound' }, 404);
+      if (this.one('SELECT pid FROM glikes WHERE pid = ? AND uid = ?', pid, me.id)) { this.sql.exec('DELETE FROM glikes WHERE pid = ? AND uid = ?', pid, me.id); this.sql.exec('UPDATE gposts SET likes = likes - 1 WHERE id = ?', pid); }
+      else { this.sql.exec('INSERT INTO glikes (pid, uid) VALUES (?, ?)', pid, me.id); this.sql.exec('UPDATE gposts SET likes = likes + 1 WHERE id = ?', pid); }
+      return json({ posts: this.postsOf(g.id, me) });
+    }
+    if (op === 'comment') {
+      const pid = String(b.post || ''), text = str(b.text, 400);
+      if (!text || !this.one('SELECT id FROM gposts WHERE id = ? AND gid = ?', pid, g.id)) return json({ error: 'notfound' }, 404);
+      this.sql.exec('INSERT INTO gcomments (id, pid, uid, text, at) VALUES (?, ?, ?, ?, ?)', 'c' + rand(9), pid, me.id, text, now);
+      return json({ posts: this.postsOf(g.id, me) });
+    }
+    return json({ error: 'notfound' }, 404);
+  }
+  postsOf(gid, me) {
+    const who = uid => { const u = this.one('SELECT name, username FROM users WHERE id = ?', uid); return u ? (u.name || (u.username ? '@' + u.username : 'Someone')) : 'Someone'; };
+    return this.sql.exec('SELECT * FROM gposts WHERE gid = ? ORDER BY at DESC LIMIT 100', gid).toArray().map(p => ({
+      id: p.id, author: p.uid === me.id ? 'You' : who(p.uid), mine: p.uid === me.id, text: p.text, at: p.at, likes: p.likes,
+      liked: !!this.one('SELECT pid FROM glikes WHERE pid = ? AND uid = ?', p.id, me.id),
+      comments: this.sql.exec('SELECT * FROM gcomments WHERE pid = ? ORDER BY at LIMIT 200', p.id).toArray().map(c => ({ author: c.uid === me.id ? 'You' : who(c.uid), text: c.text, at: c.at }))
+    }));
+  }
+
   // ---- Live connection ----
   async ws(req, url) {
     if (req.headers.get('upgrade') !== 'websocket') return json({ error: 'websocket' }, 426);
@@ -190,7 +320,7 @@ export class Hub {
     switch (m.t) {
       case 'ping': ws.send(JSON.stringify({ t: 'pong' })); return;
       case 'ack': { const s = +m.seq; const row = this.one('SELECT body FROM queue WHERE seq = ? AND uid = ?', s, uid);
-        if (row) { this.sql.exec('DELETE FROM queue WHERE seq = ?', s); const b = JSON.parse(row.body); if (b.t === 'msg') this.deliver(b.from, { t: 'status', chat: uid, id: b.id, status: 'delivered', at: now }); }
+        if (row) { this.sql.exec('DELETE FROM queue WHERE seq = ?', s); const b = JSON.parse(row.body); if (b.t === 'msg') this.deliver(b.from, { t: 'status', chat: b.group || uid, id: b.id, status: 'delivered', at: now }); }
         return; }
       case 'msg': {
         if (!to) return ws.send(JSON.stringify({ t: 'fail', id: m.id, error: 'notfound' }));
@@ -203,8 +333,25 @@ export class Hub {
         if (to) this.deliver(to.id, { t: 'status', chat: uid, status: m.t, at: now });
         return;
       case 'typing':
+        if (m.group) {
+          const g = this.one('SELECT id FROM groups WHERE id = ?', String(m.group));
+          if (g && this.member(g.id, uid)) for (const id of this.memberIds(g.id)) if (id !== uid) this.sendTo(id, { t: 'typing', chat: g.id, who: me.name || (me.username ? '@' + me.username : ''), at: now });
+          return;
+        }
         if (to) this.sendTo(to.id, { t: 'typing', chat: uid, at: now });
         return;
+      case 'gmsg': {
+        // A group message: private groups send a locked box for each member; public groups send the text itself.
+        const g = this.one('SELECT * FROM groups WHERE id = ?', String(m.group || ''));
+        if (!g || !this.member(g.id, uid)) return ws.send(JSON.stringify({ t: 'fail', id: m.id, error: 'member' }));
+        const id = String(m.id).slice(0, 40), boxes = m.boxes || {};
+        for (const mid of this.memberIds(g.id)) {
+          if (mid === uid) continue;
+          if (g.type === 'private') { const bx = boxes[mid]; if (!bx || String(bx.box || '').length > 64000) continue; this.deliver(mid, { t: 'msg', group: g.id, from: uid, id, box: String(bx.box), iv: String(bx.iv || ''), at: now, name: me.name || '', username: me.username || '' }); }
+          else this.deliver(mid, { t: 'msg', group: g.id, from: uid, id, text: String(m.text || '').slice(0, 4000), at: now, name: me.name || '', username: me.username || '' });
+        }
+        ws.send(JSON.stringify({ t: 'sent', id: m.id, at: now }));
+        return; }
       case 'call': {
         // Call set-up only: offer / answer / ice / ring / end / decline / busy.
         if (!to) return ws.send(JSON.stringify({ t: 'call', kind: 'unavailable', callId: m.callId, from: m.to }));
