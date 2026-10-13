@@ -504,6 +504,7 @@ class OverlayService : Service(), StoryBridge.Host {
         wv.webViewClient = object : WebViewClient() {
             override fun onPageStarted(v: WebView, url: String, favicon: android.graphics.Bitmap?) {
                 if (small) paneRef?.let { it.loading = true; it.frame.alpha = 0f; syncBarBg() }
+                if (!small && !dial && !profile) tvView?.place(org.json.JSONObject().put("show", false))  // the page tells it again once loaded
             }
             // Android sometimes shuts the page down to free memory, which leaves a blank white window:
             // build STORY's windows again instead (and don't let it take the app down).
@@ -650,6 +651,8 @@ class OverlayService : Service(), StoryBridge.Host {
         p.lp.alpha = if (shown) 1f else 0f
         if (p.small && shown) { p.lp.width = p.openW; p.lp.height = p.openH }
         p.frame.alpha = if (shown && !(p.small && p.loading)) 1f else 0f
+        // The Pages' own brightness (the slider's "system" mode) only while they're up - never over other apps.
+        if (p === pagesPane) p.lp.screenBrightness = if (shown && pagesBright >= 0f) pagesBright else WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
         runCatching { p.wm.updateViewLayout(p.frame, p.lp) }
         if (p === s3Pane) { syncBarBg(); syncBarTouch(); tellProfileStation3() }
         if (p === profilePane) {
@@ -1312,6 +1315,63 @@ class OverlayService : Service(), StoryBridge.Host {
         else showToast("Couldn't open that app - try another one")
     } }
     override fun evalPages(js: String) { ui.post { pagesPane?.web?.evaluateJavascript(js, null) } }
+
+    // ---- Trading: the REAL TradingView (TvView) inside the Pages window, laid over the page's chart box ----
+    private var tvView: TvView? = null
+    private fun tvViewNow(): TvView? {
+        val p = pagesPane ?: return null
+        tvView?.let { if (it.parent === p.frame) return it }
+        tvView?.let { runCatching { (it.parent as? android.view.ViewGroup)?.removeView(it); it.web.destroy() } }
+        val v = TvView(this) { sym -> evalPages("window.storyTvSymbol&&window.storyTvSymbol(" + org.json.JSONObject.quote(sym) + ")") }
+        p.frame.addView(v, FrameLayout.LayoutParams(-1, -1))   // on top of the page; it only takes touches on the chart
+        tvView = v
+        return v
+    }
+    override fun tvPlace(json: String) { ui.post {
+        val o = runCatching { org.json.JSONObject(json) }.getOrNull() ?: return@post
+        if (!o.optBoolean("show")) { tvView?.place(o); return@post }
+        tvViewNow()?.place(o)
+    } }
+    override fun tvOpen(sym: String, interval: String) { ui.post { tvViewNow()?.open(sym, interval) } }
+
+    // ---- The brightness slider: the phone's REAL brightness (no grey veil over STORY's pages). "system" = only while
+    //      STORY's Pages are up (the Pages window's own brightness); "device" = the whole phone's brightness setting
+    //      (Android asks once to let STORY change it; until then it works like "system"). -1 = leave it to the phone. ----
+    private var pagesBright = -1f
+    private fun applyPagesBright() {
+        val p = pagesPane ?: return
+        val want = if (p.shown && pagesBright >= 0f) pagesBright else WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+        if (p.lp.screenBrightness != want) { p.lp.screenBrightness = want; runCatching { p.wm.updateViewLayout(p.frame, p.lp) } }
+    }
+    override fun brightness(): String {
+        val cr = contentResolver
+        val v = runCatching { android.provider.Settings.System.getInt(cr, android.provider.Settings.System.SCREEN_BRIGHTNESS) }.getOrDefault(178)
+        val auto = runCatching { android.provider.Settings.System.getInt(cr, android.provider.Settings.System.SCREEN_BRIGHTNESS_MODE) }.getOrDefault(0) == 1
+        return org.json.JSONObject().put("v", Math.round(v.coerceIn(0, 255) * 100 / 255.0)).put("auto", auto)
+            .put("canWrite", android.provider.Settings.System.canWrite(this)).toString()
+    }
+    override fun setBrightness(mode: String, value: Int) { ui.post {
+        if (value < 0) { pagesBright = -1f; applyPagesBright(); return@post }
+        val f = (value.coerceIn(0, 100) / 100f).coerceAtLeast(0.01f)
+        if (mode == "device") {
+            if (android.provider.Settings.System.canWrite(this)) {
+                runCatching {
+                    android.provider.Settings.System.putInt(contentResolver, android.provider.Settings.System.SCREEN_BRIGHTNESS_MODE, 0)
+                    android.provider.Settings.System.putInt(contentResolver, android.provider.Settings.System.SCREEN_BRIGHTNESS, Math.round(f * 255).coerceIn(1, 255))
+                }
+                pagesBright = -1f
+            } else {
+                pagesBright = f
+                val prefs = getSharedPreferences("story", MODE_PRIVATE)
+                if (!prefs.getBoolean("asked_write_settings", false)) {
+                    prefs.edit().putBoolean("asked_write_settings", true).apply()
+                    pagesPane?.takeIf { it.shown }?.let { hideOne(it) }; updateBubble()
+                    runCatching { startActivity(Intent(android.provider.Settings.ACTION_MANAGE_WRITE_SETTINGS, android.net.Uri.parse("package:$packageName")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                }
+            }
+        } else pagesBright = f
+        applyPagesBright()
+    } }
     override fun notePrint(title: String, html: String) {
         runCatching { java.io.File(cacheDir, "note_print.html").writeText(html) }
         ui.post {

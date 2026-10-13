@@ -55,6 +55,10 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         fun noteShareTo(pkg: String, cls: String, title: String, text: String, files: List<java.io.File>)
         fun notePrint(title: String, html: String)
         fun evalPages(js: String)
+        fun tvPlace(json: String)
+        fun tvOpen(sym: String, interval: String)
+        fun brightness(): String
+        fun setBrightness(mode: String, value: Int)
     }
 
     /** The phone's real launchable apps, with their real icons -- kept ready, so the Apps area opens instantly. */
@@ -206,6 +210,17 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         host.hidePanel(); runCatching { ctx.startActivity(i) }.onFailure { runCatching { ctx.startActivity(Intent(Settings.ACTION_NFC_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
         return if (nfc.isEnabled) "none" else "nfcoff"
     }
+
+    /** Trading: the real TradingView (TvView) - which version of it this app has, where the page's chart box is,
+     *  and which pair / timeframe to show. Pages only. */
+    @JavascriptInterface fun tvVersion(): String = if (pages) "1" else ""
+    @JavascriptInterface fun tvPlace(json: String) { if (pages) host.tvPlace(json) }
+    @JavascriptInterface fun tvOpen(sym: String, interval: String) { if (pages) host.tvOpen(sym, interval) }
+
+    /** The brightness slider sets the phone's REAL screen brightness (no grey veil over STORY). brightness() = the
+     *  phone's brightness now (0-100), whether STORY may change the whole phone's, and whether auto is on. */
+    @JavascriptInterface fun brightness(): String = if (pages) host.brightness() else "{}"
+    @JavascriptInterface fun setBrightness(mode: String, value: Int) { if (pages) host.setBrightness(mode, value) }
 
     /** Wallet: reads a card photo on the phone (CardScan); answers window.storyCardScan(id, json). */
     @JavascriptInterface
