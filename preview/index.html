@@ -1249,16 +1249,6 @@
   #story-profile .pf-chat-video{ margin-left:auto; }
   #story-profile .pf-chat-video + .pf-chat-call{ margin-left:8px; }
   #story-profile .pf-chat-video[hidden] + .pf-chat-call{ margin-left:auto; }
-  #story-profile .pf-msgs.pf-need-sign > :not(.pf-signup-box){ display:none !important; }
-  #story-profile .pf-signup{ display:flex; flex-direction:column; gap:12px; padding:28px 0 20px; }
-  #story-profile .pf-signup-t{ font-size:22px; font-weight:800; }
-  #story-profile .pf-signup-s{ font-size:13px; color:var(--pf-muted); line-height:1.4; margin-top:-6px; }
-  #story-profile .pf-signup-in{ border:1px solid var(--pf-fg); border-radius:12px; background:transparent; color:var(--pf-fg); font:inherit; font-size:18px; padding:13px 14px; outline:none; letter-spacing:0.5px; -webkit-user-select:text; user-select:text; }
-  #story-profile .pf-signup-go{ border:none; border-radius:12px; background:var(--pf-fg); color:var(--pf-bg); font:inherit; font-size:15px; font-weight:800; padding:14px 0; }
-  #story-profile .pf-signup-go:disabled{ opacity:0.5; }
-  #story-profile .pf-signup-link{ border:none; background:none; color:var(--pf-muted); font:inherit; font-size:13px; padding:4px 0; text-decoration:underline; text-underline-offset:3px; }
-  #story-profile .pf-signup-err{ font-size:13px; color:#ef5b5b; min-height:18px; line-height:1.4; }
-  #story-profile .pf-signup .pf-msgs-lock{ justify-content:center; margin-top:8px; }
   #story-profile .msg-found .msg-time{ font-weight:800; color:var(--pf-fg); }
   #story-profile .pf-callview{ position:absolute; inset:0; z-index:50; background:var(--pf-bg); display:flex; flex-direction:column; align-items:center; justify-content:space-between; padding:48px 20px 28px; box-sizing:border-box; overflow:hidden; }
   #story-profile .pf-callview[hidden]{ display:none; }
@@ -7463,7 +7453,6 @@ window.storyProfileOnly = function(){
       <div class="pf-msgs-top">
         <label class="pf-msgs-search"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="search" placeholder="Search" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="search"></label>
       </div>
-      <div class="pf-signup-box" hidden></div>
       <div class="pf-msgs-filters">
         <button class="pf-mf" data-pf="mf" data-f="chats">Chats</button>
         <button class="pf-mf" data-pf="mf" data-f="groups">Groups</button>
@@ -7623,8 +7612,6 @@ window.storyProfileOnly = function(){
       if(c && c.kind === 'group') showToast('Group calls — coming soon');   // group calls come with the group server
       else if(c) callStart(c.id, k === 'chat-video');
     }
-    else if(k === 'sign-go') msgSignGo();
-    else if(k === 'sign-back'){ msgSign.step = 'phone'; msgSign.msg = ''; renderMsgList(); }
     else if(k === 'msg-start') msgStart(b.getAttribute('data-id'));
     else if(k === 'call-accept') callAccept();
     else if(k === 'call-decline') callDecline();
@@ -7653,10 +7640,6 @@ window.storyProfileOnly = function(){
   renderHighlights();
   const msgSearch = el.querySelector('.pf-msgs .pf-msgs-search input');
   msgSearch.addEventListener('input', ()=>{ msgView.q = msgSearch.value; msgFindFor(msgSearch.value); renderMsgList(); });
-  // Sign-up box: what you type is kept across redraws; Enter = the button.
-  el.querySelector('.pf-msgs').addEventListener('input', e=>{ const i = e.target.closest && e.target.closest('.pf-signup-in'); if(i){ if(i.getAttribute('data-sign') === 'phone') msgSign.raw = i.value; else msgSign.codeVal = i.value; } });
-  el.querySelector('.pf-msgs').addEventListener('keydown', e=>{ if(e.key === 'Enter' && e.target.closest && e.target.closest('.pf-signup-in')){ e.preventDefault(); msgSignGo(); } });
-  el.querySelector('.pf-msgs').addEventListener('pointerdown', e=>{ if(e.target.closest && e.target.closest('.pf-signup-in')) profileTypingOn(); });
   msgSearch.addEventListener('pointerdown', profileTypingOn);
   msgSearch.addEventListener('focus', profileTypingOn);
   msgSearch.addEventListener('blur', ()=>{ if(NATIVE && window.StoryNative.setTyping) try{ window.StoryNative.setTyping(false); }catch(err){} });
@@ -7924,11 +7907,6 @@ function msgTime(at){
 function renderMsgList(){
   const el = document.getElementById('story-profile'); if(!el || PF_GAP_WINDOW) return;
   const box = el.querySelector('.pf-msgs'); if(!box) return;
-  // Not signed in yet (in the app): the sign-up takes Messages' place until you are.
-  const needSign = MSG_ENGINE && !msgAccount();
-  const sb = box.querySelector('.pf-signup-box');
-  box.classList.toggle('pf-need-sign', needSign);
-  if(sb){ sb.hidden = !needSign; if(needSign){ const h = msgSignupHTML(); if(sb.dataset.h !== h){ sb.dataset.h = h; sb.innerHTML = h; const i = sb.querySelector('.pf-signup-in'); if(i && msgSign.step === 'code') i.value = msgSign.codeVal || ''; } return; } }
   const reqOn = msgRequestsOn();
   if(!reqOn && msgView.filter === 'requests') msgView.filter = 'chats';
   box.querySelector('[data-f="requests"]').hidden = !reqOn;
@@ -8061,8 +8039,8 @@ window.storyImeInset = function(dp){
   el.style.setProperty('--pf-ime', Math.max(0, dp || 0) + 'px');
   const list = el.querySelector('.pf-chat-list'); if(list && msgView.chat) requestAnimationFrame(()=>{ list.scrollTop = list.scrollHeight; });
 };
-// ---- STORY's own messages and calls, for real (owner): your account (sign-up with your phone number + the text
-// code), your keys (made on this phone - the private key never leaves it, kept in the phone's STORY storage as a key
+// ---- STORY's own messages and calls, for real (owner): your account (made by this phone - no phone number), your
+// keys (made on this phone - the private key never leaves it, kept in the phone's STORY storage as a key
 // that can't even be read out), the live connection to STORY's message server (msg-worker.js) and calls.
 // Runs in Profile's main window (Messages and Call history live there; the app keeps it running in the background, so
 // messages and calls reach you any time). Messages are locked on this phone (ECDH P-256 + AES-GCM, a key only the
@@ -8151,7 +8129,7 @@ function msgSend(o){ if(msgWs && msgWsOpen){ try{ msgWs.send(JSON.stringify(o));
 window.addEventListener('online', ()=>{ msgWsTry = 0; msgConnect(); });
 function msgSignedOut(){
   setMsgAccount(null); try{ if(msgWs) msgWs.close(); }catch(e){} msgWs = null; msgWsOpen = false;
-  renderMsgList();
+  renderMsgList(); msgEnsureAccount();
 }
 function chatFor(id, info){
   const list = msgChats(); let c = list.find(x=>x.id === id);
@@ -8234,66 +8212,29 @@ async function msgSyncProfile(){
   try{ await msgApi('/v1/me', { name: p.name || '', username: (p.username || '').toLowerCase(), privacy: storyPrivacy() }); msgProfSent = key; }
   catch(e){ if(e.code === 'username-taken'){ msgProfSent = key; showToast('@' + p.username + ' is taken on STORY - pick another in Edit profile'); } }
 }
-// ---- Sign-up (Messages, when you aren't signed in): your number, then the code STORY texts you ----
-const msgSign = { step:'phone', phone:'', busy:false, msg:'' };
-const CC = { ZA:'27', US:'1', CA:'1', GB:'44', NG:'234', KE:'254', GH:'233', ZW:'263', BW:'267', NA:'264', ZM:'260', MZ:'258', LS:'266', SZ:'268', IN:'91', AU:'61', NZ:'64', DE:'49', FR:'33', NL:'31', IE:'353', AE:'971', PT:'351', ES:'34', IT:'39', BR:'55' };
-function msgPhoneE164(raw){
-  let s = String(raw || '').replace(/[^\d+]/g, '');
-  if(s.startsWith('00')) s = '+' + s.slice(2);
-  if(s.startsWith('+')) return /^\+[1-9]\d{6,14}$/.test(s) ? s : '';
-  const region = ((navigator.language || '').split('-')[1] || '').toUpperCase(), cc = CC[region] || '27';
-  if(s.startsWith('0')) s = s.slice(1);
-  s = '+' + cc + s;
-  return /^\+[1-9]\d{6,14}$/.test(s) ? s : '';
-}
-function msgSignupHTML(){
-  const p = msgSign;
-  return '<div class="pf-signup">' +
-    '<div class="pf-signup-t">' + (p.step === 'phone' ? 'Your phone number' : 'Enter the code') + '</div>' +
-    '<div class="pf-signup-s">' + (p.step === 'phone' ? 'STORY texts you a code to make sure the number is yours.' : 'Sent to ' + escText(p.phone)) + '</div>' +
-    (p.step === 'phone'
-      ? '<input class="pf-signup-in" data-sign="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+27 83 123 4567" value="' + escText(p.raw || '') + '">'
-      : '<input class="pf-signup-in" data-sign="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456">') +
-    '<button class="pf-signup-go" data-pf="sign-go"' + (p.busy ? ' disabled' : '') + '>' + (p.busy ? '...' : p.step === 'phone' ? 'Send code' : 'Continue') + '</button>' +
-    (p.step === 'code' ? '<button class="pf-signup-link" data-pf="sign-back">Change number</button>' : '') +
-    '<div class="pf-signup-err">' + escText(p.msg || '') + '</div>' +
-    '<div class="pf-msgs-lock"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>End-to-end encrypted</div>' +
-  '</div>';
-}
-const SIGN_ERR = { phone:'That number doesn’t look right - start with your country code, e.g. +27', 'sms-not-ready':'Sign-up opens as soon as STORY’s text number is switched on.', 'sms-failed':'The text couldn’t be sent to that number.', wait:'Wait a moment before asking for another code.', 'too-many':'Too many tries - try again in an hour.', wrong:'That code isn’t right.', expired:'That code ran out - ask for a new one.', code:'Type the 6-digit code.', server:'STORY’s message server can’t be reached right now.' };
-async function msgSignGo(){
-  const el = document.getElementById('story-profile'); if(!el || msgSign.busy) return;
-  const inp = el.querySelector('.pf-signup-in'); const v = inp ? inp.value : '';
-  msgSign.msg = ''; msgSign.busy = true; renderMsgList();
+// ---- Your STORY account (owner: no phone number in Messages): made by this phone the first time - only the public
+// key goes to the server, which hands back your id + sign-in key. People find you by your @username. ----
+let msgJoining = false, msgJoinTry = 0;
+async function msgEnsureAccount(){
+  if(!MSG_ENGINE || msgAccount() || msgJoining) return;
+  msgJoining = true;
   try{
-    if(msgSign.step === 'phone'){
-      msgSign.raw = v; const ph = msgPhoneE164(v);
-      if(!ph) throw Object.assign(new Error('phone'), { code:'phone' });
-      await msgApi('/v1/start', { phone: ph });
-      msgSign.phone = ph; msgSign.step = 'code';
-    } else {
-      const k = await myKeys(true);
-      const r = await msgApi('/v1/verify', { phone: msgSign.phone, code: v.replace(/\D/g, ''), pub: k.pub });
-      setMsgAccount({ id:r.id, token:r.token, phone:msgSign.phone });
-      msgSign.step = 'phone'; msgSign.raw = ''; msgProfSent = '';
-      msgConnect();
-    }
-  }catch(e){
-    const c = e && e.code || 'server';
-    msgSign.msg = (SIGN_ERR[c] || SIGN_ERR.server) + (c === 'sms-failed' && e.info && e.info.detail ? ' (' + e.info.detail + ')' : '');
-  }
-  msgSign.busy = false; renderMsgList();
-  const n = document.querySelector('#story-profile .pf-signup-in'); if(n){ profileTypingOn(); n.focus(); }
+    const k = await myKeys(true);
+    const r = await msgApi('/v1/register', { pub: k.pub });
+    setMsgAccount({ id:r.id, token:r.token }); msgJoinTry = 0; msgProfSent = '';
+    msgConnect();
+  }catch(e){ setTimeout(msgEnsureAccount, Math.min(60000, 2000 * Math.pow(2, msgJoinTry++))); }
+  msgJoining = false;
 }
 // ---- Find people: type someone's @username or phone number in Messages' search ----
 let msgFindT = 0, msgFound = null, msgFoundQ = '';
 function msgFindFor(q){
   clearTimeout(msgFindT);
-  const t = q.trim(), isUser = /^@?[a-z0-9_.]{3,30}$/i.test(t), isPhone = /^\+?[\d\s()-]{7,}$/.test(t);
-  if(!msgAccount() || !(isUser || isPhone)){ msgFound = null; msgFoundQ = ''; return; }
+  // @username only - never phone numbers (owner).
+  const t = q.trim(), un = t.replace(/^@/, '').toLowerCase();
+  if(!msgAccount() || !/^[a-z0-9_.]{3,30}$/.test(un)){ msgFound = null; msgFoundQ = ''; return; }
   msgFindT = setTimeout(async ()=>{
-    const qq = isPhone ? msgPhoneE164(t) : t.replace(/^@/, '').toLowerCase(); if(!qq) return;
-    try{ const u = await msgApi('/v1/find?q=' + encodeURIComponent(isPhone ? qq : '@' + qq)); msgFound = u; msgFoundQ = t; setMsgPeer(u.id, { pub:u.pub, name:u.name, username:u.username, canCall:u.canCall, canMsg:u.canMsg }); }
+    try{ const u = await msgApi('/v1/find?q=' + encodeURIComponent('@' + un)); msgFound = u; msgFoundQ = t; setMsgPeer(u.id, { pub:u.pub, name:u.name, username:u.username, canCall:u.canCall, canMsg:u.canMsg }); }
     catch(e){ msgFound = null; msgFoundQ = t; }
     if(msgView.q.trim() === t) renderMsgList();
   }, 350);
@@ -8371,7 +8312,7 @@ function callPc(){
 }
 async function callStart(peerId, video){
   if(call.state !== 'idle'){ showToast('You’re already on a call'); return; }
-  if(!msgAccount()){ showToast('Sign up in Messages first'); return; }
+  if(!msgAccount()){ showToast('No connection to STORY right now'); msgEnsureAccount(); return; }
   const c = msgChats().find(x=>x.id === peerId) || {};
   if(c.canCall === false){ showToast('They don’t take calls from you'); return; }
   if(!msgWsOpen){ showToast('No connection to STORY right now'); msgConnect(); return; }
@@ -8460,7 +8401,7 @@ async function callFlip(){
 // The app tells the page Android's answer to the microphone / camera question.
 window.storyCallAccess = function(ok){ if(!ok) showToast('STORY needs the microphone for calls'); };
 if(MSG_ENGINE){
-  setTimeout(()=>{ msgConnect(); msgFlush(); }, 400);
+  setTimeout(()=>{ msgEnsureAccount(); msgConnect(); msgFlush(); }, 400);
   document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState === 'visible') msgConnect(); });
 }
 // ---- Call history (owner): every call made from STORY - the dial pad's (kept by the app) and STORY-to-STORY calls
