@@ -145,11 +145,17 @@ export class Hub {
     const u = this.one('SELECT * FROM users WHERE id = ?', me.id);
     return json({ id: u.id, name: u.name || '', username: u.username || '' });
   }
+  // Finding people (owner): by their @username or their name - never phone numbers. Exact @username first, then
+  // usernames / names that start with or contain what you typed (up to 20).
   async find(me, q) {
-    // @username only - never phone numbers (owner).
-    const un = q.trim().replace(/^@/, '').toLowerCase();
-    const u = USERNAME.test(un) ? this.one('SELECT * FROM users WHERE username = ?', un) : null;
-    return u && u.id !== me.id ? json(this.pubView(u, me)) : json({ error: 'notfound' }, 404);
+    const t = q.trim().slice(0, 40), un = t.replace(/^@/, '').toLowerCase();
+    if (un.length < 2) return json({ people: [] });
+    const like = '%' + un.replace(/[%_\\]/g, m => '\\' + m) + '%', start = un.replace(/[%_\\]/g, m => '\\' + m) + '%';
+    const rows = this.sql.exec(
+      `SELECT * FROM users WHERE id != ? AND (username LIKE ? ESCAPE '\\' OR (? = 0 AND lower(name) LIKE ? ESCAPE '\\'))
+       ORDER BY (username = ?) DESC, (username LIKE ? ESCAPE '\\') DESC, (lower(name) LIKE ? ESCAPE '\\') DESC, name LIMIT 20`,
+      me.id, like, t.startsWith('@') ? 1 : 0, like, un, start, start).toArray();
+    return json({ people: rows.map(u => this.pubView(u, me)) });
   }
 
   // ---- Live connection ----

@@ -8226,29 +8226,31 @@ async function msgEnsureAccount(){
   }catch(e){ setTimeout(msgEnsureAccount, Math.min(60000, 2000 * Math.pow(2, msgJoinTry++))); }
   msgJoining = false;
 }
-// ---- Find people: type someone's @username or phone number in Messages' search ----
-let msgFindT = 0, msgFound = null, msgFoundQ = '';
+// ---- Find people (owner): type someone's @username or name in Messages' search - never phone numbers ----
+let msgFindT = 0, msgFound = [], msgFoundQ = '';
 function msgFindFor(q){
   clearTimeout(msgFindT);
-  // @username only - never phone numbers (owner).
-  const t = q.trim(), un = t.replace(/^@/, '').toLowerCase();
-  if(!msgAccount() || !/^[a-z0-9_.]{3,30}$/.test(un)){ msgFound = null; msgFoundQ = ''; return; }
+  const t = q.trim();
+  if(!msgAccount() || t.replace(/^@/, '').length < 2){ msgFound = []; msgFoundQ = ''; return; }
   msgFindT = setTimeout(async ()=>{
-    try{ const u = await msgApi('/v1/find?q=' + encodeURIComponent('@' + un)); msgFound = u; msgFoundQ = t; setMsgPeer(u.id, { pub:u.pub, name:u.name, username:u.username, canCall:u.canCall, canMsg:u.canMsg }); }
-    catch(e){ msgFound = null; msgFoundQ = t; }
+    try{
+      const r = await msgApi('/v1/find?q=' + encodeURIComponent(t));
+      msgFound = r.people || []; msgFoundQ = t;
+      msgFound.forEach(u=>setMsgPeer(u.id, { pub:u.pub, name:u.name, username:u.username, canCall:u.canCall, canMsg:u.canMsg }));
+    }catch(e){ msgFound = []; msgFoundQ = t; }
     if(msgView.q.trim() === t) renderMsgList();
-  }, 350);
+  }, 300);
 }
 function msgFoundHTML(){
-  if(!msgFound || msgView.q.trim() !== msgFoundQ || msgChats().some(c=>c.id === msgFound.id)) return '';
-  const u = msgFound;
-  return '<button class="msg-row msg-found" data-pf="msg-start" data-id="' + escText(u.id) + '"><span class="msg-pic">' + PF_PHOTO_PLACEHOLDER + '</span>' +
-    '<span class="msg-mid"><span class="msg-who">' + escText(u.name || '@' + u.username) + '</span><span class="msg-last">' + (u.name && u.username ? '@' + escText(u.username) : 'On STORY') + '</span></span><span class="msg-end"><span class="msg-time">Message</span></span></button>';
+  if(!msgFound.length || msgView.q.trim() !== msgFoundQ) return '';
+  return msgFound.filter(u=>!msgChats().some(c=>c.id === u.id)).map(u=>
+    '<button class="msg-row msg-found" data-pf="msg-start" data-id="' + escText(u.id) + '"><span class="msg-pic">' + PF_PHOTO_PLACEHOLDER + '</span>' +
+    '<span class="msg-mid"><span class="msg-who">' + escText(u.name || '@' + u.username) + '</span><span class="msg-last">' + (u.name && u.username ? '@' + escText(u.username) : 'On STORY') + '</span></span><span class="msg-end"><span class="msg-time">Message</span></span></button>').join('');
 }
 function msgStart(id){
-  const u = msgFound && msgFound.id === id ? msgFound : msgPeers()[id] || {};
+  const u = msgFound.find(x=>x.id === id) || msgPeers()[id] || {};
   const c = chatFor(id, { name:u.name, username:u.username }); c.canCall = u.canCall; saveMsgChats();
-  msgFound = null; const s = document.querySelector('#story-profile .pf-msgs .pf-msgs-search input'); if(s) s.value = ''; msgView.q = '';
+  msgFound = []; const s = document.querySelector('#story-profile .pf-msgs .pf-msgs-search input'); if(s) s.value = ''; msgView.q = '';
   openChat(id);
 }
 
