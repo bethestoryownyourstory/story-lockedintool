@@ -1,0 +1,13 @@
+# STORY's message + call server (msg-worker.js), deployed by deploy-msg.yml.
+name = "story-msg"
+main = "msg-worker.js"
+compatibility_date = "2025-01-01"
+
+[[durable_objects.bindings]]
+name = "HUB"
+class_name = "Hub"
+
+# SQLite-backed Durable Object (works on Cloudflare's free plan).
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Hub"]

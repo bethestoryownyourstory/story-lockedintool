@@ -1,0 +1,58 @@
+name: Deploy STORY message server
+# Puts msg-worker.js on Cloudflare as the "story-msg" Worker (STORY's messages + calls: sign-up by text code, locked
+# messages, call set-up) - settings in msg-wrangler.toml. Runs when the server changes, or Actions -> Run workflow.
+# Needs repo secrets (Settings -> Secrets and variables -> Actions):
+#   CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID - the same ones the release server uses
+#   TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN - Twilio
+#   TWILIO_FROM (STORY's Twilio number, for the sign-up text) or TWILIO_VERIFY_SID (a Twilio Verify service)
+#   Without a way to text the code, sign-up says it opens soon.
+on:
+  push:
+    branches: [main]
+    paths: ['msg-worker.js', 'msg-wrangler.toml', '.github/workflows/deploy-msg.yml']
+  workflow_dispatch:
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Check the secrets are set
+        id: ready
+        env:
+          T: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          A: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          F: ${{ secrets.TWILIO_FROM }}
+          V: ${{ secrets.TWILIO_VERIFY_SID }}
+        run: |
+          if [ -n "$T" ] && [ -n "$A" ]; then echo "ok=true" >> "$GITHUB_OUTPUT"
+          else echo "### Not deployed: add CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID in Settings -> Secrets and variables -> Actions." >> "$GITHUB_STEP_SUMMARY"; fi
+          if [ -z "$F" ] && [ -z "$V" ]; then echo "### Sign-up waits for TWILIO_FROM (STORY's Twilio number) - add it and run this again." >> "$GITHUB_STEP_SUMMARY"; fi
+      - name: Deploy to Cloudflare
+        if: steps.ready.outputs.ok == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx --yes wrangler@4 deploy -c msg-wrangler.toml
+      - name: Give the server its keys (only the ones that are set)
+        if: steps.ready.outputs.ok == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+          TWILIO_FROM: ${{ secrets.TWILIO_FROM }}
+          TWILIO_VERIFY_SID: ${{ secrets.TWILIO_VERIFY_SID }}
+          PHONE_SALT: ${{ secrets.PHONE_SALT }}
+        run: |
+          for k in TWILIO_ACCOUNT_SID TWILIO_AUTH_TOKEN TWILIO_FROM TWILIO_VERIFY_SID PHONE_SALT; do
+            v="${!k}"
+            if [ -n "$v" ]; then printf '%s' "$v" | npx --yes wrangler@4 secret put "$k" -c msg-wrangler.toml >/dev/null && echo "$k set"; fi
+          done
+      - name: Check it answers
+        if: steps.ready.outputs.ok == 'true'
+        run: |
+          sleep 5
+          curl -s https://story-msg.$(curl -s -H "Authorization: Bearer ${{ secrets.CLOUDFLARE_API_TOKEN }}" https://api.cloudflare.com/client/v4/accounts/${{ secrets.CLOUDFLARE_ACCOUNT_ID }}/workers/subdomain | python3 -c 'import sys,json; print(json.load(sys.stdin)["result"]["subdomain"])').workers.dev/v1/health | tee -a "$GITHUB_STEP_SUMMARY"

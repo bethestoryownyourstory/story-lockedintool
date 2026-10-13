@@ -236,7 +236,7 @@ class OverlayService : Service(), StoryBridge.Host {
             ui.post {
                 val before = screensSeen
                 screensSeen = v
-                if (before != null && before != v) for (p in listOfNotNull(s3Pane, pagesPane, dialPane, profilePane, profileGapPane, lockDialPane)) { if (p.shown) p.stale = true else reload(p) }  // every STORY window, the dial pad included
+                if (before != null && before != v) for (p in listOfNotNull(s3Pane, pagesPane, dialPane, profilePane, profileGapPane, lockDialPane)) { if (p.shown || (p === profilePane && callActive)) p.stale = true else reload(p) }  // every STORY window, the dial pad included
             }
         }.start()
     }
@@ -496,9 +496,13 @@ class OverlayService : Service(), StoryBridge.Host {
         // Android has allowed STORY to.
         wv.webChromeClient = object : android.webkit.WebChromeClient() {
             override fun onPermissionRequest(r: android.webkit.PermissionRequest) { ui.post {
-                val wantsCam = r.resources.contains(android.webkit.PermissionRequest.RESOURCE_VIDEO_CAPTURE)
-                if (wantsCam && checkSelfPermission(android.Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED)
-                    r.grant(arrayOf(android.webkit.PermissionRequest.RESOURCE_VIDEO_CAPTURE)) else r.deny()
+                // Camera (Notes' camera, video calls) and microphone (calls) - each only once Android has allowed STORY.
+                val ok = android.content.pm.PackageManager.PERMISSION_GRANTED
+                val grant = r.resources.filter {
+                    (it == android.webkit.PermissionRequest.RESOURCE_VIDEO_CAPTURE && checkSelfPermission(android.Manifest.permission.CAMERA) == ok) ||
+                    (it == android.webkit.PermissionRequest.RESOURCE_AUDIO_CAPTURE && checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == ok)
+                }
+                if (grant.isNotEmpty()) r.grant(grant.toTypedArray()) else r.deny()
             } }
         }
         wv.webViewClient = object : WebViewClient() {
@@ -759,7 +763,7 @@ class OverlayService : Service(), StoryBridge.Host {
         if (p === profilePane) { p.web.evaluateJavascript("window.storyProfileReset&&window.storyProfileReset()", null); profileGapPane?.takeIf { it.stale }?.let { reload(it) } }
         // New screens were published: pick them up in the background. Station 3 / the dial pad only reload
         // then (never on a timer), so tapping them open is always instant.
-        if (p.stale || (!p.small && System.currentTimeMillis() - p.loadedAt > 5 * 60_000)) reload(p)
+        if ((p.stale || (!p.small && System.currentTimeMillis() - p.loadedAt > 5 * 60_000)) && !(p === profilePane && callActive)) reload(p)
     }
 
     private fun removePanelNow() {
@@ -1075,6 +1079,8 @@ class OverlayService : Service(), StoryBridge.Host {
             .onFailure { comeBackFromSystem() }
     }
     fun permissionsDone() { ui.post { comeBackFromSystem()
+        if (callAsking) { callAsking = false; val ok = checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            profilePane?.web?.evaluateJavascript("window.storyCallAccess&&window.storyCallAccess($ok)", null) }
         if (noteAsking.isNotEmpty()) { val k = noteAsking; noteAsking = ""; pagesPane?.web?.evaluateJavascript("window.storyNoteAccessDone&&window.storyNoteAccessDone('$k')", null) }
         Thread { CallHistory.finishFromLog(this); ui.post { tellCalls() } }.start() } }
 
@@ -1315,6 +1321,87 @@ class OverlayService : Service(), StoryBridge.Host {
         else showToast("Couldn't open that app - try another one")
     } }
     override fun evalPages(js: String) { ui.post { pagesPane?.web?.evaluateJavascript(js, null) } }
+
+    // ---- STORY calls (Messages): the call screen is Profile's window - shown for a call even with Station 3 closed
+    //      (and put away again after, if the call opened it); incoming calls ring and vibrate like the phone's own
+    //      (silent / vibrate mode respected) and wake the screen; during a call the phone's call audio is used. ----
+    private var callOpenedProfile = false
+    // A call is on (never reload Profile's window then - that would cut the call).
+    private var callActive = false
+    private var callAsking = false
+    private var ringtone: android.media.Ringtone? = null
+    private var callWake: android.os.PowerManager.WakeLock? = null
+    override fun callUi(on: Boolean) { ui.post {
+        val p = profilePane ?: return@post
+        callActive = on
+        if (on) {
+            if (!p.shown) {
+                callOpenedProfile = true
+                dialPane?.takeIf { it.shown }?.let { hideOne(it) }
+                p.web.evaluateJavascript(profileGeometryJs(), null)
+                profileGapPane?.web?.evaluateJavascript(profileGeometryJs(), null)
+                setShown(p, true); tellProfileStation3()
+            }
+        } else {
+            if (callOpenedProfile) { callOpenedProfile = false; if (p.shown) hideOne(p) }
+            else if (!p.shown && p.stale) reload(p)   // screens that came out during the call
+        }
+    } }
+    override fun callRing(on: Boolean, name: String, video: Boolean) { ui.post {
+        val am = getSystemService(AUDIO_SERVICE) as android.media.AudioManager
+        val vib = if (Build.VERSION.SDK_INT >= 31) (getSystemService(VIBRATOR_MANAGER_SERVICE) as android.os.VibratorManager).defaultVibrator
+            else @Suppress("DEPRECATION") (getSystemService(VIBRATOR_SERVICE) as android.os.Vibrator)
+        runCatching { ringtone?.stop() }; ringtone = null; runCatching { vib.cancel() }
+        callWake?.let { runCatching { if (it.isHeld) it.release() } }; callWake = null
+        if (!on) return@post
+        // Wake the screen so the call shows.
+        runCatching {
+            @Suppress("DEPRECATION")
+            callWake = (getSystemService(POWER_SERVICE) as android.os.PowerManager).newWakeLock(android.os.PowerManager.SCREEN_BRIGHT_WAKE_LOCK or android.os.PowerManager.ACQUIRE_CAUSES_WAKEUP, "story:call").apply { acquire(50_000) }
+        }
+        val mode = am.ringerMode
+        if (mode == android.media.AudioManager.RINGER_MODE_NORMAL) runCatching {
+            ringtone = android.media.RingtoneManager.getRingtone(this, android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_RINGTONE))?.apply {
+                audioAttributes = android.media.AudioAttributes.Builder().setUsage(android.media.AudioAttributes.USAGE_NOTIFICATION_RINGTONE).setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION).build()
+                if (Build.VERSION.SDK_INT >= 28) isLooping = true
+                play()
+            }
+        }
+        if (mode != android.media.AudioManager.RINGER_MODE_SILENT) runCatching {
+            vib.vibrate(android.os.VibrationEffect.createWaveform(longArrayOf(0, 900, 700), 0))
+        }
+    } }
+    override fun callAudio(on: Boolean, speaker: Boolean) { ui.post {
+        val am = getSystemService(AUDIO_SERVICE) as android.media.AudioManager
+        runCatching {
+            if (on) {
+                am.mode = android.media.AudioManager.MODE_IN_COMMUNICATION
+                if (Build.VERSION.SDK_INT >= 31) {
+                    val want = if (speaker) android.media.AudioDeviceInfo.TYPE_BUILTIN_SPEAKER else android.media.AudioDeviceInfo.TYPE_BUILTIN_EARPIECE
+                    am.availableCommunicationDevices.firstOrNull { it.type == want }?.let { am.setCommunicationDevice(it) }
+                } else @Suppress("DEPRECATION") { am.isSpeakerphoneOn = speaker }
+            } else {
+                if (Build.VERSION.SDK_INT >= 31) am.clearCommunicationDevice() else @Suppress("DEPRECATION") { am.isSpeakerphoneOn = false }
+                am.mode = android.media.AudioManager.MODE_NORMAL
+            }
+        }
+    } }
+    override fun callAsk(video: Boolean): String {
+        val ok = android.content.pm.PackageManager.PERMISSION_GRANTED
+        val need = listOfNotNull(android.Manifest.permission.RECORD_AUDIO, if (video) android.Manifest.permission.CAMERA else null).filter { checkSelfPermission(it) != ok }
+        if (need.isEmpty()) return "ok"
+        ui.post { callAsking = true; askPermissions(need.toTypedArray()) }
+        return "asking"
+    }
+    override fun msgNotify(title: String, text: String) { ui.post {
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) return@post
+        val nm = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
+        if (nm.getNotificationChannel("story_messages") == null)
+            nm.createNotificationChannel(android.app.NotificationChannel("story_messages", "Messages", android.app.NotificationManager.IMPORTANCE_HIGH))
+        val n = android.app.Notification.Builder(this, "story_messages").setSmallIcon(android.R.drawable.stat_notify_chat)
+            .setContentTitle(title).setContentText(text).setAutoCancel(true).setCategory(android.app.Notification.CATEGORY_MESSAGE).build()
+        runCatching { nm.notify(("m" + title).hashCode(), n) }
+    } }
 
     // ---- Trading: the REAL TradingView (TvView) inside the Pages window, laid over the page's chart box ----
     private var tvView: TvView? = null

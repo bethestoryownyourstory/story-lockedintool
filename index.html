@@ -1242,6 +1242,44 @@
   .community-live-call-t span{ color:var(--muted); font-size:11px; }
   #story-profile .pf-chat-call{ margin-left:auto; width:38px; height:38px; border-radius:50%; border:1px solid rgba(255,255,255,0.25); background:none; color:inherit; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
   #story-profile .pf-chat-call[hidden]{ display:none; }
+  #story-profile .pf-chat-video{ margin-left:auto; }
+  #story-profile .pf-chat-video + .pf-chat-call{ margin-left:8px; }
+  #story-profile .pf-chat-video[hidden] + .pf-chat-call{ margin-left:auto; }
+  #story-profile .pf-msgs.pf-need-sign > :not(.pf-signup-box){ display:none !important; }
+  #story-profile .pf-signup{ display:flex; flex-direction:column; gap:12px; padding:28px 0 20px; }
+  #story-profile .pf-signup-t{ font-size:22px; font-weight:800; }
+  #story-profile .pf-signup-s{ font-size:13px; color:var(--pf-muted); line-height:1.4; margin-top:-6px; }
+  #story-profile .pf-signup-in{ border:1px solid var(--pf-fg); border-radius:12px; background:transparent; color:var(--pf-fg); font:inherit; font-size:18px; padding:13px 14px; outline:none; letter-spacing:0.5px; -webkit-user-select:text; user-select:text; }
+  #story-profile .pf-signup-go{ border:none; border-radius:12px; background:var(--pf-fg); color:var(--pf-bg); font:inherit; font-size:15px; font-weight:800; padding:14px 0; }
+  #story-profile .pf-signup-go:disabled{ opacity:0.5; }
+  #story-profile .pf-signup-link{ border:none; background:none; color:var(--pf-muted); font:inherit; font-size:13px; padding:4px 0; text-decoration:underline; text-underline-offset:3px; }
+  #story-profile .pf-signup-err{ font-size:13px; color:#ef5b5b; min-height:18px; line-height:1.4; }
+  #story-profile .pf-signup .pf-msgs-lock{ justify-content:center; margin-top:8px; }
+  #story-profile .msg-found .msg-time{ font-weight:800; color:var(--pf-fg); }
+  #story-profile .pf-callview{ position:absolute; inset:0; z-index:50; background:var(--pf-bg); display:flex; flex-direction:column; align-items:center; justify-content:space-between; padding:48px 20px 28px; box-sizing:border-box; overflow:hidden; }
+  #story-profile .pf-callview[hidden]{ display:none; }
+  #story-profile .pf-callview video{ position:absolute; object-fit:cover; background:#000; }
+  #story-profile .cv-remote{ inset:0; width:100%; height:100%; opacity:0; }
+  #story-profile .pf-callview.cv-video .cv-remote{ opacity:1; }
+  #story-profile .cv-local{ right:16px; top:16px; width:96px; height:140px; border-radius:14px; border:1px solid var(--pf-hair); z-index:2; transform:scaleX(-1); }
+  #story-profile .cv-local[hidden]{ display:none; }
+  #story-profile .cv-top{ position:relative; z-index:1; display:flex; flex-direction:column; align-items:center; gap:10px; margin-top:30px; text-align:center; }
+  #story-profile .cv-pic{ width:110px; height:110px; }
+  #story-profile .pf-callview.cv-video .cv-pic{ display:none; }
+  #story-profile .cv-name{ font-size:24px; font-weight:800; }
+  #story-profile .cv-state{ font-size:14px; color:var(--pf-muted); font-variant-numeric:tabular-nums; }
+  #story-profile .pf-callview.cv-video .cv-name, #story-profile .pf-callview.cv-video .cv-state{ color:#fff; text-shadow:0 1px 6px rgba(0,0,0,0.7); }
+  #story-profile .cv-btns{ position:relative; z-index:1; display:flex; gap:16px; justify-content:center; align-items:center; }
+  #story-profile .cv-btns[hidden]{ display:none; }
+  #story-profile .cv-in{ gap:80px; }
+  #story-profile .cv-btn{ width:58px; height:58px; border-radius:50%; border:1px solid var(--pf-fg); background:var(--pf-bg); color:var(--pf-fg); display:flex; align-items:center; justify-content:center; padding:0; }
+  #story-profile .cv-btn[hidden]{ display:none; }
+  #story-profile .cv-btn.on{ background:var(--pf-fg); color:var(--pf-bg); }
+  #story-profile .cv-btn .cv-off{ display:none; }
+  #story-profile .cv-btn.on .cv-off{ display:inline; }
+  #story-profile .cv-in .cv-btn{ width:68px; height:68px; }
+  #story-profile .cv-decline{ background:#e5484d !important; border-color:#e5484d !important; color:#fff !important; }
+  #story-profile .cv-accept{ background:#2ea44f; border-color:#2ea44f; color:#fff; }
   #story-profile .pf-chat-sheet{ margin:6px 12px; padding:10px; border:1px solid rgba(255,255,255,0.2); border-radius:14px; display:flex; flex-direction:column; gap:6px; }
   #story-profile .pf-chat-sheet[hidden]{ display:none; }
   #story-profile .pf-chat-sheet-t{ font-weight:700; font-size:13px; }
@@ -7409,6 +7447,7 @@ window.storyProfileOnly = function(){
       <div class="pf-msgs-top">
         <label class="pf-msgs-search"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="search" placeholder="Search" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="search"></label>
       </div>
+      <div class="pf-signup-box" hidden></div>
       <div class="pf-msgs-filters">
         <button class="pf-mf" data-pf="mf" data-f="chats">Chats</button>
         <button class="pf-mf" data-pf="mf" data-f="groups">Groups</button>
@@ -7442,6 +7481,7 @@ window.storyProfileOnly = function(){
         <button class="pf-ed-back" data-pf="chat-back" aria-label="Back">‹</button>
         <span class="msg-pic"></span>
         <div class="pf-chat-names" data-pf="chat-info"><div class="pf-chat-name"></div><div class="pf-chat-user"></div></div>
+        <button class="pf-chat-call pf-chat-video" data-pf="chat-video" aria-label="Video call" hidden><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="m16 10 6-3v10l-6-3"/></svg></button>
         <button class="pf-chat-call" data-pf="chat-call" aria-label="Call" hidden><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/></svg></button>
       </div>
       <div class="pf-chat-sheet" hidden>
@@ -7562,7 +7602,21 @@ window.storyProfileOnly = function(){
     else if(k === 'msg-open') openChat(b.getAttribute('data-id'));
     else if(k === 'chat-back') closeChat();
     else if(k === 'chat-send') sendChatMessage();
-    else if(k === 'chat-call') showToast('Calls — coming soon');   // needs STORY's call server (like Messages)
+    else if(k === 'chat-call' || k === 'chat-video'){
+      const c = msgChats().find(x=>x.id === msgView.chat);
+      if(c && c.kind === 'group') showToast('Group calls — coming soon');   // group calls come with the group server
+      else if(c) callStart(c.id, k === 'chat-video');
+    }
+    else if(k === 'sign-go') msgSignGo();
+    else if(k === 'sign-back'){ msgSign.step = 'phone'; msgSign.msg = ''; renderMsgList(); }
+    else if(k === 'msg-start') msgStart(b.getAttribute('data-id'));
+    else if(k === 'call-accept') callAccept();
+    else if(k === 'call-decline') callDecline();
+    else if(k === 'call-end') callHangup();
+    else if(k === 'call-mute') callToggle('mute');
+    else if(k === 'call-speaker') callToggle('speaker');
+    else if(k === 'call-cam') callToggle('cam');
+    else if(k === 'call-flip') callFlip();
     else if(k === 'chat-info'){ const c = msgChats().find(x=>x.id === msgView.chat); const sh = document.querySelector('#story-profile .pf-chat-sheet'); if(c && sh && c.groupType === 'private' && (c.leaders || []).includes('me')){ sh.hidden = !sh.hidden; renderChat(); } }
     else if(k === 'callmode'){ const c = msgChats().find(x=>x.id === msgView.chat); if(c){ c.callJoin = b.getAttribute('data-m'); saveMsgChats(); msgOut({ type:'callmode', chatId:c.id, mode:c.callJoin }); } document.querySelector('#story-profile .pf-chat-sheet').hidden = true; renderChat(); }
     else if(k === 'newgroup-open'){ const f = document.querySelector('#story-profile .pf-newgroup-form'); f.hidden = false; b.hidden = true; const i = f.querySelector('input'); i.value = ''; profileTypingOn(); i.focus(); }
@@ -7582,7 +7636,11 @@ window.storyProfileOnly = function(){
   hlName.addEventListener('keydown', e=>{ if(e.key === 'Enter'){ e.preventDefault(); el.querySelector('[data-pf="cr-hl-new"]').click(); } });
   renderHighlights();
   const msgSearch = el.querySelector('.pf-msgs .pf-msgs-search input');
-  msgSearch.addEventListener('input', ()=>{ msgView.q = msgSearch.value; renderMsgList(); });
+  msgSearch.addEventListener('input', ()=>{ msgView.q = msgSearch.value; msgFindFor(msgSearch.value); renderMsgList(); });
+  // Sign-up box: what you type is kept across redraws; Enter = the button.
+  el.querySelector('.pf-msgs').addEventListener('input', e=>{ const i = e.target.closest && e.target.closest('.pf-signup-in'); if(i){ if(i.getAttribute('data-sign') === 'phone') msgSign.raw = i.value; else msgSign.codeVal = i.value; } });
+  el.querySelector('.pf-msgs').addEventListener('keydown', e=>{ if(e.key === 'Enter' && e.target.closest && e.target.closest('.pf-signup-in')){ e.preventDefault(); msgSignGo(); } });
+  el.querySelector('.pf-msgs').addEventListener('pointerdown', e=>{ if(e.target.closest && e.target.closest('.pf-signup-in')) profileTypingOn(); });
   msgSearch.addEventListener('pointerdown', profileTypingOn);
   msgSearch.addEventListener('focus', profileTypingOn);
   msgSearch.addEventListener('blur', ()=>{ if(NATIVE && window.StoryNative.setTyping) try{ window.StoryNative.setTyping(false); }catch(err){} });
@@ -7850,6 +7908,11 @@ function msgTime(at){
 function renderMsgList(){
   const el = document.getElementById('story-profile'); if(!el || PF_GAP_WINDOW) return;
   const box = el.querySelector('.pf-msgs'); if(!box) return;
+  // Not signed in yet (in the app): the sign-up takes Messages' place until you are.
+  const needSign = MSG_ENGINE && !msgAccount();
+  const sb = box.querySelector('.pf-signup-box');
+  box.classList.toggle('pf-need-sign', needSign);
+  if(sb){ sb.hidden = !needSign; if(needSign){ const h = msgSignupHTML(); if(sb.dataset.h !== h){ sb.dataset.h = h; sb.innerHTML = h; const i = sb.querySelector('.pf-signup-in'); if(i && msgSign.step === 'code') i.value = msgSign.codeVal || ''; } return; } }
   const reqOn = msgRequestsOn();
   if(!reqOn && msgView.filter === 'requests') msgView.filter = 'chats';
   box.querySelector('[data-f="requests"]').hidden = !reqOn;
@@ -7872,7 +7935,8 @@ function renderMsgList(){
   if(q) list = list.filter(c=>(c.name || '').toLowerCase().includes(q) || (c.username || '').toLowerCase().includes(q) || (c.messages || []).some(m=>(m.text || '').toLowerCase().includes(q)));
   list.sort((a, b)=>((b.messages || []).slice(-1)[0]?.at || 0) - ((a.messages || []).slice(-1)[0]?.at || 0));
   const STATUS = MSG_STATUS;
-  box.querySelector('.pf-msgs-list').innerHTML = list.map(c=>{
+  const found = msgFoundHTML();
+  box.querySelector('.pf-msgs-list').innerHTML = found + list.map(c=>{
     const ms = c.messages || [];
     // While searching, the row shows the message that matched.
     const last = (q && ms.slice().reverse().find(m=>(m.text || '').toLowerCase().includes(q))) || ms[ms.length - 1] || {};
@@ -7894,7 +7958,7 @@ function renderMsgList(){
   clearTimeout(msgTypingTimer);
   if(list.some(c=>c.typing && Date.now() - (c.typing.at || 0) < 6000)) msgTypingTimer = setTimeout(renderMsgList, 1000);
   const empty = box.querySelector('.pf-msgs-empty');
-  empty.hidden = list.length > 0;
+  empty.hidden = list.length > 0 || !!found;
   empty.querySelector('.pf-msgs-empty-t').textContent = q ? 'No results' : msgView.filter === 'archive' ? 'Nothing archived' : msgView.filter === 'requests' ? 'No requests' : msgView.filter === 'groups' ? 'No groups yet' : 'No messages yet';
   const menu = box.querySelector('.pf-msgs-menu');
   const mc = msgView.menuFor && msgChats().find(x=>x.id === msgView.menuFor);
@@ -7904,7 +7968,7 @@ function renderMsgList(){
 // ---- A chat (tap a chat in Messages). Your messages go out through the message server: until it has them they
 // show "Sending". What you do in a chat (send, open = Seen, tap the typing box = Read, typing) is queued for the
 // server in localStorage 'story-msg-outbox' - the server never sees what you write, only locked messages. ----
-const MSG_STATUS = { sending:'Sending', delivered:'Delivered', seen:'Seen', read:'Read' };
+const MSG_STATUS = { sending:'Sending', delivered:'Delivered', seen:'Seen', read:'Read', failed:'Not sent' };
 const MSG_OUTBOX = 'story-msg-outbox';
 function msgOut(ev){
   try{ const q = JSON.parse(localStorage.getItem(MSG_OUTBOX) || '[]') || []; q.push(Object.assign({ at: Date.now() }, ev)); localStorage.setItem(MSG_OUTBOX, JSON.stringify(q.slice(-500))); }catch(e){}
@@ -7944,7 +8008,8 @@ function renderChat(toEnd){
   u.hidden = !u.textContent;
   // Calls (owner): any profile you chat with (their privacy decides - the server says canCall:false when they don't
   // take calls from you); in a public group only its creator and members start calls; private groups too.
-  el.querySelector('.pf-chat-call').hidden = c.kind !== 'group' && c.canCall === false;
+  const noCall = c.kind !== 'group' && (c.canCall === false || (MSG_ENGINE && !/^u/.test(c.id)));
+  el.querySelectorAll('.pf-chat-call').forEach(x=>x.hidden = noCall);
   el.querySelectorAll('.pf-chat-sheet [data-pf="callmode"]').forEach(x=>x.classList.toggle('on', x.getAttribute('data-m') === (c.callJoin || 'open')));
   const ms = c.messages || [];
   let lastMine = -1; ms.forEach((m, i)=>{ if(m.from === 'me') lastMine = i; });
@@ -7980,6 +8045,408 @@ window.storyImeInset = function(dp){
   el.style.setProperty('--pf-ime', Math.max(0, dp || 0) + 'px');
   const list = el.querySelector('.pf-chat-list'); if(list && msgView.chat) requestAnimationFrame(()=>{ list.scrollTop = list.scrollHeight; });
 };
+// ---- STORY's own messages and calls, for real (owner): your account (sign-up with your phone number + the text
+// code), your keys (made on this phone - the private key never leaves it, kept in the phone's STORY storage as a key
+// that can't even be read out), the live connection to STORY's message server (msg-worker.js) and calls.
+// Runs in Profile's main window (Messages and Call history live there; the app keeps it running in the background, so
+// messages and calls reach you any time). Messages are locked on this phone (ECDH P-256 + AES-GCM, a key only the
+// two phones can work out) - the server only ever carries locked boxes. ----
+const MSG_API = (()=>{ try{ return localStorage.getItem('story-msg-api') || 'https://story-msg.percyjuniormaseko0.workers.dev'; }catch(e){ return 'https://story-msg.percyjuniormaseko0.workers.dev'; } })();
+const MSG_ACCOUNT_KEY = 'story-msg-account', MSG_PEERS_KEY = 'story-msg-peers';
+const MSG_ENGINE = !!document.querySelector && /[?&]profile=1/.test(location.search) && !PF_GAP_WINDOW;
+function msgAccount(){ try{ return JSON.parse(localStorage.getItem(MSG_ACCOUNT_KEY) || 'null'); }catch(e){ return null; } }
+function setMsgAccount(a){ try{ if(a) localStorage.setItem(MSG_ACCOUNT_KEY, JSON.stringify(a)); else localStorage.removeItem(MSG_ACCOUNT_KEY); }catch(e){} }
+function msgPeers(){ try{ return JSON.parse(localStorage.getItem(MSG_PEERS_KEY) || '{}') || {}; }catch(e){ return {}; } }
+function setMsgPeer(id, p){ const all = msgPeers(); all[id] = Object.assign(all[id] || {}, p); try{ localStorage.setItem(MSG_PEERS_KEY, JSON.stringify(all)); }catch(e){} }
+async function msgApi(path, body){
+  const a = msgAccount();
+  const r = await fetch(MSG_API + path, { method: body ? 'POST' : 'GET', headers: Object.assign({ 'content-type':'application/json' }, a && a.token ? { authorization:'Bearer ' + a.token } : {}), body: body ? JSON.stringify(body) : undefined });
+  const j = await r.json().catch(()=>({}));
+  if(r.status === 401 && a){ msgSignedOut(); }
+  if(!r.ok) throw Object.assign(new Error(j.error || 'server'), { code: j.error || 'server', info: j });
+  return j;
+}
+// ---- Keys (IndexedDB 'story-keys': the private key is stored as a non-extractable CryptoKey) ----
+const B64 = { to: b=>btoa(String.fromCharCode(...new Uint8Array(b))), from: s=>Uint8Array.from(atob(s), c=>c.charCodeAt(0)) };
+function keysDb(){ return new Promise((res, rej)=>{ const r = indexedDB.open('story-keys', 1); r.onupgradeneeded = ()=>r.result.createObjectStore('k'); r.onsuccess = ()=>res(r.result); r.onerror = ()=>rej(r.error); }); }
+async function keysGet(){ const db = await keysDb(); return new Promise(res=>{ const q = db.transaction('k').objectStore('k').get('me'); q.onsuccess = ()=>res(q.result || null); q.onerror = ()=>res(null); }); }
+async function keysPut(v){ const db = await keysDb(); return new Promise(res=>{ const t = db.transaction('k', 'readwrite'); t.objectStore('k').put(v, 'me'); t.oncomplete = ()=>res(); t.onerror = ()=>res(); }); }
+async function myKeys(fresh){
+  let k = fresh ? null : await keysGet();
+  if(!k){
+    const pair = await crypto.subtle.generateKey({ name:'ECDH', namedCurve:'P-256' }, true, ['deriveKey']);
+    const pub = B64.to(await crypto.subtle.exportKey('raw', pair.publicKey));
+    // Stored un-readable: the private key can be used on this phone but never read out of it.
+    const priv = await crypto.subtle.importKey('pkcs8', await crypto.subtle.exportKey('pkcs8', pair.privateKey), { name:'ECDH', namedCurve:'P-256' }, false, ['deriveBits']);
+    k = { priv, pub }; await keysPut(k);
+  }
+  return k;
+}
+const msgKeyCache = {};
+async function chatKey(peerId, peerPub){
+  const ck = peerId + '|' + peerPub; if(msgKeyCache[ck]) return msgKeyCache[ck];
+  const me = await myKeys(), a = msgAccount();
+  const theirs = await crypto.subtle.importKey('raw', B64.from(peerPub), { name:'ECDH', namedCurve:'P-256' }, false, []);
+  const bits = await crypto.subtle.deriveBits({ name:'ECDH', public: theirs }, me.priv, 256);
+  const hk = await crypto.subtle.importKey('raw', bits, 'HKDF', false, ['deriveKey']);
+  const key = await crypto.subtle.deriveKey({ name:'HKDF', hash:'SHA-256', salt: new TextEncoder().encode('story-e2e-v1'), info: new TextEncoder().encode([a.id, peerId].sort().join('|')) }, hk, { name:'AES-GCM', length:256 }, false, ['encrypt', 'decrypt']);
+  return msgKeyCache[ck] = key;
+}
+async function peerInfo(id, fresh){
+  const p = msgPeers()[id];
+  if(p && p.pub && !fresh) return p;
+  const u = await msgApi('/v1/user?id=' + encodeURIComponent(id));
+  setMsgPeer(id, { pub:u.pub, name:u.name, username:u.username, canCall:u.canCall, canMsg:u.canMsg });
+  const c = msgChats().find(x=>x.id === id);
+  if(c){ c.canCall = u.canCall; if(u.name) c.name = u.name; if(u.username) c.username = u.username; saveMsgChats(); }
+  return msgPeers()[id];
+}
+async function lockFor(peerId, obj){
+  const p = await peerInfo(peerId), key = await chatKey(peerId, p.pub), iv = crypto.getRandomValues(new Uint8Array(12));
+  const box = await crypto.subtle.encrypt({ name:'AES-GCM', iv }, key, new TextEncoder().encode(JSON.stringify(obj)));
+  return { box: B64.to(box), iv: B64.to(iv) };
+}
+async function unlockFrom(peerId, box, iv){
+  for(const fresh of [false, true]){
+    try{
+      const p = await peerInfo(peerId, fresh), key = await chatKey(peerId, p.pub);
+      const out = await crypto.subtle.decrypt({ name:'AES-GCM', iv: B64.from(iv) }, key, B64.from(box));
+      return JSON.parse(new TextDecoder().decode(out));
+    }catch(e){}
+  }
+  return null;
+}
+// ---- The live connection ----
+let msgWs = null, msgWsOpen = false, msgWsTry = 0, msgWsTimer = 0, msgPing = 0;
+function msgConnect(){
+  if(!MSG_ENGINE) return;
+  const a = msgAccount(); if(!a || !a.token) return;
+  if(msgWs && (msgWs.readyState === 0 || msgWs.readyState === 1)) return;
+  clearTimeout(msgWsTimer);
+  let ws; try{ ws = new WebSocket(MSG_API.replace(/^http/, 'ws') + '/v1/ws?token=' + encodeURIComponent(a.token)); }catch(e){ return msgRetry(); }
+  msgWs = ws;
+  ws.onopen = ()=>{ msgWsOpen = true; msgWsTry = 0; clearInterval(msgPing); msgPing = setInterval(()=>{ try{ ws.send('{"t":"ping"}'); }catch(e){} }, 25000); msgFlush(); msgSyncProfile(); };
+  ws.onmessage = e=>{ let m; try{ m = JSON.parse(e.data); }catch(err){ return; } msgOnServer(m).catch(()=>{}); };
+  ws.onclose = ()=>{ msgWsOpen = false; clearInterval(msgPing); if(msgWs === ws){ msgWs = null; msgRetry(); } };
+  ws.onerror = ()=>{ try{ ws.close(); }catch(e){} };
+}
+function msgRetry(){ clearTimeout(msgWsTimer); if(!msgAccount()) return; msgWsTimer = setTimeout(msgConnect, Math.min(30000, 1000 * Math.pow(2, msgWsTry++))); }
+function msgSend(o){ if(msgWs && msgWsOpen){ try{ msgWs.send(JSON.stringify(o)); return true; }catch(e){} } return false; }
+window.addEventListener('online', ()=>{ msgWsTry = 0; msgConnect(); });
+function msgSignedOut(){
+  setMsgAccount(null); try{ if(msgWs) msgWs.close(); }catch(e){} msgWs = null; msgWsOpen = false;
+  renderMsgList();
+}
+function chatFor(id, info){
+  const list = msgChats(); let c = list.find(x=>x.id === id);
+  if(!c){
+    c = { id, kind:'chat', name: info && info.name || '', username: info && info.username || '', messages:[] };
+    // "Who can message you" = Requests: someone new lands in Requests until you answer.
+    if(info && info.incoming && msgRequestsOn()) c.request = true;
+    list.push(c);
+  } else if(info){ if(info.name) c.name = info.name; if(info.username) c.username = info.username; }
+  return c;
+}
+async function msgOnServer(m){
+  if(m.t === 'msg'){
+    const body = await unlockFrom(m.from, m.box, m.iv);
+    const c = chatFor(m.from, { name:m.name, username:m.username, incoming:true });
+    if(body && !(c.messages || []).some(x=>x.id === m.id)) (c.messages = c.messages || []).push({ id:m.id, from:'them', text:String(body.text || ''), at:m.at || Date.now() });
+    if(!body && !(c.messages || []).some(x=>x.id === m.id)) c.messages.push({ id:m.id, from:'them', text:'Couldn’t unlock this message', at:m.at || Date.now(), locked:true });
+    c.typing = null; saveMsgChats();
+    if(m.seq) msgSend({ t:'ack', seq:m.seq });
+    renderMsgList(); if(msgView.chat === c.id){ renderChat(true); if(msgChatVisible()) msgSend({ t:'seen', to:c.id }); }
+    if(NATIVE && window.StoryNative.msgNotify && !msgChatVisible()) try{ window.StoryNative.msgNotify(c.name || (c.username ? '@' + c.username : 'STORY'), body ? String(body.text || '').slice(0, 120) : 'New message'); }catch(e){}
+    return;
+  }
+  if(m.t === 'status'){
+    const c = msgChats().find(x=>x.id === m.chat);
+    if(c){
+      const rank = { sending:0, delivered:1, seen:2, read:3 };
+      (c.messages || []).forEach(x=>{ if(x.from !== 'me') return; if(m.id && x.id !== m.id && m.status === 'delivered') return; if((rank[x.status] || 0) < rank[m.status]) x.status = m.status; });
+      saveMsgChats(); renderMsgList(); if(msgView.chat === c.id) renderChat();
+    }
+    if(m.seq) msgSend({ t:'ack', seq:m.seq });
+    return;
+  }
+  if(m.t === 'typing'){ window.storyMsgTyping(m.chat, ''); return; }
+  if(m.t === 'fail'){
+    for(const c of msgChats()){ const x = (c.messages || []).find(y=>y.id === m.id); if(x){ x.status = 'failed'; saveMsgChats(); renderChat(); showToast(m.error === 'blocked' ? 'They don’t take messages from you' : 'Couldn’t send'); break; } }
+    return;
+  }
+  if(m.t === 'signedout'){ msgSignedOut(); return; }
+  if(m.t === 'call'){ callOnSignal(m); return; }
+}
+function msgChatVisible(){ return document.visibilityState !== 'hidden' && msgView.chat && !document.querySelector('#story-profile .pf-chat')?.hidden; }
+// Everything you did in a chat (queued in story-msg-outbox) goes out - locked - the moment there's a connection.
+let msgFlushing = false;
+async function msgFlush(){
+  if(!MSG_ENGINE || msgFlushing || !msgAccount()) return;
+  msgFlushing = true;
+  try{
+    let q = []; try{ q = JSON.parse(localStorage.getItem(MSG_OUTBOX) || '[]') || []; }catch(e){}
+    const keep = [];
+    for(const ev of q){
+      let done = false;
+      try{
+        if(ev.type === 'privacy'){ await msgApi('/v1/me', { privacy: ev.privacy }); done = true; }
+        else if(/^cg:|^pg/.test(ev.chatId || '')) done = true;          // groups go through the group server (not yet)
+        else if(!msgWsOpen) done = false;
+        else if(ev.type === 'send'){
+          const L = await lockFor(ev.chatId, { text: ev.text, at: ev.at });
+          done = msgSend({ t:'msg', to: ev.chatId, id: ev.id, box: L.box, iv: L.iv });
+        }
+        else if(ev.type === 'seen' || ev.type === 'read' || ev.type === 'typing'){ done = msgSend({ t: ev.type, to: ev.chatId }) || Date.now() - ev.at > 10000; }
+        else done = true;
+      }catch(e){ done = e && (e.code === 'notfound'); }
+      if(!done) keep.push(ev);
+    }
+    // Anything added while this ran stays queued too.
+    let now = []; try{ now = JSON.parse(localStorage.getItem(MSG_OUTBOX) || '[]') || []; }catch(e){}
+    const added = now.slice(q.length);
+    try{ localStorage.setItem(MSG_OUTBOX, JSON.stringify(keep.concat(added).slice(-500))); }catch(e){}
+  } finally { msgFlushing = false; }
+}
+window.storyMsgOutbox = ()=>{ msgFlush(); };
+window.addEventListener('storage', e=>{ if(e.key === MSG_OUTBOX) msgFlush(); if(e.key === 'story-profile') msgSyncProfile(); if(e.key === MSG_ACCOUNT_KEY){ if(msgAccount()) msgConnect(); renderMsgList(); } });
+// Your name / @username on STORY's server = the ones on your Profile.
+let msgProfSent = '';
+async function msgSyncProfile(){
+  if(!MSG_ENGINE || !msgAccount()) return;
+  const p = profileData(), key = (p.name || '') + '|' + (p.username || '');
+  if(key === msgProfSent) return;
+  try{ await msgApi('/v1/me', { name: p.name || '', username: (p.username || '').toLowerCase(), privacy: storyPrivacy() }); msgProfSent = key; }
+  catch(e){ if(e.code === 'username-taken'){ msgProfSent = key; showToast('@' + p.username + ' is taken on STORY - pick another in Edit profile'); } }
+}
+// ---- Sign-up (Messages, when you aren't signed in): your number, then the code STORY texts you ----
+const msgSign = { step:'phone', phone:'', busy:false, msg:'' };
+const CC = { ZA:'27', US:'1', CA:'1', GB:'44', NG:'234', KE:'254', GH:'233', ZW:'263', BW:'267', NA:'264', ZM:'260', MZ:'258', LS:'266', SZ:'268', IN:'91', AU:'61', NZ:'64', DE:'49', FR:'33', NL:'31', IE:'353', AE:'971', PT:'351', ES:'34', IT:'39', BR:'55' };
+function msgPhoneE164(raw){
+  let s = String(raw || '').replace(/[^\d+]/g, '');
+  if(s.startsWith('00')) s = '+' + s.slice(2);
+  if(s.startsWith('+')) return /^\+[1-9]\d{6,14}$/.test(s) ? s : '';
+  const region = ((navigator.language || '').split('-')[1] || '').toUpperCase(), cc = CC[region] || '27';
+  if(s.startsWith('0')) s = s.slice(1);
+  s = '+' + cc + s;
+  return /^\+[1-9]\d{6,14}$/.test(s) ? s : '';
+}
+function msgSignupHTML(){
+  const p = msgSign;
+  return '<div class="pf-signup">' +
+    '<div class="pf-signup-t">' + (p.step === 'phone' ? 'Your phone number' : 'Enter the code') + '</div>' +
+    '<div class="pf-signup-s">' + (p.step === 'phone' ? 'STORY texts you a code to make sure the number is yours.' : 'Sent to ' + escText(p.phone)) + '</div>' +
+    (p.step === 'phone'
+      ? '<input class="pf-signup-in" data-sign="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+27 83 123 4567" value="' + escText(p.raw || '') + '">'
+      : '<input class="pf-signup-in" data-sign="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456">') +
+    '<button class="pf-signup-go" data-pf="sign-go"' + (p.busy ? ' disabled' : '') + '>' + (p.busy ? '...' : p.step === 'phone' ? 'Send code' : 'Continue') + '</button>' +
+    (p.step === 'code' ? '<button class="pf-signup-link" data-pf="sign-back">Change number</button>' : '') +
+    '<div class="pf-signup-err">' + escText(p.msg || '') + '</div>' +
+    '<div class="pf-msgs-lock"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>End-to-end encrypted</div>' +
+  '</div>';
+}
+const SIGN_ERR = { phone:'That number doesn’t look right - start with your country code, e.g. +27', 'sms-not-ready':'Sign-up opens as soon as STORY’s text number is switched on.', 'sms-failed':'The text couldn’t be sent to that number.', wait:'Wait a moment before asking for another code.', 'too-many':'Too many tries - try again in an hour.', wrong:'That code isn’t right.', expired:'That code ran out - ask for a new one.', code:'Type the 6-digit code.', server:'STORY’s message server can’t be reached right now.' };
+async function msgSignGo(){
+  const el = document.getElementById('story-profile'); if(!el || msgSign.busy) return;
+  const inp = el.querySelector('.pf-signup-in'); const v = inp ? inp.value : '';
+  msgSign.msg = ''; msgSign.busy = true; renderMsgList();
+  try{
+    if(msgSign.step === 'phone'){
+      msgSign.raw = v; const ph = msgPhoneE164(v);
+      if(!ph) throw Object.assign(new Error('phone'), { code:'phone' });
+      await msgApi('/v1/start', { phone: ph });
+      msgSign.phone = ph; msgSign.step = 'code';
+    } else {
+      const k = await myKeys(true);
+      const r = await msgApi('/v1/verify', { phone: msgSign.phone, code: v.replace(/\D/g, ''), pub: k.pub });
+      setMsgAccount({ id:r.id, token:r.token, phone:msgSign.phone });
+      msgSign.step = 'phone'; msgSign.raw = ''; msgProfSent = '';
+      msgConnect();
+    }
+  }catch(e){
+    const c = e && e.code || 'server';
+    msgSign.msg = (SIGN_ERR[c] || SIGN_ERR.server) + (c === 'sms-failed' && e.info && e.info.detail ? ' (' + e.info.detail + ')' : '');
+  }
+  msgSign.busy = false; renderMsgList();
+  const n = document.querySelector('#story-profile .pf-signup-in'); if(n){ profileTypingOn(); n.focus(); }
+}
+// ---- Find people: type someone's @username or phone number in Messages' search ----
+let msgFindT = 0, msgFound = null, msgFoundQ = '';
+function msgFindFor(q){
+  clearTimeout(msgFindT);
+  const t = q.trim(), isUser = /^@?[a-z0-9_.]{3,30}$/i.test(t), isPhone = /^\+?[\d\s()-]{7,}$/.test(t);
+  if(!msgAccount() || !(isUser || isPhone)){ msgFound = null; msgFoundQ = ''; return; }
+  msgFindT = setTimeout(async ()=>{
+    const qq = isPhone ? msgPhoneE164(t) : t.replace(/^@/, '').toLowerCase(); if(!qq) return;
+    try{ const u = await msgApi('/v1/find?q=' + encodeURIComponent(isPhone ? qq : '@' + qq)); msgFound = u; msgFoundQ = t; setMsgPeer(u.id, { pub:u.pub, name:u.name, username:u.username, canCall:u.canCall, canMsg:u.canMsg }); }
+    catch(e){ msgFound = null; msgFoundQ = t; }
+    if(msgView.q.trim() === t) renderMsgList();
+  }, 350);
+}
+function msgFoundHTML(){
+  if(!msgFound || msgView.q.trim() !== msgFoundQ || msgChats().some(c=>c.id === msgFound.id)) return '';
+  const u = msgFound;
+  return '<button class="msg-row msg-found" data-pf="msg-start" data-id="' + escText(u.id) + '"><span class="msg-pic">' + PF_PHOTO_PLACEHOLDER + '</span>' +
+    '<span class="msg-mid"><span class="msg-who">' + escText(u.name || '@' + u.username) + '</span><span class="msg-last">' + (u.name && u.username ? '@' + escText(u.username) : 'On STORY') + '</span></span><span class="msg-end"><span class="msg-time">Message</span></span></button>';
+}
+function msgStart(id){
+  const u = msgFound && msgFound.id === id ? msgFound : msgPeers()[id] || {};
+  const c = chatFor(id, { name:u.name, username:u.username }); c.canCall = u.canCall; saveMsgChats();
+  msgFound = null; const s = document.querySelector('#story-profile .pf-msgs .pf-msgs-search input'); if(s) s.value = ''; msgView.q = '';
+  openChat(id);
+}
+
+// ---- Calls: voice and video, phone to phone (WebRTC; the server only passes the set-up along). ----
+const CALL_ICE = [{ urls:['stun:stun.cloudflare.com:3478', 'stun:stun.l.google.com:19302'] }];
+const call = { state:'idle', id:'', peer:'', name:'', username:'', video:false, dir:'out', pc:null, local:null, remote:null, pendingIce:[], start:0, answeredAt:0, muted:false, speaker:false, camOff:false, facing:'user', timer:0, ringT:0 };
+function callNative(fn, ...a){ if(NATIVE && window.StoryNative[fn]) try{ return window.StoryNative[fn](...a); }catch(e){} }
+function callView(){
+  const el = document.getElementById('story-profile'); if(!el) return null;
+  let v = el.querySelector('.pf-callview');
+  if(!v){
+    v = document.createElement('div'); v.className = 'pf-callview'; v.hidden = true;
+    v.innerHTML = '<video class="cv-remote" playsinline autoplay></video><video class="cv-local" playsinline autoplay muted></video>' +
+      '<div class="cv-top"><span class="msg-pic cv-pic"></span><div class="cv-name"></div><div class="cv-state"></div></div>' +
+      '<div class="cv-btns cv-in"><button class="cv-btn cv-decline" data-pf="call-decline" aria-label="Decline"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.7 13.3a16 16 0 0 0 3.6 2.7l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2v3a2 2 0 0 1-2.2 2A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8"/><path d="M22 2 2 22"/></svg></button>' +
+        '<button class="cv-btn cv-accept" data-pf="call-accept" aria-label="Answer"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/></svg></button></div>' +
+      '<div class="cv-btns cv-live">' +
+        '<button class="cv-btn" data-pf="call-mute" aria-label="Mute"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1M12 18v4"/><path class="cv-off" d="M3 3l18 18"/></svg></button>' +
+        '<button class="cv-btn" data-pf="call-speaker" aria-label="Speaker"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/></svg></button>' +
+        '<button class="cv-btn cv-vid" data-pf="call-cam" aria-label="Camera"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="m16 10 6-3v10l-6-3"/><path class="cv-off" d="M3 3l18 18"/></svg></button>' +
+        '<button class="cv-btn cv-vid" data-pf="call-flip" aria-label="Switch camera"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 0 0-14.3-4.9L4 8"/><path d="M4 3v5h5"/><path d="M4 13a8 8 0 0 0 14.3 4.9L20 16"/><path d="M20 21v-5h-5"/></svg></button>' +
+        '<button class="cv-btn cv-decline" data-pf="call-end" aria-label="End call"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.7 13.3a16 16 0 0 0 3.6 2.7l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2v3a2 2 0 0 1-2.2 2A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8"/><path d="M22 2 2 22"/></svg></button>' +
+      '</div>';
+    el.appendChild(v);
+  }
+  return v;
+}
+function callRender(){
+  const v = callView(); if(!v) return;
+  const on = call.state !== 'idle';
+  v.hidden = !on; if(!on) return;
+  const c = msgChats().find(x=>x.id === call.peer) || {};
+  v.querySelector('.cv-pic').innerHTML = c.photo ? '<img alt="" src="' + escText(c.photo) + '">' : PF_PHOTO_PLACEHOLDER;
+  v.querySelector('.cv-name').textContent = call.name || (call.username ? '@' + call.username : '') || c.name || (c.username ? '@' + c.username : '');
+  const secs = call.answeredAt ? Math.floor((Date.now() - call.answeredAt) / 1000) : 0;
+  v.querySelector('.cv-state').textContent = call.state === 'incoming' ? (call.video ? 'Video call' : 'Voice call') : call.state === 'calling' ? 'Calling...' : call.state === 'ringing' ? 'Ringing...' : call.state === 'connecting' ? 'Connecting...' : call.state === 'live' ? callLen(secs) : call.state === 'ended' ? call.endText || 'Call ended' : '';
+  v.classList.toggle('cv-video', call.video && call.state === 'live' && !!call.remote);
+  v.querySelector('.cv-in').hidden = call.state !== 'incoming';
+  v.querySelector('.cv-live').hidden = call.state === 'incoming' || call.state === 'ended';
+  v.querySelectorAll('.cv-vid').forEach(b=>b.hidden = !call.video);
+  v.querySelector('[data-pf="call-mute"]').classList.toggle('on', call.muted);
+  v.querySelector('[data-pf="call-speaker"]').classList.toggle('on', call.speaker);
+  v.querySelector('[data-pf="call-cam"]').classList.toggle('on', call.camOff);
+  const lv = v.querySelector('.cv-local'); if(lv.srcObject !== call.local) lv.srcObject = call.local; lv.hidden = !call.video || call.camOff || !call.local;
+  const rv = v.querySelector('.cv-remote'); if(rv.srcObject !== call.remote) rv.srcObject = call.remote;
+}
+async function callMedia(video){
+  // Android asks once for the microphone (and camera for video) the first time you call.
+  if(NATIVE && window.StoryNative.callAsk){ const ok = callNative('callAsk', video); if(ok === 'asking') throw Object.assign(new Error('asking'), { code:'asking' }); }
+  return navigator.mediaDevices.getUserMedia({ audio:{ echoCancellation:true, noiseSuppression:true, autoGainControl:true }, video: video ? { facingMode:call.facing, width:{ ideal:720 }, height:{ ideal:1280 } } : false });
+}
+function callPc(){
+  const pc = new RTCPeerConnection({ iceServers: CALL_ICE });
+  pc.onicecandidate = e=>{ if(e.candidate) msgSend({ t:'call', to:call.peer, kind:'ice', callId:call.id, cand:e.candidate.toJSON() }); };
+  pc.ontrack = e=>{ call.remote = e.streams[0] || new MediaStream([e.track]); callRender(); };
+  pc.onconnectionstatechange = ()=>{
+    if(pc.connectionState === 'connected' && call.state !== 'live'){ call.state = 'live'; call.answeredAt = Date.now(); callNative('callAudio', true, call.speaker || call.video); clearInterval(call.timer); call.timer = setInterval(callRender, 1000); callRender(); }
+    if(pc.connectionState === 'failed') callEnd('Call dropped', true);
+  };
+  return pc;
+}
+async function callStart(peerId, video){
+  if(call.state !== 'idle'){ showToast('You’re already on a call'); return; }
+  if(!msgAccount()){ showToast('Sign up in Messages first'); return; }
+  const c = msgChats().find(x=>x.id === peerId) || {};
+  if(c.canCall === false){ showToast('They don’t take calls from you'); return; }
+  if(!msgWsOpen){ showToast('No connection to STORY right now'); msgConnect(); return; }
+  Object.assign(call, { state:'calling', id:'c' + Date.now() + Math.random().toString(36).slice(2, 6), peer:peerId, name:c.name || '', username:c.username || '', video:!!video, dir:'out', pendingIce:[], start:Date.now(), answeredAt:0, muted:false, speaker:!!video, camOff:false, remote:null, endText:'' });
+  callNative('callUi', true); callRender();
+  try{
+    call.local = await callMedia(video);
+    call.pc = callPc(); call.local.getTracks().forEach(t=>call.pc.addTrack(t, call.local));
+    await call.pc.setLocalDescription(await call.pc.createOffer());
+    msgSend({ t:'call', to:peerId, kind:'offer', callId:call.id, video:!!video, sdp:call.pc.localDescription.sdp });
+    callRender();
+    clearTimeout(call.ringT); call.ringT = setTimeout(()=>{ if(call.state === 'calling' || call.state === 'ringing'){ msgSend({ t:'call', to:call.peer, kind:'end', callId:call.id }); callEnd('No answer', true); } }, 45000);
+  }catch(e){ callEnd(e && e.code === 'asking' ? 'Allow the microphone, then call again' : 'Couldn’t start the call', true); }
+}
+async function callOnSignal(m){
+  if(m.kind === 'offer'){
+    if(call.state !== 'idle'){ msgSend({ t:'call', to:m.from, kind:'busy', callId:m.callId }); callSave({ peer:m.from, name:m.name, username:m.username, video:m.video, dir:'missed', start:m.at || Date.now() }); return; }
+    chatFor(m.from, { name:m.name, username:m.username, incoming:true }); saveMsgChats();
+    Object.assign(call, { state:'incoming', id:m.callId, peer:m.from, name:m.name || '', username:m.username || '', video:!!m.video, dir:'in', offer:m.sdp, pendingIce:[], start:Date.now(), answeredAt:0, muted:false, speaker:!!m.video, camOff:false, remote:null, local:null, endText:'' });
+    msgSend({ t:'call', to:m.from, kind:'ringing', callId:m.callId });
+    callNative('callUi', true); callNative('callRing', true, call.name || (call.username ? '@' + call.username : 'STORY'), !!m.video); callRender();
+    clearTimeout(call.ringT); call.ringT = setTimeout(()=>{ if(call.state === 'incoming') callEnd('Missed call', true); }, 45000);
+    return;
+  }
+  if(m.callId !== call.id || call.state === 'idle') return;
+  if(m.kind === 'ringing'){ if(call.state === 'calling'){ call.state = 'ringing'; callRender(); } return; }
+  if(m.kind === 'answer'){ call.state = 'connecting'; callRender(); await call.pc.setRemoteDescription({ type:'answer', sdp:m.sdp }); for(const c of call.pendingIce.splice(0)) await call.pc.addIceCandidate(c).catch(()=>{}); return; }
+  if(m.kind === 'ice'){ if(call.pc && call.pc.remoteDescription) await call.pc.addIceCandidate(m.cand).catch(()=>{}); else call.pendingIce.push(m.cand); return; }
+  if(m.kind === 'end') return callEnd(call.state === 'incoming' ? 'Missed call' : 'Call ended', true);
+  if(m.kind === 'decline') return callEnd('Declined', true);
+  if(m.kind === 'busy') return callEnd('On another call', true);
+  if(m.kind === 'unavailable') return callEnd('Not available right now', true);
+  if(m.kind === 'blocked') return callEnd('They don’t take calls from you', true);
+}
+async function callAccept(){
+  if(call.state !== 'incoming') return;
+  callNative('callRing', false); call.state = 'connecting'; callRender();
+  try{
+    call.local = await callMedia(call.video);
+    call.pc = callPc(); call.local.getTracks().forEach(t=>call.pc.addTrack(t, call.local));
+    await call.pc.setRemoteDescription({ type:'offer', sdp:call.offer });
+    for(const c of call.pendingIce.splice(0)) await call.pc.addIceCandidate(c).catch(()=>{});
+    await call.pc.setLocalDescription(await call.pc.createAnswer());
+    msgSend({ t:'call', to:call.peer, kind:'answer', callId:call.id, sdp:call.pc.localDescription.sdp });
+    callRender();
+  }catch(e){ msgSend({ t:'call', to:call.peer, kind:'end', callId:call.id }); callEnd(e && e.code === 'asking' ? 'Allow the microphone to answer calls' : 'Couldn’t answer', true); }
+}
+function callDecline(){ if(call.state !== 'incoming') return; msgSend({ t:'call', to:call.peer, kind:'decline', callId:call.id }); call.dir = 'missed'; callEnd('Declined', true); }
+function callHangup(){ if(call.state === 'idle') return; msgSend({ t:'call', to:call.peer, kind:'end', callId:call.id }); callEnd('Call ended', true); }
+function callSave(o){
+  let l = []; try{ l = JSON.parse(localStorage.getItem('story-calls') || '[]') || []; }catch(e){}
+  const p = msgPeers()[o.peer] || {};
+  l.unshift({ id:'sc' + Date.now(), peer:o.peer, name:o.name || p.name || '', username:o.username || p.username || '', kind:o.video ? 'video' : 'voice', dir:o.dir, start:o.start, end:o.end || 0, duration:o.duration || 0 });
+  try{ localStorage.setItem('story-calls', JSON.stringify(l.slice(0, 500))); }catch(e){}
+  if(typeof renderCalls === 'function') renderCalls();
+}
+function callEnd(text, save){
+  if(call.state === 'idle') return;
+  clearTimeout(call.ringT); clearInterval(call.timer);
+  callNative('callRing', false); callNative('callAudio', false, false);
+  const answered = !!call.answeredAt, dir = call.dir === 'in' && !answered ? 'missed' : call.dir;
+  if(save) callSave({ peer:call.peer, name:call.name, username:call.username, video:call.video, dir, start:call.start, end: answered ? Date.now() : 0, duration: answered ? (Date.now() - call.answeredAt) / 1000 : 0 });
+  try{ call.pc && call.pc.close(); }catch(e){}
+  try{ call.local && call.local.getTracks().forEach(t=>t.stop()); }catch(e){}
+  call.pc = null; call.local = null; call.remote = null;
+  call.state = 'ended'; call.endText = text || 'Call ended'; callRender();
+  setTimeout(()=>{ if(call.state === 'ended'){ call.state = 'idle'; callRender(); callNative('callUi', false); } }, 1600);
+}
+function callToggle(k){
+  if(k === 'mute'){ call.muted = !call.muted; call.local && call.local.getAudioTracks().forEach(t=>t.enabled = !call.muted); }
+  if(k === 'speaker'){ call.speaker = !call.speaker; callNative('callAudio', true, call.speaker); }
+  if(k === 'cam'){ call.camOff = !call.camOff; call.local && call.local.getVideoTracks().forEach(t=>t.enabled = !call.camOff); }
+  callRender();
+}
+async function callFlip(){
+  if(!call.video || !call.pc || !call.local) return;
+  call.facing = call.facing === 'user' ? 'environment' : 'user';
+  try{
+    const s = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:call.facing } });
+    const nt = s.getVideoTracks()[0], snd = call.pc.getSenders().find(x=>x.track && x.track.kind === 'video');
+    if(snd) await snd.replaceTrack(nt);
+    call.local.getVideoTracks().forEach(t=>{ call.local.removeTrack(t); t.stop(); }); call.local.addTrack(nt);
+    callRender();
+  }catch(e){}
+}
+// The app tells the page Android's answer to the microphone / camera question.
+window.storyCallAccess = function(ok){ if(!ok) showToast('STORY needs the microphone for calls'); };
+if(MSG_ENGINE){
+  setTimeout(()=>{ msgConnect(); msgFlush(); }, 400);
+  document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState === 'visible') msgConnect(); });
+}
 // ---- Call history (owner): every call made from STORY - the dial pad's (kept by the app) and STORY-to-STORY calls
 // and video calls once they're built (localStorage 'story-calls'). Each: who, voice / video, made / got / missed, how
 // long it lasted, when it started and when it ended. Entry: { id, number, name, photo, kind:'voice'|'video',

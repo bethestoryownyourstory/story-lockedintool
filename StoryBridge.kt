@@ -59,6 +59,11 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         fun tvOpen(sym: String, interval: String)
         fun brightness(): String
         fun setBrightness(mode: String, value: Int)
+        fun callUi(on: Boolean)
+        fun callRing(on: Boolean, name: String, video: Boolean)
+        fun callAudio(on: Boolean, speaker: Boolean)
+        fun callAsk(video: Boolean): String
+        fun msgNotify(title: String, text: String)
     }
 
     /** The phone's real launchable apps, with their real icons -- kept ready, so the Apps area opens instantly. */
@@ -221,6 +226,15 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
      *  phone's brightness now (0-100), whether STORY may change the whole phone's, and whether auto is on. */
     @JavascriptInterface fun brightness(): String = if (pages) host.brightness() else "{}"
     @JavascriptInterface fun setBrightness(mode: String, value: Int) { if (pages) host.setBrightness(mode, value) }
+
+    /** Messages + calls (Profile's window, where STORY's message connection runs): show the call screen even when
+     *  Station 3 is closed, ring / vibrate for an incoming call, the phone's call audio (earpiece / speaker), the
+     *  microphone (+ camera) question, and a notification for a new message while Messages isn't on screen. */
+    @JavascriptInterface fun callUi(on: Boolean) { if (profile) host.callUi(on) }
+    @JavascriptInterface fun callRing(on: Boolean, name: String, video: Boolean) { if (profile) host.callRing(on, name, video) }
+    @JavascriptInterface fun callAudio(on: Boolean, speaker: Boolean) { if (profile) host.callAudio(on, speaker) }
+    @JavascriptInterface fun callAsk(video: Boolean): String = if (profile) host.callAsk(video) else "ok"
+    @JavascriptInterface fun msgNotify(title: String, text: String) { if (profile) host.msgNotify(title, text) }
 
     /** Wallet: reads a card photo on the phone (CardScan); answers window.storyCardScan(id, json). */
     @JavascriptInterface
