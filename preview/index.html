@@ -1250,6 +1250,18 @@
   #story-profile .pf-chat-video + .pf-chat-call{ margin-left:8px; }
   #story-profile .pf-chat-video[hidden] + .pf-chat-call{ margin-left:auto; }
   #story-profile .msg-found .msg-time{ font-weight:800; color:var(--pf-fg); }
+  #story-profile .pf-chat-sheet{ max-height:62vh; overflow-y:auto; scrollbar-width:none; }
+  #story-profile .pf-chat-sheet::-webkit-scrollbar{ display:none; }
+  #story-profile .pf-grp-h{ font-size:11px; font-weight:800; letter-spacing:0.6px; text-transform:uppercase; color:var(--pf-muted); margin:14px 0 6px; }
+  #story-profile .pf-grp-search{ margin-bottom:6px; }
+  #story-profile .pf-grp-row{ display:flex; align-items:center; gap:10px; padding:9px 2px; border-bottom:1px solid var(--pf-hair); }
+  #story-profile .pf-grp-who{ flex:1; min-width:0; font-size:15px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #story-profile .pf-grp-who i{ font-style:normal; color:var(--pf-muted); font-size:13px; }
+  #story-profile .pf-grp-tag{ font-size:11px; font-weight:800; border:1px solid var(--pf-fg); border-radius:999px; padding:2px 8px; }
+  #story-profile .pf-grp-add{ border:1px solid var(--pf-fg); background:var(--pf-fg); color:var(--pf-bg); border-radius:999px; padding:6px 14px; font:inherit; font-size:13px; font-weight:800; }
+  #story-profile .pf-chat-sheet .pf-grp-leave{ border-color:#e5484d !important; color:#e5484d !important; background:none !important; }
+  #story-profile .pf-grp-leave{ display:block; width:100%; margin-top:16px; border:1px solid #e5484d; color:#e5484d; background:none; border-radius:12px; padding:12px 0; font:inherit; font-weight:800; }
+  #story-profile .pf-grp-done{ display:block; width:100%; margin-top:8px; border:1px solid var(--pf-fg); color:var(--pf-fg); background:none; border-radius:12px; padding:12px 0; font:inherit; font-weight:800; }
   #story-profile .pf-callview{ position:absolute; inset:0; z-index:50; background:var(--pf-bg); display:flex; flex-direction:column; align-items:center; justify-content:space-between; padding:48px 20px 28px; box-sizing:border-box; overflow:hidden; }
   #story-profile .pf-callview[hidden]{ display:none; }
   #story-profile .pf-callview video{ position:absolute; object-fit:cover; background:#000; }
@@ -7620,7 +7632,12 @@ window.storyProfileOnly = function(){
     else if(k === 'call-speaker') callToggle('speaker');
     else if(k === 'call-cam') callToggle('cam');
     else if(k === 'call-flip') callFlip();
-    else if(k === 'chat-info'){ const c = msgChats().find(x=>x.id === msgView.chat); const sh = document.querySelector('#story-profile .pf-chat-sheet'); if(c && sh && c.groupType === 'private' && (c.leaders || []).includes('me')){ sh.hidden = !sh.hidden; renderChat(); } }
+    else if(k === 'chat-info'){ const c = msgChats().find(x=>x.id === msgView.chat); const sh = document.querySelector('#story-profile .pf-chat-sheet');
+      if(c && sh && /^grp/.test(c.id)) groupSheetOpen(sh.hidden);
+      else if(c && sh && c.groupType === 'private' && (c.leaders || []).includes('me')){ sh.hidden = !sh.hidden; renderChat(); } }
+    else if(k === 'grp-add') groupAdd(b.getAttribute('data-id'));
+    else if(k === 'grp-leave') groupLeave();
+    else if(k === 'grp-close') groupSheetOpen(false);
     else if(k === 'callmode'){ const c = msgChats().find(x=>x.id === msgView.chat); if(c){ c.callJoin = b.getAttribute('data-m'); saveMsgChats(); msgOut({ type:'callmode', chatId:c.id, mode:c.callJoin }); } document.querySelector('#story-profile .pf-chat-sheet').hidden = true; renderChat(); }
     else if(k === 'newgroup-open'){ const f = document.querySelector('#story-profile .pf-newgroup-form'); f.hidden = false; b.hidden = true; const i = f.querySelector('input'); i.value = ''; profileTypingOn(); i.focus(); }
     else if(k === 'newgroup-make') makePrivateGroup();
@@ -7888,10 +7905,14 @@ function mergeCommunityChats(){
 function makePrivateGroup(){
   const f = document.querySelector('#story-profile .pf-newgroup-form'); if(!f) return;
   const name = f.querySelector('input').value.trim(); if(!name){ f.querySelector('input').focus(); return; }
-  const c = { id:'pg' + Date.now(), kind:'group', groupType:'private', name, creator:'me', leaders:['me'], members:['me'], callJoin:'open', messages:[] };
-  msgChats().push(c); saveMsgChats(); msgOut({ type:'group-create', chatId:c.id, name, groupType:'private' });
-  f.hidden = true; document.querySelector('#story-profile [data-pf="newgroup-open"]').hidden = false;
-  renderMsgList(); openChat(c.id);
+  if(f.dataset.busy) return;
+  // Made on STORY's server (owner: groups work for everyone) - you're its leader; add people from its info (tap its name).
+  f.dataset.busy = '1';
+  msgApi('/v1/groups/create', { name, type:'private' }).then(v=>{
+    const c = groupChatFromServer(v); saveMsgChats();
+    f.hidden = true; document.querySelector('#story-profile [data-pf="newgroup-open"]').hidden = false;
+    renderMsgList(); openChat(c.id); groupSheetOpen(true);
+  }).catch(()=>showToast('No connection to STORY right now')).finally(()=>{ delete f.dataset.busy; });
 }
 document.addEventListener('keydown', e=>{ if(e.key === 'Enter' && e.target.closest && e.target.closest('.pf-newgroup-form')){ e.preventDefault(); makePrivateGroup(); } });
 window.addEventListener('storage', e=>{ if(e.key === MSG_KEY){ msgChatsCache = null; renderMsgList(); renderChat(); } if(e.key === 'story-community-chats'){ mergeCommunityChats(); renderMsgList(); } });
@@ -7998,7 +8019,8 @@ function renderChat(toEnd){
   el.querySelector('.pf-chat-head .msg-pic').innerHTML = c.photo ? '<img alt="" src="' + escText(c.photo) + '">' : PF_PHOTO_PLACEHOLDER;
   el.querySelector('.pf-chat-name').textContent = c.name || (c.username ? '@' + c.username : '');
   const u = el.querySelector('.pf-chat-user');
-  u.textContent = c.groupType === 'private' ? 'Private group' + ((c.leaders || []).includes('me') ? ' · tap for call settings' : '') : c.kind === 'group' ? 'Public group' : (c.name && c.username ? '@' + c.username : '');
+  const nMembers = c.members ? c.members.length : c.count;
+  u.textContent = c.groupType === 'private' ? 'Private group' + (nMembers ? ' · ' + nMembers + (nMembers === 1 ? ' member' : ' members') : '') + (!/^grp/.test(c.id) && (c.leaders || []).includes('me') ? ' · tap for call settings' : '') : c.kind === 'group' ? 'Public group' + (nMembers ? ' · ' + nMembers + (nMembers === 1 ? ' member' : ' members') : '') : (c.name && c.username ? '@' + c.username : '');
   u.hidden = !u.textContent;
   // Calls (owner): any profile you chat with (their privacy decides - the server says canCall:false when they don't
   // take calls from you); in a public group only its creator and members start calls; private groups too.
@@ -8010,7 +8032,8 @@ function renderChat(toEnd){
   const list = el.querySelector('.pf-chat-list');
   const atEnd = toEnd || list.scrollTop + list.clientHeight >= list.scrollHeight - 40;
   const typing = c.typing && Date.now() - (c.typing.at || 0) < 6000;
-  list.innerHTML = '<div class="pf-chat-e2e"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>End-to-end encrypted</div>' +
+  // A public group's chat is public (anyone can join), so it never claims to be end-to-end encrypted.
+  list.innerHTML = (c.kind === 'group' && c.groupType !== 'private' ? '<div class="pf-chat-e2e">Public group - anyone can join</div>' : '<div class="pf-chat-e2e"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>End-to-end encrypted</div>') +
     ms.map((m, i)=>{
       const me = m.from === 'me';
       const st = i === lastMine && MSG_STATUS[m.status] ? ' · <b class="msg-' + m.status + '">' + MSG_STATUS[m.status] + '</b>' : '';
@@ -8119,7 +8142,7 @@ function msgConnect(){
   clearTimeout(msgWsTimer);
   let ws; try{ ws = new WebSocket(MSG_API.replace(/^http/, 'ws') + '/v1/ws?token=' + encodeURIComponent(a.token)); }catch(e){ return msgRetry(); }
   msgWs = ws;
-  ws.onopen = ()=>{ msgWsOpen = true; msgWsTry = 0; clearInterval(msgPing); msgPing = setInterval(()=>{ try{ ws.send('{"t":"ping"}'); }catch(e){} }, 25000); msgFlush(); msgSyncProfile(); };
+  ws.onopen = ()=>{ msgWsOpen = true; msgWsTry = 0; clearInterval(msgPing); msgPing = setInterval(()=>{ try{ ws.send('{"t":"ping"}'); }catch(e){} }, 25000); msgFlush(); msgSyncProfile(); msgSyncGroups(); };
   ws.onmessage = e=>{ let m; try{ m = JSON.parse(e.data); }catch(err){ return; } msgOnServer(m).catch(()=>{}); };
   ws.onclose = ()=>{ msgWsOpen = false; clearInterval(msgPing); if(msgWs === ws){ msgWs = null; msgRetry(); } };
   ws.onerror = ()=>{ try{ ws.close(); }catch(e){} };
@@ -8142,6 +8165,19 @@ function chatFor(id, info){
   return c;
 }
 async function msgOnServer(m){
+  if(m.t === 'group'){ groupChatFromServer(m.g); saveMsgChats(); renderMsgList(); if(msgView.chat === m.g.id) renderChat(); if(m.seq) msgSend({ t:'ack', seq:m.seq }); return; }
+  if(m.t === 'msg' && m.group){
+    let c = msgChats().find(x=>x.id === m.group);
+    if(!c){ await msgSyncGroups(); c = msgChats().find(x=>x.id === m.group); }
+    if(c){
+      const body = c.groupType === 'private' ? await unlockFrom(m.from, m.box, m.iv) : { text: m.text };
+      if(!(c.messages || []).some(x=>x.id === m.id)) (c.messages = c.messages || []).push({ id:m.id, from:'them', who: m.name || (m.username ? '@' + m.username : ''), text: body ? String(body.text || '') : 'Couldn\u2019t unlock this message', at:m.at || Date.now() });
+      c.typing = null; saveMsgChats(); renderMsgList(); if(msgView.chat === c.id) renderChat(true);
+      if(NATIVE && window.StoryNative.msgNotify && !msgChatVisible()) try{ window.StoryNative.msgNotify(c.name || 'STORY', (m.name || '') + ': ' + (body ? String(body.text || '').slice(0, 100) : 'New message')); }catch(e){}
+    }
+    if(m.seq) msgSend({ t:'ack', seq:m.seq });
+    return;
+  }
   if(m.t === 'msg'){
     const body = await unlockFrom(m.from, m.box, m.iv);
     const c = chatFor(m.from, { name:m.name, username:m.username, incoming:true });
@@ -8163,13 +8199,96 @@ async function msgOnServer(m){
     if(m.seq) msgSend({ t:'ack', seq:m.seq });
     return;
   }
-  if(m.t === 'typing'){ window.storyMsgTyping(m.chat, ''); return; }
+  if(m.t === 'typing'){ window.storyMsgTyping(m.chat, m.who || ''); return; }
   if(m.t === 'fail'){
     for(const c of msgChats()){ const x = (c.messages || []).find(y=>y.id === m.id); if(x){ x.status = 'failed'; saveMsgChats(); renderChat(); showToast(m.error === 'blocked' ? 'They don’t take messages from you' : 'Couldn’t send'); break; } }
     return;
   }
   if(m.t === 'signedout'){ msgSignedOut(); return; }
   if(m.t === 'call'){ callOnSignal(m); return; }
+}
+// ---- Groups in Messages: every group you're in (public from Community, private made here) is a chat, kept up to date
+// by the server (t:'group'). Private group messages are locked for each member; public group chat is public. ----
+function groupChatFromServer(v){
+  const list = msgChats(); let c = list.find(x=>x.id === v.id);
+  if(v.gone || v.member === false){ if(c){ list.splice(list.indexOf(c), 1); if(msgView.chat === v.id) closeChat(); } return null; }
+  if(!c){ c = { id:v.id, kind:'group', messages:[] }; list.push(c); }
+  Object.assign(c, { groupType: v.type, name: v.name, photo: v.image || c.photo || '', callJoin: v.callJoin || 'open', count: v.count, about: v.about || '' });
+  if(v.members){
+    const me = (msgAccount() || {}).id;
+    c.members = v.members.map(m=>({ id:m.id, name:m.name, username:m.username, role:m.role }));
+    c.leaders = v.members.filter(m=>m.role === 'leader').map(m=>m.id === me ? 'me' : m.id);
+    v.members.forEach(m=>{ if(m.pub && m.id !== me) setMsgPeer(m.id, { pub:m.pub, name:m.name, username:m.username }); });
+  } else if(v.leader) c.leaders = ['me'];
+  return c;
+}
+async function msgSyncGroups(){
+  if(!msgAccount()) return;
+  try{
+    const r = await msgApi('/v1/groups/mine'); const ids = new Set();
+    for(const v of r.groups || []){ ids.add(v.id); let full = v; if(v.type === 'private' && !v.members) full = await msgApi('/v1/groups/get?id=' + encodeURIComponent(v.id)); else if(v.type === 'public' && !(msgChats().find(c=>c.id === v.id) || {}).members){ try{ full = await msgApi('/v1/groups/get?id=' + encodeURIComponent(v.id)); }catch(e){} } groupChatFromServer(full); }
+    // Groups you're no longer in leave your chats.
+    const list = msgChats(); for(let i = list.length - 1; i >= 0; i--) if(/^grp/.test(list[i].id) && !ids.has(list[i].id)) list.splice(i, 1);
+    saveMsgChats(); renderMsgList(); if(msgView.chat) renderChat();
+  }catch(e){}
+}
+// ---- A group's info (tap its name in the chat): members, Add people (private: its leaders; public: any member),
+// call settings (private group leaders), Leave group. ----
+const grpAddView = { q:'', found:[] };
+function groupSheetOpen(show){
+  const sh = document.querySelector('#story-profile .pf-chat-sheet'); if(!sh) return;
+  sh.hidden = !show; grpAddView.q = ''; grpAddView.found = [];
+  if(show){ renderGroupSheet(); const c = msgChats().find(x=>x.id === msgView.chat); if(c && /^grp/.test(c.id)) msgApi('/v1/groups/get?id=' + encodeURIComponent(c.id)).then(v=>{ groupChatFromServer(v); saveMsgChats(); renderGroupSheet(); renderChat(); }).catch(()=>{}); }
+  renderChat();
+}
+function renderGroupSheet(){
+  const sh = document.querySelector('#story-profile .pf-chat-sheet'); if(!sh || sh.hidden) return;
+  const c = msgChats().find(x=>x.id === msgView.chat); if(!c || !/^grp/.test(c.id)) return;
+  const me = (msgAccount() || {}).id, leader = (c.leaders || []).includes('me');
+  const canAdd = c.groupType === 'private' ? leader : true;
+  const members = c.members || [];
+  const inGroup = new Set(members.map(m=>m.id));
+  const found = grpAddView.found.filter(u=>!inGroup.has(u.id));
+  sh.innerHTML =
+    '<div class="pf-chat-sheet-t">' + escText(c.name || 'Group') + '</div>' +
+    '<div class="pf-chat-sheet-n">' + (c.groupType === 'private' ? 'Private group' : 'Public group') + ' · ' + members.length + (members.length === 1 ? ' member' : ' members') + '</div>' +
+    (c.groupType === 'private' && leader ? '<div class="pf-grp-h">Group calls</div><button data-pf="callmode" data-m="open">Everyone in the group can join</button><button data-pf="callmode" data-m="ask">Ask to join - others can still listen</button><div class="pf-chat-sheet-n">You can\u2019t hide a call - everyone in the group always sees it.</div>' : '') +
+    (canAdd ? '<div class="pf-grp-h">Add people</div><label class="pf-msgs-search pf-grp-search"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="search" placeholder="Name or @username" autocomplete="off" autocorrect="off" spellcheck="false" value="' + escText(grpAddView.q) + '"></label>' +
+      found.map(u=>'<div class="pf-grp-row"><span class="pf-grp-who">' + escText(u.name || '@' + u.username) + (u.name && u.username ? ' <i>@' + escText(u.username) + '</i>' : '') + '</span><button class="pf-grp-add" data-pf="grp-add" data-id="' + escText(u.id) + '">Add</button></div>').join('') : '') +
+    '<div class="pf-grp-h">Members</div>' +
+    members.map(m=>'<div class="pf-grp-row"><span class="pf-grp-who">' + (m.id === me ? 'You' : escText(m.name || (m.username ? '@' + m.username : 'Someone'))) + (m.id !== me && m.name && m.username ? ' <i>@' + escText(m.username) + '</i>' : '') + '</span>' + (m.role === 'leader' ? '<span class="pf-grp-tag">Leader</span>' : '') + '</div>').join('') +
+    '<button class="pf-grp-leave" data-pf="grp-leave">Leave group</button>' +
+    '<button class="pf-grp-done" data-pf="grp-close">Done</button>';
+  sh.querySelectorAll('[data-pf="callmode"]').forEach(x=>x.classList.toggle('on', x.getAttribute('data-m') === (c.callJoin || 'open')));
+  const inp = sh.querySelector('.pf-grp-search input');
+  if(inp){
+    inp.addEventListener('pointerdown', profileTypingOn); inp.addEventListener('focus', profileTypingOn);
+    inp.addEventListener('input', ()=>{
+      grpAddView.q = inp.value; clearTimeout(renderGroupSheet.t);
+      const t = inp.value.trim();
+      if(t.replace(/^@/, '').length < 2){ grpAddView.found = []; renderGroupSheetList(); return; }
+      renderGroupSheet.t = setTimeout(()=>msgApi('/v1/find?q=' + encodeURIComponent(t)).then(r=>{ if(grpAddView.q.trim() === t){ grpAddView.found = r.people || []; renderGroupSheetList(); } }).catch(()=>{}), 300);
+    });
+  }
+}
+// Redraw only the results (keeps the search box and the keyboard where they are).
+function renderGroupSheetList(){
+  const sh = document.querySelector('#story-profile .pf-chat-sheet'); if(!sh) return;
+  const inp = sh.querySelector('.pf-grp-search input'), had = inp && document.activeElement === inp, pos = inp ? inp.selectionStart : 0;
+  renderGroupSheet();
+  const n = sh.querySelector('.pf-grp-search input'); if(n && had){ n.focus(); try{ n.setSelectionRange(pos, pos); }catch(e){} }
+}
+async function groupAdd(uid){
+  const c = msgChats().find(x=>x.id === msgView.chat); if(!c) return;
+  try{ const v = await msgApi('/v1/groups/add', { id:c.id, members:[uid] }); groupChatFromServer(v); saveMsgChats(); grpAddView.found = grpAddView.found.filter(u=>u.id !== uid); renderGroupSheetList(); renderChat(); showToast('Added'); }
+  catch(e){ showToast(e && e.code === 'leader' ? 'Only the group\u2019s leaders can add people' : 'Couldn\u2019t add them right now'); }
+}
+async function groupLeave(){
+  const c = msgChats().find(x=>x.id === msgView.chat); if(!c) return;
+  const b = document.querySelector('#story-profile .pf-grp-leave');
+  if(b && !b.dataset.sure){ b.dataset.sure = '1'; b.textContent = 'Tap again to leave'; return; }
+  try{ await msgApi('/v1/groups/leave', { id:c.id }); const list = msgChats(); list.splice(list.indexOf(c), 1); saveMsgChats(); document.querySelector('#story-profile .pf-chat-sheet').hidden = true; closeChat(); showToast('You left ' + (c.name || 'the group')); }
+  catch(e){ showToast('No connection to STORY right now'); }
 }
 function msgChatVisible(){ return document.visibilityState !== 'hidden' && msgView.chat && !document.querySelector('#story-profile .pf-chat')?.hidden; }
 // Everything you did in a chat (queued in story-msg-outbox) goes out - locked - the moment there's a connection.
@@ -8184,8 +8303,22 @@ async function msgFlush(){
       let done = false;
       try{
         if(ev.type === 'privacy'){ await msgApi('/v1/me', { privacy: ev.privacy }); done = true; }
-        else if(/^cg:|^pg/.test(ev.chatId || '')) done = true;          // groups go through the group server (not yet)
+        else if(/^cg:|^pg/.test(ev.chatId || '')) done = true;          // STORY's built-in feeds / old phone-only groups
         else if(!msgWsOpen) done = false;
+        else if(/^grp/.test(ev.chatId || '')){
+          const c = msgChats().find(x=>x.id === ev.chatId);
+          if(!c) done = true;
+          else if(ev.type === 'send'){
+            if(c.groupType === 'private'){
+              const me = (msgAccount() || {}).id, boxes = {};
+              for(const mbr of (c.members || [])) if(mbr.id !== me){ try{ boxes[mbr.id] = await lockFor(mbr.id, { text: ev.text, at: ev.at }); }catch(e){} }
+              done = msgSend({ t:'gmsg', group: c.id, id: ev.id, boxes });
+            } else done = msgSend({ t:'gmsg', group: c.id, id: ev.id, text: ev.text });
+          }
+          else if(ev.type === 'typing') done = msgSend({ t:'typing', group: c.id }) || Date.now() - ev.at > 10000;
+          else if(ev.type === 'callmode'){ try{ await msgApi('/v1/groups/update', { id: c.id, callJoin: ev.mode }); }catch(e){} done = true; }
+          else done = true;   // seen / read aren't sent for groups
+        }
         else if(ev.type === 'send'){
           const L = await lockFor(ev.chatId, { text: ev.text, at: ev.at });
           done = msgSend({ t:'msg', to: ev.chatId, id: ev.id, box: L.box, iv: L.iv });
@@ -13768,6 +13901,10 @@ function attachHandlers(){
         case 'community-like': {
           const id = el.getAttribute('data-postid');
           const found = findCommunityPostById(id);
+          if(found && found.group.server){
+            communityServerDo('like', { id:found.group.id, post:id }).then(r=>{ if(r){ found.group.posts = communityPostsFromServer(r.posts); renderDevice(); } });
+            break;
+          }
           if(found){
             const post = found.post;
             if(post.likedByMe){ post.likedByMe = false; post.likes = Math.max(0, post.likes - 1); }
@@ -13786,6 +13923,10 @@ function attachHandlers(){
           const text = input ? input.value.trim() : '';
           if(text){
             const found = findCommunityPostById(id);
+            if(found && found.group.server){
+              communityServerDo('comment', { id:found.group.id, post:id, text }).then(r=>{ if(r){ found.group.posts = communityPostsFromServer(r.posts); renderDevice(); } });
+              break;
+            }
             if(found){
               found.post.comments.push({ author:'You', text: text.slice(0,200), timestamp:'Just now' });
               // commentCount is the DISPLAYED total (seed posts start it above comments.length as
@@ -13831,11 +13972,14 @@ function attachHandlers(){
           state.communityActiveGroupId = id;
           state.current = 'community-group';
           state.communityGroupSearchOpen = false;
+          communityOpenGroupSync(id);
           break;
         }
         case 'community-join-group': {
           const g = findCommunityGroupById(el.getAttribute('data-groupid'));
-          if(g && g.type==='public' && !g.members.includes('You')){
+          if(g && g.server && !g.members.includes('You')){
+            communityServerDo('join', { id:g.id }).then(v=>{ if(v){ upsertCommunityGroup(v); saveCommunity(); showToast('Joined ' + g.name); renderDevice(); } });
+          } else if(g && g.type==='public' && !g.members.includes('You')){
             g.members.push('You');
             saveCommunity();
             showToast('Joined ' + g.name);
@@ -13879,6 +14023,12 @@ function attachHandlers(){
           const g = findCommunityGroupById(el.getAttribute('data-groupid'));
           const input = document.getElementById('community-new-post-input');
           const text = input ? input.value.trim() : '';
+          if(g && g.server && text){
+            if(communityTextViolatesPolicy(text)){ recordPolicyStrike('a blocked post'); showToast('That post isn’t allowed under STORY’s content policy.'); break; }
+            if(!g.members.includes('You')){ showToast('Join the group to post'); break; }
+            communityServerDo('post', { id:g.id, text }).then(r=>{ if(r){ g.posts = communityPostsFromServer(r.posts); renderDevice(); } });
+            break;
+          }
           if(g && text){
             if(communityTextViolatesPolicy(text)){
               recordPolicyStrike('a blocked post');
@@ -13950,16 +14100,14 @@ function attachHandlers(){
               : 'This name or description isn’t allowed under our content policy. Your account has received a warning.';
             break;
           }
-          const newGroup = {
-            id: 'ug' + Date.now(), name, description: desc || 'A group on STORY.', type: 'public', builtin:false,
-            category:'Community', country: state.groupDraftCountry || 'Global',
-            banned:false, warned:false, creator:'You', leaders:['You'], members:['You'],
-            pendingRequests:[], liveDataKind:null, posts:[], image: state.groupDraftImage || null,
-          };
-          state.communityGroups = [newGroup, ...state.communityGroups];
-          saveCommunity();
-          state.communityCreateGroupOpen = false;
-          showToast('Group created');
+          // Made on STORY's server so everyone can find and join it (owner) - never a group only this phone knows.
+          if(state.groupDraftBusy) break;
+          state.groupDraftBusy = true; state.groupDraftError = '';
+          state.groupDraftName = name; state.groupDraftDesc = desc;
+          msgApi('/v1/groups/create', { name, about: desc, type:'public', image: state.groupDraftImage || '', category:'Community', country: state.groupDraftCountry || 'Global' })
+            .then(v=>{ upsertCommunityGroup(v); saveCommunity(); state.communityCreateGroupOpen = false; showToast('Group created'); })
+            .catch(()=>{ state.groupDraftError = 'No connection to STORY right now - try again.'; })
+            .finally(()=>{ state.groupDraftBusy = false; renderDevice(); });
           break;
         }
         default: return;
@@ -13973,6 +14121,7 @@ function attachHandlers(){
   // Kick off each built-in live-data group's real fetch at most once (liveFetchAttempted guards
   // it), the first time Community is actually visible -- not eagerly at load, and never refetched
   // just because of an unrelated re-render.
+  if(state.current === 'community' || state.current === 'community-group') communitySync();
   if(state.current === 'community' || state.current === 'community-group'){
     state.communityGroups.filter(g=>g.liveDataKind && !g.liveFetchAttempted).forEach(g=>{
       g.liveFetchAttempted = true;
@@ -14061,11 +14210,70 @@ window.storyGroupLive = function(groupId, live){
 const COMMUNITY_KEY = 'story-community';
 function saveCommunity(){
   try{
-    const mine = state.communityGroups.filter(g=>!g.builtin);
+    const mine = state.communityGroups.filter(g=>!g.builtin && !g.server);
     const joined = state.communityGroups.filter(g=>g.builtin && g.members.includes('You')).map(g=>g.id);
     localStorage.setItem(COMMUNITY_KEY, JSON.stringify({ mine, joined }));
-    localStorage.setItem('story-community-chats', JSON.stringify(state.communityGroups.filter(g=>g.members.includes('You') && g.id !== 'g-stories').map(g=>({ id:g.id, name:g.name, image: g.image && String(g.image).length < 200000 ? g.image : null }))));
+    // Groups on STORY's server reach Messages from the server itself; only STORY's own built-in groups go this way.
+    localStorage.setItem('story-community-chats', JSON.stringify(state.communityGroups.filter(g=>g.members.includes('You') && g.id !== 'g-stories' && !g.server).map(g=>({ id:g.id, name:g.name, image: g.image && String(g.image).length < 200000 ? g.image : null }))));
   }catch(e){}
+}
+// ---- Community groups are REAL (owner: creating groups works for everyone): every group you create is made on STORY's
+// server, public groups show for everyone in Community (search / browse / trending), anyone can join them, and their
+// posts, likes and comments are shared. Private groups are made only in Messages and never show here. ----
+function communityFromServer(v, old){
+  const n = Math.max(+v.count || 0, v.member ? 1 : 0);
+  return Object.assign(old || {}, {
+    id: v.id, server: true, name: v.name, description: v.about || 'A group on STORY.', type: 'public', builtin: false,
+    category: v.category || 'Community', country: v.country || 'Global', image: v.image || (old && old.image) || null,
+    creator: v.leader ? 'You' : '', leaders: v.leader ? ['You'] : [], count: n,
+    // The page counts members with members.length and checks members.includes('You').
+    members: (v.member ? ['You'] : []).concat(Array(Math.max(0, n - (v.member ? 1 : 0))).fill('')),
+    pendingRequests: [], liveDataKind: null, banned: false, warned: false, posts: (old && old.posts) || [],
+  });
+}
+function communityPostsFromServer(list){
+  return (list || []).map(p=>({ id: p.id, authorName: p.author, timestamp: msgTime(p.at), type: 'note', textContent: p.text, caption: '', imageDataUrl: null,
+    likes: p.likes, likedByMe: !!p.liked, shares: 0, comments: (p.comments || []).map(c=>({ author: c.author, text: c.text })), commentCount: (p.comments || []).length }));
+}
+function upsertCommunityGroup(v){
+  if(!v || v.type !== 'public') return null;   // private groups never show in Community (owner)
+  const i = state.communityGroups.findIndex(g=>g.id === v.id);
+  const g = communityFromServer(v, i >= 0 ? state.communityGroups[i] : null);
+  if(i < 0) state.communityGroups.unshift(g);
+  return g;
+}
+let communitySyncedAt = 0, communitySyncing = false;
+async function communitySync(force){
+  if(communitySyncing || (!force && Date.now() - communitySyncedAt < 30000) || !msgAccount()) return;
+  communitySyncing = true;
+  try{
+    // Groups made on this phone before groups were shared: put them on STORY's server now (once).
+    const old = state.communityGroups.filter(g=>!g.builtin && !g.server && /^ug/.test(g.id));
+    for(const g of old){
+      try{ const v = await msgApi('/v1/groups/create', { name:g.name, about:g.description, type:'public', image:g.image || '', category:g.category, country:g.country });
+        state.communityGroups = state.communityGroups.filter(x=>x !== g); upsertCommunityGroup(v); }catch(e){}
+    }
+    const [pub, mine] = await Promise.all([msgApi('/v1/groups/public'), msgApi('/v1/groups/mine')]);
+    const seen = new Set();
+    (pub.groups || []).concat(mine.groups || []).forEach(v=>{ if(v.type === 'public'){ upsertCommunityGroup(v); seen.add(v.id); } });
+    // Groups that are gone from the server go from here too.
+    state.communityGroups = state.communityGroups.filter(g=>!g.server || seen.has(g.id));
+    communitySyncedAt = Date.now(); saveCommunity();
+    if(state.current === 'community' || state.current === 'community-group') renderDevice();
+  }catch(e){}
+  communitySyncing = false;
+}
+async function communityOpenGroupSync(id){
+  const g = findCommunityGroupById(id); if(!g || !g.server) return;
+  try{
+    const [v, p] = await Promise.all([msgApi('/v1/groups/get?id=' + encodeURIComponent(id)), msgApi('/v1/groups/posts?id=' + encodeURIComponent(id))]);
+    upsertCommunityGroup(v); g.posts = communityPostsFromServer(p.posts);
+    if(state.current === 'community-group' && state.communityActiveGroupId === id) renderDevice();
+  }catch(e){}
+}
+async function communityServerDo(op, body){
+  try{ return await msgApi('/v1/groups/' + op, body); }
+  catch(e){ showToast(e && e.code === 'server' || !e.code ? 'No connection to STORY right now' : 'Couldn’t do that'); return null; }
 }
 (function loadCommunity(){
   try{
@@ -14478,7 +14686,7 @@ function createGroupTemplate(){
           <span>I agree to this policy</span>
         </label>
         ${state.groupDraftError ? `<div class="community-error-note">${escText(state.groupDraftError)}</div>` : ''}
-        <button class="notes-create-btn" style="width:100%;margin-top:10px;" data-action="community-create-group-submit">Create Group</button>
+        <button class="notes-create-btn" style="width:100%;margin-top:10px;" data-action="community-create-group-submit">${state.groupDraftBusy ? 'Creating…' : 'Create Group'}</button>
       </div>
     </div>
   `;
