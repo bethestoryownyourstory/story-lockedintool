@@ -437,9 +437,10 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
     @JavascriptInterface
     fun setDialSize(w: Int, h: Int) { if (lock) host.setLockDialSize(w, h) else if (dial) host.setDialSize(w, h) }
 
-    /** The dial pad's call button: calls straight away (even on the lock screen). */
+    /** The dial pad's call button: calls straight away (even on the lock screen). From Station 3's dial pad, the dial
+     *  pad and Station 3 close the moment the call is placed (owner); the lock screen dial pad always stays. */
     @JavascriptInterface
-    fun callNumber(number: String) { if (station3) host.callNumber(number) }
+    fun callNumber(number: String) { if (station3) { host.callNumber(number); if (!lock) host.closeStation3() } }
     /** Dial pad > New contact (with the number you typed). */
     @JavascriptInterface fun newContact(number: String) { if (station3) host.newContact(number) }
 
