@@ -1001,6 +1001,7 @@
   .tv-sltp-fs{ position:static; }
   .chart-fs-body{ position:relative; }
   .tv-slot-fs{ position:absolute; inset:0; }
+  #content-area.fs-lock{ overflow:hidden !important; overscroll-behavior:none; }
   .acct-dots{ display:flex; justify-content:center; gap:6px; margin:8px 0 2px; }
   .acct-dots span{ width:6px; height:6px; border-radius:50%; background:var(--line); }
   .acct-dots span.on{ background:var(--text); }
@@ -3293,7 +3294,7 @@
   </div>
 
   <div class="device-wrap" id="device-wrap"></div>
-  <div id="device-dimmer" style="position:fixed;inset:0;background:#000;opacity:0;pointer-events:none;z-index:99999;transition:opacity 0.15s;"></div>
+  <div id="device-dimmer" data-keep-color style="position:fixed;inset:0;background:#000;opacity:0;pointer-events:none;z-index:99999;transition:opacity 0.15s;"></div>
 
   <div class="below-fold-note">This is a clickable spec, not the final app. The Wallet / Money / Trading suite you swipe between is <b>LockedInTool</b> — a system that lives inside the bigger <b>STORY</b> app you're previewing here. Once you're happy with the screens and flow, this becomes the blueprint for the real Android launcher (APK) and the iPhone/Mac/Windows companion apps.</div>
 </div>
@@ -5877,23 +5878,85 @@ function tvSymbol(sym){
   if(/^[A-Z]{6}$/.test(s) && /(USD|EUR|GBP|JPY|ZAR|AUD|CAD|CHF|NZD)$/.test(s)) return 'FX:' + s;
   return s;
 }
+// TradingView's own chart (owner: the real TradingView - its symbol search / pairs, timeframes, indicators and drawing
+// tools). ONE frame that never leaves the page: it lives in its own layer (#tv-layer) laid exactly over the chart box
+// (the small chart or the full-screen one), so page redraws (every 2s on Trading), going full screen and coming back
+// never reload it - the chart is always there, no "waking it up". Hidden (still loaded) whenever the box isn't on
+// screen or something covers it (a sheet, another page, Page Styles...).
 function tvWidgetMount(slot){
   const iv = { '1H':'60', '4H':'240', '1D':'D', '1W':'W' }[state.chartRes] || '60';
-  const key = tvSymbol(state.focusSymbol) + '|' + iv;
+  const white = window.storyTheme && window.storyTheme() === 'white';
+  const key = tvSymbol(state.focusSymbol) + '|' + iv + '|' + (white ? 'light' : 'dark');
+  if(!TV.layer){
+    TV.layer = document.createElement('div'); TV.layer.id = 'tv-layer'; TV.layer.setAttribute('data-keep-color', '');
+    TV.layer.style.cssText = 'position:fixed;left:0;top:0;width:0;height:0;z-index:9000;visibility:hidden;overflow:hidden;background:' + (white ? '#ffffff' : '#000000') + ';';
+    document.body.appendChild(TV.layer);
+    const again = ()=>{ if(!TV.placeQueued){ TV.placeQueued = true; requestAnimationFrame(()=>{ TV.placeQueued = false; tvPlace(); }); } };
+    document.addEventListener('scroll', again, true);
+    window.addEventListener('resize', again);
+    setInterval(()=>{ if(TV.layer.style.visibility === 'visible' || state.current === 'trading') tvPlace(); }, 400);
+  }
   if(!TV.widget || TV.widget.dataset.key !== key){
     if(TV.widget) TV.widget.remove();
     const f = document.createElement('iframe');
     f.className = 'tv-widget'; f.dataset.key = key; f.setAttribute('frameborder', '0'); f.setAttribute('allowtransparency', 'true');
+    f.setAttribute('allow', 'clipboard-write; fullscreen');
     f.src = 'https://s.tradingview.com/widgetembed/?symbol=' + encodeURIComponent(key.split('|')[0]) + '&interval=' + iv +
-      '&hidesidetoolbar=1&hidetoptoolbar=1&symboledit=0&saveimage=0&toolbarbg=000000&theme=dark&style=1&timezone=exchange&withdateranges=0&locale=en';
-    TV.widget = f;
+      '&hidesidetoolbar=0&hidetoptoolbar=0&symboledit=1&allow_symbol_change=1&saveimage=1&toolbarbg=' + (white ? 'ffffff' : '000000') +
+      '&studies=%5B%5D&theme=' + (white ? 'light' : 'dark') + '&style=1&timezone=exchange&withdateranges=1&hideideas=1&details=0&locale=en';
+    TV.layer.style.background = white ? '#ffffff' : '#000000';
+    TV.widget = f; TV.layer.appendChild(f);
   }
-  if(TV.widget.parentElement !== slot){ slot.innerHTML = ''; slot.appendChild(TV.widget); }
+  TV.slot = slot;
+  tvPlace();
+}
+// Lays the chart layer over the live chart box, or hides it (kept loaded) when the box isn't showing.
+function tvPlace(){
+  const L = TV.layer; if(!L) return;
+  const hide = ()=>{ if(L.style.visibility !== 'hidden') L.style.visibility = 'hidden'; };
+  const slot = TV.slot;
+  if(state.current !== 'trading' || pageSwipeAnimating || !slot || !slot.isConnected || document.visibilityState === 'hidden') return hide();
+  if((state.pageStyleOn && state.pageStyleViewOpen) || state.rowsViewOpen) return hide();
+  const r = slot.getBoundingClientRect();
+  if(r.width < 20 || r.height < 20) return hide();
+  // Only the part of the box that's inside the page's visible area (scrolled half out of view = the half that shows).
+  const ca = slot.closest('#content-area'); const cr = ca ? ca.getBoundingClientRect() : { left:0, top:0, right:innerWidth, bottom:innerHeight };
+  const top = Math.max(r.top, cr.top), bottom = Math.min(r.bottom, cr.bottom);
+  if(bottom - top < 20) return hide();
+  // Anything covering the box (a sheet, a pop-up, the order panel...) - the chart steps aside until it's gone.
+  L.style.pointerEvents = 'none';
+  const own = slot.closest('.tv-card, .chart-fs-body, #trading-chart') || slot;
+  let covered = false;
+  for(const fx of [0.08, 0.5, 0.92]) for(const fy of [0.08, 0.5, 0.92]){
+    const x = r.left + r.width * fx, y = r.top + r.height * fy;
+    if(y < top || y > bottom) continue;
+    const el = document.elementFromPoint(x, y);
+    if(el && el !== L && !L.contains(el) && !own.contains(el) && !(el.closest && el.closest('#trading-chart, .chart-fs-body'))){ covered = true; break; }
+  }
+  L.style.pointerEvents = '';
+  if(covered) return hide();
+  // The chart on the Trading page runs the whole width of the screen, side to side (owner) - upright or sideways.
+  const wide = !slot.closest('.chart-fullscreen');
+  const lx = wide ? cr.left : r.left, lw = wide ? cr.right - cr.left : r.width;
+  Object.assign(L.style, { left:lx + 'px', top:r.top + 'px', width:lw + 'px', height:r.height + 'px', visibility:'visible' });
+  // The part scrolled out of the page's view is cut off, and the chart's own buttons on the box (SL/TP, full screen)
+  // stay on top and tappable (holes in the layer).
+  const holes = [...(own.parentElement || own).querySelectorAll('.tv-sltp-btn:not(.tv-sltp-fs), .chart-fs-btn')]
+    .map(b=>b.getBoundingClientRect()).filter(b=>b.width && b.height)
+    .map(b=>{ const x = b.left - lx - 3, y = b.top - r.top - 3, w = b.width + 6, h = b.height + 6; return `M${x} ${y}h${w}v${h}h${-w}Z`; }).join('');
+  const ct = top - r.top, cb = bottom - r.top;
+  L.style.clipPath = `path(evenodd, 'M0 ${ct}H${lw}V${cb}H0Z${holes}')`;
+  L.style.borderRadius = wide ? '0' : (getComputedStyle(own.closest('.tv-card') || own).borderRadius || '0');
+  // The brightness slider dims the chart like the rest of the page.
+  const dim = document.querySelector('#device-wrap #system-dimmer');
+  const a = dim ? parseFloat(getComputedStyle(dim).opacity) || 0 : 0;
+  L.style.filter = a > 0 ? 'brightness(' + (1 - a).toFixed(3) + ')' : '';
 }
 function tvMount(){
   if(state.current !== 'trading') return;
-  const slot = document.querySelector('#content-area .chart-fullscreen .tv-slot') || document.querySelector('#content-area #trading-chart .tv-slot');
-  if(!slot) return;
+  const live = (document.getElementById('device-wrap') || document).querySelector('#content-area') || document.getElementById('content-area');
+  const slot = live && (live.querySelector('.chart-fullscreen .tv-slot') || live.querySelector('#trading-chart .tv-slot'));
+  if(!slot){ tvPlace(); return; }
   // TradingView's own chart ONLY (owner) - exactly TradingView's live candles, logged in or not.
   tvWidgetMount(slot); return;
   if(!window.LightweightCharts){ loadLWC().then(()=>tvMount()).catch(()=>{}); return; }
@@ -10388,7 +10451,7 @@ function buildPhone(){
         `}
         ${state.recentsOpen ? recentsOverlayHTML() : ''}
         ${fullScreenTakeoverActive ? '' : `<div class="scroll-hint" id="scroll-hint"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg></div>`}
-        <div id="system-dimmer" style="position:absolute;inset:0;background:#000;opacity:0;pointer-events:none;border-radius:inherit;z-index:60;"></div>
+        <div id="system-dimmer" data-keep-color style="position:absolute;inset:0;background:#000;opacity:0;pointer-events:none;border-radius:inherit;z-index:60;"></div>
       </div>
     </div>
   `;
@@ -10418,7 +10481,7 @@ function buildLaptop(){
         ${state.current==='scratch-draw' && !fullScreenTakeoverActive ? `<div class="laptop-float-dock notes-float-dock">${scratchFloatToolbarHTML()}</div>` : ''}
         ${state.shareSheet ? shareSheetTemplate() : ''}
         ${state.toastMessage ? toastTemplate() : ''}
-        <div id="system-dimmer" style="position:absolute;inset:0;background:#000;opacity:0;pointer-events:none;border-radius:inherit;z-index:60;"></div>
+        <div id="system-dimmer" data-keep-color style="position:absolute;inset:0;background:#000;opacity:0;pointer-events:none;border-radius:inherit;z-index:60;"></div>
       </div>
       <div class="laptop-stand"></div>
     </div>
@@ -10840,7 +10903,10 @@ function renderDevice(){
     }
   }
   if(state.noteSaveAsOpen){ const row = document.querySelector('.note-saveas-row'); if(row) row.scrollIntoView({block:'nearest'}); }
-  if(state.current === 'trading') tvMount();
+  if(state.current === 'trading') tvMount(); else tvPlace();
+  // Full-screen chart: the page under it stays still (no scrolling the page behind the chart - owner).
+  const fsLive = document.getElementById('content-area');
+  if(fsLive){ const lock = state.current === 'trading' && state.chartFullscreen; fsLive.classList.toggle('fs-lock', lock); if(lock) fsLive.scrollTop = 0; }
   positionStation3();
   attachPayScroll();
   refreshNeighbors();
@@ -10914,7 +10980,7 @@ function updateScrollbarThumb(){
   if(!el || !track || !thumb) return;
   const screenEl = el.closest('.phone-screen, .laptop-screen');
   if(!screenEl) return;
-  const scrollable = el.scrollHeight - el.clientHeight > 2;
+  const scrollable = el.scrollHeight - el.clientHeight > 2 && !el.classList.contains('fs-lock');
   track.classList.toggle('visible', scrollable);
   if(!scrollable) return;
   const screenRect = screenEl.getBoundingClientRect();
@@ -14117,6 +14183,7 @@ function beginPageSlide(next){
   delete NEIGHBORS[PAGES[next]];
   nb.host.remove();
   pageSwipeAnimating = true;
+  if(TV.layer) TV.layer.style.visibility = 'hidden'; // the live chart steps aside while the page slides
   const dir = next > idx ? 1 : -1; // +1: new page comes in from the right; -1: from the left
   const prev = { pos: wrap.style.position, overflow: wrap.style.overflow };
   if(getComputedStyle(wrap).position === 'static') wrap.style.position = 'relative';
@@ -14188,6 +14255,8 @@ function adoptSlidFrame(sl){
     setupCircleAndWheelDrag();
     attachSwipe();
     applyBrightness();
+    // Landing on Trading: its live TradingView chart is laid straight over the box (no waiting for a redraw).
+    if(state.current === 'trading') tvMount(); else tvPlace();
     positionStation3();
     attachPayScroll();
     if(typeof updatePhoneStatusClock === 'function') updatePhoneStatusClock();
