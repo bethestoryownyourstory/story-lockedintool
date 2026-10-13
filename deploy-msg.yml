@@ -1,11 +1,10 @@
 name: Deploy STORY message server
-# Puts msg-worker.js on Cloudflare as the "story-msg" Worker (STORY's messages + calls: sign-up by text code, locked
-# messages, call set-up) - settings in msg-wrangler.toml. Runs when the server changes, or Actions -> Run workflow.
+# Puts msg-worker.js on Cloudflare as the "story-msg" Worker (STORY's messages + calls: accounts made by the phone,
+# locked messages, call set-up; phone verification by text code) - settings in msg-wrangler.toml. Runs when the server changes, or Actions -> Run workflow.
 # Needs repo secrets (Settings -> Secrets and variables -> Actions):
 #   CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID - the same ones the release server uses
 #   TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN - Twilio
-#   TWILIO_FROM (STORY's Twilio number, for the sign-up text) or TWILIO_VERIFY_SID (a Twilio Verify service)
-#   Without a way to text the code, sign-up says it opens soon.
+#   TWILIO_FROM (STORY's Twilio number) or TWILIO_VERIFY_SID - only for verifying a phone number when STORY needs to.
 on:
   push:
     branches: [main]
@@ -29,7 +28,7 @@ jobs:
         run: |
           if [ -n "$T" ] && [ -n "$A" ]; then echo "ok=true" >> "$GITHUB_OUTPUT"
           else echo "### Not deployed: add CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID in Settings -> Secrets and variables -> Actions." >> "$GITHUB_STEP_SUMMARY"; fi
-          if [ -z "$F" ] && [ -z "$V" ]; then echo "### Sign-up waits for TWILIO_FROM (STORY's Twilio number) - add it and run this again." >> "$GITHUB_STEP_SUMMARY"; fi
+          if [ -z "$F" ] && [ -z "$V" ]; then echo "### Phone verification texts wait for TWILIO_FROM (only needed when STORY verifies something)." >> "$GITHUB_STEP_SUMMARY"; fi
       - name: Deploy to Cloudflare
         if: steps.ready.outputs.ok == 'true'
         env:

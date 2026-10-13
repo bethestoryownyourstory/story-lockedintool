@@ -1,7 +1,9 @@
 // STORY's message + call server (Cloudflare Worker "story-msg", deploy-msg.yml, settings in msg-wrangler.toml).
 // What it does - and what it never does:
-//  - Sign-up by phone number with a text code (Twilio Verify when TWILIO_VERIFY_SID is set, otherwise a code STORY
-//    makes and texts from TWILIO_FROM). Phone numbers are kept only as a salted hash.
+//  - Your STORY account is made by the phone itself (owner: no phone number in Messages): the phone sends only its
+//    PUBLIC key and gets back its id + a sign-in key. People find each other by @username only.
+//  - Phone numbers are only for when STORY needs to verify something (owner): a text code (Twilio Verify when
+//    TWILIO_VERIFY_SID is set, otherwise a code STORY makes and texts from TWILIO_FROM); kept only as a salted hash.
 //  - Each phone makes its own key pair; only the PUBLIC key comes here. Messages arrive already locked (AES-GCM with a
 //    key only the two phones can work out) - this server carries locked boxes and can't read any of them.
 //  - Live delivery over a WebSocket (Delivered / Seen / Read, typing), and a queue for phones that are offline.
@@ -31,6 +33,7 @@ export class Hub {
     this.ctx = ctx; this.env = env; this.sql = ctx.storage.sql;
     this.sql.exec(`CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, phone TEXT UNIQUE, token TEXT, pub TEXT, name TEXT, username TEXT UNIQUE, privacy TEXT, created INTEGER)`);
     this.sql.exec(`CREATE TABLE IF NOT EXISTS codes (phone TEXT PRIMARY KEY, code TEXT, exp INTEGER, tries INTEGER, sent INTEGER, hour INTEGER, nhour INTEGER)`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS joins (ip TEXT PRIMARY KEY, hour INTEGER, n INTEGER)`);
     this.sql.exec(`CREATE TABLE IF NOT EXISTS queue (seq INTEGER PRIMARY KEY AUTOINCREMENT, uid TEXT, body TEXT, at INTEGER)`);
     this.sql.exec(`CREATE INDEX IF NOT EXISTS queue_uid ON queue(uid)`);
   }
@@ -49,10 +52,11 @@ export class Hub {
       if (path === '/v1/ws') return this.ws(req, url);
       if (path === '/v1/health') return json({ ok: true, sms: !!(this.env.TWILIO_VERIFY_SID || this.env.TWILIO_FROM) });
       const body = req.method === 'POST' ? await req.json().catch(() => ({})) : {};
-      if (path === '/v1/start') return this.start(body);
-      if (path === '/v1/verify') return this.verify(body);
+      if (path === '/v1/register') return this.register(body, req.headers.get('cf-connecting-ip') || '');
       const me = await this.userByToken((req.headers.get('authorization') || '').replace(/^Bearer\s+/i, ''));
       if (!me) return json({ error: 'signin' }, 401);
+      if (path === '/v1/start') return this.start(body);
+      if (path === '/v1/verify') return this.verify(me, body);
       if (path === '/v1/me') return this.saveMe(me, body);
       if (path === '/v1/find') return this.find(me, url.searchParams.get('q') || '');
       if (path === '/v1/user') { const u = this.one('SELECT * FROM users WHERE id = ?', url.searchParams.get('id') || ''); return u ? json(this.pubView(u, me)) : json({ error: 'notfound' }, 404); }
@@ -60,7 +64,20 @@ export class Hub {
     } catch (e) { return json({ error: 'server', detail: String(e && e.message || e).slice(0, 200) }, 500); }
   }
 
-  // ---- Sign-up: text code ----
+  // ---- Your account: made by the phone (only its public key comes here) ----
+  async register(b, ip) {
+    const pub = String(b.pub || '');
+    if (!pub || pub.length > 400) return json({ error: 'key' }, 400);
+    const hour = Math.floor(Date.now() / 3600000), ipk = await sha('ip|' + ip);
+    const j = this.one('SELECT * FROM joins WHERE ip = ?', ipk), n = j && j.hour === hour ? j.n + 1 : 1;
+    if (n > 20) return json({ error: 'too-many' }, 429);
+    this.sql.exec('INSERT OR REPLACE INTO joins (ip, hour, n) VALUES (?, ?, ?)', ipk, hour, n);
+    const id = 'u' + rand(9), token = rand(32);
+    this.sql.exec('INSERT INTO users (id, phone, token, pub, name, username, privacy, created) VALUES (?, NULL, ?, ?, NULL, NULL, ?, ?)', id, await sha('tok|' + token), pub, '{}', Date.now());
+    return json({ id, token });
+  }
+
+  // ---- Verifying a phone number (only when STORY needs to verify something): text code ----
   async twilio(path, form, host = 'https://api.twilio.com') {
     if (this.env.TWILIO_BASE) host = this.env.TWILIO_BASE;   // local tests only: a stand-in Twilio
     const r = await fetch(host + path, { method: 'POST', headers: { authorization: 'Basic ' + btoa(this.env.TWILIO_ACCOUNT_SID + ':' + this.env.TWILIO_AUTH_TOKEN), 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(form) });
@@ -88,10 +105,10 @@ export class Hub {
     this.sql.exec('INSERT OR REPLACE INTO codes (phone, code, exp, tries, sent, hour, nhour) VALUES (?, ?, ?, 0, ?, ?, ?)', h, code ? await sha('code|' + h + '|' + code) : '', now + 600000, now, hour, nhour);
     return json({ ok: true });
   }
-  async verify(b) {
-    const phone = String(b.phone || '').replace(/[^\d+]/g, ''), code = String(b.code || '').replace(/\D/g, ''), pub = String(b.pub || '');
+  // The code is right -> that number is marked as verified on YOUR account (never used to find you).
+  async verify(me, b) {
+    const phone = String(b.phone || '').replace(/[^\d+]/g, ''), code = String(b.code || '').replace(/\D/g, '');
     if (!PHONE.test(phone) || code.length !== 6) return json({ error: 'code' }, 400);
-    if (!pub || pub.length > 400) return json({ error: 'key' }, 400);
     const h = await this.phoneHash(phone), c = this.one('SELECT * FROM codes WHERE phone = ?', h), now = Date.now();
     if (!c || c.exp < now) return json({ error: 'expired' }, 400);
     if (c.tries >= 5) return json({ error: 'too-many' }, 429);
@@ -103,14 +120,10 @@ export class Hub {
     } else good = c.code === await sha('code|' + h + '|' + code);
     if (!good) return json({ error: 'wrong', left: Math.max(0, 4 - c.tries) }, 400);
     this.sql.exec('DELETE FROM codes WHERE phone = ?', h);
-    const token = rand(32), th = await sha('tok|' + token);
-    let u = this.one('SELECT * FROM users WHERE phone = ?', h);
-    if (u) this.sql.exec('UPDATE users SET token = ?, pub = ? WHERE id = ?', th, pub, u.id);   // a new phone: the old one is signed out
-    else { const id = 'u' + rand(9); this.sql.exec('INSERT INTO users (id, phone, token, pub, name, username, privacy, created) VALUES (?, ?, ?, ?, NULL, NULL, ?, ?)', id, h, th, pub, '{}', now); u = { id }; }
-    // The old phone's live connection ends.
-    for (const ws of this.ctx.getWebSockets(u.id)) try { ws.send(JSON.stringify({ t: 'signedout' })); ws.close(4001, 'signed in elsewhere'); } catch (e) {}
-    u = this.one('SELECT * FROM users WHERE id = ?', u.id);
-    return json({ id: u.id, token, name: u.name || '', username: u.username || '' });
+    const other = this.one('SELECT id FROM users WHERE phone = ? AND id != ?', h, me.id);
+    if (other) return json({ error: 'phone-used' }, 409);
+    this.sql.exec('UPDATE users SET phone = ? WHERE id = ?', h, me.id);
+    return json({ verified: true });
   }
 
   // ---- Your profile (name, @username, privacy) ----
@@ -133,10 +146,9 @@ export class Hub {
     return json({ id: u.id, name: u.name || '', username: u.username || '' });
   }
   async find(me, q) {
-    q = q.trim();
-    let u = null;
-    if (/^\+?[\d\s()-]{7,}$/.test(q)) { const p = q.replace(/[^\d+]/g, ''); if (PHONE.test(p)) u = this.one('SELECT * FROM users WHERE phone = ?', await this.phoneHash(p)); }
-    else { const un = q.replace(/^@/, '').toLowerCase(); if (un) u = this.one('SELECT * FROM users WHERE username = ?', un); }
+    // @username only - never phone numbers (owner).
+    const un = q.trim().replace(/^@/, '').toLowerCase();
+    const u = USERNAME.test(un) ? this.one('SELECT * FROM users WHERE username = ?', un) : null;
     return u && u.id !== me.id ? json(this.pubView(u, me)) : json({ error: 'notfound' }, 404);
   }
 
