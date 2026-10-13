@@ -1004,6 +1004,10 @@
   #content-area.fs-lock{ overflow:hidden !important; overscroll-behavior:none; }
   .tabs-row .tf-more{ flex:0 0 auto; padding-left:10px; padding-right:10px; white-space:nowrap; }
   .tf-grid{ display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; margin-top:6px; }
+  .tf-chip{ position:relative; }
+  .tf-star{ position:absolute; top:0; right:0; width:26px; height:26px; display:flex; align-items:center; justify-content:center; color:var(--muted); }
+  .tf-star.on{ color:#f5c542; }
+  .tf-chip.active .tf-star:not(.on){ color:rgba(0,0,0,0.45); }
   .tf-chip, .tf-unit{ border:1px solid var(--line); background:var(--card-2); color:var(--text); border-radius:10px; padding:10px 0; text-align:center; font-weight:800; font-size:12.5px; cursor:pointer; }
   .tf-chip.active, .tf-unit.active{ background:#e8e6e1; color:#000; border-color:#e8e6e1; }
   .tf-own-title{ font-size:9.5px; font-weight:800; letter-spacing:0.6px; color:var(--muted); text-transform:uppercase; margin:14px 2px 6px; }
@@ -5886,6 +5890,18 @@ function addAccountTemplate(){
 // Any timeframe (owner): 1H 4H 1D 1W on the row, and the last box opens every TradingView timeframe - plus your own
 // (any number of minutes / hours / days / weeks / months). "15m" -> TradingView "15", "2H" -> "120", "3D" -> "3D"...
 const TIMEFRAMES = ['1m','3m','5m','15m','30m','45m','1H','2H','3H','4H','6H','8H','12H','1D','2D','3D','1W','2W','1M','3M','6M','12M'];
+// Favourite timeframes (owner): only these show on the row (default 1H 4H 1D 1W); the star on any timeframe in the
+// Timeframe sheet adds / removes it - your own ones too. Up to 6, kept in time order (story-tf-favs).
+const TF_FAV_KEY = 'story-tf-favs', TF_FAV_MAX = 6;
+function tfMinutes(tf){ const m = String(tf).match(/^(\d+)(m|H|D|W|M)$/); return m ? +m[1] * { m:1, H:60, D:1440, W:10080, M:43200 }[m[2]] : 0; }
+function tfFavs(){ try{ const l = JSON.parse(localStorage.getItem(TF_FAV_KEY) || 'null'); if(Array.isArray(l)) return l.filter(t=>tfMinutes(t)); }catch(e){} return ['1H','4H','1D','1W']; }
+function tfToggleFav(tf){
+  let l = tfFavs();
+  if(l.includes(tf)) l = l.filter(t=>t !== tf);
+  else { if(l.length >= TF_FAV_MAX){ showToast('Up to ' + TF_FAV_MAX + ' favourites - take one off first'); return; } l.push(tf); }
+  l.sort((a, b)=>tfMinutes(a) - tfMinutes(b));
+  try{ localStorage.setItem(TF_FAV_KEY, JSON.stringify(l)); }catch(e){}
+}
 function tfInterval(tf){
   const m = String(tf || '').match(/^(\d{1,4})(m|H|D|W|M)$/); if(!m) return '60';
   const n = Math.max(1, +m[1]);
@@ -5897,7 +5913,7 @@ function tfPickerTemplate(){
     <div class="modal-overlay" data-action="tf-close">
       <div class="modal-sheet tf-sheet" onclick="event.stopPropagation()">
         <div class="modal-head"><span class="modal-title">Timeframe</span><button class="modal-close" data-action="tf-close">×</button></div>
-        <div class="tf-grid">${TIMEFRAMES.map(t=>`<div class="tf-chip${state.chartRes === t ? ' active' : ''}" data-tf="${t}">${t}</div>`).join('')}</div>
+        <div class="tf-grid">${[...new Set(TIMEFRAMES.concat(tfFavs(), [state.chartRes]))].filter(t=>tfMinutes(t)).sort((a, b)=>tfMinutes(a) - tfMinutes(b)).map(t=>`<div class="tf-chip${state.chartRes === t ? ' active' : ''}" data-tf="${t}">${t}<span class="tf-star${tfFavs().includes(t) ? ' on' : ''}" data-tffav="${t}" aria-label="Favourite"><svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="${tfFavs().includes(t) ? 'currentColor' : 'none'}"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></svg></span></div>`).join('')}</div>
         <div class="tf-own-title">Your own</div>
         <div class="tf-own">
           <input class="field-input tf-num" id="tf-num" type="text" inputmode="numeric" maxlength="4" placeholder="7" value="${escText(state.tfNum || '')}">
@@ -6242,8 +6258,8 @@ function tradingScreen(){
       <button class="chart-fs-btn" data-action="chart-fullscreen" title="Full screen">⤢</button>
     </div>
     <div class="tabs-row">
-      ${['1H','4H','1D','1W'].map(r=>`<div class="tab${state.chartRes===r?' active':''}" data-chartres="${r}">${r}</div>`).join('')}
-      <div class="tab tf-more${['1H','4H','1D','1W'].includes(state.chartRes) ? '' : ' active'}" data-action="tf-open">${['1H','4H','1D','1W'].includes(state.chartRes) ? '' : escText(state.chartRes) + ' '}⌄</div>
+      ${tfFavs().map(r=>`<div class="tab${state.chartRes===r?' active':''}" data-chartres="${r}">${r}</div>`).join('')}
+      <div class="tab tf-more${tfFavs().includes(state.chartRes) ? '' : ' active'}" data-action="tf-open">${tfFavs().includes(state.chartRes) ? '' : escText(state.chartRes) + ' '}⌄</div>
     </div>
     <div class="live-pl-zone" style="background:${positions.length ? `linear-gradient(180deg, transparent 0%, rgba(${zoneColor},0.09) 26%, rgba(${zoneColor},0.07) 48%, rgba(${zoneColor},0.04) 78%, transparent 100%)` : 'transparent'};">
     <div class="section-title"><button class="acct-title" data-action="broker-panel-open">${acc ? escText(acc.name) + (acc.env === 'demo' ? (acc.platform === 'alpaca' ? ' · PAPER' : ' · DEMO') : '') : `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Search broker`}<span class="acct-title-caret">⌄</span></button></div>
@@ -12114,7 +12130,11 @@ function attachHandlers(){
   document.querySelectorAll('[data-addacct-env]').forEach(el=>el.addEventListener('click', ()=>{
     const vals = Object.assign({}, state.addAccount.vals || {}); document.querySelectorAll('#content-area [data-addacct-field]').forEach(i=>{ vals[i.getAttribute('data-addacct-field')] = i.value; }); state.addAccount.vals = vals;
     state.addAccount.env = el.getAttribute('data-addacct-env'); renderDevice(); }));
-  document.querySelectorAll('[data-tf]').forEach(el=>el.addEventListener('click', ()=>setChartRes(el.getAttribute('data-tf'))));
+  document.querySelectorAll('[data-tf]').forEach(el=>el.addEventListener('click', e=>{
+    const star = e.target.closest && e.target.closest('[data-tffav]');
+    if(star){ e.stopPropagation(); const n = document.getElementById('tf-num'); if(n) state.tfNum = n.value; tfToggleFav(star.getAttribute('data-tffav')); renderDevice(); return; }
+    setChartRes(el.getAttribute('data-tf'));
+  }));
   document.querySelectorAll('[data-tfunit]').forEach(el=>el.addEventListener('click', ()=>{ const n = document.getElementById('tf-num'); if(n) state.tfNum = n.value; state.tfUnit = el.getAttribute('data-tfunit'); renderDevice(); }));
   { const n = document.getElementById('tf-num'); if(n) n.addEventListener('input', ()=>{ state.tfNum = n.value.replace(/\D/g, ''); }); }
   document.querySelectorAll('[data-chartres]').forEach(el=>el.addEventListener('click', ()=>{ state.chartRes = el.getAttribute('data-chartres'); state.focusBars = []; renderDevice(); tradeRefreshNow(true); }));
