@@ -31,6 +31,7 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         fun toggleMessages()
         fun setLockDialSize(w: Int, h: Int)
         fun callNumber(number: String)
+        fun newContact(number: String)
         fun setQuickAccess(json: String)
         fun toggleCreate()
         fun toggleCalls()
@@ -439,6 +440,8 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
     /** The dial pad's call button: calls straight away (even on the lock screen). */
     @JavascriptInterface
     fun callNumber(number: String) { if (station3) host.callNumber(number) }
+    /** Dial pad > New contact (with the number you typed). */
+    @JavascriptInterface fun newContact(number: String) { if (station3) host.newContact(number) }
 
     /** Settings > QUICK ACCESS (JSON: mode, where, s3Aod, lockDial, dialAod). */
     @JavascriptInterface

@@ -77,6 +77,14 @@
             android:taskAffinity=""
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
+        <!-- Dial pad > New contact: the phone's own new-contact screen with the number filled in (see-through). -->
+        <activity
+            android:name=".ContactAddActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
         <!-- Asks Android once for a permission STORY needs (see-through). -->
         <activity
             android:name=".AskActivity"

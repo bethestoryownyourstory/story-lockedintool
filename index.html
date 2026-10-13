@@ -13071,7 +13071,11 @@ function attachHandlers(){
           }
           break;
         }
-        case 'station3-new-contact': showToast('Create new contact — coming soon'); break;
+        case 'station3-new-contact':
+          // The phone's own new-contact screen with the number you typed (STORY comes straight back after).
+          if(NATIVE && window.StoryNative.newContact){ window.StoryNative.newContact(state.station3DialInput.trim()); }
+          else showToast('Create new contact — coming soon');
+          break;
         case 'station3-create-post': if(NATIVE && window.StoryNative.toggleCreate){ window.StoryNative.toggleCreate(); } else { showToast('Create & post — coming soon'); } break;
         case 'station3-call-history': if(NATIVE && window.StoryNative.toggleCalls){ window.StoryNative.toggleCalls(); } else { showToast('Call history — coming soon'); } break;
         case 'station3-messages': if(NATIVE && window.StoryNative.toggleMessages){ window.StoryNative.toggleMessages(); } else { showToast('Messages — coming soon'); } break;

@@ -1535,6 +1535,23 @@ class OverlayService : Service(), StoryBridge.Host {
     private var toastView: View? = null
     private var toastWm: WindowManager? = null
     private val hideToast = Runnable { toastView?.let { runCatching { (toastWm ?: wm).removeView(it) } }; toastView = null }
+    // ---- Dial pad > New contact: the phone's own new-contact screen (number filled in). The dial pad and the Pages
+    //      step aside while it's up; STORY comes back when you save or go back. ----
+    private var contactDialWasOpen = false
+    override fun newContact(number: String) { ui.post {
+        if (keyguardLocked()) { showToast("Unlock your phone to add a contact"); return@post }
+        contactDialWasOpen = dialPane?.shown == true
+        dialPane?.takeIf { it.shown }?.let { hideOne(it) }
+        if (!stepAsideForSystem()) return@post
+        runCatching { startActivity(Intent(this, ContactAddActivity::class.java).putExtra(ContactAddActivity.EXTRA_NUMBER, number).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)) }
+            .onFailure { contactDone(false) }
+    } }
+    fun contactDone(saved: Boolean) { ui.post {
+        comeBackFromSystem()
+        if (contactDialWasOpen) { contactDialWasOpen = false; dialPane?.takeIf { !it.shown && s3Pane?.shown == true }?.let { setShown(it, true) } }
+        if (saved) showToast("Contact saved")
+    } }
+
     override fun showToast(msg: String) { ui.post {
         ui.removeCallbacks(hideToast); hideToast.run()
         val tv = TextView(this).apply {
