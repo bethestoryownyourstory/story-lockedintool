@@ -1626,8 +1626,26 @@
   .chart-fullscreen.landscape .chart-fs-body{ padding:14px 8px; }
   .chart-fullscreen.landscape .chart-fs-controls{
     flex-direction:column; justify-content:space-between; width:150px; flex-shrink:0;
-    padding:10px 12px; border-left:1px solid var(--line); overflow-y:auto; scrollbar-width:none;
+    padding:10px 12px; border-left:1px solid var(--line); overflow:hidden; scrollbar-width:none;
   }
+  /* Full-screen chart, sideways: everything in the side column shares its height exactly - it always fits, nothing
+     ever scrolls (owner: no scrolling anywhere in full screen). Order types 2 x 2. */
+  .chart-fullscreen{ overscroll-behavior:none; touch-action:none; }
+  .chart-fullscreen .chart-fs-body{ touch-action:auto; }
+  .chart-fullscreen .chart-fs-controls, .chart-fullscreen .chart-fs-head{ touch-action:manipulation; }
+  .chart-fullscreen.landscape .chart-fs-controls{ width:176px; gap:5px; justify-content:flex-start; align-items:stretch; padding:8px 10px; }
+  .chart-fullscreen.landscape .fs-order{ display:contents; }
+  .chart-fullscreen.landscape .fs-order-types{ flex:2 1 0; min-height:0; display:grid; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; gap:5px; }
+  .chart-fullscreen.landscape .fs-order-types .order-type-btn{ display:flex; align-items:center; justify-content:center; padding:0 2px; font-size:11px; min-height:0; margin:0; }
+  .chart-fullscreen.landscape .fs-order-in{ flex:1 1 0; min-height:0; height:auto; padding:0 10px; font-size:12px; margin:0; }
+  .chart-fullscreen.landscape .fs-order-place{ flex:1 1 0; min-height:0; padding:0 4px; font-size:12px; margin:0; }
+  .chart-fullscreen.landscape .chart-fs-btnrow{ flex:3 1 0 !important; min-height:0; display:flex; }
+  .chart-fullscreen.landscape .chart-fs-btnrow > *{ flex:1 1 0; min-height:0; margin:0; }
+  .chart-fullscreen.landscape .chart-fs-btnrow .btn{ padding:0 !important; }
+  .chart-fullscreen.landscape .chart-fs-btnrow > .btn{ flex:1.3 1 0; }
+  .chart-fullscreen.landscape .chart-fs-btnrow > .lot-setter{ flex:1 1 0; overflow:hidden; padding:2px; align-items:stretch; }
+  .chart-fullscreen.landscape .chart-fs-btnrow .lot-btn{ height:auto; min-height:0; align-self:stretch; }
+  .chart-fullscreen.landscape .chart-fs-btnrow .lot-input{ height:auto; min-height:0; }
   .chart-fullscreen.landscape .chart-fs-controls::-webkit-scrollbar{ display:none; }
   .chart-fullscreen.landscape .fs-hide-land{ display:none; }
   .fs-order{ width:100%; display:flex; flex-direction:column; gap:8px; }
@@ -5872,12 +5890,36 @@ function tvColors(){
 // The chart is TradingView's own live chart (TradingView's market data and candles) for the focus symbol - always,
 // logged in or not (owner: "TradingView chart only"). One frame kept alive and moved, like the chart below - it never reloads on a re-render.
 function tvSymbol(sym){
-  const s = String(sym || 'EURUSD').toUpperCase().replace(/[^A-Z0-9.:]/g, '');
+  const s = String(sym || 'EURUSD').toUpperCase().replace(/[^A-Z0-9.:_-]/g, '');
   if(s.includes(':')) return s;
-  if(/^(XAU|XAG)USD$/.test(s)) return 'OANDA:' + s;
-  if(/^[A-Z]{6}$/.test(s) && /(USD|EUR|GBP|JPY|ZAR|AUD|CAD|CHF|NZD)$/.test(s)) return 'FX:' + s;
-  return s;
+  // Brokers add their own endings (EURUSD.r, XAUUSDm, GBPUSD-pro...) - TradingView knows the plain pair.
+  const m = s.match(/^(XAU|XAG)USD/); if(m) return 'OANDA:' + m[0];
+  const fx = s.match(/^([A-Z]{3})([A-Z]{3})(?=$|[._-]|[A-Z0-9]{1,4}$)/);
+  const CUR = /^(USD|EUR|GBP|JPY|ZAR|AUD|CAD|CHF|NZD|SEK|NOK|DKK|SGD|HKD|MXN|TRY|PLN|CNH)$/;
+  if(fx && CUR.test(fx[1]) && CUR.test(fx[2])) return 'FX:' + fx[1] + fx[2];
+  return s.replace(/[._-].*$/, '');
 }
+const tvShortOf = s=>String(s || '').split(':').pop().toUpperCase();
+// The app shows tradingview.com itself (TvView.kt) - in the browser preview it's TradingView's embedded chart.
+const TV_NATIVE = (()=>{ try{ return !!(window.StoryNative && StoryNative.tvVersion && StoryNative.tvVersion() === '1'); }catch(e){ return false; } })();
+// TradingView -> STORY: the pair you pick in TradingView becomes the FOCUS symbol (on your account: that account's
+// own name for it, e.g. EURUSD.r; a pair your account doesn't have stays TradingView-only and says so).
+window.storyTvSymbol = function(short){
+  short = tvShortOf(short); if(!short) return;
+  state.tvShort = short;
+  if(tvShortOf(tvSymbol(state.focusSymbol)) === short) return;
+  const acc = activeTradeAccount();
+  const pick = list=>{
+    const clean = x=>String(x).toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const hit = list.find(x=>String(x).toUpperCase() === short) || list.find(x=>tvShortOf(tvSymbol(x)) === short) || list.find(x=>clean(x).startsWith(short));
+    if(!hit){ showToast(short + ' isn\u2019t on this account'); return; }
+    state.focusSymbol = hit; state.focusName = hit; rememberSymbol(hit); state.focusQuote = null; state.focusBars = [];
+    tradeRender(); tradeRefreshNow(true);
+  };
+  if(!acc){ state.focusSymbol = short; state.focusName = short; state.focusQuote = null; tradeRender(); return; }
+  if(state.symbolList && state.symbolList.length && state.symbolListFor === acc.id) pick(state.symbolList);
+  else TRADE.symbols(acc).then(l=>{ state.symbolList = l; state.symbolListFor = acc.id; pick(l); }).catch(()=>{});
+};
 // TradingView's own chart (owner: the real TradingView - its symbol search / pairs, timeframes, indicators and drawing
 // tools). ONE frame that never leaves the page: it lives in its own layer (#tv-layer) laid exactly over the chart box
 // (the small chart or the full-screen one), so page redraws (every 2s on Trading), going full screen and coming back
@@ -5887,6 +5929,24 @@ function tvWidgetMount(slot){
   const iv = { '1H':'60', '4H':'240', '1D':'D', '1W':'W' }[state.chartRes] || '60';
   const white = window.storyTheme && window.storyTheme() === 'white';
   const key = tvSymbol(state.focusSymbol) + '|' + iv + '|' + (white ? 'light' : 'dark');
+  if(TV_NATIVE){
+    // STORY -> TradingView: only when the FOCUS symbol or the timeframe really changed (TradingView changes the pair
+    // or timeframe in place - your drawings and layout stay).
+    const sym = tvSymbol(state.focusSymbol), sent = sym + '|' + iv;
+    if(TV.sent !== sent){
+      const same = TV.sent && tvShortOf(sym) === (state.tvShort || tvShortOf(TV.sent.split('|')[0])) && TV.sent.split('|')[1] === iv;
+      TV.sent = sent;
+      if(!same) try{ StoryNative.tvOpen(sym, iv); }catch(e){}
+    }
+    if(!TV.watch){
+      TV.watch = true;
+      const again = ()=>{ if(!TV.placeQueued){ TV.placeQueued = true; requestAnimationFrame(()=>{ TV.placeQueued = false; tvPlace(); }); } };
+      document.addEventListener('scroll', again, true);
+      window.addEventListener('resize', again);
+      setInterval(()=>{ if(TV.nativeShown || state.current === 'trading') tvPlace(); }, 400);
+    }
+    TV.slot = slot; tvPlace(); return;
+  }
   if(!TV.layer){
     TV.layer = document.createElement('div'); TV.layer.id = 'tv-layer'; TV.layer.setAttribute('data-keep-color', '');
     TV.layer.style.cssText = 'position:fixed;left:0;top:0;width:0;height:0;z-index:9000;visibility:hidden;overflow:hidden;background:' + (white ? '#ffffff' : '#000000') + ';';
@@ -5911,9 +5971,17 @@ function tvWidgetMount(slot){
   tvPlace();
 }
 // Lays the chart layer over the live chart box, or hides it (kept loaded) when the box isn't showing.
+function tvSend(o){
+  const j = JSON.stringify(o);
+  if(j === TV.lastPlace) return;
+  TV.lastPlace = j; TV.nativeShown = !!o.show;
+  try{ StoryNative.tvPlace(j); }catch(e){}
+}
 function tvPlace(){
-  const L = TV.layer; if(!L) return;
-  const hide = ()=>{ if(L.style.visibility !== 'hidden') L.style.visibility = 'hidden'; };
+  const N = TV_NATIVE;
+  // The app's real TradingView view gets told where to go; the browser preview moves its own layer.
+  const L = N ? { style:{}, contains:()=>false } : TV.layer; if(!L) return;
+  const hide = N ? ()=>tvSend({ show:false }) : ()=>{ if(L.style.visibility !== 'hidden') L.style.visibility = 'hidden'; };
   const slot = TV.slot;
   if(state.current !== 'trading' || pageSwipeAnimating || !slot || !slot.isConnected || document.visibilityState === 'hidden') return hide();
   if((state.pageStyleOn && state.pageStyleViewOpen) || state.rowsViewOpen) return hide();
@@ -5938,6 +6006,14 @@ function tvPlace(){
   // The chart on the Trading page runs the whole width of the screen, side to side (owner) - upright or sideways.
   const wide = !slot.closest('.chart-fullscreen');
   const lx = wide ? cr.left : r.left, lw = wide ? cr.right - cr.left : r.width;
+  if(N){
+    const holesN = [...(own.parentElement || own).querySelectorAll('.tv-sltp-btn:not(.tv-sltp-fs), .chart-fs-btn')]
+      .map(b=>b.getBoundingClientRect()).filter(b=>b.width && b.height).map(b=>[b.left - lx - 3, b.top - r.top - 3, b.width + 6, b.height + 6]);
+    const dimN = document.querySelector('#device-wrap #system-dimmer');
+    return tvSend({ show:true, x:lx, y:r.top, w:lw, h:r.height, ct:top - r.top, cb:bottom - r.top, holes:holesN,
+      r: wide ? 0 : parseFloat(getComputedStyle(own.closest('.tv-card') || own).borderTopLeftRadius) || 0,
+      dim: dimN ? parseFloat(getComputedStyle(dimN).opacity) || 0 : 0, dpr: window.devicePixelRatio || 1 });
+  }
   Object.assign(L.style, { left:lx + 'px', top:r.top + 'px', width:lw + 'px', height:r.height + 'px', visibility:'visible' });
   // The part scrolled out of the page's view is cut off, and the chart's own buttons on the box (SL/TP, full screen)
   // stay on top and tappable (holes in the layer).
@@ -11115,8 +11191,28 @@ function initCanvas(canvasId, isOverlay){
   canvas.addEventListener('pointerleave', stop);
 }
 
+// In the app the slider is the phone's REAL brightness (OverlayService.setBrightness): "System control" = STORY's
+// Pages at that brightness while they're up, "Device control" = the whole phone's brightness setting. No grey veil
+// over the pages (that greyed everything in the White theme). Until you move it, the slider shows the phone's own
+// brightness and STORY leaves it alone. Kept on the phone (story-brightness). The browser preview still uses the veil.
+const BRIGHT_NATIVE = (()=>{ try{ const j = JSON.parse(window.StoryNative && StoryNative.brightness ? (StoryNative.brightness() || '{}') : '{}'); return !!(j && j.v != null); }catch(e){ return false; } })();
+(function(){
+  if(!BRIGHT_NATIVE) return;
+  let saved = null; try{ saved = JSON.parse(localStorage.getItem('story-brightness') || 'null'); }catch(e){}
+  if(saved && saved.set){
+    state.brightnessValue = Math.max(0, Math.min(100, +saved.v || 0)); state.brightnessMode = saved.mode === 'device' ? 'device' : 'system'; state.brightnessUserSet = true;
+    try{ StoryNative.setBrightness(state.brightnessMode, state.brightnessValue); }catch(e){}
+  } else {
+    try{ state.brightnessValue = JSON.parse(StoryNative.brightness()).v; }catch(e){}
+  }
+})();
+function brightnessUserSet(){
+  state.brightnessUserSet = true;
+  try{ localStorage.setItem('story-brightness', JSON.stringify({ set:true, v:state.brightnessValue, mode:state.brightnessMode })); }catch(e){}
+  if(BRIGHT_NATIVE) try{ StoryNative.setBrightness(state.brightnessMode, state.brightnessValue); }catch(e){}
+}
 function applyBrightness(){
-  const dim = Math.min(0.85, Math.max(0, (100 - state.brightnessValue) / 100 * 0.85));
+  const dim = BRIGHT_NATIVE ? 0 : Math.min(0.85, Math.max(0, (100 - state.brightnessValue) / 100 * 0.85));
   const deviceDimmer = document.getElementById('device-dimmer');
   const systemDimmer = document.getElementById('system-dimmer');
   if(deviceDimmer) deviceDimmer.style.opacity = state.brightnessMode==='device' ? dim : 0;
@@ -11720,6 +11816,7 @@ function attachHandlers(){
   if(brightnessSlider){
     brightnessSlider.addEventListener('input', ()=>{
       state.brightnessValue = parseInt(brightnessSlider.value, 10);
+      brightnessUserSet();
       applyBrightness();
       const sunIco = document.getElementById('sun-ico');
       if(sunIco) sunIco.style.opacity = (0.3 + (state.brightnessValue/100)*0.7).toFixed(2);
@@ -11729,6 +11826,7 @@ function attachHandlers(){
     el.addEventListener('click', ()=>{
       state.brightnessMode = el.getAttribute('data-brightmode');
       state.brightnessMenuOpen = false;
+      brightnessUserSet();
       renderDevice();
     });
   });
@@ -14184,6 +14282,7 @@ function beginPageSlide(next){
   nb.host.remove();
   pageSwipeAnimating = true;
   if(TV.layer) TV.layer.style.visibility = 'hidden'; // the live chart steps aside while the page slides
+  if(TV_NATIVE) tvSend({ show:false });
   const dir = next > idx ? 1 : -1; // +1: new page comes in from the right; -1: from the left
   const prev = { pos: wrap.style.position, overflow: wrap.style.overflow };
   if(getComputedStyle(wrap).position === 'static') wrap.style.position = 'relative';
@@ -14426,6 +14525,7 @@ function attachSwipe(){
   shell.addEventListener('pointerdown', e=>{
     if(pageSwipeAnimating && currentSlide && currentSlide.ending) currentSlide.finishNow();
     if(pageSwipeAnimating) return;
+    if(state.current === 'trading' && state.chartFullscreen) return;   // full-screen chart: the page never moves
     const startX = e.clientX, startY = e.clientY, pid = e.pointerId;
     let sl = null, gaveUp = false, lastX = startX, lastT = performance.now(), vx = 0, pendingDx = 0, rafPending = false;
     const move = ev=>{
