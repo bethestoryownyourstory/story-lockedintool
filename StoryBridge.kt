@@ -271,8 +271,8 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
 
     /** The brightness slider sets the phone's REAL screen brightness (no grey veil over STORY). brightness() = the
      *  phone's brightness now (0-100), whether STORY may change the whole phone's, and whether auto is on. */
-    @JavascriptInterface fun brightness(): String = if (pages) host.brightness() else "{}"
-    @JavascriptInterface fun setBrightness(mode: String, value: Int) { if (pages) host.setBrightness(mode, value) }
+    @JavascriptInterface fun brightness(): String = if (pages || widget) host.brightness() else "{}"
+    @JavascriptInterface fun setBrightness(mode: String, value: Int) { if (pages || widget) host.setBrightness(mode, value) }  // the Dashboard widget's slider too
 
     /** Messages + calls (Profile's window, where STORY's message connection runs): show the call screen even when
      *  Station 3 is closed, ring / vibrate for an incoming call, the phone's call audio (earpiece / speaker), the

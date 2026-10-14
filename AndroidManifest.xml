@@ -125,7 +125,11 @@
         </receiver>
         <receiver android:name=".InstallResultReceiver" android:exported="false" />
 
-        <!-- STORY's pages as home screen widgets (Money, Wallet, Focus): a picture of the whole page; tap opens it. -->
+        <!-- STORY's pages as home screen widgets (Dashboard, Money, Wallet, Focus): a picture of the whole page; tap opens it. -->
+        <receiver android:name=".DashboardWidget" android:exported="true" android:label="Dashboard">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_dashboard" />
+        </receiver>
         <receiver android:name=".MoneyWidget" android:exported="true" android:label="Money">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_money" />
