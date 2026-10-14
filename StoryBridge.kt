@@ -31,6 +31,7 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         fun toggleMessages()
         fun setLockDialSize(w: Int, h: Int)
         fun callNumber(number: String)
+        fun appPageOpen(pkg: String)
         fun newContact(number: String)
         fun setQuickAccess(json: String)
         fun toggleCreate()
@@ -108,6 +109,11 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         for (i in tries) { if (i == null) continue; i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); if (runCatching { ctx.startActivity(i) }.isSuccess) return }
         host.showToast("No gallery app on this phone")
     }
+
+    /** An app made into a page: landing on its page opens the REAL app (STORY steps aside), with a thin strip on the
+     *  left edge to swipe your pages back. */
+    @JavascriptInterface
+    fun appPageOpen(pkg: String) { if (pages) host.appPageOpen(pkg) }
 
     @JavascriptInterface
     fun uninstallApp(pkg: String) {

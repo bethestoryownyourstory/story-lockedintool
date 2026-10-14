@@ -673,6 +673,7 @@ class OverlayService : Service(), StoryBridge.Host {
             if (!shown) profileGapPane?.web?.evaluateJavascript("window.storyProfileS3&&window.storyProfileS3(true)", null)
         }
         if (shown && (!p.small || (p.profile && !p.gap))) p.web.requestFocus()
+        if (p === pagesPane && shown && appEdge != null) { appPagePkg = null; removeAppEdge() }
         if (p === pagesPane) { quietApps(shown); updateBarLine(); if (!shown && pagesTyping) pagesBackToTop(); updateBubble()
             if (!shown) tvView?.place(org.json.JSONObject().put("show", false)) }
     }
@@ -740,6 +741,43 @@ class OverlayService : Service(), StoryBridge.Host {
         updateBubble()
         addBar() // re-add last so the STORY bar stays on top of everything, including the pages
     }
+
+    // ---- App pages (owner: "make any app into a page"): landing on an app's page opens the real app full screen; a thin
+    //      see-through strip on the LEFT edge (middle part only, so the phone's own back gesture still works above and
+    //      below it) swipes your pages back. It goes away once the Pages show or you leave that app. ----
+    private var appPagePkg: String? = null
+    private var appEdge: View? = null
+    override fun appPageOpen(pkg: String) { ui.post {
+        val i = packageManager.getLaunchIntentForPackage(pkg) ?: run { showToast("That app isn't on this phone any more"); return@post }
+        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        pagesPane?.takeIf { it.shown }?.let { hideOne(it) }
+        s3Pane?.takeIf { it.shown }?.let { closeStation3Now() }
+        updateBubble()
+        runCatching { startActivity(i) }.onFailure { showToast("Couldn't open that app"); return@post }
+        appPagePkg = pkg
+        addAppEdge()
+    } }
+    private fun addAppEdge() {
+        removeAppEdge()
+        val h = (resources.displayMetrics.heightPixels * 0.42).toInt()
+        val v = View(this)
+        val lp = WindowManager.LayoutParams((14 * dp).toInt(), h, layerType,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN, PixelFormat.TRANSLUCENT).apply {
+            gravity = Gravity.START or Gravity.CENTER_VERTICAL
+        }
+        var downX = 0f; var done = false
+        v.setOnTouchListener { _, e ->
+            when (e.actionMasked) {
+                MotionEvent.ACTION_DOWN -> { downX = e.rawX; done = false }
+                MotionEvent.ACTION_MOVE -> if (!done && e.rawX - downX > 36 * dp) { done = true; removeAppEdge(); appPagePkg = null; showPanel(station3Only = false) }
+            }
+            true
+        }
+        runCatching { layerWm.addView(v, lp) }.onSuccess { appEdge = v }
+    }
+    private fun removeAppEdge() { appEdge?.let { runCatching { layerWm.removeView(it) } }; appEdge = null }
+    /** The app on screen changed (accessibility): leaving the app page's app takes the strip away. */
+    fun foregroundChanged(pkg: String) { ui.post { if (appPagePkg != null && pkg != appPagePkg && pkg != packageName) { appPagePkg = null; removeAppEdge() } } }
 
     /** The Station 3 button is always there and always the same -- over apps, over the Pages, open or closed. */
     /** The Station 3 button is always there and always the same -- except where Settings > QUICK ACCESS says

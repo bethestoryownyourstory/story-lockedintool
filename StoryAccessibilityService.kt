@@ -29,7 +29,7 @@ class StoryAccessibilityService : AccessibilityService() {
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
                 if (pkg == packageName) return
                 val cls = e.className?.toString() ?: return
-                if (runCatching { packageManager.getActivityInfo(ComponentName(pkg, cls), 0) }.isSuccess) foregroundPkg = pkg
+                if (runCatching { packageManager.getActivityInfo(ComponentName(pkg, cls), 0) }.isSuccess) { foregroundPkg = pkg; OverlayService.instance?.foregroundChanged(pkg) }
             }
             // A media player's notification: remember its session, to see later whether it's playing.
             AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED -> {
