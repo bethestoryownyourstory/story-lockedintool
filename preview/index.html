@@ -7138,7 +7138,7 @@ function subscriptionScreen(){
   const locked = subLocked(), active = subActive();
   const until = s.until ? new Date(s.until).toLocaleDateString('en-ZA', { day:'numeric', month:'short', year:'numeric' }) : '';
   const w = state.sub.waiting;
-  const status = STORY_OWNER ? 'Owner - you have everything.'
+  const status = STORY_OWNER ? 'Owner - you have everything' + (active ? ' (plan: ' + (s.plan === 'premium' ? 'Premium' : 'Basic') + ' until ' + until + ')' : '') + '. You can still pay a plan, e.g. to test payments.'
     : active ? 'Your plan: ' + (s.plan === 'premium' ? 'Premium' : 'Basic') + ' · paid until ' + until
     : s.connected ? 'Choose a plan to use LOCKED IN TOOL.' : 'Subscriptions open once LOCKED IN TOOL’s payments are set up.';
   return `
@@ -7159,7 +7159,7 @@ function subscriptionScreen(){
         <div class="sub-tag">${p.tag}</div>
         <div class="sub-text">${p.text}</div>
         <ul class="sub-list">${p.list.map(x=>`<li>${x}</li>`).join('')}</ul>
-        ${STORY_OWNER ? '' : `<button class="btn-wide${mine ? '' : ' btn-primary'}" data-action="sub-buy" data-plan="${p.key}"${state.sub.busy || w ? ' disabled' : ''}>${mine ? 'Add another month' : 'Choose ' + p.name}</button>
+        ${`<button class="btn-wide${mine ? '' : ' btn-primary'}" data-action="sub-buy" data-plan="${p.key}"${state.sub.busy || w ? ' disabled' : ''}>${mine ? 'Add another month' : 'Choose ' + p.name}</button>
         <div class="sub-zar">Paid in rand: R${Number(pr.zar || 0).toFixed(2)} a month, approved in your own bank</div>`}
       </div>`; }).join('')}
     ${state.sub.msg ? `<div class="note pay-msg">${escText(state.sub.msg)}</div>` : ''}
