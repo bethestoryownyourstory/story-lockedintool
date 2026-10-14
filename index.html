@@ -7393,14 +7393,14 @@ function privacySettingsHTML(){
 }
 // ---- Information (Dashboard sidebar): STORY's own information - what it is, how it works, everything real, your
 // privacy, the vision and what's coming (owner: "just story information"; the words are the owner's to change). ----
-// ---- Privacy Policy + Terms of Service (owner: drafts, under Information). DRAFTS written from how Lockedintool really
-//      works - the owner fills the [brackets] and has them checked before the Live release. Also reachable from the
+// ---- Privacy Policy + Terms of Service (owner, under Information). Written from how Lockedintool really works; the
+//      owner's details: Lockedintool, lockedintool@gmail.com, no refunds (except where the law requires). Also reachable from the
 //      Subscription page (someone without a plan sees only that page, and must be able to read what they agree to).
 const LEGAL_UPDATED = '14 October 2026';
 const LEGAL = {
   'legal-privacy': { title:'Privacy Policy', sections:[
     ['Who we are', [
-      'Lockedintool ("we", "us") makes the Lockedintool app. [Registered company name and number], [address], South Africa. Contact: [contact email].',
+      'Lockedintool ("we", "us") makes the Lockedintool app, from South Africa. Contact: lockedintool@gmail.com.',
       'We follow South Africa’s Protection of Personal Information Act (POPIA). This policy says what Lockedintool collects, where it is kept, who it is shared with and the choices you have.' ]],
     ['The short version', [
       'Most of what Lockedintool shows you never leaves your phone: your payments, cards, notes, drawings, call history and broker logins stay on it.',
@@ -7442,7 +7442,7 @@ const LEGAL = {
     ['How long we keep it', [
       'On your phone: until you delete it or remove the app. On our server: your account until you ask us to delete it; delivered messages are removed; payment records as long as the law requires (usually 5 years).' ]],
     ['Your rights', [
-      'You can ask to see, correct or delete the information we hold about you by writing to [contact email]. You can also complain to South Africa’s Information Regulator (inforegulator.org.za).' ]],
+      'You can ask to see, correct or delete the information we hold about you by writing to lockedintool@gmail.com. You can also complain to South Africa’s Information Regulator (inforegulator.org.za).' ]],
     ['Children', [
       'Lockedintool is for people 18 and older because it includes trading and payments.' ]],
     ['Changes', [
@@ -7450,7 +7450,7 @@ const LEGAL = {
   ]},
   'legal-terms': { title:'Terms of Service', sections:[
     ['Agreement', [
-      'These terms are between you and Lockedintool ([registered company name and number], South Africa). By using Lockedintool you agree to them and to our Privacy Policy. If you don’t agree, don’t use the app.' ]],
+      'These terms are between you and Lockedintool (South Africa). By using Lockedintool you agree to them and to our Privacy Policy. If you don’t agree, don’t use the app.' ]],
     ['Who can use it', [
       'You must be 18 or older and able to make a legal agreement. One person per account; keep your phone secure, because your account lives on it.' ]],
     ['Automatic updates', [
@@ -7458,7 +7458,7 @@ const LEGAL = {
     ['Subscription', [
       'Basic is $1 a month and Premium $5 a month, charged in rand (shown before you pay - currently R19 and R95). One payment gives 30 days of your plan; paying the same plan again adds 30 days.',
       'Plans do not renew by themselves yet - you pay each month. Payments are made through Stitch and approved by you on your own bank’s or card’s page.',
-      'Before you pay you can cancel or switch plans at any time. [Refund policy: e.g. "Payments are not refundable except where the law requires" - owner to decide.]',
+      'Before you pay you can cancel or switch plans at any time. Once a payment is made it is not refundable, except where South African law requires a refund.',
       'We may change prices or what a plan includes; you will be told in the app before it affects you.' ]],
     ['Trading - please read', [
       'Lockedintool is not a broker, not a financial adviser and does not give investment advice. It is only a gateway to your own account at your own broker: your broker agreement is between you and your broker, and deposits and withdrawals always stay with them.',
@@ -7482,7 +7482,7 @@ const LEGAL = {
       'You can stop using Lockedintool at any time by tapping Stop and removing the app. We may suspend or end access if these terms are broken.' ]],
     ['Changes and law', [
       'We may update these terms; the date at the top shows the latest version and big changes are shown in the app. These terms follow the laws of South Africa.',
-      'Questions: [contact email].' ]],
+      'Questions: lockedintool@gmail.com.' ]],
   ]},
 };
 function legalScreen(key){
@@ -7490,7 +7490,6 @@ function legalScreen(key){
   return `
     <div class="page-shell set2 info-page legal-page">
     ${topBar(L.title, false, '', state.legalFrom || 'information', '', subLocked() && state.legalFrom !== 'subscription')}
-    <div class="legal-draft">Draft - to be checked before release</div>
     <div class="legal-date">Last updated ${LEGAL_UPDATED}</div>
     ${L.sections.map(([h, ps])=>`<div class="section-title">${h.toUpperCase()}</div><div class="set2-card legal-card">${ps.map(p=>`<p>${escText(p)}</p>`).join('')}</div>`).join('')}
     <div class="info-foot">Lockedintool</div>
