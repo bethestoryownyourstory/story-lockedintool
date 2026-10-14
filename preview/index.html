@@ -1384,6 +1384,15 @@
   .app-page-open{ margin-top:6px; padding:10px 34px; border-radius:22px; border:1px solid #ffffff; background:#000000; color:#ffffff; font-size:14px; font-weight:600; }
   .info-title{ font-family:var(--font-display); font-size:34px; font-weight:800; letter-spacing:4px; color:var(--text); }
   .info-tag{ font-size:13px; color:var(--muted); margin-top:6px; }
+  .legal-link{ cursor:pointer; align-items:center; }
+  .legal-arrow{ font-size:22px; color:var(--muted); padding-left:10px; }
+  .legal-draft{ font-size:11px; font-weight:800; letter-spacing:0.6px; text-transform:uppercase; color:#d4a017; margin:2px 0 4px; }
+  .legal-date{ font-size:12px; color:var(--muted); margin-bottom:6px; }
+  .legal-card{ padding:12px 14px; }
+  .legal-card p{ margin:0 0 9px; font-size:13px; line-height:1.5; color:var(--text); }
+  .legal-card p:last-child{ margin-bottom:0; }
+  .legal-links{ font-size:12px; color:var(--muted); text-align:center; margin:4px 0 14px; line-height:1.6; }
+  .legal-links button{ background:none; border:0; padding:0; font:inherit; color:var(--text); text-decoration:underline; cursor:pointer; }
   .info-foot{ text-align:center; font-size:11.5px; color:var(--muted); padding:6px 0 30px; line-height:1.6; }
   .set2-card{ border:1px solid var(--line); border-radius:16px; background:var(--card); margin-bottom:18px; overflow:hidden; }
   .set2-row{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:13px 16px; min-height:24px; }
@@ -4407,7 +4416,7 @@ function homeBadge(){
 
 function topBar(label, withDots, extraRight, backTarget, titleExtra, hideBack, arrowOnly){
   const target = backTarget || 'dashboard';
-  const backLabel = arrowOnly ? '‹' : (target === 'dashboard' ? '‹ Dashboard' : `‹ ${target==='money'?'Money':target==='wallet'?'Wallet':target==='wallet-overview'?'Overview':target==='settings'?'Settings':target==='layouts'?'Layouts':target==='community'?'Community':target}`);
+  const backLabel = arrowOnly ? '‹' : (target === 'dashboard' ? '‹ Dashboard' : `‹ ${target==='money'?'Money':target==='wallet'?'Wallet':target==='wallet-overview'?'Overview':target==='settings'?'Settings':target==='layouts'?'Layouts':target==='community'?'Community':target==='information'?'Information':target==='subscription'?'Subscription':target}`);
   const dots = withDots
     ? `<span class="page-dots">${PAGES.map(p=>`<span class="dot${p===state.current?' active':''}"></span>`).join('')}</span>`
     : '';
@@ -7169,6 +7178,7 @@ function subscriptionScreen(){
       </div>`; }).join('')}
     ${state.sub.msg ? `<div class="note pay-msg">${escText(state.sub.msg)}</div>` : ''}
     <div class="note" style="margin:12px 0 4px;">Both plans are designed to help you stay organized, focused, and consistent.</div>
+    <div class="legal-links">By choosing a plan you agree to the <button data-action="legal-open" data-v="legal-terms" data-from="subscription">Terms of Service</button> and <button data-action="legal-open" data-v="legal-privacy" data-from="subscription">Privacy Policy</button>.</div>
     </div>`;
 }
 let subPollT = 0;
@@ -7383,6 +7393,109 @@ function privacySettingsHTML(){
 }
 // ---- Information (Dashboard sidebar): STORY's own information - what it is, how it works, everything real, your
 // privacy, the vision and what's coming (owner: "just story information"; the words are the owner's to change). ----
+// ---- Privacy Policy + Terms of Service (owner: drafts, under Information). DRAFTS written from how Lockedintool really
+//      works - the owner fills the [brackets] and has them checked before the Live release. Also reachable from the
+//      Subscription page (someone without a plan sees only that page, and must be able to read what they agree to).
+const LEGAL_UPDATED = '14 October 2026';
+const LEGAL = {
+  'legal-privacy': { title:'Privacy Policy', sections:[
+    ['Who we are', [
+      'Lockedintool ("we", "us") makes the Lockedintool app. [Registered company name and number], [address], South Africa. Contact: [contact email].',
+      'We follow South Africa’s Protection of Personal Information Act (POPIA). This policy says what Lockedintool collects, where it is kept, who it is shared with and the choices you have.' ]],
+    ['The short version', [
+      'Most of what Lockedintool shows you never leaves your phone: your payments, cards, notes, drawings, call history and broker logins stay on it.',
+      'Your messages are end-to-end encrypted: they are locked on your phone and only the person you send them to can open them. Our server only carries the locked message.',
+      'We do not sell your information and Lockedintool shows no ads.' ]],
+    ['Kept only on your phone', [
+      'Money and Wallet: payments read from the notifications and bank SMS your bank and payment apps put on your phone (amount, who, date, balance, the card or account’s last 4 digits). One-time PINs, chats, email and adverts are skipped.',
+      'Cards you add: bank name, last 4 digits and expiry. The full card number and CVV are only checked while you add the card and are never kept. Pictures of scanned cards are kept with the long number and CVV covered.',
+      'Notes, drawings, pictures and audio you add to notes; your profile picture; highlights and posts you make with Create; your settings.',
+      'Trading: the sign-in tokens and API keys of the broker accounts you add, in Lockedintool’s private storage. Your broker password is never kept.',
+      'Call history: calls made with Lockedintool, and contact names if you allow contacts.',
+      'Removing Lockedintool from your phone removes all of this.' ]],
+    ['Kept on our server', [
+      'Your account: a random ID, the public half of your encryption key, your name and @username (so people can find you) and your privacy choices (who can message and call you).',
+      'Messages and calls: locked messages waiting for a phone that is offline (deleted once delivered), and whether a message was delivered, seen or read. Calls go straight from phone to phone; our server only helps them connect.',
+      'Community: groups you create or join, and what you post, like or comment in public groups - public groups are visible to everyone. Private group messages are end-to-end encrypted.',
+      'Payments: your plan, its price, status and dates, and the payment reference from our payment partner. If you add a bank account to receive money, it is kept to pay you - anyone viewing it sees only the last 3 digits, and people sending you money never see it.',
+      'Phone number: only if Lockedintool ever needs to verify something, and then only kept as a scrambled (hashed) value - never used to find you.',
+      'Your internet address (IP) for a short time to stop abuse such as mass sign-ups.' ]],
+    ['Who we share with', [
+      'Stitch (our payment partner, a licensed South African payment provider) when you pay a plan or send money - you pay on Stitch’s or your bank’s own page; we never see your card or banking login.',
+      'Your brokers and exchanges: Lockedintool talks to them straight from your phone with the keys you added.',
+      'TradingView: the chart is TradingView’s own website inside Lockedintool; signing in to TradingView is between you and TradingView.',
+      'binlist.net: only the first 8 digits of a card you add, to show its bank’s name.',
+      'Cloudflare (runs our servers) and GitHub (delivers app updates).',
+      'Twilio, only if a phone number is ever verified by text.',
+      'Card scanning runs on your phone (Google ML Kit) and works offline - the pictures are not sent anywhere.',
+      'We share information with authorities only when the law requires it.' ]],
+    ['Permissions Lockedintool asks for', [
+      'Notification access - to read payments for Money and Wallet and to show the Notifications panel.',
+      'Accessibility - to open recent apps, lock the screen, see when the phone’s PIN page or quick settings are showing (so the lock screen dial pad steps aside), and find Lockedintool’s widgets on your home screen. What it sees is used on the phone at that moment and never stored or sent.',
+      'Display over other apps - Station 3, the Pages and the dial pad.',
+      'Camera, microphone, photos, videos and audio - only when you use them (Create, calls, card scanning, notes, profile picture).',
+      'Phone, call log and contacts - to place calls from the dial pad and show Call history.',
+      'Modify system settings - only if you choose Device brightness control.',
+      'You can turn any permission off in your phone’s settings; the feature that needs it stops working.' ]],
+    ['Keeping it safe', [
+      'Encryption keys are made on your phone and the private key never leaves it. Broker keys sit in the app’s private storage. Connections to our server are encrypted.' ]],
+    ['How long we keep it', [
+      'On your phone: until you delete it or remove the app. On our server: your account until you ask us to delete it; delivered messages are removed; payment records as long as the law requires (usually 5 years).' ]],
+    ['Your rights', [
+      'You can ask to see, correct or delete the information we hold about you by writing to [contact email]. You can also complain to South Africa’s Information Regulator (inforegulator.org.za).' ]],
+    ['Children', [
+      'Lockedintool is for people 18 and older because it includes trading and payments.' ]],
+    ['Changes', [
+      'We may update this policy as Lockedintool changes. The date at the top shows the latest version; big changes are shown in the app.' ]],
+  ]},
+  'legal-terms': { title:'Terms of Service', sections:[
+    ['Agreement', [
+      'These terms are between you and Lockedintool ([registered company name and number], South Africa). By using Lockedintool you agree to them and to our Privacy Policy. If you don’t agree, don’t use the app.' ]],
+    ['Who can use it', [
+      'You must be 18 or older and able to make a legal agreement. One person per account; keep your phone secure, because your account lives on it.' ]],
+    ['Automatic updates', [
+      'Using Lockedintool means agreeing that it keeps itself up to date: new versions install automatically.' ]],
+    ['Subscription', [
+      'Basic is $1 a month and Premium $5 a month, charged in rand (shown before you pay - currently R19 and R95). One payment gives 30 days of your plan; paying the same plan again adds 30 days.',
+      'Plans do not renew by themselves yet - you pay each month. Payments are made through Stitch and approved by you on your own bank’s or card’s page.',
+      'Before you pay you can cancel or switch plans at any time. [Refund policy: e.g. "Payments are not refundable except where the law requires" - owner to decide.]',
+      'We may change prices or what a plan includes; you will be told in the app before it affects you.' ]],
+    ['Trading - please read', [
+      'Lockedintool is not a broker, not a financial adviser and does not give investment advice. It is only a gateway to your own account at your own broker: your broker agreement is between you and your broker, and deposits and withdrawals always stay with them.',
+      'Orders you place in Lockedintool are sent to your broker exactly as you place them. You are responsible for every trade. Trading is risky and you can lose more than you put in.',
+      'Prices, charts and balances come from your broker and TradingView and can be late, wrong or unavailable. We are not responsible for losses caused by markets, your broker, TradingView, your connection or app downtime.' ]],
+    ['Money and Wallet', [
+      'Money and Wallet are built from your bank’s notifications and messages, so they can be incomplete or wrong - they are not bank statements. Check with your bank before relying on them.',
+      'Tap to Pay uses your phone’s own payment app. When sending money is available it goes from your bank account straight into theirs through our payment partner; Lockedintool never holds your money.' ]],
+    ['Messages, groups and calls', [
+      'You own what you post. You let us carry and show it so the app can work (for example, posts in public groups are visible to everyone).',
+      'Not allowed: sexual or adult content, harassment, threats, illegal content, scams, malware or anything meant to harm a device or a person. We may remove content and warn, suspend or close accounts that break these rules.',
+      'The dial pad places normal phone calls through your mobile network; your network’s charges apply. For emergencies, use your phone’s own dialer if anything doesn’t work.' ]],
+    ['Other services', [
+      'Your brokers, TradingView, Stitch, your bank and other apps you open from Lockedintool have their own terms, which apply when you use them.' ]],
+    ['The app', [
+      'Lockedintool, its name, logo and design belong to Lockedintool. Don’t copy, resell or reverse-engineer the app or misuse our servers.',
+      'We work to keep Lockedintool running, but it is provided as it is and may sometimes be unavailable, change or have mistakes. Features marked "coming soon" are not available yet.' ]],
+    ['Responsibility', [
+      'As far as the law allows, Lockedintool is not liable for indirect losses or lost profits, and our total liability to you is limited to what you paid us in the last 3 months. Nothing here removes your rights under South Africa’s Consumer Protection Act.' ]],
+    ['Ending', [
+      'You can stop using Lockedintool at any time by tapping Stop and removing the app. We may suspend or end access if these terms are broken.' ]],
+    ['Changes and law', [
+      'We may update these terms; the date at the top shows the latest version and big changes are shown in the app. These terms follow the laws of South Africa.',
+      'Questions: [contact email].' ]],
+  ]},
+};
+function legalScreen(key){
+  const L = LEGAL[key];
+  return `
+    <div class="page-shell set2 info-page legal-page">
+    ${topBar(L.title, false, '', state.legalFrom || 'information', '', subLocked() && state.legalFrom !== 'subscription')}
+    <div class="legal-draft">Draft - to be checked before release</div>
+    <div class="legal-date">Last updated ${LEGAL_UPDATED}</div>
+    ${L.sections.map(([h, ps])=>`<div class="section-title">${h.toUpperCase()}</div><div class="set2-card legal-card">${ps.map(p=>`<p>${escText(p)}</p>`).join('')}</div>`).join('')}
+    <div class="info-foot">Lockedintool</div>
+    </div>`;
+}
 function informationScreen(){
   const ver = NATIVE && window.StoryNative.appVersion ? window.StoryNative.appVersion() : '';
   const block = (title, rows)=>`
@@ -7419,6 +7532,11 @@ function informationScreen(){
       ['Your bank inside Lockedintool', 'Log in to your bank for your full history and live balance.'],
       ['Subscription', 'One subscription that covers everything Lockedintool connects for you.'],
     ])}
+    <div class="section-title">LEGAL</div>
+    <div class="set2-card">
+      <div class="set2-row legal-link" data-action="legal-open" data-v="legal-privacy" data-from="information"><div class="set2-text"><div class="set2-name">Privacy Policy</div><div class="set2-sub">What Lockedintool collects, where it’s kept and who sees it.</div></div><span class="legal-arrow">›</span></div>
+      <div class="set2-row legal-link" data-action="legal-open" data-v="legal-terms" data-from="information"><div class="set2-text"><div class="set2-name">Terms of Service</div><div class="set2-sub">The agreement for using Lockedintool, plans and trading.</div></div><span class="legal-arrow">›</span></div>
+    </div>
     <div class="info-foot">#lockedintool${ver ? '<br>Lockedintool ' + escText(ver) : ''}</div>
     </div>`;
 }
@@ -10832,6 +10950,7 @@ function renderScreenContent(){
     case 'tx-history': return txHistoryScreen();
     case 'layouts': return layoutsScreen();
     case 'information': return informationScreen();
+    case 'legal-privacy': case 'legal-terms': return legalScreen(state.current);
     case 'subscription': return subscriptionScreen();
     case 'layouts-dashboard': return layoutsDashboardScreen();
     case 'layouts-homescreen': return layoutsHomeScreenScreen();
@@ -11848,7 +11967,7 @@ notesDb().then(db=>new Promise(res=>{
 document.addEventListener('visibilitychange', ()=>{ if(document.hidden){ if(noteLiveSaveT){ clearTimeout(noteLiveSaveT); noteLiveSaveT = null; } persistNotesNow(); } });
 function renderDevice(){
   // No plan (once subscriptions are really on) = LOCKED IN TOOL shows only its Subscription page (owner).
-  if(subLocked() && state.current !== 'subscription' && !IN_STATION3_WINDOW){ state.current = 'subscription'; state.rowsViewOpen = false; state.pageStyleViewOpen = false; }
+  if(subLocked() && state.current !== 'subscription' && !/^legal-/.test(state.current) && !IN_STATION3_WINDOW){ state.current = 'subscription'; state.rowsViewOpen = false; state.pageStyleViewOpen = false; }
   // A live home screen widget never leaves its page (owner: the Money widget stays on Money, the Dashboard widget on
   // the Dashboard): anything that would go to another page opens STORY full screen on it instead.
   if(window.__storyWidgetPinned && state.current !== window.__storyWidget){
@@ -14138,6 +14257,7 @@ function attachHandlers(){
         case 'sub-reopen': if(state.sub.waiting) payOpenBank(state.sub.waiting.url); break;
         case 'sub-done': state.sub.waiting = null; break;
         case 'sub-cancel': subCancel(); break;
+        case 'legal-open': state.legalFrom = el.getAttribute('data-from') || 'information'; state.current = el.getAttribute('data-v'); break;
         case 'pay-mode': state.pay.mode = el.getAttribute('data-v'); state.pay.msg = ''; break;
         case 'pay-bank': state.pay.bank = el.getAttribute('data-v'); break;
         case 'pay-unpick': state.pay.to = null; break;
