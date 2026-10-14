@@ -7095,7 +7095,7 @@ window.storyAppsChanged = function(){
 };
 // Anything that isn't built yet tells you so when tapped ("... — coming soon"), everywhere in STORY.
 const COMING_SOON = [
-  ['[data-dash]', el=>el.textContent.trim()],
+  ['[data-dash]:not([data-dash="camera"]):not([data-dash="gallery"])', el=>el.textContent.trim()],
   ['.search-row', ()=>'Search'],
   ['.avatar-add:not([data-action="add-card"] .avatar-add)', ()=>'Add'],
   ['.btn-row-action:not([data-action])', el=>el.textContent.trim()],
@@ -8616,6 +8616,20 @@ window.storyProfileGeom = function(){
     raf = requestAnimationFrame(frame);
   };
 })();
+// Camera and Gallery (Dashboard sidebar and Apps): the phone's own Camera app and Gallery app (owner: the real ones).
+function storyOpenPhone(which){
+  if(NATIVE && window.StoryNative[which === 'camera' ? 'openCamera' : 'openGallery']) window.StoryNative[which === 'camera' ? 'openCamera' : 'openGallery']();
+  else showToast(which === 'camera' ? 'Opens your phone\u2019s camera in the app' : 'Opens your phone\u2019s gallery in the app');
+}
+document.addEventListener('click', (e)=>{
+  const el = e.target.closest && e.target.closest('[data-dash="camera"], [data-dash="gallery"], [data-app-id="camera"], [data-app-id="gallery"]');
+  if(!el) return;
+  if(el.hasAttribute('data-app-id') && (Date.now() - appMenuOpenedAt < 450 || state.appMenuId)) return;   // a held app row opens its menu
+  e.stopPropagation(); e.preventDefault();
+  const which = el.getAttribute('data-dash') || el.getAttribute('data-app-id');
+  if(el.hasAttribute('data-app-id')) pushRecentApp(which);
+  storyOpenPhone(which);
+}, true);
 window.storyGoHome = function(){ state.recentsOpen=false; state.homePickerOpen=false; state.appMenuId=null; state.current = state.homeScreen || 'wallet'; renderDevice(); };
 document.addEventListener('click', (e)=>{
   const el = e.target.closest && e.target.closest('[data-native-pkg]');
