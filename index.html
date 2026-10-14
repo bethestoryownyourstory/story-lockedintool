@@ -1301,6 +1301,23 @@
   #story-profile .pf-newgroup-form input{ flex:1; min-width:0; padding:10px 12px; border-radius:12px; border:1px solid rgba(255,255,255,0.3); background:none; color:inherit; font-size:14px; }
   #story-profile .pf-newgroup-form button{ padding:0 14px; border-radius:12px; border:0; background:#ffffff; color:#000000; font-weight:700; }
   #story-profile .msg-lock{ display:inline-flex; margin-right:4px; vertical-align:-1px; opacity:0.8; font-style:normal; }
+  .info-hero{ text-align:center; padding:18px 0 22px; }
+  .info-title{ font-family:var(--font-display); font-size:34px; font-weight:800; letter-spacing:4px; color:var(--text); }
+  .info-tag{ font-size:13px; color:var(--muted); margin-top:6px; }
+  .info-foot{ text-align:center; font-size:11.5px; color:var(--muted); padding:6px 0 30px; line-height:1.6; }
+  .set2-card{ border:1px solid var(--line); border-radius:16px; background:var(--card); margin-bottom:18px; overflow:hidden; }
+  .set2-row{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:13px 16px; min-height:24px; }
+  .set2-row + .set2-row{ border-top:1px solid var(--line); }
+  .set2-stack{ flex-direction:column; align-items:stretch; gap:10px; }
+  .set2-text{ flex:1; min-width:0; }
+  .set2-name{ font-size:14px; font-weight:700; color:var(--text); line-height:1.3; }
+  .set2-sub{ font-size:11.5px; color:var(--muted); line-height:1.4; margin-top:3px; }
+  .set2-seg{ display:flex; gap:6px; }
+  .set2-seg .theme-opt{ flex:1; padding:9px 4px; text-align:center; white-space:nowrap; font-size:12.5px; }
+  .set2-nested{ padding-left:30px; }
+  .set2-link{ cursor:pointer; }
+  .set2-link:active{ opacity:0.6; }
+  .set2 .qa-radio{ width:20px; height:20px; }
   .privacy-pick{ width:100%; display:flex; gap:6px; }
   .privacy-pick .theme-opt{ flex:1; padding-left:4px; padding-right:4px; white-space:nowrap; }
   .privacy-check{ width:22px; height:22px; border-radius:50%; border:1px solid var(--line); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:800; }
@@ -4254,7 +4271,7 @@ function dashboardScreen(){
           <div class="sidebar-item" data-nav="community">COMMUNITY</div>
           <div class="sidebar-item" data-nav="settings">SETTINGS</div>
           <div class="sidebar-item" data-dash="subs">SUBSCRIPTIONS</div>
-          <div class="sidebar-item" data-dash="info">INFORMATION</div>
+          <div class="sidebar-item" data-nav="information">INFORMATION</div>
           <div class="sidebar-item" data-dash="camera">CAMERA</div>
           <div class="sidebar-item" data-dash="gallery">GALLERY</div>
           <div class="sidebar-item" data-nav="apps">APPS</div>
@@ -6873,19 +6890,15 @@ function layoutsArrangementScreen(){
 let qaS3MoreOpen = false;
 function quickAccessSettingsHTML(){
   const q = quickAccess();
-  const radio = (m, name)=>`
-    <div class="row-card qa-pick" data-action="qa-mode" data-v="${m}">
-      <div class="row"><div class="row-left"><div class="row-name">${name}</div></div><span class="qa-radio${q.mode===m?' on':''}"></span></div>
-    </div>`;
   const toggle = (k, name, sub)=>`
-    <div class="row qa-sub">
-      <div class="row-left"><div class="row-name">${name}</div>${sub ? `<div class="row-sub">${sub}</div>` : ''}</div>
+    <div class="set2-row set2-nested">
+      <div class="set2-text"><div class="set2-name">${name}</div>${sub ? `<div class="set2-sub">${sub}</div>` : ''}</div>
       <button class="toggle-switch${q[k]?' on':''}" data-action="qa-toggle" data-k="${k}"><span class="toggle-knob"></span></button>
     </div>`;
   const where = `
-    <div class="row qa-sub qa-where">
-      <div class="row-left"><div class="row-name">Show Station 3</div></div>
-      <div class="theme-pick">
+    <div class="set2-row set2-nested set2-stack">
+      <div class="set2-text"><div class="set2-name">Show Station 3</div></div>
+      <div class="set2-seg">
         ${[['pages','Pages'],['apps','Apps'],['both','Both']].map(([v,t])=>`<button class="theme-opt${q.where===v?' on':''}" data-action="qa-where" data-v="${v}">${t}</button>`).join('')}
       </div>
     </div>`;
@@ -6893,8 +6906,8 @@ function quickAccessSettingsHTML(){
   let body = '';
   if(q.mode === 's3dial') body = s3Opts;
   else if(q.mode === 'separate') body = `
-    <div class="row qa-sub" data-action="qa-s3more" style="cursor:pointer;">
-      <div class="row-left"><div class="row-name">Station 3 options</div></div><span class="chev-right">${qaS3MoreOpen ? '⌄' : '›'}</span>
+    <div class="set2-row set2-nested set2-link" data-action="qa-s3more">
+      <div class="set2-text"><div class="set2-name">Station 3 options</div></div><span class="chev-right">${qaS3MoreOpen ? '⌄' : '›'}</span>
     </div>
     ${qaS3MoreOpen ? s3Opts : ''}
     ${toggle('lockDial', 'Put dial pad on lock screen')}
@@ -6902,12 +6915,17 @@ function quickAccessSettingsHTML(){
   else body = `
     ${toggle('lockDial', 'Put on lock screen')}
     ${q.lockDial ? toggle('dialAod', 'Always On Display') : ''}`;
-  const opt = (m, name)=> radio(m, name) + (q.mode === m ? `<div class="row-card qa-body">${body}</div>` : '');
+  const opt = (m, name)=>`
+    <div class="set2-row set2-link qa-pick" data-action="qa-mode" data-v="${m}">
+      <div class="set2-text"><div class="set2-name">${name}</div></div><span class="qa-radio${q.mode===m?' on':''}"></span>
+    </div>` + (q.mode === m ? body : '');
   return `
     <div class="section-title">QUICK ACCESS</div>
-    ${opt('s3dial', 'Station 3 with dial pad')}
-    ${opt('separate', 'Station 3 dial pad separate')}
-    ${opt('dialonly', 'Dial pad only')}`;
+    <div class="set2-card">
+      ${opt('s3dial', 'Station 3 with dial pad')}
+      ${opt('separate', 'Station 3 dial pad separate')}
+      ${opt('dialonly', 'Dial pad only')}
+    </div>`;
 }
 function saveQuickAccess(patch){
   const q = Object.assign(quickAccess(), patch);
@@ -6924,47 +6942,88 @@ function privacySettingsHTML(){
   let people = []; try{ people = (JSON.parse(localStorage.getItem('story-messages') || '[]') || []).filter(c=>c && c.kind !== 'group'); }catch(e){}
   return `
     <div class="section-title">PRIVACY</div>
-    <div class="row-card">
-      <div class="row" style="flex-wrap:wrap;gap:8px;">
-        <div class="row-left"><div class="row-name">Who can call you</div><div class="row-sub">${calls === 'everyone' ? 'Anyone who messages you sees the call button' : calls === 'people' ? 'Only the people you pick' : 'No one can call you'}</div></div>
-        <div class="theme-pick privacy-pick">
+    <div class="set2-card">
+      <div class="set2-row set2-stack">
+        <div class="set2-text"><div class="set2-name">Who can call you</div><div class="set2-sub">${calls === 'everyone' ? 'Anyone who messages you sees the call button' : calls === 'people' ? 'Only the people you pick' : 'No one can call you'}</div></div>
+        <div class="set2-seg">
           <button class="theme-opt${calls === 'everyone' ? ' on' : ''}" data-action="privacy-calls" data-value="everyone">Everyone</button>
           <button class="theme-opt${calls === 'people' ? ' on' : ''}" data-action="privacy-calls" data-value="people">Specific people</button>
           <button class="theme-opt${calls === 'nobody' ? ' on' : ''}" data-action="privacy-calls" data-value="nobody">No one</button>
         </div>
       </div>
       ${calls === 'people' ? (people.length ? people.map(c=>`
-        <div class="row" data-action="privacy-call-person" data-value="${escText(c.id)}" style="cursor:pointer;">
-          <div class="row-left"><div class="row-name">${escText(c.name || (c.username ? '@' + c.username : 'Chat'))}</div></div>
+        <div class="set2-row set2-nested set2-link" data-action="privacy-call-person" data-value="${escText(c.id)}">
+          <div class="set2-text"><div class="set2-name">${escText(c.name || (c.username ? '@' + c.username : 'Chat'))}</div></div>
           <span class="privacy-check${picked.includes(c.id) ? ' on' : ''}">${picked.includes(c.id) ? '✓' : ''}</span>
-        </div>`).join('') : `<div class="row"><div class="row-left"><div class="row-sub">People you chat with show here to pick from.</div></div></div>`) : ''}
+        </div>`).join('') : `<div class="set2-row set2-nested"><div class="set2-text"><div class="set2-sub">People you chat with show here to pick from.</div></div></div>`) : ''}
+    </div>`;
+}
+// ---- Information (Dashboard sidebar): STORY's own information - what it is, how it works, everything real, your
+// privacy, the vision and what's coming (owner: "just story information"; the words are the owner's to change). ----
+function informationScreen(){
+  const ver = NATIVE && window.StoryNative.appVersion ? window.StoryNative.appVersion() : '';
+  const block = (title, rows)=>`
+    <div class="section-title">${title}</div>
+    <div class="set2-card">${rows.map(([name, sub])=>`<div class="set2-row"><div class="set2-text"><div class="set2-name">${name}</div>${sub ? `<div class="set2-sub">${sub}</div>` : ''}</div></div>`).join('')}</div>`;
+  return `
+    <div class="page-shell set2 info-page">
+    ${topBar('Information', false)}
+    <div class="info-hero">
+      <div class="info-title">STORY</div>
+      <div class="info-tag">Be the story. Own your story.</div>
+    </div>
+    ${block('WHAT STORY IS', [
+      ['One with your phone', 'Once STORY is on, it stays on - like part of the phone. Your pages and Station 3 are there over every app, and on the lock screen.'],
+      ['Everything in one place', 'Your money, your cards, your trading, your notes and your people - without switching between apps.'],
+    ])}
+    ${block('HOW IT WORKS', [
+      ['Pages', 'Money, Wallet and Focus sit side by side in a row. Swipe between them; Rows and Page Styles show them in different ways.'],
+      ['Station 3', 'The button in the corner. Open it for Messages, Profile, Create, Call history and the dial pad - from anywhere.'],
+      ['Community', 'Public groups anyone can join, and Stories - real people sharing their journey.'],
+      ['Notes', 'Notes and drawings, kept on your phone.'],
+    ])}
+    ${block('EVERYTHING IS REAL', [
+      ['Your money', 'Payments come from your own bank\u2019s notifications. Nothing is made up.'],
+      ['Your trading', 'Your own broker accounts and TradingView\u2019s real chart. STORY is only the gateway - deposits and withdrawals stay with your broker.'],
+      ['Your people', 'Real messages, calls and groups between people on STORY.'],
+    ])}
+    ${block('YOUR PRIVACY', [
+      ['Messages and calls', 'End-to-end encrypted. Your keys are made on your phone and never leave it.'],
+      ['Your money, cards and notes', 'Kept only on your phone. Card numbers and CVVs are never kept.'],
+      ['Your broker logins', 'Kept in STORY\u2019s private storage on your phone - never your password.'],
+    ])}
+    ${block('COMING NEXT', [
+      ['Group calls', 'Calls with your whole group.'],
+      ['Your bank inside STORY', 'Log in to your bank for your full history and live balance.'],
+      ['Subscription', 'One subscription that covers everything STORY connects for you.'],
+    ])}
+    <div class="info-foot">#bethestoryownyourstory${ver ? '<br>STORY ' + escText(ver) : ''}</div>
     </div>`;
 }
 function settingsHubScreen(){
+  // Settings (owner: "fix settings, they don't look nice"): one card per section, rows split by thin lines, the
+  // explanation under each name, choices as full-width even buttons (set2).
+  const white = window.storyTheme && window.storyTheme()==='white';
+  const st = state.accountStatus.status;
   return `
-    <div class="page-shell">
+    <div class="page-shell set2">
     ${topBar('Settings', false)}
     <div class="section-title">DISPLAY</div>
-    <div class="row-card">
-      <div class="row">
-        <div class="row-left">
-          <div class="row-name">System theme</div>
-          <div class="row-sub">Swaps STORY's black and white. Every other colour stays.</div>
-        </div>
-        <div class="theme-pick">
-          <button class="theme-opt${window.storyTheme && window.storyTheme()==='white' ? '' : ' on'}" data-action="theme-black">Black</button>
-          <button class="theme-opt${window.storyTheme && window.storyTheme()==='white' ? ' on' : ''}" data-action="theme-white">White</button>
+    <div class="set2-card">
+      <div class="set2-row set2-stack">
+        <div class="set2-text"><div class="set2-name">System theme</div></div>
+        <div class="set2-seg">
+          <button class="theme-opt${white ? '' : ' on'}" data-action="theme-black">Black</button>
+          <button class="theme-opt${white ? ' on' : ''}" data-action="theme-white">White</button>
         </div>
       </div>
     </div>
     ${quickAccessSettingsHTML()}
     ${privacySettingsHTML()}
     <div class="section-title">CATEGORIES</div>
-    <div class="row-card" style="cursor:pointer;" data-nav="notif-settings">
-      <div class="row"><div class="row-left"><div class="row-name">Notifications</div></div><span class="chev-right">›</span></div>
-    </div>
-    <div class="row-card" style="cursor:pointer;" data-nav="community-guidelines">
-      <div class="row"><div class="row-left"><div class="row-name">Community Guidelines</div>${state.accountStatus.status!=='active' ? `<div class="row-sub" style="color:var(--red);">${state.accountStatus.status==='warned'?'Warning issued':'Account suspended'}</div>` : ''}</div><span class="chev-right">›</span></div>
+    <div class="set2-card">
+      <div class="set2-row set2-link" data-nav="notif-settings"><div class="set2-text"><div class="set2-name">Notifications</div></div><span class="chev-right">›</span></div>
+      <div class="set2-row set2-link" data-nav="community-guidelines"><div class="set2-text"><div class="set2-name">Community Guidelines</div>${st !== 'active' ? `<div class="set2-sub" style="color:var(--red);">${st==='warned'?'Warning issued':'Account suspended'}</div>` : ''}</div><span class="chev-right">›</span></div>
     </div>
     </div>
   `;
@@ -10326,6 +10385,7 @@ function renderScreenContent(){
     case 'receive-money': return receiveMoneyScreen();
     case 'tx-history': return txHistoryScreen();
     case 'layouts': return layoutsScreen();
+    case 'information': return informationScreen();
     case 'layouts-dashboard': return layoutsDashboardScreen();
     case 'layouts-homescreen': return layoutsHomeScreenScreen();
     case 'layouts-arrangement': return layoutsArrangementScreen();

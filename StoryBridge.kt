@@ -80,6 +80,14 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         ctx.startActivity(i)
     }
 
+    /** Information page: this STORY app's version ("1.0 (build 233)"). */
+    @JavascriptInterface
+    fun appVersion(): String = runCatching {
+        val pi = ctx.packageManager.getPackageInfo(ctx.packageName, 0)
+        val code = if (android.os.Build.VERSION.SDK_INT >= 28) pi.longVersionCode else @Suppress("DEPRECATION") pi.versionCode.toLong()
+        (pi.versionName ?: "") + " (build " + code + ")"
+    }.getOrDefault("")
+
     /** Dashboard / Apps > Camera and Gallery: the phone's own Camera app and Gallery app (owner: the real ones).
      *  Camera on the lock screen opens the phone's lock-screen camera, like the phone's own shortcut. */
     @JavascriptInterface
