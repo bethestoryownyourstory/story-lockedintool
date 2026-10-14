@@ -2565,6 +2565,8 @@
     -webkit-backface-visibility:hidden; backface-visibility:hidden; contain:paint; }
   .pswitch-wheel3d-scene .curve-slice *{ animation:none !important; transition:none !important; }
   .curve-slice-inner{ position:absolute; top:0; width:182px; height:238px; --mscale:0.476; }
+  /* A 3D Circle face: the whole screen (the page exactly as the Pages show it), shrunk to the face's width. */
+  .wheel-screen{ position:absolute; left:0; top:0; transform-origin:0 0; overflow:hidden; background:var(--bg-app); }
   /* Fills the gap above/below a shorter page's real content, up to the shared rim height --
      the app background color (var(--bg-app)), same curve/radius/angle as the content
      slices, and visible from both sides for the same reason as .curve-slice above. */
@@ -3720,8 +3722,6 @@ function pswitchCircle2dHTML(navAttr){
 // dragging vertically tilts it so you can look at its top or underneath (direct drag,
 // no momentum, clamped so it can't flip all the way over).
 const WHEEL_TILE_W = 182;
-const WHEEL_MSCALE = 0.476;              // must match .curve-slice-inner's --mscale in CSS
-const WHEEL_DESIGN_W = WHEEL_TILE_W / WHEEL_MSCALE; // the real phone's content width (~382px)
 const WHEEL_SLICES = 14;     // strips per page -- higher = smoother curve (was 9)
 // Was 92deg out of each page's 120deg slot, leaving a 28deg gap between pages with no
 // geometry at all -- looking through that gap (from any tilt) showed pure empty background,
@@ -3757,28 +3757,30 @@ const WHEEL_CAP_BAND = 28;
 // than useful. All 3 panels are the same size now, sized to whatever Wallet/Trading need;
 // Money just shows as much as that common height fits, cropped like any other mini preview,
 // the same way it behaves in every other Page Style (Rows, Circle, etc).
-// Every panel is as tall as the TALLEST page, Money included (owner: nothing may be cut - every page shows whole).
-function wheelPageTileHeights(clean){
-  const heights = {};
-  PAGE_SWITCH_ITEMS.forEach(item=>{
-    const natural = measureNaturalHeight(clean[item.key], WHEEL_DESIGN_W);
-    heights[item.key] = Math.max(160, Math.round(natural * WHEEL_MSCALE));
-  });
-  const uniformH = Math.max(...Object.values(heights));
-  PAGE_SWITCH_ITEMS.forEach(item=>{ heights[item.key] = uniformH; });
-  return heights;
+// 3D Circle (owner: every page shows FULL, exactly as it shows on the screen): each face is the whole screen - the
+// page at this phone's size with the very zoom the Pages give it (pageFitZoom), Wallet's Transfer Money bar included -
+// shrunk to the face's width. Built once per page and shared by its 14 strips.
+function wheelScreenHTML(key, W, H, s){
+  const tmp = document.createElement('div');
+  tmp.innerHTML = pageCleanHTML(key, true);
+  const root = tmp.firstElementChild;
+  if(!root) return '';
+  const z = isAppPage(key) ? 1 : pageFitZoom(key, W, H);
+  if(z !== 1){
+    root.style.zoom = z.toFixed(4);
+    const top = root.querySelector(':scope > .page-top');
+    if(top) top.style.zoom = (1 / z).toFixed(4);
+  }
+  const dock = key === 'wallet' ? `<div class="phone-float-dock wallet-float-dock">${walletFloatBar()}</div>` : '';
+  return `<div class="wheel-screen" style="width:${W}px;height:${H}px;transform:scale(${s.toFixed(5)});">${tmp.innerHTML}${dock}</div>`;
 }
 function pswitchWheel3dHTML(navAttr){
-  // Each page is built ONCE and reused by all 14 of its strips (fast to open - it used to be built 14 times over).
-  const clean = {}, preview = {};
-  PAGE_SWITCH_ITEMS.forEach(item=>{
-    clean[item.key] = pageCleanHTML(item.key, true);
-    preview[item.key] = clean[item.key] ? `<div class="mini-preview-frame"><div class="mini-preview-inner">${clean[item.key]}</div></div>` : '';
-  });
-  const tileH = wheelPageTileHeights(clean);
-  // No wall/rim framing any more -- every page is already forced to the same content
-  // height (wheelPageTileHeights), so the drum height is just that shared content height,
-  // with no cap band padding above/below it to fill.
+  const areaEl = document.querySelector('#device-wrap #content-area');
+  const W = (areaEl && areaEl.clientWidth) || window.innerWidth, H = (areaEl && areaEl.clientHeight) || window.innerHeight;
+  const s = WHEEL_TILE_W / W, faceH = Math.round(H * s);
+  const preview = {}, tileH = {};
+  PAGE_SWITCH_ITEMS.forEach(item=>{ preview[item.key] = wheelScreenHTML(item.key, W, H, s); tileH[item.key] = faceH; });
+  // Every face is the screen's shape, so the drum is exactly one screen tall (shrunk).
   const maxTileH = Math.max(...PAGE_SWITCH_ITEMS.map(item=>tileH[item.key]));
   const sceneH = maxTileH + 110; // breathing room so the content/shading isn't clipped
   // Every page of the row gets an equal slot of the drum (3 pages = 120deg each, as always; app pages add slots).
@@ -15045,25 +15047,34 @@ function fitPageToScreen(area, el, pageKey){
 // doesn't stall while it's measured.
 function prewarmPageFits(){
   if(IN_STATION3_WINDOW || state.device !== 'phone') return;
+  PAGES.forEach(pg=>{ if(pg !== state.current) fitPageOffscreen(pg); });
+}
+// Works out one page's fit off screen - always the PAGE itself (never Rows / a Page Style that may be open).
+function fitPageOffscreen(pg){
   const live = document.getElementById('device-wrap');
-  if(!live) return;
+  if(!live || IN_STATION3_WINDOW || state.device !== 'phone') return;
   const r = live.getBoundingClientRect();
-  const saved = state.current;
-  PAGES.forEach(pg=>{
-    if(pg === saved) return;
-    const host = document.createElement('div');
-    host.className = 'device-wrap';
-    host.setAttribute('aria-hidden', 'true');
-    host.style.cssText = 'position:fixed;left:0;top:0;width:' + r.width + 'px;height:' + r.height + 'px;visibility:hidden;pointer-events:none;z-index:-1;';
-    let frameHTML = '', contentHTML = '';
-    try{ state.current = pg; frameHTML = buildPhone(); contentHTML = renderScreenContent(); }
-    finally{ state.current = saved; }
-    host.innerHTML = frameHTML;
-    document.body.appendChild(host);
-    const area = host.querySelector('#content-area');
-    if(area){ area.innerHTML = contentHTML; try{ fitPageToScreen(area, null, pg); }catch(e){} }
-    host.remove();
-  });
+  const host = document.createElement('div');
+  host.className = 'device-wrap';
+  host.setAttribute('aria-hidden', 'true');
+  host.style.cssText = 'position:fixed;left:0;top:0;width:' + r.width + 'px;height:' + r.height + 'px;visibility:hidden;pointer-events:none;z-index:-1;';
+  const saved = { cur:state.current, rows:state.rowsViewOpen, ps:state.pageStyleViewOpen };
+  let frameHTML = '', contentHTML = '';
+  try{ state.current = pg; state.rowsViewOpen = false; state.pageStyleViewOpen = false; frameHTML = buildPhone(); contentHTML = renderScreenContent(); }
+  finally{ state.current = saved.cur; state.rowsViewOpen = saved.rows; state.pageStyleViewOpen = saved.ps; }
+  host.innerHTML = frameHTML;
+  document.body.appendChild(host);
+  const area = host.querySelector('#content-area');
+  if(area){ area.innerHTML = contentHTML; try{ fitPageToScreen(area, null, pg); }catch(e){} }
+  host.remove();
+}
+// A page's zoom on this screen, exactly as the Pages show it (worked out once per screen size).
+function pageFitZoom(pg, W, H){
+  const pre = pg + '|' + W + 'x' + H + '|';
+  const find = ()=>{ for(const k in FIT_CACHE) if(k.indexOf(pre) === 0) return FIT_CACHE[k].zoom; return null; };
+  let z = find();
+  if(z == null){ fitPageOffscreen(pg); z = find(); }
+  return z == null ? 1 : z;
 }
 setTimeout(()=>{ try{ prewarmPageFits(); }catch(e){} }, 1200);
 window.addEventListener('resize', ()=>{ setTimeout(()=>{ try{ prewarmPageFits(); refreshNeighbors(true); }catch(e){} }, 400); });
