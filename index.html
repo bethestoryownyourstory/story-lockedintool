@@ -7908,7 +7908,7 @@ function checkProfileField(){
   const v = inp.value.trim();
   // Either can be left empty -- but not both (a profile always has a name or a username).
   const other = k === 'name' ? profileData().username : k === 'username' ? profileData().name : 'x';
-  const problem = k === 'bio' || k === 'about' ? '' : !v ? (other ? '' : 'Add a name or a username.') : k === 'username' ? usernameProblem(v) : '';
+  const problem = k === 'bio' || k === 'about' ? '' : profileChangeProblem(k, v) || (!v ? (other ? '' : 'Add a name or a username.') : k === 'username' ? usernameProblem(v) : '');
   f.querySelector('.pf-field-msg').textContent = k === 'bio' || k === 'about' ? inp.value.length + ' / 150' : problem || (k === 'username' && !v ? 'Your @ on Lockedintool.' : '');
   f.querySelector('.pf-field-msg').classList.toggle('bad', !!problem);
   f.querySelector('[data-pf="field-save"]').disabled = !!problem;
@@ -9166,8 +9166,31 @@ async function msgSyncProfile(){
   upSyncPhoto();
   const p = profileData(), key = [p.name, p.username, p.bio, p.about].map(x=>x || '').join('|');
   if(key === msgProfSent) return;
-  try{ await msgApi('/v1/me', { name: p.name || '', username: (p.username || '').toLowerCase(), bio: p.bio || '', about: p.about || '', privacy: storyPrivacy() }); msgProfSent = key; }
-  catch(e){ if(e.code === 'username-taken'){ msgProfSent = key; showToast('@' + p.username + ' is taken on Lockedintool - pick another in Edit profile'); } }
+  try{ const r = await msgApi('/v1/me', { name: p.name || '', username: (p.username || '').toLowerCase(), bio: p.bio || '', about: p.about || '', privacy: storyPrivacy() }); msgProfSent = key; profileLocksSave(r); }
+  catch(e){
+    if(e.code === 'username-taken'){ msgProfSent = key; showToast('@' + p.username + ' is taken on Lockedintool - pick another in Edit profile'); }
+    // The server keeps the name / @username rules (owner): back to what it has, then the rest (bio, About) goes up.
+    else if(['name-wait', 'username-wait', 'reserved'].includes(e.code) && e.info){
+      profileLocksSave(e.info);
+      saveProfileData({ name: e.info.name || '', username: e.info.username || '' });
+      showToast(e.code === 'reserved' ? 'Only Lockedintool’s own profile can use that name' : e.code === 'name-wait' ? 'You can change your name again on ' + profileWaitDate(e.info.until) : 'You can change your @username again on ' + profileWaitDate(e.info.until));
+      setTimeout(msgSyncProfile, 500);
+    }
+  }
+}
+// Name once every 60 days, @username once every 100 days; "Lockedintool" only for the official profile (owner).
+const PF_LOCKS_KEY = 'story-profile-locks';
+function profileLocks(){ try{ return JSON.parse(localStorage.getItem(PF_LOCKS_KEY) || '{}') || {}; }catch(e){ return {}; } }
+function profileLocksSave(r){ if(!r) return; try{ localStorage.setItem(PF_LOCKS_KEY, JSON.stringify({ nameAt: r.nameAt || 0, usernameAt: r.usernameAt || 0, official: !!r.official })); }catch(e){} }
+function profileWaitDate(at){ return new Date(at).toLocaleDateString('en-ZA', { day:'numeric', month:'short', year:'numeric' }); }
+function profileChangeProblem(k, v){
+  const L = profileLocks(), cur = profileData();
+  if(k === 'name' ? v === cur.name : v === cur.username) return '';
+  if(!L.official && v.toLowerCase().replace(/[^a-z0-9]/g, '').includes('lockedintool')) return 'Only Lockedintool’s own profile can use that name.';
+  if(L.official) return '';   // the official profile isn't held to the waits
+  const at = k === 'name' ? L.nameAt : L.usernameAt, wait = (k === 'name' ? 60 : 100) * 86400000;
+  if(at && Date.now() - at < wait) return 'You can change your ' + (k === 'name' ? 'name' : '@username') + ' again on ' + profileWaitDate(at + wait) + '.';
+  return '';
 }
 // ---- Your STORY account (owner: no phone number in Messages): made by this phone the first time - only the public
 // key goes to the server, which hands back your id + sign-in key. People find you by your @username. ----

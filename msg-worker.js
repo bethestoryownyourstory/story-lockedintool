@@ -26,6 +26,12 @@ const b64u = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\
 const sha = async s => b64u(await crypto.subtle.digest('SHA-256', enc.encode(s)));
 const rand = n => b64u(crypto.getRandomValues(new Uint8Array(n)));
 const PHONE = /^\+[1-9]\d{6,14}$/;
+// The official Lockedintool profile (owner: "only us can use our name and username"). Its account is the official
+// one; later team accounts are added here. Nobody else may have "lockedintool" in their name or @username.
+const OFFICIAL_USERNAMES = ['officiallockedintoolprofile'];
+const BRAND = 'lockedintool';
+const brandIn = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '').includes(BRAND);
+const NAME_WAIT = 60 * 86400000, USERNAME_WAIT = 100 * 86400000;   // owner: name once every 60 days, @username once every 100
 const USERNAME = /^(?!.*\.\.)(?!\.)(?!.*\.$)[a-z0-9_.]{3,30}$/;
 // South African banks Stitch pays into (its BankBeneficiaryBankId names) - shown by their own names.
 const PAY_BANKS = { absa: 'Absa', african_bank: 'African Bank', capitec: 'Capitec', discovery_bank: 'Discovery Bank', fnb: 'FNB', investec: 'Investec', nedbank: 'Nedbank', standard_bank: 'Standard Bank', tymebank: 'TymeBank' };
@@ -64,6 +70,10 @@ export class Hub {
     try { this.sql.exec(`ALTER TABLE users ADD COLUMN about TEXT`); } catch (e) {}
     try { this.sql.exec(`ALTER TABLE users ADD COLUMN bio TEXT`); } catch (e) {}
     try { this.sql.exec(`ALTER TABLE users ADD COLUMN photo TEXT`); } catch (e) {}
+    try { this.sql.exec(`ALTER TABLE users ADD COLUMN name_at INTEGER`); } catch (e) {}
+    try { this.sql.exec(`ALTER TABLE users ADD COLUMN username_at INTEGER`); } catch (e) {}
+    try { this.sql.exec(`ALTER TABLE users ADD COLUMN official INTEGER`); } catch (e) {}
+    for (const un of OFFICIAL_USERNAMES) this.sql.exec('UPDATE users SET official = 1 WHERE username = ?', un);
     this.sql.exec(`CREATE TABLE IF NOT EXISTS follows (uid TEXT, fid TEXT, at INTEGER, PRIMARY KEY (uid, fid))`);
     this.sql.exec(`CREATE INDEX IF NOT EXISTS follows_fid ON follows(fid)`);
     this.sql.exec(`CREATE TABLE IF NOT EXISTS media (id TEXT, i INTEGER, n INTEGER, uid TEXT, mime TEXT, data BLOB, at INTEGER, PRIMARY KEY (id, i))`);
@@ -79,7 +89,7 @@ export class Hub {
   privacy(u) { try { return Object.assign({ messages: 'everyone', calls: 'everyone', callPeople: [], status: 'followers' }, JSON.parse(u.privacy || '{}')); } catch (e) { return { messages: 'everyone', calls: 'everyone', callPeople: [], status: 'followers' }; } }
   canCall(from, to) { const p = this.privacy(to); return p.calls === 'everyone' || (p.calls === 'people' && (p.callPeople || []).includes(from.id)); }
   canMsg(from, to) { const p = this.privacy(to); return p.messages !== 'none' && p.messages !== 'nobody'; }
-  pubView(u, me) { return { id: u.id, name: u.name || '', username: u.username || '', pub: u.pub, canCall: me ? this.canCall(me, u) : true, canMsg: me ? this.canMsg(me, u) : true, canPay: !!this.one('SELECT uid FROM paybank WHERE uid = ?', u.id), photo: this.mediaUrl(u.photo), about: u.about || '' }; }
+  pubView(u, me) { return { id: u.id, name: u.name || '', username: u.username || '', pub: u.pub, canCall: me ? this.canCall(me, u) : true, canMsg: me ? this.canMsg(me, u) : true, canPay: !!this.one('SELECT uid FROM paybank WHERE uid = ?', u.id), photo: this.mediaUrl(u.photo), about: u.about || '', official: !!u.official }; }
 
   async fetch(req) {
     const url = new URL(req.url), path = url.pathname;
@@ -183,14 +193,30 @@ export class Hub {
   }
 
   // ---- Your profile (name, @username, privacy) ----
+  meView(u) { return { id: u.id, name: u.name || '', username: u.username || '', nameAt: u.name_at || 0, usernameAt: u.username_at || 0, official: !!u.official }; }
   saveMe(me, b) {
-    const sets = [], vals = [];
-    if (b.name !== undefined) { sets.push('name = ?'); vals.push(String(b.name || '').slice(0, 60) || null); }
+    const sets = [], vals = [], now = Date.now();
+    const no = (error, extra) => json(Object.assign({ error }, this.meView(me), extra || {}), 409);
+    let official = !!me.official;
     if (b.username !== undefined) {
       const un = String(b.username || '').toLowerCase();
-      if (un && !USERNAME.test(un)) return json({ error: 'username' }, 400);
-      if (un) { const t = this.one('SELECT id FROM users WHERE username = ? AND id != ?', un, me.id); if (t) return json({ error: 'username-taken' }, 409); }
-      sets.push('username = ?'); vals.push(un || null);
+      if (un !== (me.username || '')) {
+        if (un && !USERNAME.test(un)) return json({ error: 'username' }, 400);
+        const officialName = OFFICIAL_USERNAMES.includes(un);
+        if (!official && !officialName && brandIn(un)) return no('reserved');
+        if (!official && me.username_at && now - me.username_at < USERNAME_WAIT) return no('username-wait', { until: me.username_at + USERNAME_WAIT });
+        if (un) { const t = this.one('SELECT id FROM users WHERE username = ? AND id != ?', un, me.id); if (t) return json({ error: 'username-taken' }, 409); }
+        sets.push('username = ?', 'username_at = ?'); vals.push(un || null, now);
+        if (officialName) { sets.push('official = 1'); official = true; }
+      }
+    }
+    if (b.name !== undefined) {
+      const name = String(b.name || '').slice(0, 60);
+      if (name !== (me.name || '')) {
+        if (!official && brandIn(name)) return no('reserved');
+        if (!official && me.name_at && now - me.name_at < NAME_WAIT) return no('name-wait', { until: me.name_at + NAME_WAIT });
+        sets.push('name = ?', 'name_at = ?'); vals.push(name || null, now);
+      }
     }
     if (b.privacy !== undefined) {
       const p = b.privacy || {};
@@ -206,8 +232,7 @@ export class Hub {
       sets.push('photo = ?'); vals.push(ph || null);
     }
     if (sets.length) this.sql.exec('UPDATE users SET ' + sets.join(', ') + ' WHERE id = ?', ...vals, me.id);
-    const u = this.one('SELECT * FROM users WHERE id = ?', me.id);
-    return json({ id: u.id, name: u.name || '', username: u.username || '' });
+    return json(this.meView(this.one('SELECT * FROM users WHERE id = ?', me.id)));
   }
   // Finding people (owner): by their @username or their name - never phone numbers. Exact @username first, then
   // usernames / names that start with or contain what you typed (up to 20).
@@ -291,12 +316,12 @@ export class Hub {
   }
   updates(me) {
     this.dropOldStatuses();
-    const lite = u => { const v = this.pubView(u, me); return { id: v.id, name: v.name, username: v.username, photo: v.photo, about: v.about, isFollowing: this.follows(me.id, u.id), followers: this.one('SELECT COUNT(*) AS n FROM follows WHERE fid = ?', u.id).n }; };
+    const lite = u => { const v = this.pubView(u, me); return { id: v.id, name: v.name, username: v.username, photo: v.photo, about: v.about, official: v.official, isFollowing: this.follows(me.id, u.id), followers: this.one('SELECT COUNT(*) AS n FROM follows WHERE fid = ?', u.id).n }; };
     const people = this.sql.exec("SELECT DISTINCT u.* FROM uposts p JOIN users u ON u.id = p.uid WHERE p.kind = 'status' AND p.at >= ? AND (u.id = ? OR u.id IN (SELECT fid FROM follows WHERE uid = ?))", Date.now() - 86400000, me.id, me.id).toArray();
     const statuses = people.map(u => ({ user: lite(u), items: this.statusesOf(u, me) })).filter(s => s.items.length)
       .sort((a, b) => (b.user.id === me.id) - (a.user.id === me.id) || b.items[b.items.length - 1].at - a.items[a.items.length - 1].at);
     const profiles = this.sql.exec(`SELECT u.*, (SELECT COUNT(*) FROM follows f WHERE f.fid = u.id) AS fc FROM users u
-       WHERE u.id != ? AND (u.name IS NOT NULL OR u.username IS NOT NULL) ORDER BY fc DESC, u.created DESC LIMIT 60`, me.id).toArray().map(lite);
+       WHERE u.id != ? AND (u.name IS NOT NULL OR u.username IS NOT NULL) ORDER BY (u.official = 1) DESC, fc DESC, u.created DESC LIMIT 60`, me.id).toArray().map(lite);
     return json({ me: this.personView(me, me), statuses, profiles });
   }
   uposts(me, op, b) {
