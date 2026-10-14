@@ -129,6 +129,15 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         ctx.startActivity(Intent(Intent.ACTION_DELETE, Uri.parse("package:$pkg")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 
+    /** Money transfer: your own bank's approval page (Stitch) opens in the phone's browser; STORY steps aside. */
+    @JavascriptInterface
+    fun openUrl(url: String) {
+        if (station3 || !url.startsWith("https://")) return
+        host.hidePanel()
+        runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            .onFailure { host.showToast("No browser on this phone") }
+    }
+
     /** "Apps" in STORY's Apps | Pages switch: back to the app you were on (or the home screen), untouched. */
     @JavascriptInterface
     fun showApps() { host.hidePanel() }

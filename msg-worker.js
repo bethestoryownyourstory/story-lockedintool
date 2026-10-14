@@ -12,6 +12,11 @@
 //  - Groups (owner): public groups (Community - anyone can find and join them) and private groups (made in Messages -
 //    only people a leader adds; never listed anywhere). Private group messages are locked for each member; public
 //    group posts and chat are public by nature (anyone can join).
+//  - Money transfer (owner: send money profile to profile, and to anyone - even people not on STORY): paid through
+//    Stitch (licensed South African payment partner - STITCH_CLIENT_ID / STITCH_CLIENT_SECRET): the payer approves the
+//    payment in their OWN bank (Stitch's page) and it goes straight into the receiver's bank account. A STORY profile
+//    receives into the bank account they added (kept only here, never shown to anyone - only its last 3 digits to its
+//    owner); anyone else by their name + bank + account number. STORY never holds the money.
 // Everything lives in ONE Durable Object (SQLite storage) so every phone's connection meets in the same place.
 
 const JSONH = { 'content-type': 'application/json', 'access-control-allow-origin': '*', 'access-control-allow-headers': 'content-type, authorization', 'access-control-allow-methods': 'GET, POST, OPTIONS' };
@@ -22,6 +27,8 @@ const sha = async s => b64u(await crypto.subtle.digest('SHA-256', enc.encode(s))
 const rand = n => b64u(crypto.getRandomValues(new Uint8Array(n)));
 const PHONE = /^\+[1-9]\d{6,14}$/;
 const USERNAME = /^(?!.*\.\.)(?!\.)(?!.*\.$)[a-z0-9_.]{3,30}$/;
+// South African banks Stitch pays into (its BankBeneficiaryBankId names) - shown by their own names.
+const PAY_BANKS = { absa: 'Absa', african_bank: 'African Bank', capitec: 'Capitec', discovery_bank: 'Discovery Bank', fnb: 'FNB', investec: 'Investec', nedbank: 'Nedbank', standard_bank: 'Standard Bank', tymebank: 'TymeBank' };
 
 export default {
   async fetch(req, env) {
@@ -47,6 +54,10 @@ export class Hub {
     this.sql.exec(`CREATE TABLE IF NOT EXISTS glikes (pid TEXT, uid TEXT, PRIMARY KEY (pid, uid))`);
     this.sql.exec(`CREATE TABLE IF NOT EXISTS gcomments (id TEXT PRIMARY KEY, pid TEXT, uid TEXT, text TEXT, at INTEGER)`);
     try { this.sql.exec(`ALTER TABLE groups ADD COLUMN shares INTEGER DEFAULT 0`); } catch (e) {}
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS paybank (uid TEXT PRIMARY KEY, name TEXT, bank TEXT, acct TEXT, updated INTEGER)`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS payments (id TEXT PRIMARY KEY, uid TEXT, to_uid TEXT, to_name TEXT, to_bank TEXT, to_mask TEXT, cents INTEGER, ref TEXT, stitch TEXT, status TEXT, created INTEGER, updated INTEGER)`);
+    this.sql.exec(`CREATE INDEX IF NOT EXISTS payments_uid ON payments(uid, created)`);
+    this.sql.exec(`CREATE INDEX IF NOT EXISTS payments_to ON payments(to_uid, created)`);
     // STORY's own Stories feed (Community > Stories): one shared public group everyone posts their stories to.
     this.sql.exec(`INSERT OR IGNORE INTO groups (id, name, about, type, image, category, country, creator, calljoin, created) VALUES ('g-stories', 'Stories', 'Real people sharing their life and success stories, and the advice that got them there.', 'stories', '', 'Life', 'Global', 'story', 'open', 0)`);
   }
@@ -57,13 +68,14 @@ export class Hub {
   privacy(u) { try { return Object.assign({ messages: 'everyone', calls: 'everyone', callPeople: [] }, JSON.parse(u.privacy || '{}')); } catch (e) { return { messages: 'everyone', calls: 'everyone', callPeople: [] }; } }
   canCall(from, to) { const p = this.privacy(to); return p.calls === 'everyone' || (p.calls === 'people' && (p.callPeople || []).includes(from.id)); }
   canMsg(from, to) { const p = this.privacy(to); return p.messages !== 'none' && p.messages !== 'nobody'; }
-  pubView(u, me) { return { id: u.id, name: u.name || '', username: u.username || '', pub: u.pub, canCall: me ? this.canCall(me, u) : true, canMsg: me ? this.canMsg(me, u) : true }; }
+  pubView(u, me) { return { id: u.id, name: u.name || '', username: u.username || '', pub: u.pub, canCall: me ? this.canCall(me, u) : true, canMsg: me ? this.canMsg(me, u) : true, canPay: !!this.one('SELECT uid FROM paybank WHERE uid = ?', u.id) }; }
 
   async fetch(req) {
     const url = new URL(req.url), path = url.pathname;
     try {
       if (path === '/v1/ws') return this.ws(req, url);
       if (path === '/v1/health') return json({ ok: true, sms: !!(this.env.TWILIO_VERIFY_SID || this.env.TWILIO_FROM) });
+      if (path === '/v1/pay/return') return new Response('<!doctype html><meta name=viewport content="width=device-width,initial-scale=1"><body style="margin:0;background:#000;color:#fff;font:600 18px system-ui;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center;padding:24px;box-sizing:border-box">Done - go back to STORY to see your payment.</body>', { headers: { 'content-type': 'text/html; charset=utf-8' } });
       const body = req.method === 'POST' ? await req.json().catch(() => ({})) : {};
       if (path === '/v1/register') return this.register(body, req.headers.get('cf-connecting-ip') || '');
       const me = await this.userByToken((req.headers.get('authorization') || '').replace(/^Bearer\s+/i, ''));
@@ -73,6 +85,7 @@ export class Hub {
       if (path === '/v1/me') return this.saveMe(me, body);
       if (path === '/v1/find') return this.find(me, url.searchParams.get('q') || '');
       if (path.startsWith('/v1/groups/')) return this.groups(me, path.slice(11), body, url.searchParams);
+      if (path.startsWith('/v1/pay/')) return this.pay(me, path.slice(8), body, url);
       if (path === '/v1/user') { const u = this.one('SELECT * FROM users WHERE id = ?', url.searchParams.get('id') || ''); return u ? json(this.pubView(u, me)) : json({ error: 'notfound' }, 404); }
       return json({ error: 'notfound' }, 404);
     } catch (e) { return json({ error: 'server', detail: String(e && e.message || e).slice(0, 200) }, 500); }
@@ -318,6 +331,94 @@ export class Hub {
     pair[1].send(JSON.stringify({ t: 'hello', id: me.id }));
     return new Response(null, { status: 101, webSocket: pair[0] });
   }
+  // ---- Money transfer (Stitch) ----
+  // (STITCH_BASE: local tests only - a stand-in Stitch, like TWILIO_BASE)
+  payReady() { return !!(this.env.STITCH_CLIENT_ID && this.env.STITCH_CLIENT_SECRET); }
+  async stitchToken() {
+    if (this.stitchTok && this.stitchTok.exp > Date.now() + 60000) return this.stitchTok.v;
+    const r = await fetch((this.env.STITCH_BASE || 'https://secure.stitch.money') + '/connect/token', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ grant_type: 'client_credentials', client_id: this.env.STITCH_CLIENT_ID, client_secret: this.env.STITCH_CLIENT_SECRET,
+        scope: 'client_paymentrequest', audience: 'https://secure.stitch.money/connect/token' }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.access_token) throw new Error('stitch-signin: ' + (j.error_description || j.error || r.status));
+    this.stitchTok = { v: j.access_token, exp: Date.now() + (j.expires_in || 3600) * 1000 };
+    return j.access_token;
+  }
+  async stitch(query, variables) {
+    const r = await fetch((this.env.STITCH_BASE || 'https://api.stitch.money') + '/graphql', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + await this.stitchToken() }, body: JSON.stringify({ query, variables }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || j.errors) throw new Error('stitch: ' + ((j.errors && j.errors[0] && j.errors[0].message) || r.status));
+    return j.data;
+  }
+  bankOk(b) {
+    const bank = String(b.bank || ''), acct = String(b.acct || '').replace(/\s+/g, ''), name = String(b.name || '').trim().slice(0, 60);
+    if (!PAY_BANKS[bank] || !/^\d{6,16}$/.test(acct) || name.length < 2) return null;
+    return { bank, acct, name };
+  }
+  payView(p, me) {
+    const out = p.uid === me.id;
+    const other = out ? (p.to_uid ? this.one('SELECT name, username FROM users WHERE id = ?', p.to_uid) : null) : this.one('SELECT name, username FROM users WHERE id = ?', p.uid);
+    return { id: p.id, dir: out ? 'out' : 'in', amount: p.cents / 100, currency: 'ZAR', ref: p.ref || '', status: p.status, at: p.created,
+      who: out ? (other ? (other.name || '@' + other.username) : p.to_name) : (other ? (other.name || '@' + (other.username || '')) : 'Someone'),
+      bank: out && !p.to_uid ? (PAY_BANKS[p.to_bank] || '') + (p.to_mask ? ' ••' + p.to_mask : '') : '' };   // a STORY profile's bank is never shown
+  }
+  async pay(me, op, b, url) {
+    const now = Date.now();
+    if (op === 'info') {
+      const mine = this.one('SELECT * FROM paybank WHERE uid = ?', me.id);
+      return json({ connected: this.payReady(), banks: PAY_BANKS, bank: mine ? { name: mine.name, bank: mine.bank, mask: mine.acct.slice(-3) } : null });
+    }
+    if (op === 'bank') {
+      if (b.remove) { this.sql.exec('DELETE FROM paybank WHERE uid = ?', me.id); return json({ ok: true, bank: null }); }
+      const k = this.bankOk(b); if (!k) return json({ error: 'bank-details' }, 400);
+      this.sql.exec('INSERT OR REPLACE INTO paybank (uid, name, bank, acct, updated) VALUES (?, ?, ?, ?, ?)', me.id, k.name, k.bank, k.acct, now);
+      return json({ ok: true, bank: { name: k.name, bank: k.bank, mask: k.acct.slice(-3) } });
+    }
+    if (op === 'history') {
+      const rows = this.sql.exec('SELECT * FROM payments WHERE (uid = ? OR (to_uid = ? AND status = ?)) ORDER BY created DESC LIMIT 100', me.id, me.id, 'paid').toArray();
+      return json({ payments: rows.map(p => this.payView(p, me)) });
+    }
+    if (op === 'send') {
+      const cents = Math.round(Number(b.amount) * 100);
+      if (!(cents >= 100 && cents <= 5000000)) return json({ error: 'amount' }, 400);   // R1 - R50 000 a payment
+      let to = null, toUid = null;
+      if (b.to) {
+        const u = this.one('SELECT * FROM users WHERE id = ?', String(b.to)); if (!u) return json({ error: 'notfound' }, 404);
+        if (u.id === me.id) return json({ error: 'self' }, 400);
+        const pb = this.one('SELECT * FROM paybank WHERE uid = ?', u.id); if (!pb) return json({ error: 'no-bank' }, 409);
+        to = { name: pb.name, bank: pb.bank, acct: pb.acct }; toUid = u.id;
+      } else { to = this.bankOk(b.bank || {}); if (!to) return json({ error: 'bank-details' }, 400); }
+      if (!this.payReady()) return json({ error: 'not-connected' }, 503);
+      const ref = String(b.ref || '').replace(/[^A-Za-z0-9 .\-]/g, '').trim().slice(0, 20) || 'STORY';
+      const id = 'p' + rand(9);
+      const d = await this.stitch(`mutation Pay($amount: MoneyInput!, $payerReference: String!, $beneficiaryReference: String!, $externalReference: String, $name: String!, $bankId: BankBeneficiaryBankId!, $acct: String!) {
+        clientPaymentInitiationRequestCreate(input: { amount: $amount, payerReference: $payerReference, beneficiaryReference: $beneficiaryReference, externalReference: $externalReference,
+          beneficiary: { bankAccount: { name: $name, bankId: $bankId, accountNumber: $acct } } }) { paymentInitiationRequest { id url } } }`,
+        { amount: { quantity: (cents / 100).toFixed(2), currency: 'ZAR' }, payerReference: ref.slice(0, 12), beneficiaryReference: ref, externalReference: id, name: to.name, bankId: to.bank, acct: to.acct });
+      const pr = d.clientPaymentInitiationRequestCreate.paymentInitiationRequest;
+      this.sql.exec('INSERT INTO payments (id, uid, to_uid, to_name, to_bank, to_mask, cents, ref, stitch, status, created, updated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        id, me.id, toUid, toUid ? null : to.name, to.bank, toUid ? '' : to.acct.slice(-3), cents, ref, pr.id, 'pending', now, now);
+      const back = this.env.STITCH_REDIRECT || (url.origin + '/v1/pay/return');
+      return json({ id, url: pr.url + (pr.url.includes('?') ? '&' : '?') + 'redirect_uri=' + encodeURIComponent(back) });
+    }
+    if (op === 'status') {
+      const p = this.one('SELECT * FROM payments WHERE id = ? AND uid = ?', url.searchParams.get('id') || '', me.id);
+      if (!p) return json({ error: 'notfound' }, 404);
+      if (p.status === 'pending' && this.payReady()) {
+        const d = await this.stitch(`query St($id: ID!) { node(id: $id) { ... on PaymentInitiationRequest { status { __typename } } } }`, { id: p.stitch });
+        const tn = d && d.node && d.node.status && d.node.status.__typename || '';
+        const st = /Completed/.test(tn) ? 'paid' : /Cancelled/.test(tn) ? 'cancelled' : /Expired/.test(tn) ? 'expired' : 'pending';
+        if (st !== 'pending') {
+          this.sql.exec('UPDATE payments SET status = ?, updated = ? WHERE id = ?', st, now, p.id);
+          p.status = st;
+          if (st === 'paid' && p.to_uid) this.deliver(p.to_uid, { t: 'paid', id: p.id, amount: p.cents / 100, currency: 'ZAR', ref: p.ref || '', from: me.id, name: me.name || '', username: me.username || '', at: now });
+        }
+      }
+      return json(this.payView(p, me));
+    }
+    return json({ error: 'notfound' }, 404);
+  }
+
   sendTo(uid, o) { let n = 0; for (const ws of this.ctx.getWebSockets(uid)) { try { ws.send(JSON.stringify(o)); n++; } catch (e) {} } return n; }
   // Kept until the phone says it has it (ack), so nothing is lost if the connection drops.
   deliver(uid, o) {
