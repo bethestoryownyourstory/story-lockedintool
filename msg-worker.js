@@ -380,6 +380,36 @@ export class Hub {
     if (!this.exBackDone) { try { await this.express('POST', '/api/v1/redirect-urls', { redirectUrl: back }); } catch (e) {} this.exBackDone = true; }
     return back;
   }
+  // A plan payment's state at Stitch; paid = 30 days of that plan (same plan adds on, a different plan starts now).
+  async subCheck(me, p) {
+    if (p.status !== 'pending' || !this.expressReady()) return p.status;
+    const now = Date.now();
+    const d = await this.express('GET', '/api/v1/payment-links/' + encodeURIComponent(p.stitch));
+    const ls = (d.payment && d.payment.status) || 'PENDING';
+    const st = ls === 'PAID' ? 'paid' : ls === 'CANCELLED' ? 'cancelled' : ls === 'EXPIRED' || ls === 'FAILED' ? 'expired' : 'pending';
+    if (st !== 'pending') {
+      this.sql.exec('UPDATE payments SET status = ?, updated = ? WHERE id = ?', st, now, p.id);
+      p.status = st;
+      if (st === 'paid') {
+        const plan = p.kind.slice(4), cur = this.one('SELECT * FROM subs WHERE uid = ?', me.id);
+        const from = cur && cur.plan === plan && cur.until > now ? cur.until : now;
+        this.sql.exec('INSERT OR REPLACE INTO subs (uid, plan, until, updated) VALUES (?, ?, ?, ?)', me.id, plan, from + 30 * 86400000, now);
+      }
+    }
+    return p.status;
+  }
+  // Cancel a plan payment that isn't paid yet (Stitch: POST payment-links/{id}/cancel - the link can't be paid any more).
+  // If Stitch says it's already paid / going through, the real state is read instead (paid still counts).
+  async subCancel(me, p) {
+    if (p.status !== 'pending') return p.status;
+    if (this.expressReady()) {
+      try { await this.express('POST', '/api/v1/payment-links/' + encodeURIComponent(p.stitch) + '/cancel'); }
+      catch (e) { try { await this.subCheck(me, p); } catch (e2) {} return p.status; }
+    }
+    this.sql.exec('UPDATE payments SET status = ?, updated = ? WHERE id = ?', 'cancelled', Date.now(), p.id);
+    p.status = 'cancelled';
+    return p.status;
+  }
   async sub(me, op, b, url) {
     const now = Date.now();
     if (op === 'info') return json(this.subView(me));
@@ -387,6 +417,9 @@ export class Hub {
       const plans = this.subPlans(), plan = String(b.plan || '');
       if (!plans[plan]) return json({ error: 'plan' }, 400);
       if (!this.subReady()) return json({ error: 'not-connected' }, 503);
+      // Changed your mind before paying (owner): any plan you started but didn't pay is cancelled at Stitch first,
+      // so only the newest one can be paid. One that was already paid still counts (subCheck credits it).
+      for (const old of this.sql.exec("SELECT * FROM payments WHERE uid = ? AND kind LIKE 'sub:%' AND status = 'pending'", me.id).toArray()) await this.subCancel(me, old);
       const cents = Math.round(plans[plan].zar * 100), id = 'p' + rand(9);
       const who = String(me.name || (me.username ? '@' + me.username : '') || 'LOCKED IN member').replace(/[^\p{L}\p{N} .@'_-]/gu, '').trim();
       const d = await this.express('POST', '/api/v1/payment-links', {
@@ -399,24 +432,10 @@ export class Hub {
       const back = await this.expressBack(url);
       return json({ id, url: link.link + (link.link.includes('?') ? '&' : '?') + 'redirect_url=' + encodeURIComponent(back) });
     }
-    if (op === 'status') {
-      const p = this.one("SELECT * FROM payments WHERE id = ? AND uid = ? AND kind LIKE 'sub:%'", url.searchParams.get('id') || '', me.id);
+    if (op === 'status' || op === 'cancel') {
+      const p = this.one("SELECT * FROM payments WHERE id = ? AND uid = ? AND kind LIKE 'sub:%'", (op === 'cancel' ? b.id : url.searchParams.get('id')) || '', me.id);
       if (!p) return json({ error: 'notfound' }, 404);
-      if (p.status === 'pending' && this.expressReady()) {
-        const d = await this.express('GET', '/api/v1/payment-links/' + encodeURIComponent(p.stitch));
-        const ls = (d.payment && d.payment.status) || 'PENDING';
-        const st = ls === 'PAID' ? 'paid' : ls === 'CANCELLED' ? 'cancelled' : ls === 'EXPIRED' ? 'expired' : 'pending';
-        if (st !== 'pending') {
-          this.sql.exec('UPDATE payments SET status = ?, updated = ? WHERE id = ?', st, now, p.id);
-          p.status = st;
-          if (st === 'paid') {
-            // 30 days of the plan you paid for; renewing the same plan adds on, a different plan starts now.
-            const plan = p.kind.slice(4), cur = this.one('SELECT * FROM subs WHERE uid = ?', me.id);
-            const from = cur && cur.plan === plan && cur.until > now ? cur.until : now;
-            this.sql.exec('INSERT OR REPLACE INTO subs (uid, plan, until, updated) VALUES (?, ?, ?, ?)', me.id, plan, from + 30 * 86400000, now);
-          }
-        }
-      }
+      if (op === 'cancel') await this.subCancel(me, p); else await this.subCheck(me, p);
       return json(Object.assign({ status: p.status }, this.subView(me)));
     }
     return json({ error: 'notfound' }, 404);
