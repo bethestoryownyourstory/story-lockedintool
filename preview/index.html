@@ -19,6 +19,17 @@
   document.documentElement.classList.add('story-widget');
   const real = window.StoryNative;
   if(!real) return;
+  // A LIVE widget (&live=1, owner: "a real working widget"): STORY really works in it (Buy / Sell, payments, every
+  // button) - only the things that belong to the full Pages window stay off (TradingView's own window, the Pages'
+  // brightness, the keyboard hand-off, Rows / Page Styles, closing the Pages).
+  if(/[?&]live=1/.test(location.search)){
+    window.__storyWidgetLive = true;
+    const OFF = new Set(['tvVersion','tvPlace','tvOpen','brightness','setBrightness','setTyping','pagesAction','closePanel','openRecents','showApps']);
+    const live = new Proxy({}, { get(t, k){ if(OFF.has(k)) return ()=>''; const f = real[k]; return typeof f === 'function' ? (...a)=>real[k](...a) : f; } });
+    try{ window.StoryNative = live; }catch(e){}
+    if(window.StoryNative !== live) Object.defineProperty(window, 'StoryNative', { value:live, configurable:true });
+    return;
+  }
   const READ = new Set(['getApps','appVersion','getTheme','getProfilePhoto','photoAccess','secretGet','moneyList','moneyAccess','notifList','getCalls','mediaAccess','getQuickAccess','listPhotos']);
   const safe = new Proxy({}, { get(t, k){
     if(k === 'http') return (id, method, url, h, body)=> String(method).toUpperCase() === 'DELETE' ? undefined : real.http(id, method, url, h, body);
@@ -32,6 +43,16 @@
 <meta charset="UTF-8">
 <title>STORY — Prototype</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<script>
+/* Live widget: the page lays out at the Pages' own width (pw, CSS px) and the phone shrinks it to the widget's size,
+   so it looks exactly like the Pages, only smaller. */
+(function(){ try{
+  const m = /[?&]live=1/.test(location.search) && /[?&]pw=([0-9.]+)/.exec(location.search);
+  if(!m) return;
+  const v = document.querySelector('meta[name="viewport"]');
+  if(v) v.setAttribute('content', 'width=' + Math.round(parseFloat(m[1])) + ', user-scalable=no, viewport-fit=cover');
+}catch(e){} })();
+</script>
 <!-- Lets a phone that has this added to its Home Screen launch with zero browser chrome --
      no address bar, no browser buttons -- instead of opening as a normal tab. iOS reads these
      meta tags directly; Android additionally wants the JS-injected manifest set up further
@@ -11998,6 +12019,8 @@ function attachHandlers(){
   document.querySelectorAll('[data-nav]').forEach(el=>{
     el.addEventListener('click', ()=>{
       const target = el.getAttribute('data-nav');
+      // A live home screen widget: '‹ Dashboard' opens STORY full screen (owner).
+      if(window.__storyWidgetLive && target === 'dashboard'){ try{ window.StoryNative.widgetOpenPages('dashboard'); }catch(e){} return; }
       state.current = target;
       if(PAGES.includes(target)) state.lastPage = target;
       renderDevice();
@@ -15299,6 +15322,7 @@ function attachSwipe(){
   // Rows replaces the content with its own static grid the same way, so it's suspended for
   // the same reason -- there's no page-swipe surface showing while Rows is up.
   if((state.pageStyleOn && state.pageStyleViewOpen) || state.rowsViewOpen) return;
+  if(window.__storyWidget) return;   // a home screen widget stays on its own page (a swipe there is the home screen's)
   document.querySelectorAll('[data-swipe-dir]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const idx = PAGES.indexOf(state.current);
