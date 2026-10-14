@@ -2458,9 +2458,13 @@
     color:var(--text); opacity:0.55;
   }
   .pswitch-rows-tiles{ flex:1; display:grid; grid-template-columns:repeat(var(--cols,3),1fr); gap:8px; min-width:0; }
+  /* More pages than fit (app pages): every page keeps its normal size, side by side in the row, and you swipe the
+     row sideways to go through them (owner) - no scrollbar line. */
+  .pswitch-rows-tiles.many{ grid-template-columns:none; grid-auto-flow:column; grid-auto-columns:calc((100% - 16px) / 3);
+    overflow-x:auto; overflow-y:hidden; scroll-snap-type:x mandatory; scrollbar-width:none; overscroll-behavior-x:contain; touch-action:pan-x; }
+  .pswitch-rows-tiles.many::-webkit-scrollbar{ display:none; }
+  .pswitch-rows-tiles.many .pswitch-tile{ scroll-snap-align:start; }
   .pswitch-rows-tiles .pswitch-tile{ height:130px; --mscale:0.38; }
-  /* A row with app pages in it: narrower tiles, so their names wrap inside the tile instead of being cut off. */
-  .pswitch-rows-tiles.many .pswitch-tile-label{ left:5px; right:5px; padding:3px 4px; white-space:normal; text-align:center; font-size:9.5px; line-height:1.15; }
   .pswitch-rows-row-placeholder .pswitch-rows-row-label{ opacity:0.3; }
   .pswitch-rows-empty-slot{
     height:130px; border:1.5px dashed var(--line); border-radius:14px;
