@@ -6951,7 +6951,7 @@ function payLoad(){
   msgApi('/v1/pay/info').then(i=>{ state.pay.info = i; payShow(); }).catch(()=>{});
   msgApi('/v1/pay/history').then(h=>{ state.pay.history = h.payments || []; payShow(); }).catch(()=>{});
 }
-const PAY_ERRORS = { 'not-connected':'Money transfer connects once STORY’s payment partner (Stitch) is set up.', 'no-bank':'They haven’t added a bank account to receive money yet.',
+const PAY_ERRORS = { 'not-connected':'Sending money connects once STORY’s payout partner is set up.', 'no-bank':'They haven’t added a bank account to receive money yet.',
   'bank-details':'Check the name, bank and account number.', amount:'Send between R1 and R50 000.', self:'That’s you.', notfound:'That STORY account doesn’t exist any more.', signin:'Your STORY account isn’t ready yet - try again in a moment.' };
 function payBankChips(sel, action){
   return `<div class="community-chip-row pay-banks">${Object.entries(payBanks()).map(([k, n])=>`<div class="community-chip${sel === k ? ' active' : ''}" data-action="${action}" data-v="${k}">${escText(n)}</div>`).join('')}</div>`;
