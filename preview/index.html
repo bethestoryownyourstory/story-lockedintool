@@ -1391,6 +1391,7 @@
   .legal-card{ padding:12px 14px; }
   .legal-card p{ margin:0 0 9px; font-size:13px; line-height:1.5; color:var(--text); }
   .legal-card p:last-child{ margin-bottom:0; }
+  .sub-norefund{ font-size:12.5px; font-weight:700; color:var(--text); text-align:center; margin:6px 0 2px; }
   .legal-links{ font-size:12px; color:var(--muted); text-align:center; margin:4px 0 14px; line-height:1.6; }
   .legal-links button{ background:none; border:0; padding:0; font:inherit; color:var(--text); text-decoration:underline; cursor:pointer; }
   .info-foot{ text-align:center; font-size:11.5px; color:var(--muted); padding:6px 0 30px; line-height:1.6; }
@@ -7178,6 +7179,7 @@ function subscriptionScreen(){
       </div>`; }).join('')}
     ${state.sub.msg ? `<div class="note pay-msg">${escText(state.sub.msg)}</div>` : ''}
     <div class="note" style="margin:12px 0 4px;">Both plans are designed to help you stay organized, focused, and consistent.</div>
+    <div class="sub-norefund">No refunds - payments can’t be refunded once made.</div>
     <div class="legal-links">By choosing a plan you agree to the <button data-action="legal-open" data-v="legal-terms" data-from="subscription">Terms of Service</button> and <button data-action="legal-open" data-v="legal-privacy" data-from="subscription">Privacy Policy</button>.</div>
     </div>`;
 }
