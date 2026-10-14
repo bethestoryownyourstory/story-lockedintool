@@ -125,6 +125,20 @@
         </receiver>
         <receiver android:name=".InstallResultReceiver" android:exported="false" />
 
+        <!-- STORY's pages as home screen widgets (Money, Wallet, Focus): a picture of the whole page; tap opens it. -->
+        <receiver android:name=".MoneyWidget" android:exported="true" android:label="Money">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_money" />
+        </receiver>
+        <receiver android:name=".WalletWidget" android:exported="true" android:label="Home / Wallet">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_wallet" />
+        </receiver>
+        <receiver android:name=".FocusWidget" android:exported="true" android:label="Focus">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_focus" />
+        </receiver>
+
         <!-- Lets Android's own installer open a downloaded update (plan B when the quiet install fails). -->
         <provider
             android:name="androidx.core.content.FileProvider"

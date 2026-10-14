@@ -159,6 +159,7 @@ class OverlayService : Service(), StoryBridge.Host {
         ui.postDelayed(updateLoop, 15_000)  // then look for a new STORY version in the background
         Updater.schedule(this)              // and keep checking every 15 minutes even if STORY is off
         StoryBridge.refreshApps(this)  // the Apps area's list is ready before it's ever opened
+        ui.postDelayed({ PageWidgets.refreshPlaced(this) }, 20_000)  // home screen widgets get a fresh picture once STORY is up
         val pkgFilter = android.content.IntentFilter().apply {
             addAction(Intent.ACTION_PACKAGE_ADDED); addAction(Intent.ACTION_PACKAGE_REMOVED); addAction(Intent.ACTION_PACKAGE_CHANGED); addDataScheme("package")
         }
@@ -178,6 +179,7 @@ class OverlayService : Service(), StoryBridge.Host {
         if (gated) return START_NOT_STICKY
         if (intent?.action == ACTION_STOP) { getSharedPreferences("story", MODE_PRIVATE).edit().putBoolean("enabled", false).apply(); stopSelf(); return START_NOT_STICKY }
         if (intent?.action == ACTION_REBUILD) ui.post { rebuildLayer() }
+        if (intent?.action == PageWidgets.ACTION_OPEN_PAGE) intent.getStringExtra("page")?.let { pg -> ui.post { openPageFromWidget(pg) } }
         return START_STICKY
     }
 
@@ -674,6 +676,7 @@ class OverlayService : Service(), StoryBridge.Host {
         }
         if (shown && (!p.small || (p.profile && !p.gap))) p.web.requestFocus()
         if (p === pagesPane && shown && appEdge != null) { appPagePkg = null; removeAppEdge() }
+        if (p === pagesPane && !shown) ui.postDelayed({ PageWidgets.refreshPlaced(this) }, 1500)  // home screen widgets show what you just saw
         if (p === pagesPane) { quietApps(shown); updateBarLine(); if (!shown && pagesTyping) pagesBackToTop(); updateBubble()
             if (!shown) tvView?.place(org.json.JSONObject().put("show", false)) }
     }
@@ -740,6 +743,83 @@ class OverlayService : Service(), StoryBridge.Host {
         }
         updateBubble()
         addBar() // re-add last so the STORY bar stays on top of everything, including the pages
+    }
+
+    // ---- Home screen widgets (PageWidgets.kt): tapping one opens its page; each widget's picture is the real page,
+    //      drawn by a STORY page kept out of sight in its own 1px window (a WebView only draws inside a window),
+    //      one page at a time, then thrown away - nothing stays running. ----
+    private fun openPageFromWidget(page: String) {
+        warmUp()
+        val p = pagesPane ?: return
+        p.web.evaluateJavascript("window.storyShow&&window.storyShow(" + org.json.JSONObject.quote(page) + ",false)", null)
+        if (!p.shown) setShown(p, true)
+        updateBubble()
+        addBar()
+    }
+    private val snapQueue = ArrayDeque<String>()
+    private var snapping = false
+    fun widgetSnap(page: String) { ui.post { if (page !in snapQueue) snapQueue.addLast(page); nextSnap() } }
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun nextSnap() {
+        if (snapping) return
+        val page = snapQueue.removeFirstOrNull() ?: return
+        snapping = true
+        // The same size the Pages are drawn at, so the picture is exactly the page as it shows on the Pages.
+        val W = pagesPane?.web?.width?.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
+        val H = pagesPane?.web?.height?.takeIf { it > 0 } ?: realHeightPx()
+        val themed = ContextThemeWrapper(this, R.style.Theme_Story)
+        val holder = FrameLayout(themed)
+        val wv = WebView(themed)
+        val hlp = WindowManager.LayoutParams(1, 1, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            PixelFormat.TRANSLUCENT).apply { gravity = Gravity.TOP or Gravity.START; x = 0; y = 0 }
+        var done = false
+        fun finish(bmp: android.graphics.Bitmap?) {
+            if (done) return
+            done = true
+            runCatching { holder.removeView(wv) }; runCatching { wm.removeView(holder) }; runCatching { wv.destroy() }
+            bmp?.let { b -> Thread { PageWidgets.save(this, page, b) }.start() }
+            snapping = false
+            ui.postDelayed({ nextSnap() }, 300)
+        }
+        wv.setBackgroundColor(th(Color.BLACK))
+        wv.settings.javaScriptEnabled = true; wv.settings.domStorageEnabled = true
+        wv.isVerticalScrollBarEnabled = false
+        wv.addJavascriptInterface(StoryBridge(this, this, widget = true, evalTo = { js -> ui.post { if (!done) wv.evaluateJavascript(js, null) } }), "StoryNative")
+        val loader = WebViewAssetLoader.Builder().addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this)).build()
+        val query = "?widget=" + page
+        wv.webViewClient = object : WebViewClient() {
+            override fun shouldInterceptRequest(v: WebView, r: WebResourceRequest): WebResourceResponse? {
+                val u = r.url.toString()
+                if (u.startsWith(ProfilePhotoActivity.PHOTO_BASE)) return photoResponse(r)
+                return loader.shouldInterceptRequest(r.url)
+            }
+            override fun shouldOverrideUrlLoading(v: WebView, r: WebResourceRequest): Boolean = true
+            override fun onReceivedError(v: WebView, r: WebResourceRequest, e: android.webkit.WebResourceError) {
+                if (r.isForMainFrame && r.url.toString().startsWith(REMOTE)) v.loadUrl(LOCAL + query)
+            }
+            override fun onReceivedHttpError(v: WebView, r: WebResourceRequest, e: WebResourceResponse) {
+                if (r.isForMainFrame && r.url.toString().startsWith(REMOTE)) v.loadUrl(LOCAL + query)
+            }
+            override fun onPageFinished(v: WebView, url: String) {
+                v.evaluateJavascript("window.storyWidget&&window.storyWidget(" + org.json.JSONObject.quote(page) + ")", null)
+                // Live numbers (and Focus's TradingView chart) get a moment to arrive, then the page is drawn.
+                ui.postDelayed({
+                    if (done) return@postDelayed
+                    val bmp = runCatching {
+                        v.measure(View.MeasureSpec.makeMeasureSpec(W, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(H, View.MeasureSpec.EXACTLY))
+                        v.layout(0, 0, W, H)
+                        android.graphics.Bitmap.createBitmap(W, H, android.graphics.Bitmap.Config.ARGB_8888).also { v.draw(android.graphics.Canvas(it)) }
+                    }.getOrNull()
+                    finish(bmp)
+                }, if (page == "trading") 7000L else 3000L)
+            }
+        }
+        wv.translationX = -4f * W   // never on screen
+        holder.addView(wv, FrameLayout.LayoutParams(W, H))
+        if (runCatching { wm.addView(holder, hlp) }.isFailure) { finish(null); return }
+        ui.postDelayed({ finish(null) }, 25_000L)   // never hangs
+        wv.loadUrl(remoteBase() + query + "&v=" + System.currentTimeMillis())
     }
 
     // ---- App pages (owner: "make any app into a page"): landing on an app's page opens the real app full screen; a thin

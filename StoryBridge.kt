@@ -15,7 +15,9 @@ import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 
 /** What the overlay panel (which shows the STORY screens) can ask the phone to do. JS name: window.StoryNative */
-class StoryBridge(private val ctx: Context, private val host: Host, private val station3: Boolean = false, private val dial: Boolean = false, private val profile: Boolean = false, private val lock: Boolean = false) {
+class StoryBridge(private val ctx: Context, private val host: Host, private val station3: Boolean = false, private val dial: Boolean = false, private val profile: Boolean = false, private val lock: Boolean = false,
+                  /** A home-screen widget's out-of-sight page: reads only; its answers go back to it. */
+                  private val widget: Boolean = false, private val evalTo: ((String) -> Unit)? = null) {
 
     interface Host {
         fun hidePanel()
@@ -192,7 +194,8 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         }.start()
     }
     private fun answerHttp(id: String, code: Int, text: String) {
-        host.evalPages("window.storyHttp&&window.storyHttp(" + JSONObject.quote(id) + "," + code + "," + JSONObject.quote(text) + ")")
+        val js = "window.storyHttp&&window.storyHttp(" + JSONObject.quote(id) + "," + code + "," + JSONObject.quote(text) + ")"
+        evalTo?.invoke(js) ?: host.evalPages(js)
     }
 
     @JavascriptInterface
@@ -320,7 +323,7 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
     }
 
     // ---- Notes, all inside STORY (owner: real actions, never leaving STORY). The Pages only. ----
-    private val pages get() = !station3 && !profile
+    private val pages get() = !station3 && !profile && !widget
 
     /** Asks Android once (its own question) for what a note needs: "photos", "audio" or "camera". */
     @JavascriptInterface

@@ -83,6 +83,7 @@ object MoneyLog {
             prefs(c).edit().putString(KEY, out.toString()).apply()
         }
         OverlayService.instance?.evalPages("window.storyMoneyNew&&window.storyMoneyNew()")
+        android.os.Handler(android.os.Looper.getMainLooper()).post { PageWidgets.refreshPlaced(c, listOf("money", "wallet")) }  // their home screen widgets too
         return true
     }
 
