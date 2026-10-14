@@ -24,6 +24,8 @@
   // the keyboard hand-off, Rows / Page Styles, closing the Pages).
   if(/[?&]live=1/.test(location.search)){
     window.__storyWidgetLive = true;
+    // Page widgets stay on their page; the Dashboard widget works as the Dashboard - everything opens inside it (owner).
+    window.__storyWidgetPinned = window.__storyWidget !== 'dashboard';
     const OFF = new Set(['tvVersion','tvPlace','tvOpen','pagesAction','closePanel','openRecents','showApps']);
     const live = new Proxy({}, { get(t, k){ if(OFF.has(k)) return ()=>''; const f = real[k]; return typeof f === 'function' ? (...a)=>real[k](...a) : f; } });
     try{ window.StoryNative = live; }catch(e){}
@@ -11571,7 +11573,7 @@ document.addEventListener('visibilitychange', ()=>{ if(document.hidden){ if(note
 function renderDevice(){
   // A live home screen widget never leaves its page (owner: the Money widget stays on Money, the Dashboard widget on
   // the Dashboard): anything that would go to another page opens STORY full screen on it instead.
-  if(window.__storyWidgetLive && state.current !== window.__storyWidget){
+  if(window.__storyWidgetPinned && state.current !== window.__storyWidget){
     const go = state.current; state.current = window.__storyWidget;
     // (while it's still starting up it's simply put on its page - only a real tap opens STORY)
     if(window.__storyWidgetReady) try{ window.StoryNative.widgetOpenPages(go); }catch(e){}
@@ -12030,7 +12032,7 @@ function attachHandlers(){
     el.addEventListener('click', ()=>{
       const target = el.getAttribute('data-nav');
       // A live home screen widget stays on its own page (owner): going anywhere else opens STORY full screen there.
-      if(window.__storyWidgetLive && target !== window.__storyWidget){ try{ window.StoryNative.widgetOpenPages(target); }catch(e){} return; }
+      if(window.__storyWidgetPinned && target !== window.__storyWidget){ try{ window.StoryNative.widgetOpenPages(target); }catch(e){} return; }
       state.current = target;
       if(PAGES.includes(target)) state.lastPage = target;
       renderDevice();
@@ -15332,7 +15334,7 @@ function attachSwipe(){
   // Rows replaces the content with its own static grid the same way, so it's suspended for
   // the same reason -- there's no page-swipe surface showing while Rows is up.
   if((state.pageStyleOn && state.pageStyleViewOpen) || state.rowsViewOpen) return;
-  if(window.__storyWidget) return;   // a home screen widget stays on its own page (a swipe there is the home screen's)
+  if(window.__storyWidget && (window.__storyWidgetPinned || !window.__storyWidgetLive)) return;   // a page widget stays on its own page
   document.querySelectorAll('[data-swipe-dir]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const idx = PAGES.indexOf(state.current);
