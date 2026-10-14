@@ -31,6 +31,10 @@ class StoryAccessibilityService : AccessibilityService() {
                 val cls = e.className?.toString() ?: return
                 if (runCatching { packageManager.getActivityInfo(ComponentName(pkg, cls), 0) }.isSuccess) { foregroundPkg = pkg; OverlayService.instance?.foregroundChanged(pkg) }
             }
+            // The home screen moved (swiping between screens, the app drawer...) or windows changed: STORY's live
+            // widgets step aside and come back once it's still.
+            AccessibilityEvent.TYPE_VIEW_SCROLLED -> if (pkg == foregroundPkg) OverlayService.instance?.widgetLiveEvent(true)
+            AccessibilityEvent.TYPE_WINDOWS_CHANGED -> OverlayService.instance?.widgetLiveEvent(false)
             // A media player's notification: remember its session, to see later whether it's playing.
             AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED -> {
                 val n = e.parcelableData as? Notification ?: return
@@ -112,6 +116,25 @@ class StoryAccessibilityService : AccessibilityService() {
                 if (find(c, depth + 1, count, match)) return true
             }
             return false
+        }
+        private val STORY_WIDGET = Regex("^STORY .+ widget #(\\d+)$")
+        /** Where each STORY widget is on the home screen right now (widget id -> its place on the screen). */
+        fun storyWidgets(home: String): Map<Int, android.graphics.Rect> {
+            val s = instance ?: return emptyMap()
+            val out = HashMap<Int, android.graphics.Rect>()
+            val ws = runCatching { s.windows }.getOrNull() ?: return out
+            for (w in ws) {
+                val r = runCatching { w.root }.getOrNull() ?: continue
+                if (r.packageName?.toString() != home) continue
+                find(r, 0, intArrayOf(0)) { n ->
+                    STORY_WIDGET.find(n.contentDescription?.toString() ?: "")?.let { m ->
+                        val b = android.graphics.Rect(); n.getBoundsInScreen(b)
+                        if (b.width() > 0 && b.height() > 0) out[m.groupValues[1].toInt()] = b
+                    }
+                    false
+                }
+            }
+            return out
         }
         @Volatile var foregroundPkg: String? = null
         private val mediaSessions = ConcurrentHashMap<String, MediaSession.Token>()

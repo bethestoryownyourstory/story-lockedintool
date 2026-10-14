@@ -30,6 +30,7 @@ open class PageWidget(private val page: String) : AppWidgetProvider() {
     }
     override fun onAppWidgetOptionsChanged(c: Context, m: AppWidgetManager, id: Int, o: Bundle) { PageWidgets.show(c, page) }
     override fun onDisabled(c: Context) { PageWidgets.file(c, page).delete() }
+    override fun onDeleted(c: Context, ids: IntArray) { OverlayService.instance?.widgetLiveEvent(false) }
 }
 class MoneyWidget : PageWidget("money")
 class WalletWidget : PageWidget("wallet")
@@ -45,6 +46,10 @@ object PageWidgets {
     private fun ids(c: Context, page: String): IntArray =
         runCatching { AppWidgetManager.getInstance(c).getAppWidgetIds(ComponentName(c, providers.getValue(page))) }.getOrDefault(IntArray(0))
     fun placed(c: Context, page: String) = ids(c, page).isNotEmpty()
+    /** Every STORY widget on the home screen. */
+    fun allIds(c: Context): Set<Int> = providers.keys.flatMap { ids(c, it).toList() }.toSet()
+    /** Which page a widget shows. */
+    fun pageOf(c: Context, id: Int): String? = providers.keys.firstOrNull { p -> ids(c, p).contains(id) }
 
     /** Make the page's picture again (if it has a widget on the home screen and not within the last minGapMs). */
     fun refresh(c: Context, page: String, minGapMs: Long = 60_000L) {
@@ -80,6 +85,7 @@ object PageWidgets {
                 rv.setTextColor(R.id.widget_label, StoryTheme.swap(c, Color.WHITE))
                 rv.setTextViewText(R.id.widget_label, names[page] ?: "STORY")
                 rv.setOnClickPendingIntent(R.id.widget_root, pi)
+                rv.setContentDescription(R.id.widget_root, "STORY " + (names[page] ?: page) + " widget #" + id)  // how STORY finds it to lay the live page over it
                 if (full != null) {
                     rv.setImageViewBitmap(R.id.widget_image, fit(c, full, m.getAppWidgetOptions(id), scale))
                     rv.setViewVisibility(R.id.widget_label, View.GONE)

@@ -34,6 +34,7 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         fun setLockDialSize(w: Int, h: Int)
         fun callNumber(number: String)
         fun appPageOpen(pkg: String)
+        fun openPages(page: String)
         fun newContact(number: String)
         fun setQuickAccess(json: String)
         fun toggleCreate()
@@ -116,6 +117,10 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
      *  left edge to swipe your pages back. */
     @JavascriptInterface
     fun appPageOpen(pkg: String) { if (pages) host.appPageOpen(pkg) }
+
+    /** A live home screen widget's '‹ Dashboard': STORY opens full screen (owner). */
+    @JavascriptInterface
+    fun widgetOpenPages(page: String) { if (widget) host.openPages(page) }
 
     @JavascriptInterface
     fun uninstallApp(pkg: String) {

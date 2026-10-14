@@ -11,6 +11,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.graphics.Color
 import android.graphics.PixelFormat
+import android.graphics.Rect
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Handler
@@ -66,6 +67,7 @@ class OverlayService : Service(), StoryBridge.Host {
     private val unlocked = object : android.content.BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) {
             userPresentAt = System.currentTimeMillis()
+            widgetLiveEvent(false)  // unlocked onto the home screen: live widgets come back
             AodActivity.instance?.finish()  // unlocked (e.g. fingerprint) while the Always On Display was up
             ui.post { syncLockDial(); profileLayer(false) }   // unlocked: Station 3's window back where the keyboard works
             for (d in longArrayOf(300, 1000, 2500)) ui.postDelayed({ syncLockDial(); updateBubble() }, d)
@@ -75,7 +77,7 @@ class OverlayService : Service(), StoryBridge.Host {
     // Always On Display: when the screen goes off, STORY's dim always-on screen comes up instead
     // (if switched on). Pressing power while it's up turns the screen truly off.
     private val screenOff = object : android.content.BroadcastReceiver() {
-        override fun onReceive(c: Context, i: Intent) { screenOffAt = System.currentTimeMillis(); lockDialAway = false; lockDialPeek = false; lockDialBackAt = 0L; onScreenOff(); ui.post { syncLockDial() } }
+        override fun onReceive(c: Context, i: Intent) { screenOffAt = System.currentTimeMillis(); ui.post { hideLiveWidgets() }; lockDialAway = false; lockDialPeek = false; lockDialBackAt = 0L; onScreenOff(); ui.post { syncLockDial() } }
     }
     // Screen on: the lock screen may be showing -> the lock screen dial pad (Settings > QUICK ACCESS).
     private val screenOn = object : android.content.BroadcastReceiver() {
@@ -677,6 +679,7 @@ class OverlayService : Service(), StoryBridge.Host {
         if (shown && (!p.small || (p.profile && !p.gap))) p.web.requestFocus()
         if (p === pagesPane && shown && appEdge != null) { appPagePkg = null; removeAppEdge() }
         if (p === pagesPane && !shown) ui.postDelayed({ PageWidgets.refreshPlaced(this) }, 1500)  // home screen widgets show what you just saw
+        if (shown && (p === pagesPane || p === profilePane)) hideLiveWidgets() else if (!shown && (p === pagesPane || p === profilePane)) widgetLiveEvent(false)
         if (p === pagesPane) { quietApps(shown); updateBarLine(); if (!shown && pagesTyping) pagesBackToTop(); updateBubble()
             if (!shown) tvView?.place(org.json.JSONObject().put("show", false)) }
     }
@@ -748,7 +751,9 @@ class OverlayService : Service(), StoryBridge.Host {
     // ---- Home screen widgets (PageWidgets.kt): tapping one opens its page; each widget's picture is the real page,
     //      drawn by a STORY page kept out of sight in its own 1px window (a WebView only draws inside a window),
     //      one page at a time, then thrown away - nothing stays running. ----
+    override fun openPages(page: String) { ui.post { openPageFromWidget(page) } }
     private fun openPageFromWidget(page: String) {
+        hideLiveWidgets()
         warmUp()
         val p = pagesPane ?: return
         p.web.evaluateJavascript("window.storyShow&&window.storyShow(" + org.json.JSONObject.quote(page) + ",false)", null)
@@ -822,6 +827,125 @@ class OverlayService : Service(), StoryBridge.Host {
         wv.loadUrl(remoteBase() + query + "&v=" + System.currentTimeMillis())
     }
 
+    // ---- LIVE home screen widgets (owner: "a real working widget - STORY works in it"). Android only lets a widget
+    //      show pictures, so while the home screen is up STORY lays the REAL page, working, exactly over each STORY
+    //      widget (found with the accessibility service: the widget's root says "STORY <page> widget #<id>").
+    //      Anything that could move the home screen (a touch outside it, scrolling, another screen) puts it away for
+    //      a moment - the widget's picture shows meanwhile - and it comes back once the widget has stood still. ----
+    private class LiveW(val id: Int, val page: String, val holder: FrameLayout, val web: WebView, val lp: WindowManager.LayoutParams) {
+        var ready = false; var shown = false
+    }
+    private val liveWidgets = HashMap<Int, LiveW>()
+    private var homePkgCache: String? = null
+    private fun homePkg(): String? = homePkgCache ?: runCatching {
+        packageManager.resolveActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), 0)?.activityInfo?.packageName
+    }.getOrNull()?.also { homePkgCache = it }
+    private var lastFound: Map<Int, Rect> = emptyMap()
+    private val widgetScanRun = Runnable { widgetScanNow() }
+    /** Something changed on screen. moving = it may be sliding right now (scroll / touch): step aside at once. */
+    fun widgetLiveEvent(moving: Boolean) { ui.post {
+        if (moving) hideLiveWidgets()
+        ui.removeCallbacks(widgetScanRun); ui.postDelayed(widgetScanRun, if (moving) 450L else 200L)
+    } }
+    private fun hideLiveWidgets() { liveWidgets.values.forEach { hideLive(it) }; lastFound = emptyMap(); ui.removeCallbacks(widgetScanRun) }
+    private fun hideLive(w: LiveW) {
+        if (!w.shown) return
+        w.shown = false
+        w.holder.visibility = View.GONE
+        w.lp.flags = w.lp.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+        runCatching { wm.updateViewLayout(w.holder, w.lp) }
+        runCatching { w.web.onPause() }
+    }
+    private fun widgetScanNow() {
+        val home = homePkg()
+        val onHome = home != null && StoryAccessibilityService.foregroundPkg == home && !keyguardLocked() &&
+            pagesPane?.shown != true && profilePane?.shown != true &&
+            getSystemService(android.os.PowerManager::class.java)?.isInteractive == true
+        if (!onHome) { hideLiveWidgets(); return }
+        val found = StoryAccessibilityService.storyWidgets(home!!)
+        // Widgets that are gone from the home screen for good: their live page goes too.
+        val placed = if (found.isEmpty() && liveWidgets.isEmpty()) emptySet() else PageWidgets.allIds(this)
+        liveWidgets.keys.filter { it !in placed }.forEach { id -> liveWidgets.remove(id)?.let { w -> runCatching { wm.removeView(w.holder) }; runCatching { w.web.destroy() } } }
+        liveWidgets.values.filter { it.id !in found }.forEach { hideLive(it) }
+        if (found.isEmpty()) { lastFound = emptyMap(); return }
+        // Only once the widget has stood still (same place twice in a row) - never mid-swipe.
+        if (found != lastFound) { lastFound = found; ui.postDelayed(widgetScanRun, 220); return }
+        found.forEach { (id, r) -> PageWidgets.pageOf(this, id)?.let { page -> placeLive(id, page, r) } }
+    }
+    @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
+    private fun placeLive(id: Int, page: String, r: Rect) {
+        // The page keeps the Pages' shape: as big as fits inside the widget, centred (exactly over its picture).
+        val PW = pagesPane?.web?.width?.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
+        val PH = pagesPane?.web?.height?.takeIf { it > 0 } ?: realHeightPx()
+        val k = minOf(r.width().toFloat() / PW, r.height().toFloat() / PH)
+        val w = (PW * k).toInt().coerceAtLeast(1); val h = (PH * k).toInt().coerceAtLeast(1)
+        val x = r.left + (r.width() - w) / 2; val y = r.top + (r.height() - h) / 2
+        val lw = liveWidgets[id]?.takeIf { it.page == page } ?: run {
+            liveWidgets.remove(id)?.let { old -> runCatching { wm.removeView(old.holder) }; runCatching { old.web.destroy() } }
+            buildLive(id, page, PW / dp) ?: return
+        }
+        val moved = lw.lp.x != x || lw.lp.y != y || lw.lp.width != w || lw.lp.height != h
+        lw.lp.x = x; lw.lp.y = y; lw.lp.width = w; lw.lp.height = h
+        if (!lw.ready) { if (moved) runCatching { wm.updateViewLayout(lw.holder, lw.lp) }; return }
+        // Only touch the window when something really changed (each change makes Android announce new windows,
+        // which would otherwise start another look round - never a loop).
+        if (lw.shown && !moved) return
+        lw.lp.flags = lw.lp.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+        runCatching { wm.updateViewLayout(lw.holder, lw.lp) }
+        if (!lw.shown) { lw.shown = true; runCatching { lw.web.onResume() }; lw.holder.visibility = View.VISIBLE }
+    }
+    @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
+    private fun buildLive(id: Int, page: String, pwCss: Float): LiveW? {
+        val themed = ContextThemeWrapper(this, R.style.Theme_Story)
+        val holder = FrameLayout(themed).apply { visibility = View.GONE }
+        val web = WebView(themed)
+        val lp = WindowManager.LayoutParams(1, 1, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
+            PixelFormat.TRANSLUCENT).apply { gravity = Gravity.TOP or Gravity.START }
+        pinToScreen(lp)
+        val lw = LiveW(id, page, holder, web, lp)
+        web.setBackgroundColor(th(Color.BLACK))
+        web.settings.javaScriptEnabled = true; web.settings.domStorageEnabled = true
+        web.settings.useWideViewPort = true; web.settings.loadWithOverviewMode = true
+        web.isVerticalScrollBarEnabled = false; web.isHorizontalScrollBarEnabled = false
+        web.addJavascriptInterface(StoryBridge(this, this, widget = true, evalTo = { js -> ui.post { if (liveWidgets[id] === lw) web.evaluateJavascript(js, null) } }), "StoryNative")
+        val loader = WebViewAssetLoader.Builder().addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this)).build()
+        val query = "?widget=" + page + "&live=1&pw=" + pwCss
+        web.webViewClient = object : WebViewClient() {
+            override fun shouldInterceptRequest(v: WebView, r: WebResourceRequest): WebResourceResponse? {
+                val u = r.url.toString()
+                if (u.startsWith(ProfilePhotoActivity.PHOTO_BASE)) return photoResponse(r)
+                return loader.shouldInterceptRequest(r.url)
+            }
+            override fun shouldOverrideUrlLoading(v: WebView, r: WebResourceRequest): Boolean {
+                val u = r.url.toString(); return !(u.startsWith(REMOTE) || u.startsWith(LOCAL))
+            }
+            override fun onReceivedError(v: WebView, r: WebResourceRequest, e: android.webkit.WebResourceError) {
+                if (r.isForMainFrame && r.url.toString().startsWith(REMOTE)) v.loadUrl(LOCAL + query)
+            }
+            override fun onReceivedHttpError(v: WebView, r: WebResourceRequest, e: WebResourceResponse) {
+                if (r.isForMainFrame && r.url.toString().startsWith(REMOTE)) v.loadUrl(LOCAL + query)
+            }
+            override fun onRenderProcessGone(v: WebView, detail: android.webkit.RenderProcessGoneDetail): Boolean {
+                ui.post { liveWidgets.remove(id)?.let { runCatching { wm.removeView(it.holder) } } }
+                return true
+            }
+            override fun onPageFinished(v: WebView, url: String) {
+                v.evaluateJavascript("window.storyWidget&&window.storyWidget(" + org.json.JSONObject.quote(page) + ")", null)
+                ui.postDelayed({ lw.ready = true; widgetLiveEvent(false) }, 300)
+            }
+        }
+        // A touch anywhere else on the home screen may start a swipe: step aside, come back once it's still.
+        holder.setOnTouchListener { _, e -> if (e.actionMasked == MotionEvent.ACTION_OUTSIDE) widgetLiveEvent(true); false }
+        holder.addView(web, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        if (runCatching { wm.addView(holder, lp) }.isFailure) { web.destroy(); return null }
+        liveWidgets[id] = lw
+        web.loadUrl(remoteBase() + query + "&v=" + System.currentTimeMillis())
+        return lw
+    }
+
     // ---- App pages (owner: "make any app into a page"): landing on an app's page opens the real app full screen; a thin
     //      see-through strip on the LEFT edge (middle part only, so the phone's own back gesture still works above and
     //      below it) swipes your pages back. It goes away once the Pages show or you leave that app. ----
@@ -857,7 +981,7 @@ class OverlayService : Service(), StoryBridge.Host {
     }
     private fun removeAppEdge() { appEdge?.let { runCatching { layerWm.removeView(it) } }; appEdge = null }
     /** The app on screen changed (accessibility): leaving the app page's app takes the strip away. */
-    fun foregroundChanged(pkg: String) { ui.post { if (appPagePkg != null && pkg != appPagePkg && pkg != packageName) { appPagePkg = null; removeAppEdge() } } }
+    fun foregroundChanged(pkg: String) { widgetLiveEvent(pkg != homePkg()); ui.post { if (appPagePkg != null && pkg != appPagePkg && pkg != packageName) { appPagePkg = null; removeAppEdge() } } }
 
     /** The Station 3 button is always there and always the same -- over apps, over the Pages, open or closed. */
     /** The Station 3 button is always there and always the same -- except where Settings > QUICK ACCESS says
