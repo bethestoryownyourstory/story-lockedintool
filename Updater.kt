@@ -56,10 +56,10 @@ object Updater {
         e.apply()
         val nm = ctx.getSystemService(NotificationManager::class.java)
         if (pct == null) { nm.cancel(PROGRESS_NOTIFICATION); return }
-        nm.createNotificationChannel(NotificationChannel("story_progress", "STORY update progress", NotificationManager.IMPORTANCE_LOW))
+        nm.createNotificationChannel(NotificationChannel("story_progress", "Lockedintool update progress", NotificationManager.IMPORTANCE_LOW))
         val n = Notification.Builder(ctx, "story_progress")
             .setSmallIcon(android.R.drawable.stat_sys_download)
-            .setContentTitle(if (pct >= 0) "Updating STORY…" else "Installing STORY update…")
+            .setContentTitle(if (pct >= 0) "Updating Lockedintool…" else "Installing Lockedintool update…")
             .setContentText(if (pct >= 0) "Downloading $pct%" else "Almost done")
             .setProgress(100, maxOf(pct, 0), pct < 0)
             .setOngoing(true).setOnlyAlertOnce(true).build()
@@ -103,8 +103,8 @@ object Updater {
                 return
             }
             if (!Release.isOwner(ctx) && !Release.agreedAuto(ctx)) { setStatus(ctx, "Build $latest is available"); offerToUser(ctx, latest, force); return }
-            // Owner, or a user who agreed to automatic updates: install by itself. Needs the one-time "allow STORY to update itself" switch.
-            if (!ctx.packageManager.canRequestPackageInstalls()) { setStatus(ctx, "Build $latest is ready - tap \"Allow STORY to update itself\""); return }
+            // Owner, or a user who agreed to automatic updates: install by itself. Needs the one-time "allow Lockedintool to update itself" switch.
+            if (!ctx.packageManager.canRequestPackageInstalls()) { setStatus(ctx, "Build $latest is ready - tap \"Allow Lockedintool to update itself\""); return }
             if (!force && latest == offered && System.currentTimeMillis() - offeredAt < 10 * 60_000) return
             offered = latest; offeredAt = System.currentTimeMillis()
             val apk = download(base, ctx, latest)
@@ -211,7 +211,7 @@ object KeepAlive {
 
 /**
  * The result of an update. Android sometimes needs one tap to approve it: this brings that prompt
- * up, and leaves a "STORY update ready" notification until it's installed. If the quiet install
+ * up, and leaves a "Lockedintool update ready" notification until it's installed. If the quiet install
  * fails, it says why on the setup screen and opens Android's normal installer instead.
  */
 class InstallResultReceiver : BroadcastReceiver() {
@@ -227,7 +227,7 @@ class InstallResultReceiver : BroadcastReceiver() {
                 val confirm = i.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)
                 if (confirm != null && !prefs.getBoolean("session_confirm_tried", false)) {
                     prefs.edit().putBoolean("session_confirm_tried", true).apply()
-                    Updater.setStatus(c, "Approve once - after this STORY updates by itself")
+                    Updater.setStatus(c, "Approve once - after this Lockedintool updates by itself")
                     OverlayService.instance?.pauseForInstall()
                     if (runCatching { c.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess) return
                     OverlayService.instance?.resumeNow()
@@ -268,11 +268,11 @@ class InstallResultReceiver : BroadcastReceiver() {
 
         fun showUpdateNotification(c: Context) {
             val nm = c.getSystemService(NotificationManager::class.java)
-            nm.createNotificationChannel(NotificationChannel("story_update", "STORY updates", NotificationManager.IMPORTANCE_HIGH))
+            nm.createNotificationChannel(NotificationChannel("story_update", "Lockedintool updates", NotificationManager.IMPORTANCE_HIGH))
             val open = PendingIntent.getActivity(c, 0, Intent(c, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
             val n = Notification.Builder(c, "story_update")
                 .setSmallIcon(android.R.drawable.stat_sys_download_done)
-                .setContentTitle("STORY update ready")
+                .setContentTitle("Lockedintool update ready")
                 .setContentText("Tap to install")
                 .setContentIntent(open)
                 .setOngoing(true)       // can't be swiped away by accident

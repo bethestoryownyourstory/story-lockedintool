@@ -34,7 +34,7 @@ class UpdateActivity : Activity() {
         fun text(t: String, size: Float, color: Int = Color.WHITE) = TextView(this).apply { text = t; textSize = size; setTextColor(color); setPadding(0, 0, 0, pad / 2) }
         card.addView(text("Automatic updates", 22f))
         card.addView(text(
-            "To use STORY, you agree that it keeps itself up to date. Whenever a new version comes out, " +
+            "To use Lockedintool, you agree that it keeps itself up to date. Whenever a new version comes out, " +
             "it installs by itself, automatically. You won't be asked or reminded again.", 15f, Color.parseColor("#FFCCCCCC")))
         val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.END }
         row.addView(Button(this).apply {
@@ -75,11 +75,11 @@ class UpdateActivity : Activity() {
 
         fun notify(c: Context) {
             val nm = c.getSystemService(NotificationManager::class.java)
-            nm.createNotificationChannel(NotificationChannel("story_update", "STORY updates", NotificationManager.IMPORTANCE_HIGH))
+            nm.createNotificationChannel(NotificationChannel("story_update", "Lockedintool updates", NotificationManager.IMPORTANCE_HIGH))
             val open = PendingIntent.getActivity(c, NOTIFICATION, Intent(c, UpdateActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
             val n = Notification.Builder(c, "story_update")
                 .setSmallIcon(android.R.drawable.stat_sys_download_done)
-                .setContentTitle("Agree to automatic updates to use STORY")
+                .setContentTitle("Agree to automatic updates to use Lockedintool")
                 .setContentText("Tap to agree")
                 .setContentIntent(open)
                 .setOngoing(true)

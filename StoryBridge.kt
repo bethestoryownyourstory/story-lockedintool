@@ -317,7 +317,7 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
                     val values = android.content.ContentValues().apply {
                         put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, name)
                         put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/png")
-                        put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, android.os.Environment.DIRECTORY_PICTURES + "/STORY")
+                        put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, android.os.Environment.DIRECTORY_PICTURES + "/Lockedintool")
                         put(android.provider.MediaStore.Images.Media.IS_PENDING, 1)
                     }
                     val uri = ctx.contentResolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values) ?: return@runCatching false
@@ -326,7 +326,7 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
                     ctx.contentResolver.update(uri, values, null, null)
                     true
                 } else {
-                    val dir = java.io.File(ctx.getExternalFilesDir(android.os.Environment.DIRECTORY_PICTURES), "STORY").apply { mkdirs() }
+                    val dir = java.io.File(ctx.getExternalFilesDir(android.os.Environment.DIRECTORY_PICTURES), "Lockedintool").apply { mkdirs() }
                     val f = java.io.File(dir, name); f.writeBytes(bytes)
                     android.media.MediaScannerConnection.scanFile(ctx, arrayOf(f.path), arrayOf("image/png"), null)
                     true

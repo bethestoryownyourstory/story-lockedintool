@@ -25,7 +25,7 @@ async function samePin(a, b) {
 export default {
   async fetch(request, env) {
     const path = new URL(request.url).pathname;
-    if (request.method !== 'POST') return json({ ok: false, error: 'STORY release server' }, 405);
+    if (request.method !== 'POST') return json({ ok: false, error: 'Lockedintool release server' }, 405);
     if (!env.PIN) return json({ ok: false, error: 'PIN is not set on the server.' }, 500);
     let body = {};
     try { body = await request.json(); } catch (_) {}

@@ -117,7 +117,7 @@ class StoryAccessibilityService : AccessibilityService() {
             }
             return false
         }
-        private val STORY_WIDGET = Regex("^STORY .+ widget #(\\d+)$")
+        private val STORY_WIDGET = Regex("^(?:Lockedintool|STORY) .+ widget #(\\d+)$")
         /** Where each STORY widget is on the home screen right now (widget id -> its place on the screen). */
         fun storyWidgets(home: String): Map<Int, android.graphics.Rect> {
             val s = instance ?: return emptyMap()

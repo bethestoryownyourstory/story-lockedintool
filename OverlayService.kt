@@ -207,10 +207,10 @@ class OverlayService : Service(), StoryBridge.Host {
 
     private fun startAsForeground() {
         val nm = getSystemService(NotificationManager::class.java)
-        nm.createNotificationChannel(NotificationChannel("story", "STORY", NotificationManager.IMPORTANCE_MIN))
-        // Tapping the notification opens STORY; it never switches STORY off (only "Stop STORY" does).
+        nm.createNotificationChannel(NotificationChannel("story", "Lockedintool", NotificationManager.IMPORTANCE_MIN))
+        // Tapping the notification opens STORY; it never switches STORY off (only "Stop Lockedintool" does).
         val openApp = android.app.PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), android.app.PendingIntent.FLAG_IMMUTABLE)
-        val n = Notification.Builder(this, "story").setContentTitle("STORY is on").setContentText("Stays on until you tap Stop STORY")
+        val n = Notification.Builder(this, "story").setContentTitle("Lockedintool is on").setContentText("Stays on until you tap Stop Lockedintool")
             .setSmallIcon(android.R.drawable.ic_menu_view).setContentIntent(openApp).setOngoing(true).build()
         if (Build.VERSION.SDK_INT >= 34) startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE) else startForeground(1, n)
         running = true
@@ -827,9 +827,9 @@ class OverlayService : Service(), StoryBridge.Host {
         wv.loadUrl(remoteBase() + query + "&v=" + System.currentTimeMillis())
     }
 
-    // ---- LIVE home screen widgets (owner: "a real working widget - STORY works in it"). Android only lets a widget
+    // ---- LIVE home screen widgets (owner: "a real working widget - Lockedintool works in it"). Android only lets a widget
     //      show pictures, so while the home screen is up STORY lays the REAL page, working, exactly over each STORY
-    //      widget (found with the accessibility service: the widget's root says "STORY <page> widget #<id>").
+    //      widget (found with the accessibility service: the widget's root says "Lockedintool <page> widget #<id>").
     //      Anything that could move the home screen (a touch outside it, scrolling, another screen) puts it away for
     //      a moment - the widget's picture shows meanwhile - and it comes back once the widget has stood still. ----
     private class LiveW(val id: Int, val page: String, val holder: FrameLayout, val web: WebView, val lp: WindowManager.LayoutParams) {
@@ -1422,7 +1422,7 @@ class OverlayService : Service(), StoryBridge.Host {
         if (failed) showToast("Couldn't use that picture - try another one")
         if (changed) profilePane?.web?.evaluateJavascript("window.storyProfilePhotoChanged&&window.storyProfilePhotoChanged()", null)
     } }
-    /** One time: Android's own "allow STORY to see your photos" (it sits under STORY's windows, so they step aside). */
+    /** One time: Android's own "allow Lockedintool to see your photos" (it sits under STORY's windows, so they step aside). */
     override fun requestPhotoAccess() { ui.post {
         if (!stepAsideForSystem()) return@post
         runCatching { startActivity(Intent(this, ProfilePhotoActivity::class.java).putExtra(ProfilePhotoActivity.EXTRA_ACCESS, true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)) }
@@ -1514,7 +1514,7 @@ class OverlayService : Service(), StoryBridge.Host {
                     else pi.send()
                 }
             }, 1500)
-            ui.postDelayed({ if (createActive && CreateCameraActivity.instance == null) createEvent("error", "the phone didn't let STORY open its camera screen") }, 4500)
+            ui.postDelayed({ if (createActive && CreateCameraActivity.instance == null) createEvent("error", "the phone didn't let Lockedintool open its camera screen") }, 4500)
         } else {
             CreateCameraActivity.instance?.let { it.finish(); it.overridePendingTransition(0, 0) }
             if (pagesHiddenForCreate) { pagesHiddenForCreate = false; pagesPane?.takeIf { !it.shown }?.let { setShown(it, true) } }

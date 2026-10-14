@@ -1,9 +1,9 @@
 <resources>
-    <string name="a11y_desc">Lets STORY open your phone\'s recent apps and lock the screen. It does not read your screen.</string>
-    <string name="widget_dashboard_desc">Your Dashboard in STORY, working right on the home screen.</string>
-    <string name="widget_money_desc">Your Money page in STORY, working right on the home screen.</string>
-    <string name="widget_wallet_desc">Your Home / Wallet page in STORY, working right on the home screen.</string>
-    <string name="widget_focus_desc">Your Focus page in STORY, working right on the home screen.</string>
-    <string name="widget_notes_desc">Your Notes page in STORY, working right on the home screen.</string>
-    <string name="widget_community_desc">Your Community page in STORY, working right on the home screen.</string>
+    <string name="a11y_desc">Lets Lockedintool open your phone\'s recent apps and lock the screen. It does not read your screen.</string>
+    <string name="widget_dashboard_desc">Your Dashboard in Lockedintool, working right on the home screen.</string>
+    <string name="widget_money_desc">Your Money page in Lockedintool, working right on the home screen.</string>
+    <string name="widget_wallet_desc">Your Home / Wallet page in Lockedintool, working right on the home screen.</string>
+    <string name="widget_focus_desc">Your Focus page in Lockedintool, working right on the home screen.</string>
+    <string name="widget_notes_desc">Your Notes page in Lockedintool, working right on the home screen.</string>
+    <string name="widget_community_desc">Your Community page in Lockedintool, working right on the home screen.</string>
 </resources>

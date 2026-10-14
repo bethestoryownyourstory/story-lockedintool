@@ -82,7 +82,7 @@ export class Hub {
         if (url.searchParams.get('pay') === '1' && this.expressReady()) { try { await this.expressToken(); pay = 'ok'; } catch (e) { pay = String(e.message || e).slice(0, 160); } }
         return json({ ok: true, sms: !!(this.env.TWILIO_VERIFY_SID || this.env.TWILIO_FROM), pay, subs: this.subReady(), transfers: this.payReady() });
       }
-      if (path === '/v1/pay/return') return new Response('<!doctype html><meta name=viewport content="width=device-width,initial-scale=1"><body style="margin:0;background:#000;color:#fff;font:600 18px system-ui;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center;padding:24px;box-sizing:border-box">Done - go back to STORY to see your payment.</body>', { headers: { 'content-type': 'text/html; charset=utf-8' } });
+      if (path === '/v1/pay/return') return new Response('<!doctype html><meta name=viewport content="width=device-width,initial-scale=1"><body style="margin:0;background:#000;color:#fff;font:600 18px system-ui;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center;padding:24px;box-sizing:border-box">Done - go back to Lockedintool to see your payment.</body>', { headers: { 'content-type': 'text/html; charset=utf-8' } });
       const body = req.method === 'POST' ? await req.json().catch(() => ({})) : {};
       if (path === '/v1/register') return this.register(body, req.headers.get('cf-connecting-ip') || '');
       const me = await this.userByToken((req.headers.get('authorization') || '').replace(/^Bearer\s+/i, ''));
@@ -134,7 +134,7 @@ export class Hub {
       if (!r.ok) return json({ error: 'sms-failed', detail: r.j.message || '' }, 502);
     } else {
       code = String(crypto.getRandomValues(new Uint32Array(1))[0] % 1000000).padStart(6, '0');
-      const r = await this.twilio('/2010-04-01/Accounts/' + env.TWILIO_ACCOUNT_SID + '/Messages.json', { From: env.TWILIO_FROM, To: phone, Body: 'Your STORY code is ' + code + '. It works for 10 minutes. Never share it.' });
+      const r = await this.twilio('/2010-04-01/Accounts/' + env.TWILIO_ACCOUNT_SID + '/Messages.json', { From: env.TWILIO_FROM, To: phone, Body: 'Your Lockedintool code is ' + code + '. It works for 10 minutes. Never share it.' });
       if (!r.ok) return json({ error: 'sms-failed', detail: r.j.message || '' }, 502);
     }
     this.sql.exec('INSERT OR REPLACE INTO codes (phone, code, exp, tries, sent, hour, nhour) VALUES (?, ?, ?, 0, ?, ?, ?)', h, code ? await sha('code|' + h + '|' + code) : '', now + 600000, now, hour, nhour);
@@ -483,7 +483,7 @@ export class Hub {
         to = { name: pb.name, bank: pb.bank, acct: pb.acct }; toUid = u.id;
       } else { to = this.bankOk(b.bank || {}); if (!to) return json({ error: 'bank-details' }, 400); }
       if (!this.payReady()) return json({ error: 'not-connected' }, 503);
-      const ref = String(b.ref || '').replace(/[^A-Za-z0-9 .\-]/g, '').trim().slice(0, 20) || 'STORY';
+      const ref = String(b.ref || '').replace(/[^A-Za-z0-9 .\-]/g, '').trim().slice(0, 20) || 'Lockedintool';
       const id = 'p' + rand(9);
       const d = await this.stitch(`mutation Pay($amount: MoneyInput!, $payerReference: String!, $beneficiaryReference: String!, $externalReference: String, $name: String!, $bankId: BankBeneficiaryBankId!, $acct: String!) {
         clientPaymentInitiationRequestCreate(input: { amount: $amount, payerReference: $payerReference, beneficiaryReference: $beneficiaryReference, externalReference: $externalReference,

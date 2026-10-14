@@ -33,15 +33,15 @@ class MainActivity : Activity() {
         val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(StoryTheme.swap(this@MainActivity, Color.BLACK)); setPadding(pad, pad * 2, pad, pad); gravity = Gravity.TOP }
         fun title(t: String, size: Float = 22f) = TextView(this).apply { text = t; setTextColor(StoryTheme.swap(this@MainActivity, Color.WHITE)); textSize = size; setPadding(0, 0, 0, pad / 2) }
         fun btn(t: String, f: () -> Unit) = Button(this).apply { text = t; isAllCaps = false; setOnClickListener { f() } }
-        col.addView(title("STORY", 32f))
+        col.addView(title("Lockedintool", 32f))
         col.addView(title("Floats over your phone. Your home screen, lock screen and apps stay exactly as they are.", 15f))
         col.addView(btn("1. Allow display over other apps") {
             startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
         })
-        col.addView(btn("2. Turn on STORY system actions") {
+        col.addView(btn("2. Turn on Lockedintool system actions") {
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
         })
-        col.addView(btn("Allow STORY to update itself (one time)") {
+        col.addView(btn("Allow Lockedintool to update itself (one time)") {
             startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName")))
         })
         // So music keeps playing when the Pages open (STORY needs to see which players are playing).
@@ -51,7 +51,7 @@ class MainActivity : Activity() {
                 else Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
             runCatching { startActivity(i) }.onFailure { runCatching { startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) } }
         })
-        col.addView(btn("3. Start STORY") {
+        col.addView(btn("3. Start Lockedintool") {
             if (!Settings.canDrawOverlays(this)) { startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))); return@btn }
             if (Build.VERSION.SDK_INT >= 33) requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 1)
             getSharedPreferences("story", MODE_PRIVATE).edit().putBoolean("enabled", true).apply()
@@ -59,9 +59,9 @@ class MainActivity : Activity() {
             startForegroundService(Intent(this, OverlayService::class.java))
             finish()
         })
-        col.addView(btn("Stop STORY") { getSharedPreferences("story", MODE_PRIVATE).edit().putBoolean("enabled", false).apply(); stopService(Intent(this, OverlayService::class.java)) })
+        col.addView(btn("Stop Lockedintool") { getSharedPreferences("story", MODE_PRIVATE).edit().putBoolean("enabled", false).apply(); stopService(Intent(this, OverlayService::class.java)) })
         // So the phone never shuts STORY down to save battery, and lets it start by itself after a restart.
-        col.addView(btn("4. Keep STORY always on") { keepAlwaysOn() })
+        col.addView(btn("4. Keep Lockedintool always on") { keepAlwaysOn() })
         // STORY's Always On Display (switch Samsung's own Always On Display off when using this).
         val prefs = getSharedPreferences("story", MODE_PRIVATE)
         fun aodLabel() = if (prefs.getBoolean("aod", false)) "Always On Display: ON" else "Always On Display: off"

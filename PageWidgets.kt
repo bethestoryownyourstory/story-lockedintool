@@ -86,9 +86,9 @@ object PageWidgets {
                 val rv = RemoteViews(c.packageName, R.layout.widget_page)
                 rv.setInt(R.id.widget_root, "setBackgroundColor", bg)
                 rv.setTextColor(R.id.widget_label, StoryTheme.swap(c, Color.WHITE))
-                rv.setTextViewText(R.id.widget_label, names[page] ?: "STORY")
+                rv.setTextViewText(R.id.widget_label, names[page] ?: "Lockedintool")
                 rv.setOnClickPendingIntent(R.id.widget_root, pi)
-                rv.setContentDescription(R.id.widget_root, "STORY " + (names[page] ?: page) + " widget #" + id)  // how STORY finds it to lay the live page over it
+                rv.setContentDescription(R.id.widget_root, "Lockedintool " + (names[page] ?: page) + " widget #" + id)  // how STORY finds it to lay the live page over it
                 if (full != null) {
                     rv.setImageViewBitmap(R.id.widget_image, fit(c, full, m.getAppWidgetOptions(id), scale))
                     rv.setViewVisibility(R.id.widget_label, View.GONE)

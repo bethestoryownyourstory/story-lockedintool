@@ -38,7 +38,7 @@
     <application
         android:allowBackup="false"
         android:icon="@drawable/ic_launcher"
-        android:label="STORY"
+        android:label="Lockedintool"
         android:theme="@style/Theme.Story">
 
         <!-- Setup screen. STORY does NOT replace your home screen; it floats over it. -->
@@ -165,14 +165,14 @@
             android:name=".OverlayService"
             android:exported="false"
             android:foregroundServiceType="specialUse">
-            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Floating STORY button and bar drawn over other apps at the user's request" />
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Floating Lockedintool button and bar drawn over other apps at the user's request" />
         </service>
 
         <!-- Optional: lets STORY open the phone's real recents screen and lock the screen. -->
         <service
             android:name=".StoryMediaListener"
             android:exported="true"
-            android:label="STORY music"
+            android:label="Lockedintool music"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
             <intent-filter><action android:name="android.service.notification.NotificationListenerService" /></intent-filter>
         </service>
@@ -180,7 +180,7 @@
         <service
             android:name=".StoryAccessibilityService"
             android:exported="true"
-            android:label="STORY system actions"
+            android:label="Lockedintool system actions"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter><action android:name="android.accessibilityservice.AccessibilityService" /></intent-filter>
             <meta-data android:name="android.accessibilityservice" android:resource="@xml/accessibility_config" />

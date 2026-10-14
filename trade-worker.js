@@ -40,13 +40,13 @@ export default {
     const url = new URL(req.url);
     const parts = url.pathname.split('/').filter(Boolean);   // ['mt5', id|'connect', action]
     if (parts[0] !== 'mt5') return json({ ok: true, service: 'story-trade' });
-    if (!env.METAAPI_TOKEN) return json({ error: 'MT5 connects once STORY’s MetaApi key is added' }, 503);
+    if (!env.METAAPI_TOKEN) return json({ error: 'MT5 connects once Lockedintool’s MetaApi key is added' }, 503);
     try {
       if (parts[1] === 'connect' && req.method === 'POST') {
         const b = await req.json();
         if (!b.login || !b.password || !b.server) return json({ error: 'Login, password and server are needed' }, 400);
         const acc = await meta(env, PROV + '/users/current/accounts', { method: 'POST', body: JSON.stringify({
-          name: 'STORY ' + b.login, login: String(b.login), password: b.password, server: b.server, platform: b.platform === 'mt4' ? 'mt4' : 'mt5', magic: 0, type: 'cloud-g2', application: 'MetaApi' }) });
+          name: 'Lockedintool ' + b.login, login: String(b.login), password: b.password, server: b.server, platform: b.platform === 'mt4' ? 'mt4' : 'mt5', magic: 0, type: 'cloud-g2', application: 'MetaApi' }) });
         const id = acc.id;
         // Wait (up to ~50s) until MetaApi has signed in to the broker.
         let info = null, region = 'new-york';

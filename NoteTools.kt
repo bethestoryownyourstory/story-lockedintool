@@ -106,24 +106,24 @@ object NoteTools {
     }.getOrNull()
 
     // ---- files made by STORY, saved straight into the phone's Documents/STORY ----
-    /** Returns the folder it went into ("Documents/STORY"), or null. */
+    /** Returns the folder it went into ("Documents/Lockedintool"), or null. */
     fun saveToDocuments(c: Context, fileName: String, mime: String, bytes: ByteArray): String? = runCatching {
         if (Build.VERSION.SDK_INT >= 29) {
             val values = ContentValues().apply {
                 put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
                 put(MediaStore.MediaColumns.MIME_TYPE, mime)
-                put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOCUMENTS + "/STORY")
+                put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOCUMENTS + "/Lockedintool")
                 put(MediaStore.MediaColumns.IS_PENDING, 1)
             }
             val uri = c.contentResolver.insert(MediaStore.Files.getContentUri("external"), values) ?: return null
             c.contentResolver.openOutputStream(uri)?.use { it.write(bytes) } ?: return null
             values.clear(); values.put(MediaStore.MediaColumns.IS_PENDING, 0)
             c.contentResolver.update(uri, values, null, null)
-            "Documents/STORY"
+            "Documents/Lockedintool"
         } else {
-            val d = File(c.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), "STORY").apply { mkdirs() }
+            val d = File(c.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), "Lockedintool").apply { mkdirs() }
             File(d, fileName).writeBytes(bytes)
-            "STORY's documents folder"
+            "Lockedintool's documents folder"
         }
     }.getOrNull()
 
@@ -224,7 +224,7 @@ object NoteTools {
         if (text.isNotBlank()) send.putExtra(Intent.EXTRA_TEXT, text)
         if (title.isNotBlank()) send.putExtra(Intent.EXTRA_SUBJECT, title)
         if (uris.isNotEmpty()) {
-            send.clipData = android.content.ClipData.newUri(c.contentResolver, title.ifBlank { "STORY" }, uris[0]).apply { for (u in uris.drop(1)) addItem(android.content.ClipData.Item(u)) }
+            send.clipData = android.content.ClipData.newUri(c.contentResolver, title.ifBlank { "Lockedintool" }, uris[0]).apply { for (u in uris.drop(1)) addItem(android.content.ClipData.Item(u)) }
             send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             for (u in uris) c.grantUriPermission(pkg, u, Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
