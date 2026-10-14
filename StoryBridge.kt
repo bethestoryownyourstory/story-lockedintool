@@ -187,6 +187,9 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         (Settings.Secure.getString(ctx.contentResolver, "enabled_notification_listeners") ?: "").contains(ctx.packageName + "/")
     }.getOrDefault(false)
 
+    /** The phone's notifications right now (STORY's Notifications Panel). Pages only. */
+    @JavascriptInterface fun notifList(): String = if (pages) StoryMediaListener.current(ctx) else "[]"
+
     /** Opens Android's own notification-access switch for STORY. */
     @JavascriptInterface
     fun moneyAccessOpen() {

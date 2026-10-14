@@ -46,6 +46,9 @@ export class Hub {
     this.sql.exec(`CREATE INDEX IF NOT EXISTS gposts_gid ON gposts(gid, at)`);
     this.sql.exec(`CREATE TABLE IF NOT EXISTS glikes (pid TEXT, uid TEXT, PRIMARY KEY (pid, uid))`);
     this.sql.exec(`CREATE TABLE IF NOT EXISTS gcomments (id TEXT PRIMARY KEY, pid TEXT, uid TEXT, text TEXT, at INTEGER)`);
+    try { this.sql.exec(`ALTER TABLE groups ADD COLUMN shares INTEGER DEFAULT 0`); } catch (e) {}
+    // STORY's own Stories feed (Community > Stories): one shared public group everyone posts their stories to.
+    this.sql.exec(`INSERT OR IGNORE INTO groups (id, name, about, type, image, category, country, creator, calljoin, created) VALUES ('g-stories', 'Stories', 'Real people sharing their life and success stories, and the advice that got them there.', 'stories', '', 'Life', 'Global', 'story', 'open', 0)`);
   }
 
   one(q, ...a) { const r = this.sql.exec(q, ...a).toArray(); return r[0] || null; }
@@ -176,7 +179,11 @@ export class Hub {
     const count = this.one('SELECT COUNT(*) AS n FROM gmembers WHERE gid = ?', g.id).n;
     const mine = me ? this.member(g.id, me.id) : null;
     const v = { id: g.id, name: g.name, about: g.about || '', type: g.type, image: g.image || '', category: g.category || 'Community', country: g.country || 'Global',
-      creator: g.creator, callJoin: g.calljoin || 'open', created: g.created, count, member: !!mine, leader: !!mine && mine.role === 'leader' };
+      creator: g.creator, callJoin: g.calljoin || 'open', created: g.created, count, member: !!mine, leader: !!mine && mine.role === 'leader',
+      // Real numbers for Trending: members, times the group was shared, likes and comments on its posts.
+      shares: g.shares || 0,
+      likes: this.one('SELECT COALESCE(SUM(likes), 0) AS n FROM gposts WHERE gid = ?', g.id).n,
+      comments: this.one('SELECT COUNT(*) AS n FROM gcomments c JOIN gposts p ON p.id = c.pid WHERE p.gid = ?', g.id).n };
     if (full) v.members = this.sql.exec('SELECT m.uid, m.role, u.name, u.username, u.pub FROM gmembers m JOIN users u ON u.id = m.uid WHERE m.gid = ? ORDER BY m.role = \'leader\' DESC, m.joined LIMIT 500', g.id).toArray()
       .map(r => ({ id: r.uid, role: r.role, name: r.name || '', username: r.username || '', pub: g.type === 'private' ? r.pub : undefined }));
     return v;
@@ -209,7 +216,7 @@ export class Hub {
       return json(this.groupView(get(id), me, true));
     }
     if (op === 'mine') {
-      const rows = this.sql.exec('SELECT g.* FROM groups g JOIN gmembers m ON m.gid = g.id WHERE m.uid = ? ORDER BY g.created DESC', me.id).toArray();
+      const rows = this.sql.exec("SELECT g.* FROM groups g JOIN gmembers m ON m.gid = g.id WHERE m.uid = ? AND g.type != 'stories' ORDER BY g.created DESC", me.id).toArray();
       return json({ groups: rows.map(g => this.groupView(g, me, g.type === 'private')) });
     }
     if (op === 'public') {
@@ -220,6 +227,10 @@ export class Hub {
     }
     const g = get(b.id || q.get('id'));
     if (!g) return json({ error: 'notfound' }, 404);
+    // Stories: everyone reads it, and posting / liking / commenting there just needs you to be on STORY.
+    if (g.type === 'stories' && !this.member(g.id, me.id) && ['post', 'like', 'comment', 'share'].includes(op)) this.sql.exec('INSERT OR IGNORE INTO gmembers (gid, uid, role, joined) VALUES (?, ?, ?, ?)', g.id, me.id, 'member', now);
+    if (g.type === 'stories' && op === 'posts') return json({ posts: this.postsOf(g.id, me) });
+    if (op === 'share-group') { if (g.type === 'public') this.sql.exec('UPDATE groups SET shares = COALESCE(shares, 0) + 1 WHERE id = ?', g.id); return json({ ok: true }); }
     const mine = this.member(g.id, me.id);
     if (g.type === 'private' && !mine) return json({ error: 'notfound' }, 404);   // private groups: members only
     if (op === 'get') return json(this.groupView(g, me, true));
@@ -260,15 +271,20 @@ export class Hub {
     }
     if (op === 'posts') return json({ posts: this.postsOf(g.id, me) });
     if (op === 'post') {
-      if (g.type !== 'public') return json({ error: 'public' }, 400);
-      const text = str(b.text, 600); if (!text) return json({ error: 'empty' }, 400);
-      this.sql.exec('INSERT INTO gposts (id, gid, uid, text, image, at) VALUES (?, ?, ?, ?, ?, ?)', 'p' + rand(9), g.id, me.id, text, '', now);
+      if (g.type !== 'public' && g.type !== 'stories') return json({ error: 'public' }, 400);
+      const text = str(b.text, 600), image = /^data:image\/(png|jpeg|webp);base64,/.test(String(b.image || '')) && String(b.image).length < 600000 ? String(b.image) : '';
+      if (!text && !image) return json({ error: 'empty' }, 400);
+      this.sql.exec('INSERT INTO gposts (id, gid, uid, text, image, at) VALUES (?, ?, ?, ?, ?, ?)', 'p' + rand(9), g.id, me.id, text, image, now);
       return json({ posts: this.postsOf(g.id, me) });
     }
     if (op === 'like') {
       const pid = String(b.post || ''); if (!this.one('SELECT id FROM gposts WHERE id = ? AND gid = ?', pid, g.id)) return json({ error: 'notfound' }, 404);
       if (this.one('SELECT pid FROM glikes WHERE pid = ? AND uid = ?', pid, me.id)) { this.sql.exec('DELETE FROM glikes WHERE pid = ? AND uid = ?', pid, me.id); this.sql.exec('UPDATE gposts SET likes = likes - 1 WHERE id = ?', pid); }
       else { this.sql.exec('INSERT INTO glikes (pid, uid) VALUES (?, ?)', pid, me.id); this.sql.exec('UPDATE gposts SET likes = likes + 1 WHERE id = ?', pid); }
+      return json({ posts: this.postsOf(g.id, me) });
+    }
+    if (op === 'share') {
+      const pid = String(b.post || ''); this.sql.exec('UPDATE gposts SET shares = COALESCE(shares, 0) + 1 WHERE id = ? AND gid = ?', pid, g.id);
       return json({ posts: this.postsOf(g.id, me) });
     }
     if (op === 'comment') {
@@ -282,7 +298,7 @@ export class Hub {
   postsOf(gid, me) {
     const who = uid => { const u = this.one('SELECT name, username FROM users WHERE id = ?', uid); return u ? (u.name || (u.username ? '@' + u.username : 'Someone')) : 'Someone'; };
     return this.sql.exec('SELECT * FROM gposts WHERE gid = ? ORDER BY at DESC LIMIT 100', gid).toArray().map(p => ({
-      id: p.id, author: p.uid === me.id ? 'You' : who(p.uid), mine: p.uid === me.id, text: p.text, at: p.at, likes: p.likes,
+      id: p.id, author: p.uid === me.id ? 'You' : who(p.uid), mine: p.uid === me.id, text: p.text, image: p.image || '', at: p.at, likes: p.likes, shares: p.shares || 0,
       liked: !!this.one('SELECT pid FROM glikes WHERE pid = ? AND uid = ?', p.id, me.id),
       comments: this.sql.exec('SELECT * FROM gcomments WHERE pid = ? ORDER BY at LIMIT 200', p.id).toArray().map(c => ({ author: c.uid === me.id ? 'You' : who(c.uid), text: c.text, at: c.at }))
     }));
