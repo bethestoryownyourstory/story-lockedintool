@@ -21,10 +21,10 @@
   if(!real) return;
   // A LIVE widget (&live=1, owner: "a real working widget"): STORY really works in it (Buy / Sell, payments, every
   // button) - only the things that belong to the full Pages window stay off (TradingView's own window, the Pages'
-  // brightness, the keyboard hand-off, Rows / Page Styles, closing the Pages).
+  // the keyboard hand-off, Rows / Page Styles, closing the Pages).
   if(/[?&]live=1/.test(location.search)){
     window.__storyWidgetLive = true;
-    const OFF = new Set(['tvVersion','tvPlace','tvOpen','brightness','setBrightness','setTyping','pagesAction','closePanel','openRecents','showApps']);
+    const OFF = new Set(['tvVersion','tvPlace','tvOpen','setTyping','pagesAction','closePanel','openRecents','showApps']);
     const live = new Proxy({}, { get(t, k){ if(OFF.has(k)) return ()=>''; const f = real[k]; return typeof f === 'function' ? (...a)=>real[k](...a) : f; } });
     try{ window.StoryNative = live; }catch(e){}
     if(window.StoryNative !== live) Object.defineProperty(window, 'StoryNative', { value:live, configurable:true });
@@ -7236,6 +7236,7 @@ window.storyWidget = function(page){
   state.rowsViewOpen=false; state.pageStyleViewOpen=false; state.chartFullscreen=false; state.toastMessage=null;
   state.current = page;
   renderDevice();
+  window.__storyWidgetReady = true;
 };
 // Called by the Android overlay: open STORY on a given page (and optionally with Station 3 open).
 window.storyShow = function(page, station3){
@@ -11566,6 +11567,13 @@ notesDb().then(db=>new Promise(res=>{
 }).catch(()=>{ notesLoaded = true; });
 document.addEventListener('visibilitychange', ()=>{ if(document.hidden){ if(noteLiveSaveT){ clearTimeout(noteLiveSaveT); noteLiveSaveT = null; } persistNotesNow(); } });
 function renderDevice(){
+  // A live home screen widget never leaves its page (owner: the Money widget stays on Money, the Dashboard widget on
+  // the Dashboard): anything that would go to another page opens STORY full screen on it instead.
+  if(window.__storyWidgetLive && state.current !== window.__storyWidget){
+    const go = state.current; state.current = window.__storyWidget;
+    // (while it's still starting up it's simply put on its page - only a real tap opens STORY)
+    if(window.__storyWidgetReady) try{ window.StoryNative.widgetOpenPages(go); }catch(e){}
+  }
   landOnAppPage();
   trackRecent();
   // Either the full Draw page's canvas or the in-notes inline drawing overlay canvas -- never
@@ -12019,8 +12027,8 @@ function attachHandlers(){
   document.querySelectorAll('[data-nav]').forEach(el=>{
     el.addEventListener('click', ()=>{
       const target = el.getAttribute('data-nav');
-      // A live home screen widget: '‹ Dashboard' opens STORY full screen (owner).
-      if(window.__storyWidgetLive && target === 'dashboard'){ try{ window.StoryNative.widgetOpenPages('dashboard'); }catch(e){} return; }
+      // A live home screen widget stays on its own page (owner): going anywhere else opens STORY full screen there.
+      if(window.__storyWidgetLive && target !== window.__storyWidget){ try{ window.StoryNative.widgetOpenPages(target); }catch(e){} return; }
       state.current = target;
       if(PAGES.includes(target)) state.lastPage = target;
       renderDevice();
