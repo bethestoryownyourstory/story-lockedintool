@@ -80,6 +80,27 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         ctx.startActivity(i)
     }
 
+    /** Dashboard / Apps > Camera and Gallery: the phone's own Camera app and Gallery app (owner: the real ones).
+     *  Camera on the lock screen opens the phone's lock-screen camera, like the phone's own shortcut. */
+    @JavascriptInterface
+    fun openCamera() {
+        val locked = (ctx.getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager).isKeyguardLocked
+        val i = Intent(if (locked) android.provider.MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA_SECURE else android.provider.MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        host.hidePanel()
+        runCatching { ctx.startActivity(i) }.onFailure { runCatching { ctx.startActivity(Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.onFailure { host.showToast("No camera app on this phone") } }
+    }
+    @JavascriptInterface
+    fun openGallery() {
+        host.hidePanel()
+        val tries = listOf(
+            Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, Intent.CATEGORY_APP_GALLERY),
+            Intent(Intent.ACTION_VIEW).setDataAndType(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, "image/*"),
+            ctx.packageManager.getLaunchIntentForPackage("com.google.android.apps.photos")
+        )
+        for (i in tries) { if (i == null) continue; i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); if (runCatching { ctx.startActivity(i) }.isSuccess) return }
+        host.showToast("No gallery app on this phone")
+    }
+
     @JavascriptInterface
     fun uninstallApp(pkg: String) {
         host.hidePanel()
