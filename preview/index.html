@@ -1302,6 +1302,12 @@
   #story-profile .pf-newgroup-form button{ padding:0 14px; border-radius:12px; border:0; background:#ffffff; color:#000000; font-weight:700; }
   #story-profile .msg-lock{ display:inline-flex; margin-right:4px; vertical-align:-1px; opacity:0.8; font-style:normal; }
   .info-hero{ text-align:center; padding:18px 0 22px; }
+  /* App pages: the app's own icon and name; landing here opens the real app. */
+  .app-page-body{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; min-height:360px; padding:24px 0; }
+  .app-page-icon{ width:96px; height:96px; display:flex; align-items:center; justify-content:center; }
+  .app-page-letter{ width:96px; height:96px; border-radius:22px; border:1px solid #333333; display:flex; align-items:center; justify-content:center; font-size:40px; font-weight:600; color:#ffffff; }
+  .app-page-name{ font-size:20px; font-weight:600; color:#ffffff; text-align:center; }
+  .app-page-open{ margin-top:6px; padding:10px 34px; border-radius:22px; border:1px solid #ffffff; background:#000000; color:#ffffff; font-size:14px; font-weight:600; }
   .info-title{ font-family:var(--font-display); font-size:34px; font-weight:800; letter-spacing:4px; color:var(--text); }
   .info-tag{ font-size:13px; color:var(--muted); margin-top:6px; }
   .info-foot{ text-align:center; font-size:11.5px; color:var(--muted); padding:6px 0 30px; line-height:1.6; }
@@ -2451,8 +2457,10 @@
     font-size:10px; font-weight:800; letter-spacing:0.4px; text-transform:uppercase;
     color:var(--text); opacity:0.55;
   }
-  .pswitch-rows-tiles{ flex:1; display:grid; grid-template-columns:repeat(3,1fr); gap:8px; min-width:0; }
+  .pswitch-rows-tiles{ flex:1; display:grid; grid-template-columns:repeat(var(--cols,3),1fr); gap:8px; min-width:0; }
   .pswitch-rows-tiles .pswitch-tile{ height:130px; --mscale:0.38; }
+  /* A row with app pages in it: narrower tiles, so their names wrap inside the tile instead of being cut off. */
+  .pswitch-rows-tiles.many .pswitch-tile-label{ left:5px; right:5px; padding:3px 4px; white-space:normal; text-align:center; font-size:9.5px; line-height:1.15; }
   .pswitch-rows-row-placeholder .pswitch-rows-row-label{ opacity:0.3; }
   .pswitch-rows-empty-slot{
     height:130px; border:1.5px dashed var(--line); border-radius:14px;
@@ -3424,6 +3432,67 @@ const PAGE_SWITCH_ITEMS = [
   {key:'wallet', label:'Home / Wallet'},
   {key:'trading', label:'Focus'},
 ];
+// App pages (owner): hold an app in Apps > Create into a page -> it joins the row after Focus (kept in
+// localStorage `story-app-pages` = [{pkg, name}]). Landing on one opens the REAL app full screen (Android can't put
+// another app's screen inside STORY); a swipe in from the left edge brings the Pages back (OverlayService appPageOpen).
+const CORE_PAGE_COUNT = PAGES.length;
+function isAppPage(key){ return typeof key === 'string' && key.indexOf('app:') === 0; }
+function appPagesStored(){
+  try{ const a = JSON.parse(localStorage.getItem('story-app-pages') || '[]'); return Array.isArray(a) ? a.filter(x=>x && x.pkg) : []; }catch(e){ return []; }
+}
+function syncAppPages(){
+  PAGES.length = CORE_PAGE_COUNT; PAGE_SWITCH_ITEMS.length = CORE_PAGE_COUNT;
+  appPagesStored().forEach(a=>{ PAGES.push('app:' + a.pkg); PAGE_SWITCH_ITEMS.push({key:'app:' + a.pkg, label:escText(a.name || ''), app:a}); });
+}
+syncAppPages();
+function appPageInfo(key){
+  const pkg = key.slice(4);
+  const live = (state.installedApps || []).find(x=>x.pkg === pkg);
+  const kept = appPagesStored().find(x=>x.pkg === pkg) || {};
+  return { pkg, name: (live && live.name) || kept.name || pkg, app: live || null };
+}
+function appPageIconHTML(info){
+  if(info.app && (info.app.iconUrl || info.app.iconData)) return appIconHTML(info.app);
+  return `<span class="app-page-letter">${escText((info.name || '?').charAt(0).toUpperCase())}</span>`;
+}
+function appPageScreen(key){
+  const info = appPageInfo(key || state.current);
+  return `
+    <div class="page-shell app-page">
+    ${topBar(escText(info.name), true)}
+    <div class="app-page-body">
+      <div class="app-page-icon">${appPageIconHTML(info)}</div>
+      <div class="app-page-name">${escText(info.name)}</div>
+      <button class="app-page-open" data-action="app-page-open" data-pkg="${escText(info.pkg)}">Open</button>
+    </div>
+    </div>`;
+}
+// Landing on an app page opens that app; the Pages go back to the page before it (the nearest STORY page), so the
+// left-edge swipe brings you back there.
+function landOnAppPage(){
+  if(!isAppPage(state.current) || !NATIVE || IN_STATION3_WINDOW || !window.StoryNative.appPageOpen) return false;
+  if(state.rowsViewOpen || (state.pageStyleOn && state.pageStyleViewOpen)) return false;
+  const pkg = state.current.slice(4);
+  let i = PAGES.indexOf(state.current);
+  while(i > 0 && isAppPage(PAGES[i])) i--;
+  state.current = PAGES[Math.max(0, i)];
+  state.lastPage = state.current;
+  try{ window.StoryNative.appPageOpen(pkg); }catch(e){}
+  return true;
+}
+function toggleAppPage(a){
+  const list = appPagesStored();
+  const at = list.findIndex(x=>x.pkg === a.pkg);
+  if(at >= 0){
+    list.splice(at, 1);
+    if(state.current === 'app:' + a.pkg) state.current = 'trading';
+    if(state.lastPage === 'app:' + a.pkg) state.lastPage = 'trading';
+  } else list.push({pkg:a.pkg, name:a.name});
+  try{ localStorage.setItem('story-app-pages', JSON.stringify(list)); }catch(e){}
+  syncAppPages();
+  Object.keys(NEIGHBORS).forEach(k=>{ if(isAppPage(k) && !PAGES.includes(k)){ if(NEIGHBORS[k].host.parentNode) NEIGHBORS[k].host.remove(); delete NEIGHBORS[k]; } });
+  showToast(at >= 0 ? a.name + ' is no longer a page' : a.name + ' is now a page in Row 1');
+}
 function pageSwitchTileIconSVG(key){
   const s = 'stroke="rgba(243,242,238,0.85)" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round"';
   switch(key){
@@ -3455,7 +3524,7 @@ function stripPageTop(html){
   return tmp.innerHTML;
 }
 function pageCleanHTML(key){
-  const fn = key==='money' ? moneyScreen : key==='wallet' ? walletScreen : key==='trading' ? tradingScreen : null;
+  const fn = key==='money' ? moneyScreen : key==='wallet' ? walletScreen : key==='trading' ? tradingScreen : isAppPage(key) ? ()=>appPageScreen(key) : null;
   if(!fn) return '';
   // Strip duplicate ids (multiple simultaneous previews of the same real screen would
   // otherwise collide in the live DOM) and the "HOME" badge, which is clutter at this size
@@ -3638,28 +3707,31 @@ function pswitchWheel3dHTML(navAttr){
   // with no cap band padding above/below it to fill.
   const maxTileH = Math.max(...PAGE_SWITCH_ITEMS.map(item=>tileH[item.key]));
   const sceneH = maxTileH + 110; // breathing room so the content/shading isn't clipped
+  // Every page of the row gets an equal slot of the drum (3 pages = 120deg each, as always; app pages add slots).
+  const arc = 360 / PAGE_SWITCH_ITEMS.length, sliceAngle = arc / WHEEL_SLICES;
+  const radius = WHEEL_SLICE_W / (2 * Math.sin((sliceAngle/2) * Math.PI/180));
   return `
     <div class="pswitch-wheel3d-scene" data-wheel3d style="height:${sceneH}px;">
       <div class="pswitch-wheel3d-rig" data-wheel3d-rig style="transform:rotateX(${state.wheelRotX}deg) rotateY(${state.wheelRotY}deg);">
         ${PAGE_SWITCH_ITEMS.map((item,i)=>{
-          const baseAngle = i*120;
+          const baseAngle = i*arc;
           const h = tileH[item.key];
           let slices = '';
           for(let k=0;k<WHEEL_SLICES;k++){
-            const rel = -WHEEL_PAGE_ARC/2 + WHEEL_SLICE_ANGLE*(k+0.5);
+            const rel = -arc/2 + sliceAngle*(k+0.5);
             const angle = baseAngle + rel;
             const cropLeft = -(k*WHEEL_SLICE_W).toFixed(2);
             // Front only: each strip hides itself when turned away (backface-visibility on the strip).
             const marginLeft = (-WHEEL_SLICE_W/2).toFixed(2);
             slices += `
-              <div class="curve-slice" data-angle="${angle.toFixed(2)}" style="width:${(WHEEL_SLICE_W + 0.8).toFixed(2)}px;height:${h}px;margin:${-h/2}px 0 0 ${marginLeft}px;transform:rotateY(${angle.toFixed(2)}deg) translateZ(${WHEEL_RADIUS.toFixed(2)}px);">
+              <div class="curve-slice" data-angle="${angle.toFixed(2)}" style="width:${(WHEEL_SLICE_W + 0.8).toFixed(2)}px;height:${h}px;margin:${-h/2}px 0 0 ${marginLeft}px;transform:rotateY(${angle.toFixed(2)}deg) translateZ(${radius.toFixed(2)}px);">
                 <div class="curve-slice-inner" style="left:${cropLeft}px;height:${h}px;">${miniPagePreviewHTML(item.key)}</div>
               </div>
             `;
           }
           return `<div class="curve-page" data-${navAttr}="${item.key}" data-faceangle="${baseAngle}">${slices}${tileLabelHTML(item, navAttr)}</div>`;
         }).join('')}
-        ${wheelPageDividersHTML(maxTileH)}
+        ${wheelPageDividersHTML(maxTileH, arc, radius)}
       </div>
     </div>
   `;
@@ -3685,11 +3757,11 @@ function wheel3dRimArcHTML(baseAngle, dir, tileHeight, white){
 // A thin vertical white line at each boundary BETWEEN pages (not through the middle of a
 // page), running the drum's full height, so the 3 pages read as clearly separate panels --
 // the same idea as the rim rings, just running the other direction.
-function wheelPageDividersHTML(totalH){
+function wheelPageDividersHTML(totalH, arc, radius){
   let out = '';
   for(let i=0;i<PAGE_SWITCH_ITEMS.length;i++){
-    const angle = i*120 + WHEEL_PAGE_ARC/2; // the seam between this page and the next
-    out += `<div class="wheel3d-vert-divider" style="height:${totalH}px;margin-top:${-totalH/2}px;transform:rotateY(${angle.toFixed(2)}deg) translateZ(${WHEEL_RADIUS.toFixed(2)}px);"></div>`;
+    const angle = i*arc + arc/2; // the seam between this page and the next
+    out += `<div class="wheel3d-vert-divider" style="height:${totalH}px;margin-top:${-totalH/2}px;transform:rotateY(${angle.toFixed(2)}deg) translateZ(${radius.toFixed(2)}px);"></div>`;
   }
   return out;
 }
@@ -3710,7 +3782,7 @@ function pageSwitcherRowsGridHTML(){
     <div class="pswitch-rows-grid">
       <div class="pswitch-rows-row">
         <div class="pswitch-rows-row-label">Row 1</div>
-        <div class="pswitch-rows-tiles">
+        <div class="pswitch-rows-tiles${PAGE_SWITCH_ITEMS.length > 3 ? ' many' : ''}" style="--cols:${PAGE_SWITCH_ITEMS.length};">
           ${PAGE_SWITCH_ITEMS.map(item=>pswitchTileHTML(item, 'pswitch-nav')).join('')}
         </div>
       </div>
@@ -7067,6 +7139,16 @@ function loadNativeApps(){
       return { id:'pkg:'+a.pkg, pkg:a.pkg, name:a.label, icon:'📱', iconUrl, iconSrc:a.icon, section:'PHONE APPS' };
     }));
     Object.values(prev).forEach(a=>{ try{ URL.revokeObjectURL(a.iconUrl); }catch(e){} });
+    // An app that's gone from the phone stops being a page.
+    if(list.length){
+      const have = new Set(list.map(a=>a.pkg)), kept = appPagesStored();
+      const still = kept.filter(x=>have.has(x.pkg));
+      if(still.length !== kept.length){
+        try{ localStorage.setItem('story-app-pages', JSON.stringify(still)); }catch(e){}
+        if(isAppPage(state.current) && !have.has(state.current.slice(4))) state.current = 'trading';
+        syncAppPages();
+      }
+    }
   }catch(err){ console.warn('native apps unavailable', err); }
 }
 // Called by the Android overlay: open STORY on a given page (and optionally with Station 3 open).
@@ -8734,7 +8816,7 @@ function appMenuTemplate(){
       <div class="confirm-sheet" onclick="event.stopPropagation()">
         <div class="confirm-title">${appIconHTML(a)} ${escText(a.name)}</div>
         <div class="confirm-btn-row">
-          <button class="btn-wide" style="margin-top:0;" data-action="app-turn-into-page">Create into a page</button>
+          ${a.section !== 'STORY' ? `<button class="btn-wide" style="margin-top:0;" data-action="app-turn-into-page">${a.pkg && appPagesStored().some(x=>x.pkg === a.pkg) ? 'Remove page' : 'Create into a page'}</button>` : ''}
           <button class="btn-wide" style="margin-top:0;color:var(--red);" data-action="app-delete">Delete App</button>
         </div>
       </div>
@@ -10374,6 +10456,7 @@ function renderScreenContent(){
   if(state.pageStyleOn && state.pageStyleViewOpen && PAGES.includes(state.current)){
     return pageStyleContentScreen();
   }
+  if(isAppPage(state.current)) return appPageScreen();
   switch(state.current){
     case 'dashboard': return dashboardScreen();
     case 'money': return moneyScreen();
@@ -11397,6 +11480,7 @@ notesDb().then(db=>new Promise(res=>{
 }).catch(()=>{ notesLoaded = true; });
 document.addEventListener('visibilitychange', ()=>{ if(document.hidden){ if(noteLiveSaveT){ clearTimeout(noteLiveSaveT); noteLiveSaveT = null; } persistNotesNow(); } });
 function renderDevice(){
+  landOnAppPage();
   trackRecent();
   // Either the full Draw page's canvas or the in-notes inline drawing overlay canvas -- never
   // both at once (the overlay only exists in write mode, the full canvas only in draw mode) --
@@ -12981,7 +13065,17 @@ function attachHandlers(){
         case 'recents-bg': state.recentsOpen = false; break;
         case 'recents-close-all': state.recents = []; state.recentsOpen = false; break;
         case 'app-menu-close': if(Date.now() - appMenuOpenedAt > 450) state.appMenuId = null; break;
-        case 'app-turn-into-page': state.appMenuId = null; showToast('Coming soon'); break;
+        case 'app-turn-into-page': {
+          const a = state.installedApps.find(x=>x.id===state.appMenuId);
+          state.appMenuId = null;
+          if(a && a.pkg) toggleAppPage(a); else showToast('Only apps on your phone can become a page');
+          break;
+        }
+        case 'app-page-open': {
+          const pkg = el.getAttribute('data-pkg');
+          if(NATIVE && window.StoryNative.appPageOpen) window.StoryNative.appPageOpen(pkg); else showToast('Opens the app on your phone');
+          break;
+        }
         case 'app-delete': {
           const gone = state.installedApps.find(x=>x.id===state.appMenuId);
           if(NATIVE && gone && gone.pkg){ state.appMenuId = null; window.StoryNative.uninstallApp(gone.pkg); break; }
@@ -14991,6 +15085,8 @@ function adoptSlidFrame(sl){
     updateScrollHint();
     updateScrollbarThumb();
   }catch(e){ renderDevice(); return; }
+  // Swiped onto an app page: the app opens and the Pages quietly go back to the page before it while they're away.
+  if(isAppPage(state.current) && NATIVE && window.StoryNative.appPageOpen){ setTimeout(renderDevice, 350); return; }
   refreshNeighbors();
 }
 let currentSlide = null;
