@@ -3864,20 +3864,6 @@ const NOTE_PAGE_CHAR_LIMIT = 1200;
 const NOTE_DEFAULT_PAGE_COUNT = 4;
 const NOTE_TABLE_MAX_COLS = 6;
 const NOTE_TABLE_MAX_ROWS = 12;
-// Small inline-SVG "sketch" placeholders used only to seed the Community feed's sample drawing
-// posts so it doesn't look empty on first visit -- these are honest sample illustrations (never
-// presented as a real user's captured drawing) built the same way any other seed/sample data in
-// this prototype (e.g. the Money page's sample figures) is built.
-function communitySeedSketch(stroke, bg){
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="260" viewBox="0 0 400 260">`+
-    `<rect width="400" height="260" fill="${bg}"/>`+
-    `<path d="M30 200 Q100 60 180 150 T340 90" fill="none" stroke="${stroke}" stroke-width="6" stroke-linecap="round"/>`+
-    `<circle cx="300" cy="70" r="22" fill="none" stroke="${stroke}" stroke-width="6"/>`+
-    `<path d="M60 210 h260" stroke="${stroke}" stroke-width="4" stroke-linecap="round" opacity="0.5"/>`+
-    `</svg>`;
-  return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
-}
-
 // Placeholder copy for the built-in "STORY" group that explains Community to new users -- the
 // user said they'll supply the real text later, so it's kept as a single named constant here to
 // make that swap trivial.
@@ -3915,8 +3901,7 @@ function recordPolicyStrike(reason){
 
 // The groups that ship with the app and can't be deleted by the user. Five of them (market
 // prices, News, Bricks, USA, Palestine) are meant to show real, free, public data -- each carries
-// a liveDataKind so fetchGroupLiveData() knows which real endpoint to try, plus honest sampleItems
-// to show (clearly labeled as sample) until/unless that fetch actually succeeds.
+// a liveDataKind so fetchGroupLiveData() knows which real endpoint to try; until it succeeds they say so.
 // Small inlined placeholder photos for the built-in group cards (Community groups + Trending),
 // so a group card shows a picture behind its centered name instead of a flat card. These are
 // procedurally generated stand-ins, not real photography -- a user-created group gets its own
@@ -3961,7 +3946,6 @@ function buildBuiltinCommunityGroups(){
     {
       id:'g-story', name:'STORY', description:'How Community works on STORY.', type:'public', builtin:true, category:'Info', country:'Global', image:COMMUNITY_GROUP_IMAGES.story,
       banned:false, warned:false, creator:'STORY', leaders:['STORY'], members:['You'],
-      trendingStats:{ joined:500, shares:50, likes:200, comments:30 },
       pendingRequests:[], liveDataKind:null,
       posts:[{ id:'p-story-intro', authorName:'STORY', timestamp:'Pinned', type:'note', textContent:COMMUNITY_STORY_GROUP_INTRO, caption:'', imageDataUrl:null, likes:0, likedByMe:false, shares:0, comments:[] }],
     },
@@ -3969,59 +3953,36 @@ function buildBuiltinCommunityGroups(){
       id:'g-stories', name:'Stories', description:'Real people sharing their life and success stories, and the advice that got them there.', type:'public', builtin:true, category:'Life', country:'Global',
       banned:false, warned:false, creator:'STORY', leaders:['STORY'], members:['You'],
       pendingRequests:[], liveDataKind:null,
-      posts:[
-        {id:'p-story1', authorName:'Thah', timestamp:'11:59', type:'note', textContent:'Finally mapped out the Q4 roadmap on paper before touching a doc. Slower, but so much clearer once it was all in front of me.', caption:'', imageDataUrl:null, likes:52000, commentCount:25000, shares:31000, likedByMe:false, comments:[{author:'Devon', text:'This is such a good habit, doing this from now on.', timestamp:'1h ago'}]},
-        {id:'p-story2', authorName:'Pretty', timestamp:'09:14', type:'drawing', textContent:'', imageDataUrl: communitySeedSketch('#000', '#f4d35e'), caption:'Warming up before the real sketch', likes:44000, commentCount:19000, shares:23000, likedByMe:false, comments:[]},
-        {id:'p-story3', authorName:'Priya S.', timestamp:'Yesterday', type:'note', textContent:'Wrote out my whole morning routine last night and I have actually stuck to it for a week now. Small wins add up.', caption:'', imageDataUrl:null, likes:22, shares:4, likedByMe:true, comments:[{author:'Sam', text:'Love this, sharing it with my team.', timestamp:'20h ago'},{author:'Ana', text:'What time do you start?', timestamp:'18h ago'}]},
-        {id:'p-story4', authorName:'Jordan B.', timestamp:'2d ago', type:'drawing', textContent:'', imageDataUrl: communitySeedSketch('#457b9d', '#eaf4ff'), caption:'', likes:5, shares:1, likedByMe:false, comments:[]},
-        {id:'p-story5', authorName:'Nina F.', timestamp:'3d ago', type:'note', textContent:'Brainstormed three names for the side project. Going with "Northline" I think -- advice welcome.', caption:'', imageDataUrl:null, likes:11, shares:2, likedByMe:false, comments:[{author:'Marcus', text:'Northline is clean, good pick.', timestamp:'2d ago'}]},
-      ],
+      posts:[],   // only real stories people post (owner: no made-up posts) - they come from STORY's server
     },
     {
       id:'g-market', name:'Stock News', description:'Free public market prices -- crypto pairs, refreshed from a public source when this device is online.', type:'public', builtin:true, category:'Finance', country:'Global', image:COMMUNITY_GROUP_IMAGES.market,
       banned:false, warned:false, creator:'STORY', leaders:['STORY'], members:['You'],
-      trendingStats:{ joined:45000, shares:22000, likes:61000, comments:33000 },
       pendingRequests:[], liveDataKind:'market', liveStatus:'pending', liveFetchAttempted:false,
-      sampleItems:[
-        {title:'BTC/USD: $64,230.11 (sample)', sub:'+1.2% (24h) — sample data'},
-        {title:'ETH/USD: $3,412.55 (sample)', sub:'+0.6% (24h) — sample data'},
-        {title:'SOL/USD: $146.80 (sample)', sub:'-0.4% (24h) — sample data'},
-      ],
       liveItems:null, posts:[],
     },
     {
       id:'g-news', name:'News', description:'Public headlines, refreshed from a public source when this device is online.', type:'public', builtin:true, category:'News', country:'Global', image:COMMUNITY_GROUP_IMAGES.news,
       banned:false, warned:false, creator:'STORY', leaders:['STORY'], members:['You'],
-      trendingStats:{ joined:12000, shares:9000, likes:34000, comments:24000 },
       pendingRequests:[], liveDataKind:'hn-topic', liveQuery:'', liveStatus:'pending', liveFetchAttempted:false,
-      sampleItems:[
-        {title:'Sample headline: Markets rally on inflation data', sub:'sample data'},
-        {title:'Sample headline: New climate accord announced', sub:'sample data'},
-      ],
       liveItems:null, posts:[],
     },
     {
       id:'g-bricks', name:'Bricks', description:'Public headlines mentioning "BRICS", refreshed from a public source when this device is online.', type:'public', builtin:true, category:'World', country:'Global', image:COMMUNITY_GROUP_IMAGES.bricks,
       banned:false, warned:false, creator:'STORY', leaders:['STORY'], members:['You'],
-      trendingStats:{ joined:8000, shares:5000, likes:15000, comments:9000 },
       pendingRequests:[], liveDataKind:'hn-topic', liveQuery:'BRICS', liveStatus:'pending', liveFetchAttempted:false,
-      sampleItems:[{title:'Sample: BRICS nations discuss new trade framework', sub:'sample data'}],
       liveItems:null, posts:[],
     },
     {
       id:'g-usa', name:'USA', description:'Public headlines about the United States, refreshed from a public source when this device is online.', type:'public', builtin:true, category:'World', country:'United States', image:COMMUNITY_GROUP_IMAGES.usa,
       banned:false, warned:false, creator:'STORY', leaders:['STORY'], members:['You'],
-      trendingStats:{ joined:21000, shares:19000, likes:42000, comments:25000 },
       pendingRequests:[], liveDataKind:'hn-topic', liveQuery:'USA', liveStatus:'pending', liveFetchAttempted:false,
-      sampleItems:[{title:'Sample: US Congress debates new infrastructure bill', sub:'sample data'}],
       liveItems:null, posts:[],
     },
     {
       id:'g-palestine', name:'Palestine', description:'Public headlines about Palestine, refreshed from a public source when this device is online.', type:'public', builtin:true, category:'World', country:'Palestine', image:COMMUNITY_GROUP_IMAGES.palestine,
       banned:false, warned:false, creator:'STORY', leaders:['STORY'], members:['You'],
-      trendingStats:{ joined:30000, shares:40000, likes:90000, comments:50000 },
       pendingRequests:[], liveDataKind:'hn-topic', liveQuery:'Palestine', liveStatus:'pending', liveFetchAttempted:false,
-      sampleItems:[{title:'Sample: Ceasefire talks continue amid ongoing negotiations', sub:'sample data'}],
       liveItems:null, posts:[],
     },
   ];
@@ -4043,7 +4004,7 @@ function formatCount(n){
 // HN Search API for headlines) -- honest about the outcome either way: on a genuine fetch success
 // liveStatus becomes 'live' and liveItems holds the real response; on any failure (no network in
 // this sandboxed test environment, CORS, etc.) liveStatus becomes 'fallback' and the group's
-// already-visible sampleItems (clearly labeled "sample data") are what stays on screen.
+// group says it couldn't load live updates - never sample items (owner: everything real).
 async function fetchGroupLiveData(group){
   try{
     if(group.liveDataKind === 'market'){
@@ -4332,21 +4293,7 @@ let state = {
   selectedDate: null,
   analyticsMonths:[],
   notifPopupId:null,
-  notifApps:[
-    {id:'instagram', name:'Instagram', icon:'📷', enabled:true},
-    {id:'whatsapp', name:'WhatsApp', icon:'💬', enabled:true},
-    {id:'gmail', name:'Gmail', icon:'✉️', enabled:true},
-    {id:'spotify', name:'Spotify', icon:'🎵', enabled:false},
-    {id:'lockedintool', name:'LockedInTool', icon:'💰', enabled:true},
-  ],
-  systemNotifications:[
-    {id:'sn1', appId:'instagram', title:'Instagram', body:'alex_j liked your photo', time:'2m ago'},
-    {id:'sn2', appId:'lockedintool', title:'LockedInTool', body:'PayPal payment received +$450.00', time:'2m ago'},
-    {id:'sn3', appId:'whatsapp', title:'WhatsApp', body:'Mom: Call me when you can', time:'10m ago'},
-    {id:'sn4', appId:'whatsapp', title:'WhatsApp', body:'Jordan: Sounds good 👍', time:'1h ago'},
-    {id:'sn5', appId:'gmail', title:'Gmail', body:'Invoice #2291 from Acme Co.', time:'45m ago'},
-    {id:'sn6', appId:'spotify', title:'Spotify', body:'New episode from your podcast', time:'3h ago'},
-  ],
+  // The Notifications Panel and its settings show the phone's REAL notifications and apps (owner: everything real).
   notifications:[],
   installedApps:[
     {id:'tradingview', name:'TradingView', icon:'📈', section:'WORK & TRADING', launchPopup:'tradingview'},
@@ -10407,43 +10354,61 @@ function moreMenuTemplate(){
   `;
 }
 
+// ---- STORY's Notifications Panel (pull down on the Dashboard) - the phone's REAL notifications, read with STORY's
+// notification access (StoryMediaListener -> StoryNative.notifList). Settings > Notifications = the real apps that send
+// them, each with a switch (story-notif-off); apps seen before stay listed (story-notif-apps). ----
+const NOTIF_OFF_KEY = 'story-notif-off', NOTIF_APPS_KEY = 'story-notif-apps';
+function notifOff(){ try{ return new Set(JSON.parse(localStorage.getItem(NOTIF_OFF_KEY) || '[]')); }catch(e){ return new Set(); } }
+function realNotifs(){
+  let l = []; try{ if(NATIVE && window.StoryNative.notifList) l = JSON.parse(window.StoryNative.notifList() || '[]') || []; }catch(e){}
+  // Remember every app that sent something, so it can be switched off even when it has nothing showing.
+  try{ const apps = JSON.parse(localStorage.getItem(NOTIF_APPS_KEY) || '{}') || {}; let ch = false; l.forEach(n=>{ if(apps[n.pkg] !== n.app){ apps[n.pkg] = n.app; ch = true; } }); if(ch) localStorage.setItem(NOTIF_APPS_KEY, JSON.stringify(apps)); }catch(e){}
+  return l;
+}
+const NOTIF_BELL = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>';
+function notifAppIcon(pkg){
+  const a = state.installedApps.find(x=>x.pkg === pkg);
+  return a && (a.iconUrl || a.iconData) ? appIconHTML(a) : NOTIF_BELL;
+}
 function notificationsPanelScreen(){
-  const enabledIds = new Set(state.notifApps.filter(a=>a.enabled).map(a=>a.id));
-  const list = state.systemNotifications.filter(n=>enabledIds.has(n.appId));
+  const access = NATIVE && window.StoryNative.moneyAccess ? window.StoryNative.moneyAccess() : false;
+  const off = notifOff();
+  const list = access ? realNotifs().filter(n=>!off.has(n.pkg)) : [];
   return `
     <div class="page-shell">
     ${topBar('Notifications Panel', false)}
     <div class="note" style="margin-bottom:10px;">All your app notifications in one place. Manage which apps show up in Notification Settings.</div>
-    ${list.length ? list.map(n=>{
-      const app = state.notifApps.find(a=>a.id===n.appId);
-      return `
+    ${!access ? `<div class="notif-card" data-action="money-access" style="margin-bottom:8px;cursor:pointer;"><div class="notif-icon-wrap">${NOTIF_BELL}</div><div class="notif-mid"><div class="notif-source">Allow STORY to see your notifications</div><div class="notif-label">Turn on notification access</div></div></div>`
+      : list.length ? list.map(n=>`
         <div class="notif-card" style="margin-bottom:8px;">
-          <div class="notif-icon-wrap">${app ? app.icon : '🔔'}</div>
+          <div class="notif-icon-wrap">${notifAppIcon(n.pkg)}</div>
           <div class="notif-mid">
-            <div class="notif-source">${n.title}</div>
-            <div class="notif-label">${n.body}</div>
+            <div class="notif-source">${escText(n.app)}${n.title ? ' · ' + escText(n.title) : ''}</div>
+            <div class="notif-label">${escText(n.text)}</div>
           </div>
-          <div class="notif-right"><div class="notif-time">${n.time}</div></div>
-        </div>
-      `;
-    }).join('') : `<div class="note">No notifications right now — turn some apps on in Notification Settings.</div>`}
-    </div>
-  `;
+          <div class="notif-right"><div class="notif-time">${escText(msgTime(n.ts))}</div></div>
+        </div>`).join('') : `<div class="note">No notifications right now.</div>`}
+    </div>`;
 }
-
+// A new notification (or one cleared) while the panel is open: it updates at once.
+window.storyNotifsChanged = function(){ if(state.current === 'notifications' || state.current === 'notif-settings') renderDevice(); };
 function notifSettingsScreen(){
+  realNotifs();
+  let apps = {}; try{ apps = JSON.parse(localStorage.getItem(NOTIF_APPS_KEY) || '{}') || {}; }catch(e){}
+  const off = notifOff();
+  const list = Object.keys(apps).map(pkg=>({ pkg, name: apps[pkg] })).sort((a, b)=>a.name.localeCompare(b.name));
   return `
     <div class="page-shell">
     ${topBar('Notification Settings', false, '', 'settings')}
     <div class="note" style="margin-bottom:12px;">Choose which installed apps can send notifications to your Notifications Panel.</div>
-    ${state.notifApps.map(a=>`
+    ${list.length ? list.map(a=>`
       <div class="row-card" style="margin-bottom:8px;">
         <div class="row">
-          <div class="row-left"><div class="row-icon">${a.icon}</div><div class="row-name">${a.name}</div></div>
-          <button class="toggle-switch${a.enabled?' on':''}" data-toggleapp="${a.id}"><span class="toggle-knob"></span></button>
+          <div class="row-left"><div class="row-icon">${notifAppIcon(a.pkg)}</div><div class="row-name">${escText(a.name)}</div></div>
+          <button class="toggle-switch${off.has(a.pkg) ? '' : ' on'}" data-toggleapp="${escText(a.pkg)}"><span class="toggle-knob"></span></button>
         </div>
       </div>
-    `).join('')}
+    `).join('') : `<div class="note">Apps show here once they send you a notification.</div>`}
     </div>
   `;
 }
@@ -12969,8 +12934,8 @@ function attachHandlers(){
   document.querySelectorAll('[data-toggleapp]').forEach(el=>{
     el.addEventListener('click', ()=>{
       const id = el.getAttribute('data-toggleapp');
-      const app = state.notifApps.find(a=>a.id===id);
-      if(app) app.enabled = !app.enabled;
+      const off = notifOff(); if(off.has(id)) off.delete(id); else off.add(id);
+      try{ localStorage.setItem(NOTIF_OFF_KEY, JSON.stringify([...off])); }catch(e){}
       renderDevice();
     });
   });
@@ -13856,22 +13821,11 @@ function attachHandlers(){
               break;
             }
             const group = findCommunityGroupById('g-stories');
+            // Stories are real and shared (owner): the story goes to STORY's server for everyone to see.
             if(group){
-              const newPost = {
-                id: 'cp' + Date.now(),
-                authorName: 'You',
-                timestamp: 'Just now',
-                type: s.type,
-                textContent: s.type==='note' ? s.textContent : '',
-                imageDataUrl: s.type==='drawing' ? s.imageDataUrl : null,
-                caption: caption,
-                likes: 0,
-                likedByMe: false,
-                shares: 0,
-                comments: [],
-              };
-              group.posts = [newPost, ...group.posts];
-              showToast('Shared to Stories');
+              const text = s.type === 'note' ? (caption ? caption + '\n\n' : '') + (s.textContent || '') : caption;
+              communityServerDo('post', { id:'g-stories', text: text.slice(0, 600), image: s.type === 'drawing' ? (s.imageDataUrl || '') : '' })
+                .then(r=>{ if(r){ group.posts = communityPostsFromServer(r.posts); showToast('Shared to Stories'); renderDevice(); } });
             }
           }
           state.shareSheet = null;
@@ -13915,7 +13869,7 @@ function attachHandlers(){
         case 'community-like': {
           const id = el.getAttribute('data-postid');
           const found = findCommunityPostById(id);
-          if(found && found.group.server){
+          if(found && communityShared(found.group)){
             communityServerDo('like', { id:found.group.id, post:id }).then(r=>{ if(r){ found.group.posts = communityPostsFromServer(r.posts); renderDevice(); } });
             break;
           }
@@ -13937,7 +13891,7 @@ function attachHandlers(){
           const text = input ? input.value.trim() : '';
           if(text){
             const found = findCommunityPostById(id);
-            if(found && found.group.server){
+            if(found && communityShared(found.group)){
               communityServerDo('comment', { id:found.group.id, post:id, text }).then(r=>{ if(r){ found.group.posts = communityPostsFromServer(r.posts); renderDevice(); } });
               break;
             }
@@ -13961,6 +13915,7 @@ function attachHandlers(){
           if(found){
             const post = found.post;
             post.shares = (post.shares || 0) + 1;
+            if(communityShared(found.group)) communityServerDo('share', { id:found.group.id, post:id }).then(r=>{ if(r){ found.group.posts = communityPostsFromServer(r.posts); } });
             state.shareSheet = {
               source:'post', title: post.authorName + '’s post', type: post.type,
               textContent: post.textContent || '', imageDataUrl: post.imageDataUrl || null,
@@ -13974,6 +13929,7 @@ function attachHandlers(){
           const g = findCommunityGroupById(el.getAttribute('data-groupid'));
           if(g){
             g.trendingStats = g.trendingStats || {}; g.trendingStats.shares = (g.trendingStats.shares || 0) + 1;
+            if(g.server) msgApi('/v1/groups/share-group', { id:g.id }).catch(()=>{});
             state.shareSheet = { source:'group', title: g.name, type:'text', textContent: g.name + ' - join this group on STORY.' + (g.description ? '\n' + g.description : ''), imageDataUrl:null, allowCommunity:false };
           }
           break;
@@ -14255,11 +14211,13 @@ function communityFromServer(v, old){
     // The page counts members with members.length and checks members.includes('You').
     members: (v.member ? ['You'] : []).concat(Array(Math.max(0, n - (v.member ? 1 : 0))).fill('')),
     pendingRequests: [], liveDataKind: null, banned: false, warned: false, posts: (old && old.posts) || [],
+    // Trending uses these real numbers (owner: everything real).
+    trendingStats: { joined: n, shares: +v.shares || 0, likes: +v.likes || 0, comments: +v.comments || 0 },
   });
 }
 function communityPostsFromServer(list){
-  return (list || []).map(p=>({ id: p.id, authorName: p.author, timestamp: msgTime(p.at), type: 'note', textContent: p.text, caption: '', imageDataUrl: null,
-    likes: p.likes, likedByMe: !!p.liked, shares: 0, comments: (p.comments || []).map(c=>({ author: c.author, text: c.text })), commentCount: (p.comments || []).length }));
+  return (list || []).map(p=>({ id: p.id, authorName: p.author, timestamp: msgTime(p.at), type: p.image ? 'drawing' : 'note', textContent: p.image ? '' : p.text, caption: p.image ? (p.text || '') : '', imageDataUrl: p.image || null,
+    likes: p.likes, likedByMe: !!p.liked, shares: +p.shares || 0, comments: (p.comments || []).map(c=>({ author: c.author, text: c.text })), commentCount: (p.comments || []).length }));
 }
 function upsertCommunityGroup(v){
   if(!v || v.type !== 'public') return null;   // private groups never show in Community (owner)
@@ -14284,13 +14242,18 @@ async function communitySync(force){
     (pub.groups || []).concat(mine.groups || []).forEach(v=>{ if(v.type === 'public'){ upsertCommunityGroup(v); seen.add(v.id); } });
     // Groups that are gone from the server go from here too.
     state.communityGroups = state.communityGroups.filter(g=>!g.server || seen.has(g.id));
+    // Stories: the real stories everyone posted.
+    try{ const st = findCommunityGroupById('g-stories'), r = await msgApi('/v1/groups/posts?id=g-stories'); if(st) st.posts = communityPostsFromServer(r.posts); }catch(e){}
     communitySyncedAt = Date.now(); saveCommunity();
     if(state.current === 'community' || state.current === 'community-group') renderDevice();
   }catch(e){}
   communitySyncing = false;
 }
+const communityShared = g=>g && (g.server || g.id === 'g-stories');   // its posts live on STORY's server
 async function communityOpenGroupSync(id){
-  const g = findCommunityGroupById(id); if(!g || !g.server) return;
+  const g = findCommunityGroupById(id);
+  if(g && g.id === 'g-stories'){ try{ const r = await msgApi('/v1/groups/posts?id=g-stories'); g.posts = communityPostsFromServer(r.posts); if(state.current === 'community-group' && state.communityActiveGroupId === id) renderDevice(); }catch(e){} return; }
+  if(!g || !g.server) return;
   try{
     const [v, p] = await Promise.all([msgApi('/v1/groups/get?id=' + encodeURIComponent(id)), msgApi('/v1/groups/posts?id=' + encodeURIComponent(id))]);
     upsertCommunityGroup(v); g.posts = communityPostsFromServer(p.posts);
@@ -14547,7 +14510,7 @@ function communityGroupScreen(){
   const isMember = g.members.includes('You');
   const isLeader = g.leaders.includes('You') || g.creator==='You';
   const isLive = !!g.liveDataKind;
-  const items = isLive ? (g.liveStatus==='live' ? g.liveItems : g.sampleItems) : null;
+  const items = isLive && g.liveStatus==='live' ? g.liveItems : null;   // only real live items - never samples (owner)
   return `
     <div class="page-shell">
     ${topBar(g.name, false, '', 'community')}
@@ -14596,8 +14559,8 @@ function communityGroupScreen(){
     ` : ''}
 
     ${isLive ? `
-      <div class="section-title">${g.liveStatus==='live' ? 'LIVE' : 'SAMPLE DATA — LIVE FETCH UNAVAILABLE'}</div>
-      ${!g.liveFetchAttempted ? `<div class="community-empty-note">Checking for live updates…</div>` : ''}
+      <div class="section-title">LIVE</div>
+      ${!g.liveFetchAttempted || g.liveStatus === 'pending' ? `<div class="community-empty-note">Checking for live updates…</div>` : g.liveStatus !== 'live' ? `<div class="community-empty-note">Couldn’t load live updates right now - check your connection.</div>` : ''}
       <div class="community-live-list">
         ${(items||[]).map(it=>`
           <div class="community-live-item">
