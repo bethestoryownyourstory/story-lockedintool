@@ -1,6 +1,6 @@
 {
-  "name": "STORY — LockedInTool",
-  "short_name": "STORY",
+  "name": "Lockedintool",
+  "short_name": "Lockedintool",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

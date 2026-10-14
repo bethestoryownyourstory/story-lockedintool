@@ -43,7 +43,7 @@
 }catch(e){} })();
 </script>
 <meta charset="UTF-8">
-<title>STORY — Prototype</title>
+<title>Lockedintool — Prototype</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <script>
 /* Live widget: the page lays out at the Pages' own width (pw, CSS px) and the phone shrinks it to the widget's size,
@@ -61,7 +61,7 @@
      down (see setupManifest()). -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="STORY">
+<meta name="apple-mobile-web-app-title" content="Lockedintool">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#000">
 <link rel="manifest" href="manifest.json">
@@ -2821,6 +2821,10 @@
   .story-clock{ font-size:11px; font-weight:600; font-family:var(--font-mono); }
   .story-cast-ico{ font-size:10px; margin-top:2px; }
   .story-title{ font-family:var(--font-display); font-weight:700; font-size:17px; letter-spacing:0; white-space:nowrap; margin-right:2px; }
+  /* Lockedintool (owner): two lines in exactly the box the old one-word title took - same width, height and space around */
+  .story-title{ display:inline-flex; flex-direction:column; justify-content:center; width:52px; height:22px; overflow:visible; }
+  .story-title-l{ display:block; font-size:0.64em; line-height:1; }
+  .story-title-l + .story-title-l{ padding-left:0.62em; }
   .story-title-row{ display:flex; align-items:center; gap:9px; flex-shrink:0; }
   .story-divider-v{ width:1px; height:20px; background:rgba(255,255,255,0.25); }
   .layouts-btn{ background:var(--card); border:none; color:var(--text); font-size:9.5px; font-weight:700;
@@ -2965,7 +2969,7 @@
   .controls-toggles .chev{ margin-left:auto; color:var(--muted); flex-shrink:0; }
   .controls-hr{ height:1px; background:rgba(255,255,255,0.18); margin:8px 0 6px; }
   .controls-label{ font-size:11px; color:var(--muted); }
-  @media (max-width:420px){ .story-title{ font-size:20px; } .story-clock{ font-size:12px; } }
+  @media (max-width:420px){ .story-title{ font-size:20px; width:61.17px; height:26px; } .story-clock{ font-size:12px; } }
 
   .search-row{ cursor:pointer; }
   .search-row:active{ transform:scale(0.98); box-shadow:var(--press1); }
@@ -3454,7 +3458,7 @@
 </head>
 <body>
 
-<button id="dev-emergency-btn" class="dev-emergency-btn" title="Reset STORY to a clean Dashboard">⎋ Reset STORY</button>
+<button id="dev-emergency-btn" class="dev-emergency-btn" title="Reset Lockedintool to a clean Dashboard">⎋ Reset Lockedintool</button>
 
 <!-- ===== STORY'S OWN STATUS BAR =====
      A real phone's clock/wifi/signal/battery row belongs to the OS, not to any one app, so
@@ -3481,7 +3485,7 @@
 
 <div class="stage">
   <div class="stage-head">
-    <h1>STORY — live prototype</h1>
+    <h1>Lockedintool — live prototype</h1>
     <p>From the dashboard, tap the arrow (top right) to open your pages. Swipe — or click‑drag on desktop — left/right to move between Wallet, Money, and Trading. Tap "‹ Dashboard" (top left) on any page to come back. No bottom nav bar — this is the default way the app behaves.</p>
   </div>
 
@@ -3493,7 +3497,7 @@
   <div class="device-wrap" id="device-wrap"></div>
   <div id="device-dimmer" data-keep-color style="position:fixed;inset:0;background:#000;opacity:0;pointer-events:none;z-index:99999;transition:opacity 0.15s;"></div>
 
-  <div class="below-fold-note">This is a clickable spec, not the final app. The Wallet / Money / Trading suite you swipe between is <b>LockedInTool</b> — a system that lives inside the bigger <b>STORY</b> app you're previewing here. Once you're happy with the screens and flow, this becomes the blueprint for the real Android launcher (APK) and the iPhone/Mac/Windows companion apps.</div>
+  <div class="below-fold-note">This is a clickable spec, not the final app. You're previewing <b>Lockedintool</b>. Once you're happy with the screens and flow, this becomes the blueprint for the real Android launcher (APK) and the iPhone/Mac/Windows companion apps.</div>
 </div>
 
 <script>
@@ -3509,7 +3513,7 @@ if(!DEV_MODE){
   if(emergencyBtn) emergencyBtn.style.display = 'none';
 } else {
   document.getElementById('dev-emergency-btn').addEventListener('click', ()=>{
-    if(confirm('Reset STORY back to a clean Dashboard?\n\nThis just reloads the page -- nothing about your phone itself is ever touched.')){
+    if(confirm('Reset Lockedintool back to a clean Dashboard?\n\nThis just reloads the page -- nothing about your phone itself is ever touched.')){
       location.reload();
     }
   });
@@ -4114,7 +4118,7 @@ function buildBuiltinCommunityGroups(){
   return [{
     id:'g-stories', name:'Stories', description:'Real people sharing their life and success stories, and the advice that got them there.', type:'public', builtin:true, category:'Life', country:'Global',
     banned:false, warned:false, creator:'STORY', leaders:['STORY'], members:['You'], pendingRequests:[], liveDataKind:null,
-    posts:[],   // only real stories people post - they come from STORY's server
+    posts:[],   // only real stories people post - they come from Lockedintool's server
   }];
 }
 // Abbreviates an engagement count the way social feeds do (1000 -> "1k", 1500 -> "1.5k",
@@ -4442,7 +4446,7 @@ function dashboardScreen(){
       <div class="notif-pull" id="notif-pull" style="pointer-events:none;">▾</div>
       <div class="story-topbar">
         <div class="story-title-row">
-          <span class="story-title">STORY</span>
+          <span class="story-title" aria-label="Lockedintool"><span class="story-title-l">Locked</span><span class="story-title-l">intool</span></span>
           ${state.homeScreen==='dashboard' ? homeBadge() : ''}
           <span class="story-divider-v"></span>
           <button class="layouts-btn" data-nav="layouts">LAYOUTS</button>
@@ -4456,7 +4460,7 @@ function dashboardScreen(){
         <span class="search-label">SEARCH ENGINE</span>
         <textarea class="search-value-input" id="dash-search-input" rows="1" placeholder="Google">${state.searchQuery.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
       </div>
-      ${state.searchBlocked ? `<div class="dash-search-note dash-search-note-blocked">🛡 Safe Search is on — this search isn't allowed on STORY.</div>` : ''}
+      ${state.searchBlocked ? `<div class="dash-search-note dash-search-note-blocked">🛡 Safe Search is on — this search isn't allowed on Lockedintool.</div>` : ''}
       ${(!state.searchBlocked && state.pendingSearchQuery) ? `<div class="dash-search-note">Press Enter again to open "${state.pendingSearchQuery}"</div>` : ''}
       <div class="safe-search"><span class="diamond">◇</span> Safe search is on</div>
       <div class="story-body">
@@ -4532,7 +4536,7 @@ function searchPopupTemplate(){
           </div>
         ` : ''}
         ${state.searchBlocked ? `
-          <div class="search-blocked-note">🛡 Safe Search is on — this search isn't allowed on STORY.</div>
+          <div class="search-blocked-note">🛡 Safe Search is on — this search isn't allowed on Lockedintool.</div>
         ` : `
           <button class="btn-wide btn-primary" id="search-action-btn" style="margin-top:0;">${state.pendingSearchQuery ? `Open "${state.pendingSearchQuery}" ↗` : 'Search'}</button>
         `}
@@ -4548,7 +4552,7 @@ function brightnessMenuTemplate(){
         <div class="confirm-title">Brightness Control</div>
         <div class="confirm-sub">Choose what the slider controls.</div>
         <div class="settings-option${state.brightnessMode==='system'?' selected':''}" data-brightmode="system">
-          <div class="row-left"><div class="row-name">System control</div><div class="row-sub">Only dims STORY</div></div>
+          <div class="row-left"><div class="row-name">System control</div><div class="row-sub">Only dims Lockedintool</div></div>
           <div class="radio-dot"></div>
         </div>
         <div class="settings-option${state.brightnessMode==='device'?' selected':''}" data-brightmode="device">
@@ -4871,7 +4875,7 @@ function moneyCompute(){
   state.expenseLimit = lim > 0 ? +lim : null;
 }
 function paymentCardsHTML(){
-  if(!moneyAccessOk()) return `<div class="notif-card" data-action="money-access"><div class="notif-icon-wrap">🔔</div><div class="notif-mid"><div class="notif-source">STORY</div><div class="notif-label">Allow STORY to see your payments</div></div><div class="notif-right"><div class="notif-amt">Turn on</div><div class="notif-time">&nbsp;</div></div></div>`;
+  if(!moneyAccessOk()) return `<div class="notif-card" data-action="money-access"><div class="notif-icon-wrap">🔔</div><div class="notif-mid"><div class="notif-source">Lockedintool</div><div class="notif-label">Allow Lockedintool to see your payments</div></div><div class="notif-right"><div class="notif-amt">Turn on</div><div class="notif-time">&nbsp;</div></div></div>`;
   const sp = state.moneySpan || moneyRangeSpan();
   const list = moneyView().filter(t=>t.ts >= sp.from && t.ts <= sp.to).slice(0, 300);
   if(!list.length) return `<div class="notif-card notif-empty"><div class="notif-icon-wrap">💳</div><div class="notif-mid"><div class="notif-source">${moneyView().length ? 'No payments in this time' : 'No payments yet'}</div><div class="notif-label">They show as your bank apps send them</div></div><div class="notif-right"><div class="notif-amt">&nbsp;</div><div class="notif-time">&nbsp;</div></div></div>`;
@@ -5369,7 +5373,7 @@ async function tlModify(acc, pos, v){
 }
 
 // ---- MT5 (through STORY's MetaApi connection, the only way an app can reach MT5) ----
-const MT5_API = 'https://story-trade.percyjuniormaseko0.workers.dev';   // STORY's trade server (trade-worker.js, MetaApi)
+const MT5_API = 'https://story-trade.percyjuniormaseko0.workers.dev';   // Lockedintool's trade server (trade-worker.js, MetaApi)
 async function mt5Call(acc, method, path, body){
   if(!MT5_API) throw 'mt5-soon';
   const r = await httpReq(method, MT5_API + path, { 'X-Story-Key': acc ? (secretGet('mt5key:' + acc.accId) || '') : '' }, body);
@@ -5385,16 +5389,16 @@ async function mt5Call(acc, method, path, body){
 // Each one: the details you type to add your account, and how STORY reads it / trades on it. Platforms marked soon
 // are real ones still being connected (they say so, never pretend).
 const PLATFORMS = {
-  mt5:        { hidden:true, label:'MT5', group:'Forex & CFDs', sym:'EURUSD', env:true, fields:[['login','MT5 LOGIN (ACCOUNT NUMBER)','e.g. 48213390','numeric'],['password','PASSWORD','Your MT5 password','password'],['server','BROKER SERVER','Your broker’s MT5 server (from your broker)']], note:'STORY connects your MT5 account through MetaApi (the only way an app can reach MT5). Your password is only used to connect - it can take up to a minute the first time.' },
-  mt4:        { hidden:true, label:'MT4', group:'Forex & CFDs', sym:'EURUSD', env:true, fields:[['login','MT4 LOGIN (ACCOUNT NUMBER)','e.g. 48213390','numeric'],['password','PASSWORD','Your MT4 password','password'],['server','BROKER SERVER','Your broker’s MT4 server (from your broker)']], note:'STORY connects your MT4 account through MetaApi. Your password is only used to connect - it can take up to a minute the first time.' },
-  tradelocker:{ label:'TradeLocker', group:'Forex & CFDs', sym:'EURUSD', env:true, fields:[['email','TRADELOCKER EMAIL','you@email.com','email'],['password','PASSWORD','Your TradeLocker password','password'],['server','BROKER SERVER','Your broker’s server name (from your broker)'],['accNo','ACCOUNT NUMBER','Its number in TradeLocker, e.g. 1234567','numeric']], note:'STORY signs in to your broker directly. Your password is not kept - only a sign-in key, on this phone.' },
-  ctrader:    { label:'cTrader', group:'Forex & CFDs', soon:'cTrader connects once STORY’s cTrader app is registered with Spotware' },
+  mt5:        { hidden:true, label:'MT5', group:'Forex & CFDs', sym:'EURUSD', env:true, fields:[['login','MT5 LOGIN (ACCOUNT NUMBER)','e.g. 48213390','numeric'],['password','PASSWORD','Your MT5 password','password'],['server','BROKER SERVER','Your broker’s MT5 server (from your broker)']], note:'Lockedintool connects your MT5 account through MetaApi (the only way an app can reach MT5). Your password is only used to connect - it can take up to a minute the first time.' },
+  mt4:        { hidden:true, label:'MT4', group:'Forex & CFDs', sym:'EURUSD', env:true, fields:[['login','MT4 LOGIN (ACCOUNT NUMBER)','e.g. 48213390','numeric'],['password','PASSWORD','Your MT4 password','password'],['server','BROKER SERVER','Your broker’s MT4 server (from your broker)']], note:'Lockedintool connects your MT4 account through MetaApi. Your password is only used to connect - it can take up to a minute the first time.' },
+  tradelocker:{ label:'TradeLocker', group:'Forex & CFDs', sym:'EURUSD', env:true, fields:[['email','TRADELOCKER EMAIL','you@email.com','email'],['password','PASSWORD','Your TradeLocker password','password'],['server','BROKER SERVER','Your broker’s server name (from your broker)'],['accNo','ACCOUNT NUMBER','Its number in TradeLocker, e.g. 1234567','numeric']], note:'Lockedintool signs in to your broker directly. Your password is not kept - only a sign-in key, on this phone.' },
+  ctrader:    { label:'cTrader', group:'Forex & CFDs', soon:'cTrader connects once Lockedintool’s cTrader app is registered with Spotware' },
   dxtrade:    { label:'DXtrade', group:'Forex & CFDs', soon:'DXtrade is being connected' },
   matchtrader:{ label:'Match-Trader', group:'Forex & CFDs', soon:'Match-Trader is being connected' },
   deriv:      { label:'Deriv', group:'Forex & CFDs', sym:'R_100', fields:[['token','DERIV API TOKEN','From Deriv: Account settings > API token (Read + Trade)','password']], note:'Make a token in your Deriv account with Read and Trade on. Buy / Sell open Multiplier trades (up / down) with your lot as the stake; closing sells them.' },
   binance:    { label:'Binance', group:'Crypto', sym:'BTCUSDT', fields:[['key','API KEY','From Binance: API Management','text'],['secret','SECRET KEY','Shown once when you create the key','password']], note:'Make an API key in your Binance account with Spot trading on (never withdrawals). The key stays on this phone.' },
-  bybit:      { label:'Bybit', group:'Crypto', sym:'BTCUSDT', fields:[['key','API KEY','From Bybit: API','text'],['secret','API SECRET','','password']], note:'Make an API key in Bybit with Trade on (never withdrawals). STORY trades USDT perpetuals. The key stays on this phone.' },
-  okx:        { label:'OKX', group:'Crypto', sym:'BTC-USDT-SWAP', fields:[['key','API KEY','From OKX: API','text'],['secret','SECRET KEY','','password'],['passphrase','PASSPHRASE','The passphrase you set for the key','password']], note:'Make an API key in OKX with Trade on (never withdrawals). STORY trades perpetual swaps; lot = contracts. The key stays on this phone.' },
+  bybit:      { label:'Bybit', group:'Crypto', sym:'BTCUSDT', fields:[['key','API KEY','From Bybit: API','text'],['secret','API SECRET','','password']], note:'Make an API key in Bybit with Trade on (never withdrawals). Lockedintool trades USDT perpetuals. The key stays on this phone.' },
+  okx:        { label:'OKX', group:'Crypto', sym:'BTC-USDT-SWAP', fields:[['key','API KEY','From OKX: API','text'],['secret','SECRET KEY','','password'],['passphrase','PASSPHRASE','The passphrase you set for the key','password']], note:'Make an API key in OKX with Trade on (never withdrawals). Lockedintool trades perpetual swaps; lot = contracts. The key stays on this phone.' },
   kraken:     { label:'Kraken', group:'Crypto', sym:'XBTUSD', fields:[['key','API KEY','From Kraken: Security > API','text'],['secret','PRIVATE KEY','','password']], note:'Make an API key in Kraken with Query funds and Create & modify orders (never withdrawals). The key stays on this phone.' },
   luno:       { label:'Luno', group:'Crypto', sym:'XBTZAR', fields:[['key','API KEY ID','From Luno: Security > API keys','text'],['secret','API KEY SECRET','','password']], note:'Make an API key in Luno with Trade permission (never send). The key stays on this phone.' },
   valr:       { label:'VALR', group:'Crypto', sym:'BTCZAR', fields:[['key','API KEY','From VALR: Account > API keys','text'],['secret','API SECRET','','password']], note:'Make an API key in VALR with View and Trade (never withdraw). The key stays on this phone.' },
@@ -5693,7 +5697,7 @@ const alAdapter = {
   async symbols(acc){ const j = await xget(alBase(acc) + '/v2/assets?status=active&asset_class=us_equity', alHead(acc)); return (j || []).filter(x=>x.tradable).map(x=>x.symbol).sort(); },
 };
 // ---- Deriv (WebSocket API; Multipliers for Buy / Sell) ----
-const DERIV_APP_ID = 1089;   // Deriv's public app id - STORY's own can replace it once registered at api.deriv.com
+const DERIV_APP_ID = 1089;   // Deriv's public app id - Lockedintool's own can replace it once registered at api.deriv.com
 const dvSockets = {};
 function dvSend(acc, req){
   return new Promise((resolve, reject)=>{
@@ -5792,7 +5796,7 @@ function httpRaw(method, url, headers, rawBody){
 function tradeErrText(e){
   if(e === 'signin') return 'Sign in again to this account';
   if(e === 'offline') return 'No connection';
-  if(e === 'mt5-soon') return 'MT5 connects once STORY’s MetaApi key is added';
+  if(e === 'mt5-soon') return 'MT5 connects once Lockedintool’s MetaApi key is added';
   return String(e || 'Something went wrong');
 }
 let tradeBusy = false;
@@ -6599,7 +6603,7 @@ function addCardTemplate(){
       <div class="modal-sheet" onclick="event.stopPropagation()">
         <div class="modal-head"><span class="modal-title">Add card</span><button class="modal-close" data-action="add-card-close">×</button></div>
         <div class="card-opts">
-          <button class="card-opt" data-action="card-scan"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8V6a2 2 0 0 1 2-2h2M17 4h2a2 2 0 0 1 2 2v2M21 16v2a2 2 0 0 1-2 2h-2M7 20H5a2 2 0 0 1-2-2v-2"/><rect x="6.5" y="8" width="11" height="8" rx="1.5"/><path d="M6.5 11h11"/></svg><span class="card-opt-t">Scan card</span><span class="card-opt-s">STORY reads your card with the camera - front and back</span></button>
+          <button class="card-opt" data-action="card-scan"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8V6a2 2 0 0 1 2-2h2M17 4h2a2 2 0 0 1 2 2v2M21 16v2a2 2 0 0 1-2 2h-2M7 20H5a2 2 0 0 1-2-2v-2"/><rect x="6.5" y="8" width="11" height="8" rx="1.5"/><path d="M6.5 11h11"/></svg><span class="card-opt-t">Scan card</span><span class="card-opt-s">Lockedintool reads your card with the camera - front and back</span></button>
           <button class="card-opt" data-action="card-manual"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg><span class="card-opt-t">Add manually</span><span class="card-opt-s">Type your card details yourself</span></button>
         </div>
       </div>
@@ -6628,7 +6632,7 @@ function cardSheetTemplate(){
     <div class="modal-overlay" data-action="card-sheet-close">
       <div class="confirm-sheet" onclick="event.stopPropagation()">
         <div class="confirm-title">${escText(c.bank || 'Card')} ••${escText(c.last4 || '')}</div>
-        <div class="confirm-sub">Remove this card from STORY? Nothing changes at your bank.</div>
+        <div class="confirm-sub">Remove this card from Lockedintool? Nothing changes at your bank.</div>
         <div class="confirm-btn-row">
           <button class="btn-wide" style="margin-top:0;color:var(--red);" data-action="card-remove">Remove card</button>
           <button class="btn-wide btn-primary" style="margin-top:0;" data-action="card-sheet-close">Close</button>
@@ -6646,7 +6650,7 @@ function openCardCamera(side){
   const wrap = document.createElement('div'); wrap.id = 'card-cam'; wrap.setAttribute('data-keep-color', ''); wrap.dataset.side = side;
   document.body.appendChild(wrap);
   if(NATIVE && window.StoryNative.noteCameraAccess && !window.StoryNative.noteCameraAccess()){
-    wrap.innerHTML = '<div class="card-cam-ask"><div>Let STORY use the camera to read your card.</div><button class="note-panel-btn">Allow</button><button class="card-cam-x" aria-label="Close">×</button></div>';
+    wrap.innerHTML = '<div class="card-cam-ask"><div>Let Lockedintool use the camera to read your card.</div><button class="note-panel-btn">Allow</button><button class="card-cam-x" aria-label="Close">×</button></div>';
     wrap.querySelector('.note-panel-btn').addEventListener('click', ()=>{ cardAccessWaiting = true; window.StoryNative.noteAsk('camera'); });
     wrap.querySelector('.card-cam-x').addEventListener('click', ()=>{ closeCardCamera(); cardScanBack(); });
     return;
@@ -6771,7 +6775,7 @@ function walletActivitySubLabel(entry){
   return Math.floor(hrs / 24) + 'd ago';
 }
 function walletActivityRowsHTML(){
-  if(!moneyAccessOk()) return `<div class="row" data-action="money-access" style="cursor:pointer;"><div class="row-left"><div class="row-icon">🔔</div><div class="row-name">Allow STORY to see your payments</div></div><div class="row-amt">Turn on</div></div>`;
+  if(!moneyAccessOk()) return `<div class="row" data-action="money-access" style="cursor:pointer;"><div class="row-left"><div class="row-icon">🔔</div><div class="row-name">Allow Lockedintool to see your payments</div></div><div class="row-amt">Turn on</div></div>`;
   const list = walletActivityList();
   if(!list.length) return moneyRowsEmpty('No activity yet');
   return list.map(t=>({ icon: moneyIcon(t), name: escText(moneyWho(t)), sub: moneyWhen(t.ts), amt: t.amt, ts: t.ts, cur: t.cur })).map(t=>`
@@ -6951,8 +6955,8 @@ function payLoad(){
   msgApi('/v1/pay/info').then(i=>{ state.pay.info = i; payShow(); }).catch(()=>{});
   msgApi('/v1/pay/history').then(h=>{ state.pay.history = h.payments || []; payShow(); }).catch(()=>{});
 }
-const PAY_ERRORS = { 'not-connected':'Sending money connects once STORY’s payout partner is set up.', 'no-bank':'They haven’t added a bank account to receive money yet.',
-  'bank-details':'Check the name, bank and account number.', amount:'Send between R1 and R50 000.', self:'That’s you.', notfound:'That STORY account doesn’t exist any more.', signin:'Your STORY account isn’t ready yet - try again in a moment.' };
+const PAY_ERRORS = { 'not-connected':'Sending money connects once Lockedintool’s payout partner is set up.', 'no-bank':'They haven’t added a bank account to receive money yet.',
+  'bank-details':'Check the name, bank and account number.', amount:'Send between R1 and R50 000.', self:'That’s you.', notfound:'That Lockedintool account doesn’t exist any more.', signin:'Your Lockedintool account isn’t ready yet - try again in a moment.' };
 function payBankChips(sel, action){
   return `<div class="community-chip-row pay-banks">${Object.entries(payBanks()).map(([k, n])=>`<div class="community-chip${sel === k ? ' active' : ''}" data-action="${action}" data-v="${k}">${escText(n)}</div>`).join('')}</div>`;
 }
@@ -6968,7 +6972,7 @@ function payFind(q){
 }
 function payFoundHTML(){
   const p = state.pay;
-  if(!p.found.length) return p.q.trim().replace(/^@/, '').length >= 2 ? '<div class="note" style="padding:10px 4px;">No one on STORY by that name yet.</div>' : '';
+  if(!p.found.length) return p.q.trim().replace(/^@/, '').length >= 2 ? '<div class="note" style="padding:10px 4px;">No one on Lockedintool by that name yet.</div>' : '';
   return `<div class="row-card">${p.found.map(u=>`
     <div class="row" data-action="pay-pick" data-id="${escText(u.id)}" style="cursor:pointer;${u.canPay ? '' : 'opacity:0.5;'}">
       <div class="row-left"><div class="row-icon">${PAY_PERSON}</div><div><div class="row-name">${escText(u.name || '@' + u.username)}</div><div class="row-sub">${u.name && u.username ? '@' + escText(u.username) + ' · ' : ''}${u.canPay ? 'Can receive money' : 'Hasn’t added a bank account yet'}</div></div></div>
@@ -7009,7 +7013,7 @@ function sendMoneyScreen(){
     </div>`;
   const ready = !!msgAccount();
   const who = p.mode === 'story'
-    ? (p.to ? `<div class="row-card"><div class="row"><div class="row-left"><div class="row-icon">${PAY_PERSON}</div><div><div class="row-name">${escText(p.to.name || '@' + p.to.username)}</div><div class="row-sub">${p.to.name && p.to.username ? '@' + escText(p.to.username) : 'On STORY'}</div></div></div><button class="order-corner-btn" data-action="pay-unpick" title="Change">✕</button></div></div>`
+    ? (p.to ? `<div class="row-card"><div class="row"><div class="row-left"><div class="row-icon">${PAY_PERSON}</div><div><div class="row-name">${escText(p.to.name || '@' + p.to.username)}</div><div class="row-sub">${p.to.name && p.to.username ? '@' + escText(p.to.username) : 'On Lockedintool'}</div></div></div><button class="order-corner-btn" data-action="pay-unpick" title="Change">✕</button></div></div>`
       : `<input class="field-input" data-pay-input="q" type="text" autocomplete="off" placeholder="Search @username or name" value="${escText(p.q)}"><div id="pay-found">${payFoundHTML()}</div>`)
     : `<input class="field-input" data-pay-input="name" type="text" autocomplete="off" placeholder="Their name (as on the account)" value="${escText(p.name)}">
        ${payBankChips(p.bank, 'pay-bank')}
@@ -7020,17 +7024,17 @@ function sendMoneyScreen(){
     <div class="page-shell">
     ${topBar('Send Money', false, '', 'wallet')}
     <div class="order-type-grid pay-tabs">
-      <button class="order-type-btn${p.mode === 'story' ? ' active' : ''}" data-action="pay-mode" data-v="story">STORY profile</button>
+      <button class="order-type-btn${p.mode === 'story' ? ' active' : ''}" data-action="pay-mode" data-v="story">Lockedintool profile</button>
       <button class="order-type-btn${p.mode === 'bank' ? ' active' : ''}" data-action="pay-mode" data-v="bank">Anyone</button>
     </div>
     <div class="section-title">SEND TO</div>
-    ${ready ? who : '<div class="note">Your STORY account is being set up - one moment.</div>'}
+    ${ready ? who : '<div class="note">Your Lockedintool account is being set up - one moment.</div>'}
     <div class="section-title">AMOUNT</div>
     <input class="field-input pay-amount" data-pay-input="amount" type="text" inputmode="decimal" autocomplete="off" placeholder="R0.00" value="${escText(p.amount)}">
     <input class="field-input" data-pay-input="ref" type="text" autocomplete="off" maxlength="20" placeholder="Reference (optional)" value="${escText(p.ref)}" style="margin-top:8px;">
     ${p.msg ? `<div class="note pay-msg">${escText(p.msg)}</div>` : ''}
     <button class="btn-wide btn-primary" data-action="pay-send" style="margin-top:14px;"${p.busy ? ' disabled' : ''}>${p.busy ? 'One moment…' : 'Send' + (amt > 0 ? ' ' + payMoney(amt) : '') + (toName ? ' to ' + escText(toName) : '')}</button>
-    <div class="note" style="margin-top:10px;">You approve every payment in your own bank. It goes straight from your account into theirs - STORY never holds your money.</div>
+    <div class="note" style="margin-top:10px;">You approve every payment in your own bank. It goes straight from your account into theirs - Lockedintool never holds your money.</div>
     ${payHistoryHTML()}
     </div>`;
 }
@@ -7050,16 +7054,16 @@ function receiveMoneyScreen(){
     <div class="page-shell">
     ${topBar('Receive Money', false, '', 'wallet')}
     <div class="row-card" style="text-align:center;padding:18px 16px;">
-      <div class="pay-recv-who">${escText(prof.username ? '@' + prof.username : (prof.name || 'Your STORY profile'))}</div>
-      <div class="note" style="margin-top:6px;">People on STORY send you money by your ${prof.username ? '@username' : 'name'}.${prof.username ? '' : ' Add a @username in your profile so they can find you easily.'}</div>
+      <div class="pay-recv-who">${escText(prof.username ? '@' + prof.username : (prof.name || 'Your Lockedintool profile'))}</div>
+      <div class="note" style="margin-top:6px;">People on Lockedintool send you money by your ${prof.username ? '@username' : 'name'}.${prof.username ? '' : ' Add a @username in your profile so they can find you easily.'}</div>
     </div>
     <div class="section-title">PAID INTO</div>
-    ${!msgAccount() ? '<div class="note">Your STORY account is being set up - one moment.</div>'
+    ${!msgAccount() ? '<div class="note">Your Lockedintool account is being set up - one moment.</div>'
       : p.info === null ? '<div class="note">Loading…</div>'
       : mine && !r.editing ? `<div class="row-card"><div class="row"><div class="row-left"><div class="row-icon">${PAY_BANK_ICON}</div><div><div class="row-name">${escText(payBanks()[mine.bank] || mine.bank)} ••${escText(mine.mask)}</div><div class="row-sub">${escText(mine.name)}</div></div></div></div></div>
         <div class="confirm-btn-row" style="margin-top:10px;"><button class="btn-wide" style="margin-top:0;" data-action="pay-recv-edit">Change</button><button class="btn-wide" style="margin-top:0;color:var(--red);" data-action="pay-recv-remove">Remove</button></div>`
       : form}
-    <div class="note" style="margin-top:12px;">Your account number stays on STORY's server only to pay you - nobody sending you money ever sees it.</div>
+    <div class="note" style="margin-top:12px;">Your account number stays on Lockedintool's server only to pay you - nobody sending you money ever sees it.</div>
     </div>`;
 }
 // Waiting for the bank: STORY asks how the payment stands every few seconds - only while this screen is up.
@@ -7102,7 +7106,7 @@ function payRecvSave(){
   if(r.name.trim().length < 2 || !r.bank || !/^\d{6,16}$/.test(acct)){ r.msg = PAY_ERRORS['bank-details']; return; }
   r.busy = true; r.msg = '';
   msgApi('/v1/pay/bank', { name:r.name.trim(), bank:r.bank, acct }).then(x=>{
-    r.busy = false; r.editing = false; r.acct = ''; if(state.pay.info) state.pay.info.bank = x.bank; showToast('Saved - people on STORY can send you money'); payShow();
+    r.busy = false; r.editing = false; r.acct = ''; if(state.pay.info) state.pay.info.bank = x.bank; showToast('Saved - people on Lockedintool can send you money'); payShow();
   }).catch(e=>{ r.busy = false; r.msg = PAY_ERRORS[e.code] || 'Couldn’t save - try again.'; payShow(); });
 }
 // ---- LOCKED IN TOOL subscription (owner: Basic $1 / Premium $5 a month; no plan = STORY doesn't open). Paid in your
@@ -7181,7 +7185,7 @@ function subPoll(){
 function subBuy(plan){
   const s = subState() || {};
   if(!s.connected){ showToast('Subscriptions open once LOCKED IN TOOL’s payments are set up'); return; }
-  if(!msgAccount()){ showToast('Your STORY account is being set up - try again in a moment'); return; }
+  if(!msgAccount()){ showToast('Your Lockedintool account is being set up - try again in a moment'); return; }
   const p = SUB_PLANS.find(x=>x.key === plan), pr = (s.plans || {})[plan] || {};
   state.sub.busy = true; state.sub.msg = '';
   msgApi('/v1/sub/buy', { plan }).then(r=>{
@@ -7250,7 +7254,7 @@ function layoutsHomeScreenScreen(){
     <div class="page-shell layouts-shell">
     ${topBar('Home Screen', false, '', 'layouts', '', false, true)}
     <div class="section-title">HOME SCREEN</div>
-    <div class="note">Pick which screen STORY opens to every time you launch it — on phone, laptop, or PC.</div>
+    <div class="note">Pick which screen Lockedintool opens to every time you launch it — on phone, laptop, or PC.</div>
     <div style="margin-top:12px;">
       ${['dashboard','wallet','money','trading'].map(s=>`
         <div class="settings-option${s===state.homeScreen?' selected':''}" data-sethome="${s}">
@@ -7369,11 +7373,10 @@ function informationScreen(){
     <div class="page-shell set2 info-page">
     ${topBar('Information', false)}
     <div class="info-hero">
-      <div class="info-title">STORY</div>
-      <div class="info-tag">Be the story. Own your story.</div>
+      <div class="info-title">Lockedintool</div>
     </div>
-    ${block('WHAT STORY IS', [
-      ['One with your phone', 'Once STORY is on, it stays on - like part of the phone. Your pages and Station 3 are there over every app, and on the lock screen.'],
+    ${block('WHAT LOCKEDINTOOL IS', [
+      ['One with your phone', 'Once Lockedintool is on, it stays on - like part of the phone. Your pages and Station 3 are there over every app, and on the lock screen.'],
       ['Everything in one place', 'Your money, your cards, your trading, your notes and your people - without switching between apps.'],
     ])}
     ${block('HOW IT WORKS', [
@@ -7384,20 +7387,20 @@ function informationScreen(){
     ])}
     ${block('EVERYTHING IS REAL', [
       ['Your money', 'Payments come from your own bank\u2019s notifications. Nothing is made up.'],
-      ['Your trading', 'Your own broker accounts and TradingView\u2019s real chart. STORY is only the gateway - deposits and withdrawals stay with your broker.'],
-      ['Your people', 'Real messages, calls and groups between people on STORY.'],
+      ['Your trading', 'Your own broker accounts and TradingView\u2019s real chart. Lockedintool is only the gateway - deposits and withdrawals stay with your broker.'],
+      ['Your people', 'Real messages, calls and groups between people on Lockedintool.'],
     ])}
     ${block('YOUR PRIVACY', [
       ['Messages and calls', 'End-to-end encrypted. Your keys are made on your phone and never leave it.'],
       ['Your money, cards and notes', 'Kept only on your phone. Card numbers and CVVs are never kept.'],
-      ['Your broker logins', 'Kept in STORY\u2019s private storage on your phone - never your password.'],
+      ['Your broker logins', 'Kept in Lockedintool\u2019s private storage on your phone - never your password.'],
     ])}
     ${block('COMING NEXT', [
       ['Group calls', 'Calls with your whole group.'],
-      ['Your bank inside STORY', 'Log in to your bank for your full history and live balance.'],
-      ['Subscription', 'One subscription that covers everything STORY connects for you.'],
+      ['Your bank inside Lockedintool', 'Log in to your bank for your full history and live balance.'],
+      ['Subscription', 'One subscription that covers everything Lockedintool connects for you.'],
     ])}
-    <div class="info-foot">#bethestoryownyourstory${ver ? '<br>STORY ' + escText(ver) : ''}</div>
+    <div class="info-foot">#lockedintool${ver ? '<br>Lockedintool ' + escText(ver) : ''}</div>
     </div>`;
 }
 function settingsHubScreen(){
@@ -7676,7 +7679,7 @@ function openProfileField(k){
   f.querySelector('.pf-field-at').hidden = k !== 'username';
   f.querySelector('input').hidden = k === 'bio'; f.querySelector('textarea').hidden = k !== 'bio';
   const inp = profileFieldBox();
-  if(k === 'bio'){ inp.value = p.bio; inp.placeholder = 'Tell your story'; }
+  if(k === 'bio'){ inp.value = p.bio; inp.placeholder = 'Tell people about you'; }
   else {
     inp.maxLength = 30;
     inp.value = k === 'name' ? p.name : p.username;
@@ -7703,7 +7706,7 @@ function checkProfileField(){
   // Either can be left empty -- but not both (a profile always has a name or a username).
   const other = k === 'name' ? profileData().username : k === 'username' ? profileData().name : 'x';
   const problem = k === 'bio' ? '' : !v ? (other ? '' : 'Add a name or a username.') : k === 'username' ? usernameProblem(v) : '';
-  f.querySelector('.pf-field-msg').textContent = k === 'bio' ? inp.value.length + ' / 150' : problem || (k === 'username' && !v ? 'Your @ on STORY.' : '');
+  f.querySelector('.pf-field-msg').textContent = k === 'bio' ? inp.value.length + ' / 150' : problem || (k === 'username' && !v ? 'Your @ on Lockedintool.' : '');
   f.querySelector('.pf-field-msg').classList.toggle('bad', !!problem);
   f.querySelector('[data-pf="field-save"]').disabled = !!problem;
   return !problem;
@@ -8106,7 +8109,7 @@ window.storyCreateEvent = function(kind, why){
     crHas = kind; crRender(); return;
   }
   crRecording = false; crRender();
-  if(kind === 'denied') showToast('STORY isn’t allowed to use the camera');
+  if(kind === 'denied') showToast('Lockedintool isn’t allowed to use the camera');
   else if(kind === 'error'){
     clearTimeout(crWatch); showToast('Camera problem' + (why ? ': ' + why : ' — try again'));
     if(!crCameraReady) crStatus('Camera problem' + (why ? ': ' + why : ''));
@@ -8220,7 +8223,7 @@ function makePrivateGroup(){
     const c = groupChatFromServer(v); saveMsgChats();
     f.hidden = true; document.querySelector('#story-profile [data-pf="newgroup-open"]').hidden = false;
     renderMsgList(); openChat(c.id); groupSheetOpen(true);
-  }).catch(()=>showToast('No connection to STORY right now')).finally(()=>{ delete f.dataset.busy; });
+  }).catch(()=>showToast('No connection to Lockedintool right now')).finally(()=>{ delete f.dataset.busy; });
 }
 document.addEventListener('keydown', e=>{ if(e.key === 'Enter' && e.target.closest && e.target.closest('.pf-newgroup-form')){ e.preventDefault(); makePrivateGroup(); } });
 window.addEventListener('storage', e=>{ if(e.key === MSG_KEY){ msgChatsCache = null; renderMsgList(); renderChat(); } if(e.key === 'story-community-chats'){ mergeCommunityChats(); renderMsgList(); } });
@@ -8481,7 +8484,7 @@ async function msgOnServer(m){
       const body = c.groupType === 'private' ? await unlockFrom(m.from, m.box, m.iv) : { text: m.text };
       if(!(c.messages || []).some(x=>x.id === m.id)) (c.messages = c.messages || []).push({ id:m.id, from:'them', who: m.name || (m.username ? '@' + m.username : ''), text: body ? String(body.text || '') : 'Couldn\u2019t unlock this message', at:m.at || Date.now() });
       c.typing = null; saveMsgChats(); renderMsgList(); if(msgView.chat === c.id) renderChat(true);
-      if(NATIVE && window.StoryNative.msgNotify && !msgChatVisible()) try{ window.StoryNative.msgNotify(c.name || 'STORY', (m.name || '') + ': ' + (body ? String(body.text || '').slice(0, 100) : 'New message')); }catch(e){}
+      if(NATIVE && window.StoryNative.msgNotify && !msgChatVisible()) try{ window.StoryNative.msgNotify(c.name || 'Lockedintool', (m.name || '') + ': ' + (body ? String(body.text || '').slice(0, 100) : 'New message')); }catch(e){}
     }
     if(m.seq) msgSend({ t:'ack', seq:m.seq });
     return;
@@ -8494,7 +8497,7 @@ async function msgOnServer(m){
     c.typing = null; saveMsgChats();
     if(m.seq) msgSend({ t:'ack', seq:m.seq });
     renderMsgList(); if(msgView.chat === c.id){ renderChat(true); if(msgChatVisible()) msgSend({ t:'seen', to:c.id }); }
-    if(NATIVE && window.StoryNative.msgNotify && !msgChatVisible()) try{ window.StoryNative.msgNotify(c.name || (c.username ? '@' + c.username : 'STORY'), body ? String(body.text || '').slice(0, 120) : 'New message'); }catch(e){}
+    if(NATIVE && window.StoryNative.msgNotify && !msgChatVisible()) try{ window.StoryNative.msgNotify(c.name || (c.username ? '@' + c.username : 'Lockedintool'), body ? String(body.text || '').slice(0, 120) : 'New message'); }catch(e){}
     return;
   }
   if(m.t === 'status'){
@@ -8512,7 +8515,7 @@ async function msgOnServer(m){
     for(const c of msgChats()){ const x = (c.messages || []).find(y=>y.id === m.id); if(x){ x.status = 'failed'; saveMsgChats(); renderChat(); showToast(m.error === 'blocked' ? 'They don’t take messages from you' : 'Couldn’t send'); break; } }
     return;
   }
-  if(m.t === 'paid'){   // money sent to you on STORY (Stitch) - it lands in the bank account you added under Receive
+  if(m.t === 'paid'){   // money sent to you on Lockedintool (Stitch) - it lands in the bank account you added under Receive
     if(NATIVE && window.StoryNative.msgNotify) try{ window.StoryNative.msgNotify('Money received', (m.name || (m.username ? '@' + m.username : 'Someone')) + ' sent you R' + Number(m.amount || 0).toFixed(2) + (m.ref ? ' · ' + m.ref : '')); }catch(e){}
     if(m.seq) msgSend({ t:'ack', seq:m.seq });
     return;
@@ -8601,7 +8604,7 @@ async function groupLeave(){
   const b = document.querySelector('#story-profile .pf-grp-leave');
   if(b && !b.dataset.sure){ b.dataset.sure = '1'; b.textContent = 'Tap again to leave'; return; }
   try{ await msgApi('/v1/groups/leave', { id:c.id }); const list = msgChats(); list.splice(list.indexOf(c), 1); saveMsgChats(); document.querySelector('#story-profile .pf-chat-sheet').hidden = true; closeChat(); showToast('You left ' + (c.name || 'the group')); }
-  catch(e){ showToast('No connection to STORY right now'); }
+  catch(e){ showToast('No connection to Lockedintool right now'); }
 }
 function msgChatVisible(){ return document.visibilityState !== 'hidden' && msgView.chat && !document.querySelector('#story-profile .pf-chat')?.hidden; }
 // Everything you did in a chat (queued in story-msg-outbox) goes out - locked - the moment there's a connection.
@@ -8616,7 +8619,7 @@ async function msgFlush(){
       let done = false;
       try{
         if(ev.type === 'privacy'){ await msgApi('/v1/me', { privacy: ev.privacy }); done = true; }
-        else if(/^cg:|^pg/.test(ev.chatId || '')) done = true;          // STORY's built-in feeds / old phone-only groups
+        else if(/^cg:|^pg/.test(ev.chatId || '')) done = true;          // Lockedintool's built-in feeds / old phone-only groups
         else if(!msgWsOpen) done = false;
         else if(/^grp/.test(ev.chatId || '')){
           const c = msgChats().find(x=>x.id === ev.chatId);
@@ -8656,7 +8659,7 @@ async function msgSyncProfile(){
   const p = profileData(), key = (p.name || '') + '|' + (p.username || '');
   if(key === msgProfSent) return;
   try{ await msgApi('/v1/me', { name: p.name || '', username: (p.username || '').toLowerCase(), privacy: storyPrivacy() }); msgProfSent = key; }
-  catch(e){ if(e.code === 'username-taken'){ msgProfSent = key; showToast('@' + p.username + ' is taken on STORY - pick another in Edit profile'); } }
+  catch(e){ if(e.code === 'username-taken'){ msgProfSent = key; showToast('@' + p.username + ' is taken on Lockedintool - pick another in Edit profile'); } }
 }
 // ---- Your STORY account (owner: no phone number in Messages): made by this phone the first time - only the public
 // key goes to the server, which hands back your id + sign-in key. People find you by your @username. ----
@@ -8691,7 +8694,7 @@ function msgFoundHTML(){
   if(!msgFound.length || msgView.q.trim() !== msgFoundQ) return '';
   return msgFound.filter(u=>!msgChats().some(c=>c.id === u.id)).map(u=>
     '<button class="msg-row msg-found" data-pf="msg-start" data-id="' + escText(u.id) + '"><span class="msg-pic">' + PF_PHOTO_PLACEHOLDER + '</span>' +
-    '<span class="msg-mid"><span class="msg-who">' + escText(u.name || '@' + u.username) + '</span><span class="msg-last">' + (u.name && u.username ? '@' + escText(u.username) : 'On STORY') + '</span></span><span class="msg-end"><span class="msg-time">Message</span></span></button>').join('');
+    '<span class="msg-mid"><span class="msg-who">' + escText(u.name || '@' + u.username) + '</span><span class="msg-last">' + (u.name && u.username ? '@' + escText(u.username) : 'On Lockedintool') + '</span></span><span class="msg-end"><span class="msg-time">Message</span></span></button>').join('');
 }
 function msgStart(id){
   const u = msgFound.find(x=>x.id === id) || msgPeers()[id] || {};
@@ -8760,10 +8763,10 @@ function callPc(){
 }
 async function callStart(peerId, video){
   if(call.state !== 'idle'){ showToast('You’re already on a call'); return; }
-  if(!msgAccount()){ showToast('No connection to STORY right now'); msgEnsureAccount(); return; }
+  if(!msgAccount()){ showToast('No connection to Lockedintool right now'); msgEnsureAccount(); return; }
   const c = msgChats().find(x=>x.id === peerId) || {};
   if(c.canCall === false){ showToast('They don’t take calls from you'); return; }
-  if(!msgWsOpen){ showToast('No connection to STORY right now'); msgConnect(); return; }
+  if(!msgWsOpen){ showToast('No connection to Lockedintool right now'); msgConnect(); return; }
   Object.assign(call, { state:'calling', id:'c' + Date.now() + Math.random().toString(36).slice(2, 6), peer:peerId, name:c.name || '', username:c.username || '', video:!!video, dir:'out', pendingIce:[], start:Date.now(), answeredAt:0, muted:false, speaker:!!video, camOff:false, remote:null, endText:'' });
   callNative('callUi', true); callRender();
   try{
@@ -8781,7 +8784,7 @@ async function callOnSignal(m){
     chatFor(m.from, { name:m.name, username:m.username, incoming:true }); saveMsgChats();
     Object.assign(call, { state:'incoming', id:m.callId, peer:m.from, name:m.name || '', username:m.username || '', video:!!m.video, dir:'in', offer:m.sdp, pendingIce:[], start:Date.now(), answeredAt:0, muted:false, speaker:!!m.video, camOff:false, remote:null, local:null, endText:'' });
     msgSend({ t:'call', to:m.from, kind:'ringing', callId:m.callId });
-    callNative('callUi', true); callNative('callRing', true, call.name || (call.username ? '@' + call.username : 'STORY'), !!m.video); callRender();
+    callNative('callUi', true); callNative('callRing', true, call.name || (call.username ? '@' + call.username : 'Lockedintool'), !!m.video); callRender();
     clearTimeout(call.ringT); call.ringT = setTimeout(()=>{ if(call.state === 'incoming') callEnd('Missed call', true); }, 45000);
     return;
   }
@@ -8847,7 +8850,7 @@ async function callFlip(){
   }catch(e){}
 }
 // The app tells the page Android's answer to the microphone / camera question.
-window.storyCallAccess = function(ok){ if(!ok) showToast('STORY needs the microphone for calls'); };
+window.storyCallAccess = function(ok){ if(!ok) showToast('Lockedintool needs the microphone for calls'); };
 if(MSG_ENGINE){
   setTimeout(()=>{ msgEnsureAccount(); msgConnect(); msgFlush(); }, 400);
   document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState === 'visible') msgConnect(); });
@@ -8942,7 +8945,7 @@ function morePhotos(){
 window.storyPhotoAccessDone = function(access){
   if(pfGridFor === 'create' && window.StoryNative.mediaAccess) access = window.StoryNative.mediaAccess();  // pictures AND videos
   if(access !== 'none') openPhotoGrid(access);
-  else if(pfGridFor === 'create') showToast('STORY isn’t allowed to see your pictures');
+  else if(pfGridFor === 'create') showToast('Lockedintool isn’t allowed to see your pictures');
   else window.StoryNative.pickProfilePhoto();  // not allowed: the phone's own picker instead
 };
 function pickProfilePhoto(){
@@ -8954,7 +8957,7 @@ function pickProfilePhoto(){
     return;
   }
   if(NATIVE && window.StoryNative.pickProfilePhoto){ window.StoryNative.pickProfilePhoto(); return; }
-  if(NATIVE){ showToast('Update STORY to change your photo'); return; }  // this phone's STORY predates the photo picker
+  if(NATIVE){ showToast('Update Lockedintool to change your photo'); return; }  // this phone's Lockedintool predates the photo picker
   // Browser: pick a file, keep a 512px square of it.
   const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*';
   inp.onchange = ()=>{
@@ -9129,7 +9132,7 @@ function appsScreen(){
       const items = state.installedApps.filter(a=>a.section===sec);
       if(!items.length) return '';
       return `
-        <div class="section-title">${sec}</div>
+        <div class="section-title">${sec === 'STORY' ? 'LOCKEDINTOOL' : sec}</div>
         ${items.map(a=>{
           const attr = a.pkg ? `data-native-pkg="${escText(a.pkg)}"` : a.nav ? `data-nav="${a.nav}"` : a.launchPopup ? `data-app-launchpopup="${a.launchPopup}"` : a.locked ? `data-app-locked="${escText(a.name)}"` : `data-app-toast="${escText(a.name)}"`;
           return `
@@ -9178,11 +9181,11 @@ function communityGuidelinesScreen(){
         <div class="row-sub">${acc.strikes} strike${acc.strikes===1?'':'s'} on record</div>
       </div></div>
     </div>
-    <div class="section-title" style="margin-top:16px;">WHAT'S NOT ALLOWED ON STORY</div>
+    <div class="section-title" style="margin-top:16px;">WHAT'S NOT ALLOWED ON LOCKEDINTOOL</div>
     <div class="community-policy-box" style="margin-bottom:10px;">
       Sexual, nudity, or adult content of any kind — including links to adult sites, OnlyFans/Fansly-type
-      pages, or channels sharing that kind of content — is never allowed in STORY's search, groups, or Stories,
-      and STORY never shows ads containing it either. The same goes for malware, hacking tools, or links meant
+      pages, or channels sharing that kind of content — is never allowed in Lockedintool's search, groups, or Stories,
+      and Lockedintool never shows ads containing it either. The same goes for malware, hacking tools, or links meant
       to compromise a device.
     </div>
     <div class="community-policy-box" style="margin-bottom:10px;">
@@ -9191,9 +9194,9 @@ function communityGuidelinesScreen(){
       system would need real moderation on top of this.)
     </div>
     <div class="community-policy-box">
-      This only applies inside STORY itself. STORY doesn't control apps like TikTok, Instagram, or Facebook,
-      or what you do in them — you're free to have and use those outside STORY. The restriction is on what
-      STORY's own search, groups, and Stories allow.
+      This only applies inside Lockedintool itself. Lockedintool doesn't control apps like TikTok, Instagram, or Facebook,
+      or what you do in them — you're free to have and use those outside Lockedintool. The restriction is on what
+      Lockedintool's own search, groups, and Stories allow.
     </div>
     </div>
   `;
@@ -9834,7 +9837,7 @@ function openNotePictures(){
   const body = notePanelOpen('Pictures', 'note-panel-photos');
   if(!NATIVE){ noteMediaWebFallback('picture'); notePanelClose(); return; }
   const access = window.StoryNative.photoAccess();
-  if(access === 'none'){ noteAccessAsk(body, 'Let STORY show your pictures here.', 'photos', openNotePictures); return; }
+  if(access === 'none'){ noteAccessAsk(body, 'Let Lockedintool show your pictures here.', 'photos', openNotePictures); return; }
   let ids = []; try{ ids = JSON.parse(window.StoryNative.listPhotos() || '[]'); }catch(e){}
   body.innerHTML = '<div class="note-photo-grid"></div>' + (ids.length ? '' : '<div class="note-panel-empty">No pictures on this phone yet.</div>');
   const grid = body.querySelector('.note-photo-grid');
@@ -9863,7 +9866,7 @@ const ProfileThumbBase = 'https://appassets.androidplatform.net/story-photo/';
 function openNoteAudio(){
   const body = notePanelOpen('Audio', 'note-panel-audio');
   if(!NATIVE){ noteMediaWebFallback('audio'); notePanelClose(); return; }
-  if(!window.StoryNative.noteAudioAccess()){ noteAccessAsk(body, 'Let STORY show the audio on your phone here.', 'audio', openNoteAudio); return; }
+  if(!window.StoryNative.noteAudioAccess()){ noteAccessAsk(body, 'Let Lockedintool show the audio on your phone here.', 'audio', openNoteAudio); return; }
   let list = []; try{ list = JSON.parse(window.StoryNative.noteListAudio() || '[]'); }catch(e){}
   if(!list.length){ body.innerHTML = '<div class="note-panel-empty">No audio on this phone yet.</div>'; return; }
   const fmt = ms=>{ const s = Math.round((ms || 0) / 1000); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
@@ -9887,7 +9890,7 @@ function openNoteCamera(){
   const body = notePanelOpen('Camera', 'note-panel-cam');
   const panel = document.getElementById('note-panel');
   panel.setAttribute('data-keep-color', '');
-  if(NATIVE && !window.StoryNative.noteCameraAccess()){ noteAccessAsk(body, 'Let STORY use the camera to take photos for your notes.', 'camera', openNoteCamera); return; }
+  if(NATIVE && !window.StoryNative.noteCameraAccess()){ noteAccessAsk(body, 'Let Lockedintool use the camera to take photos for your notes.', 'camera', openNoteCamera); return; }
   body.innerHTML = `<div class="note-cam-view"><video autoplay playsinline muted></video><img class="note-cam-shot" alt="" hidden><div class="note-cam-msg" hidden></div></div>
     <div class="note-cam-bar">
       <button class="note-cam-side note-cam-retake" hidden>Retake</button>
@@ -9949,7 +9952,7 @@ window.storyNoteMedia = function(kind, status, data){
   data = data || {};
   if(status === 'error'){ showToast(kind === 'pdf' ? "Couldn't make the PDF - try again" : kind === 'print' ? "Couldn't open printing - try again" : "Couldn't add that - try another one"); return; }
   if(status !== 'ok') return;
-  if(kind === 'pdf'){ showToast('PDF saved to ' + (data.folder || 'Documents/STORY')); return; }
+  if(kind === 'pdf'){ showToast('PDF saved to ' + (data.folder || 'Documents/Lockedintool')); return; }
   if(kind === 'print' || !data.file || state.current !== 'notes-canvas') return;
   const src = NOTE_FILE_BASE + encodeURIComponent(data.file);
   noteInsertBlock(kind === 'audio' ? noteAudioNode(src, data.name) : noteImageNode(src));
@@ -10749,7 +10752,7 @@ function notificationsPanelScreen(){
     <div class="page-shell">
     ${topBar('Notifications Panel', false)}
     <div class="note" style="margin-bottom:10px;">All your app notifications in one place. Manage which apps show up in Notification Settings.</div>
-    ${!access ? `<div class="notif-card" data-action="money-access" style="margin-bottom:8px;cursor:pointer;"><div class="notif-icon-wrap">${NOTIF_BELL}</div><div class="notif-mid"><div class="notif-source">Allow STORY to see your notifications</div><div class="notif-label">Turn on notification access</div></div></div>`
+    ${!access ? `<div class="notif-card" data-action="money-access" style="margin-bottom:8px;cursor:pointer;"><div class="notif-icon-wrap">${NOTIF_BELL}</div><div class="notif-mid"><div class="notif-source">Allow Lockedintool to see your notifications</div><div class="notif-label">Turn on notification access</div></div></div>`
       : list.length ? list.map(n=>`
         <div class="notif-card" style="margin-bottom:8px;">
           <div class="notif-icon-wrap">${notifAppIcon(n.pkg)}</div>
@@ -11492,7 +11495,7 @@ function buildLaptop(){
           <div class="laptop-dot" style="background:#ef5b5b;"></div>
           <div class="laptop-dot" style="background:#e8b23d;"></div>
           <div class="laptop-dot" style="background:#3ecf6a;"></div>
-          <div class="laptop-url">story.app</div>
+          <div class="laptop-url">lockedintool.app</div>
         </div>
         <div class="laptop-screen">
           <div class="laptop-content" id="content-area" style="${fullScreenTakeoverActive ? 'overflow:hidden;' : ''}"></div>
@@ -12560,7 +12563,7 @@ function attachHandlers(){
   document.querySelectorAll('[data-removeacct]').forEach(el=>{
     el.addEventListener('click', e=>{
       e.stopPropagation();
-      state.confirmDialog = { message: 'Remove this account from STORY? (Nothing changes on your broker.)', action: 'confirm-remove-account', actionData: el.getAttribute('data-removeacct') };
+      state.confirmDialog = { message: 'Remove this account from Lockedintool? (Nothing changes on your broker.)', action: 'confirm-remove-account', actionData: el.getAttribute('data-removeacct') };
       state.accountSwitcherOpen = false;
       renderDevice();
     });
@@ -14168,7 +14171,7 @@ function attachHandlers(){
           else if(r === 'none') showToast('Pick your tap to pay app (e.g. Google Wallet) in Contactless payments');
           break;
         }
-        case 'money-access': { if(NATIVE && window.StoryNative.moneyAccessOpen) window.StoryNative.moneyAccessOpen(); else showToast('Turn on notification access for STORY'); break; }
+        case 'money-access': { if(NATIVE && window.StoryNative.moneyAccessOpen) window.StoryNative.moneyAccessOpen(); else showToast('Turn on notification access for Lockedintool'); break; }
         case 'spend-limit-open': state.spendLimitOpen = true; break;
         case 'spend-limit-close': state.spendLimitOpen = false; break;
         case 'spend-limit-save': {
@@ -14208,7 +14211,7 @@ function attachHandlers(){
             const caption = captionInput ? captionInput.value.trim().slice(0,140) : '';
             if(communityTextViolatesPolicy(caption) || communityTextViolatesPolicy(s.textContent || '')){
               recordPolicyStrike('a blocked share to Stories');
-              showToast('That isn’t allowed under STORY’s content policy.');
+              showToast('That isn’t allowed under Lockedintool’s content policy.');
               state.shareSheet = null;
               break;
             }
@@ -14232,7 +14235,7 @@ function attachHandlers(){
             const text = [cap.trim(), s.fullText != null ? s.fullText : (s.textContent || '')].filter(Boolean).join('\n\n');
             drawingPagesToPNG(s.images || (s.imageDataUrl ? [s.imageDataUrl] : []), s.bg).then(list=>{
               if(!text.trim() && !list.length){ showToast('Nothing to share yet'); return; }
-              window.StoryNative.noteShareTo(a.pkg, a.cls, s.title || 'STORY', text, JSON.stringify(list));
+              window.StoryNative.noteShareTo(a.pkg, a.cls, s.title || 'Lockedintool', text, JSON.stringify(list));
             });
           }
           state.shareSheet = null;
@@ -14249,7 +14252,7 @@ function attachHandlers(){
             drawingPagesToPNG(imgs, s.bg).then(list=>{
               if(!text.trim() && !list.length){ showToast('Nothing to share yet'); return; }
               const files = list.map((u, i)=>{ const bin = atob(u.split(',')[1]); const arr = new Uint8Array(bin.length); for(let k = 0; k < bin.length; k++) arr[k] = bin.charCodeAt(k); return new File([arr], (s.title || 'Drawing') + (list.length > 1 ? ' ' + (i + 1) : '') + '.png', {type:'image/png'}); });
-              const data = { title: s.title || 'STORY', text };
+              const data = { title: s.title || 'Lockedintool', text };
               if(files.length && navigator.canShare && navigator.canShare({ files })) data.files = files;
               if(navigator.share) navigator.share(data).catch(()=>{});
               else showToast(copyTextFallback(text) ? 'Copied to clipboard' : 'Sharing isn’t available here');
@@ -14322,7 +14325,7 @@ function attachHandlers(){
           if(g){
             g.trendingStats = g.trendingStats || {}; g.trendingStats.shares = (g.trendingStats.shares || 0) + 1;
             if(g.server) msgApi('/v1/groups/share-group', { id:g.id }).catch(()=>{});
-            state.shareSheet = { source:'group', title: g.name, type:'text', textContent: g.name + ' - join this group on STORY.' + (g.description ? '\n' + g.description : ''), imageDataUrl:null, allowCommunity:false };
+            state.shareSheet = { source:'group', title: g.name, type:'text', textContent: g.name + ' - join this group on Lockedintool.' + (g.description ? '\n' + g.description : ''), imageDataUrl:null, allowCommunity:false };
           }
           break;
         }
@@ -14386,7 +14389,7 @@ function attachHandlers(){
           const input = document.getElementById('community-new-post-input');
           const text = input ? input.value.trim() : '';
           if(g && communityShared(g) && text){
-            if(communityTextViolatesPolicy(text)){ recordPolicyStrike('a blocked post'); showToast('That post isn’t allowed under STORY’s content policy.'); break; }
+            if(communityTextViolatesPolicy(text)){ recordPolicyStrike('a blocked post'); showToast('That post isn’t allowed under Lockedintool’s content policy.'); break; }
             if(!g.members.includes('You')){ showToast('Join the group to post'); break; }
             communityServerDo('post', { id:g.id, text }).then(r=>{ if(r){ g.posts = communityPostsFromServer(r.posts); renderDevice(); } });
             break;
@@ -14394,7 +14397,7 @@ function attachHandlers(){
           if(g && text){
             if(communityTextViolatesPolicy(text)){
               recordPolicyStrike('a blocked post');
-              showToast('That post isn’t allowed under STORY’s content policy.');
+              showToast('That post isn’t allowed under Lockedintool’s content policy.');
               break;
             }
             g.posts = [{ id:'cp'+Date.now(), authorName:'You', timestamp:'Just now', type:'note', textContent:text.slice(0,600), caption:'', imageDataUrl:null, likes:0, likedByMe:false, shares:0, comments:[] }, ...g.posts];
@@ -14480,7 +14483,7 @@ function attachHandlers(){
           state.groupDraftName = name; state.groupDraftDesc = desc;
           msgApi('/v1/groups/create', { name, about: desc, type:'public', image: state.groupDraftImage || '', category:'Community', country: state.groupDraftCountry || 'Global' })
             .then(v=>{ upsertCommunityGroup(v); saveCommunity(); state.communityCreateGroupOpen = false; showToast('Group created'); })
-            .catch(()=>{ state.groupDraftError = 'No connection to STORY right now - try again.'; })
+            .catch(()=>{ state.groupDraftError = 'No connection to Lockedintool right now - try again.'; })
             .finally(()=>{ state.groupDraftBusy = false; renderDevice(); });
           break;
         }
@@ -14589,7 +14592,7 @@ function saveCommunity(){
 function communityFromServer(v, old){
   const n = Math.max(+v.count || 0, v.member ? 1 : 0);
   return Object.assign(old || {}, {
-    id: v.id, server: true, name: v.name, description: v.about || 'A group on STORY.', type: 'public', builtin: false,
+    id: v.id, server: true, name: v.name, description: v.about || 'A group on Lockedintool.', type: 'public', builtin: false,
     category: v.category || 'Community', country: v.country || 'Global', image: v.image || (old && old.image) || null,
     creator: v.leader ? 'You' : '', leaders: v.leader ? ['You'] : [], count: n,
     // The page counts members with members.length and checks members.includes('You').
@@ -14633,7 +14636,7 @@ async function communitySync(force){
   }catch(e){}
   communitySyncing = false;
 }
-const communityShared = g=>g && (g.server || g.id === 'g-stories');   // its posts live on STORY's server
+const communityShared = g=>g && (g.server || g.id === 'g-stories');   // its posts live on Lockedintool's server
 async function communityOpenGroupSync(id){
   const g = findCommunityGroupById(id);
   if(g && g.id === 'g-stories'){ try{ const r = await msgApi('/v1/groups/posts?id=g-stories'); g.posts = communityPostsFromServer(r.posts); if(state.current === 'community-group' && state.communityActiveGroupId === id) renderDevice(); }catch(e){} return; }
@@ -14646,7 +14649,7 @@ async function communityOpenGroupSync(id){
 }
 async function communityServerDo(op, body){
   try{ return await msgApi('/v1/groups/' + op, body); }
-  catch(e){ showToast(e && e.code === 'server' || !e.code ? 'No connection to STORY right now' : 'Couldn’t do that'); return null; }
+  catch(e){ showToast(e && e.code === 'server' || !e.code ? 'No connection to Lockedintool right now' : 'Couldn’t do that'); return null; }
 }
 (function loadCommunity(){
   try{
@@ -14688,7 +14691,7 @@ function communityGroupRowHTML(g){
   return `
     <div class="community-group-row" data-action="community-open-group" data-groupid="${g.id}">
       <div class="row-left">
-        <div class="row-name">${escText(g.name)}${g.builtin ? ' <span class="community-builtin-tag">STORY</span>' : ''}</div>
+        <div class="row-name">${escText(g.name)}${g.builtin ? ' <span class="community-builtin-tag">Lockedintool</span>' : ''}</div>
         <div class="row-sub">${communityGroupTypeBadge(g.type)} · ${g.members.length} member${g.members.length===1?'':'s'}</div>
       </div>
       <span class="chev-right">›</span>
@@ -14842,7 +14845,7 @@ function communityStoriesSectionHTML(){
       <div class="community-divider2"></div>
       <div class="community-cta-banner2" data-action="community-open-group" data-groupid="g-stories">
         <button class="community-info-dot" data-action="community-info-toggle" title="About Stories" onclick="event.stopPropagation()">?</button>
-        <p>Let us hear your story. Share your journey with us.</p>
+        <p>Share your journey with us.</p>
       </div>
       <div class="community-feed">
         ${shown.map(p=>communityPostCardHTML(p, storiesGroup.id)).join('')}
@@ -15039,7 +15042,7 @@ function groupPhotoPickerHTML(){
   return `
     <div class="modal-head"><button class="modal-close" data-action="community-group-pick-back" aria-label="Back">‹</button><span class="modal-title">Choose a picture</span><span style="width:26px"></span></div>
     ${access === 'none'
-      ? `<div class="community-empty-note">Let STORY show your pictures here.</div><button class="notes-create-btn" style="width:100%;margin-top:8px;" data-action="community-group-pick-allow">Allow</button>`
+      ? `<div class="community-empty-note">Let Lockedintool show your pictures here.</div><button class="notes-create-btn" style="width:100%;margin-top:8px;" data-action="community-group-pick-allow">Allow</button>`
       : `<div class="group-photo-grid">${access === 'partial' ? `<button class="group-photo group-photo-more" data-action="community-group-pick-allow">+<span>More pictures</span></button>` : ''}${shown.map(id=>`<button class="group-photo" data-action="community-group-pick-photo" data-photo="${escText(String(id))}"><img loading="lazy" alt="" src="${ProfileThumbBase}thumb/${escText(String(id))}"></button>`).join('')}</div>
          ${ids.length ? '' : '<div class="community-empty-note">No pictures on this phone yet.</div>'}`}`;
 }
