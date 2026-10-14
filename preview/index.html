@@ -2375,6 +2375,18 @@
   #story-profile .up-v-cbar{ display:flex; gap:8px; margin-top:8px; }
   #story-profile .up-v-cbar input{ flex:1; min-width:0; border:1px solid rgba(255,255,255,0.35); border-radius:20px; background:transparent; color:#fff; padding:10px 14px; font-size:14px; font-family:inherit; outline:none; -webkit-user-select:text; user-select:text; }
   #story-profile .up-v-cbar button{ width:42px; height:42px; border-radius:50%; border:none; background:#fff; color:#000; display:flex; align-items:center; justify-content:center; padding:0; }
+  /* Sign-up: name + @username before Profile / Messages / Updates / Create. */
+  #story-profile .su-title{ font-size:24px; font-weight:800; letter-spacing:-0.3px; margin-top:6px; }
+  #story-profile .su-sub{ font-size:14px; color:var(--pf-muted); line-height:1.45; margin:8px 0 22px; }
+  #story-profile .su-label{ display:block; font-size:11px; font-weight:800; letter-spacing:1.2px; text-transform:uppercase; color:var(--pf-muted); margin:14px 0 6px; }
+  #story-profile .su-box{ display:flex; align-items:center; gap:2px; border:1px solid var(--pf-fg); border-radius:12px; padding:0 14px; }
+  #story-profile .su-at{ font-size:16px; color:var(--pf-muted); }
+  #story-profile .su-box input{ flex:1; min-width:0; border:none; outline:none; background:transparent; color:var(--pf-fg); font-size:16px; font-family:inherit; padding:13px 0; -webkit-user-select:text; user-select:text; }
+  #story-profile .su-box input::placeholder{ color:var(--pf-muted); }
+  #story-profile .su-msg{ min-height:20px; font-size:13px; margin-top:10px; color:#ff4d4f; }
+  #story-profile .su-go{ width:100%; margin-top:12px; padding:14px 0; border-radius:12px; border:none; background:var(--pf-fg); color:var(--pf-bg); font-size:15px; font-weight:800; font-family:inherit; }
+  #story-profile .su-go:disabled{ opacity:0.35; }
+  #story-profile .su-note{ font-size:12px; color:var(--pf-muted); text-align:center; line-height:1.4; margin-top:14px; }
   /* Create > Profile > ✓: Status or Post pops up right beside ✓ (where it comes from). */
   #story-profile .cr-pick{ position:absolute; right:72px; top:calc(var(--pf-top, 24px) + 12px); display:flex; flex-direction:column; gap:8px; z-index:3; }
   #story-profile .cr-pick button{ min-width:108px; padding:12px 18px; border-radius:23px; border:1.5px solid #fff; background:rgba(0,0,0,0.6); color:#fff; font-size:14px; font-weight:700; font-family:inherit; }
@@ -8031,6 +8043,17 @@ window.storyProfileOnly = function(){
       <div class="pf-calls-list"></div>
       <div class="pf-msgs-empty pf-calls-empty"><div class="pf-msgs-empty-t">No call history yet</div></div>
     </div>
+    <div class="pf-scroll pf-signup" hidden>
+      <div class="su-title">Create your profile</div>
+      <div class="su-sub">Choose the name and @username people will know you by on Lockedintool.</div>
+      <label class="su-label">Name</label>
+      <div class="su-box"><input type="text" class="su-name" maxlength="30" placeholder="Your name" autocomplete="off" autocapitalize="words" enterkeyhint="next"></div>
+      <label class="su-label">Username</label>
+      <div class="su-box"><span class="su-at">@</span><input type="text" class="su-user" maxlength="30" placeholder="username" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="done"></div>
+      <div class="su-msg"></div>
+      <button class="su-go" data-pf="su-go" disabled>Continue</button>
+      <div class="su-note">You can change your name once every 60 days and your @username once every 100 days.</div>
+    </div>
     <div class="pf-scroll pf-updates" hidden>
       <div class="pf-msgs-top">
         <label class="pf-msgs-search"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="search" placeholder="Search anyone on Lockedintool" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="search"></label>
@@ -8173,6 +8196,7 @@ window.storyProfileOnly = function(){
     }
     else if(k === 'cr-post') crPost();
     else if(k === 'cr-as') crPostAs(b.getAttribute('data-k'));
+    else if(k === 'su-go') suGo();
     else if(k === 'up-st-me'){
       const mine = ((UP.data || {}).statuses || []).find(s=>s.user.id === (msgAccount() || {}).id);
       if(mine) upView(mine.user, mine.items, 0, true);
@@ -8267,6 +8291,14 @@ window.storyProfileOnly = function(){
   ['pointerup', 'pointercancel', 'pointerleave'].forEach(t=>el.querySelector('.pf-msgs-list').addEventListener(t, ()=>clearTimeout(holdT)));
   el.querySelector('.pf-msgs-list').addEventListener('click', e=>{ if(held){ e.stopPropagation(); held = false; } }, true);
   el.querySelector('.pf-msgs').addEventListener('click', e=>{ if(msgView.menuFor && !e.target.closest('.pf-msgs-menu') && !e.target.closest('.msg-row')){ msgView.menuFor = null; renderMsgList(); } });
+  const suName = el.querySelector('.su-name'), suUser = el.querySelector('.su-user');
+  for(const box of [suName, suUser]){
+    box.addEventListener('input', suCheck);
+    box.addEventListener('pointerdown', profileTypingOn); box.addEventListener('focus', profileTypingOn);
+    box.addEventListener('blur', ()=>{ if(NATIVE && window.StoryNative.setTyping) try{ window.StoryNative.setTyping(false); }catch(err){} });
+  }
+  suName.addEventListener('keydown', e=>{ if(e.key === 'Enter'){ e.preventDefault(); suUser.focus(); } });
+  suUser.addEventListener('keydown', e=>{ if(e.key === 'Enter'){ e.preventDefault(); suGo(); } });
   const upCBox = el.querySelector('.up-v-cbar input');
   upCBox.addEventListener('pointerdown', profileTypingOn); upCBox.addEventListener('focus', profileTypingOn);
   upCBox.addEventListener('blur', ()=>{ if(NATIVE && window.StoryNative.setTyping) try{ window.StoryNative.setTyping(false); }catch(err){} });
@@ -8330,6 +8362,7 @@ window.storyProfileReset = function(){
   el.querySelector('.pf-updates').hidden = true; el.querySelector('.pf-person').hidden = true; UP.person = null;
   el.querySelector('.pf-updates .pf-msgs-search input').value = ''; UP.q = ''; UP.found = null;
   el.querySelector('.cr-pick').hidden = true;
+  el.querySelector('.pf-signup').hidden = true;
   const ms = el.querySelector('.pf-msgs .pf-msgs-search input'); if(ms){ ms.value = ''; } msgView.q = ''; msgView.menuFor = null;
   if(crRecording && NATIVE && window.StoryNative.createVideo) window.StoryNative.createVideo(false);
   if(crHas && NATIVE && window.StoryNative.createDiscard) window.StoryNative.createDiscard();
@@ -8341,6 +8374,9 @@ window.storyProfileReset = function(){
 window.storyS3Page = function(which){
   const el = document.getElementById('story-profile'); if(!el || PF_GAP_WINDOW) return;
   window.storyProfileReset();
+  // Sign-up (owner): a new profile starts empty - before Profile, Messages, Updates or Create you choose your name
+  // and @username. (Call history works without it.)
+  if(which !== 'calls' && !suDone()){ el.querySelector('.pf-home').hidden = true; suOpen(which); return; }
   if(which === 'create'){ el.querySelector('.pf-home').hidden = true; crShow(); return; }
   if(which === 'calls'){ el.querySelector('.pf-home').hidden = true; el.querySelector('.pf-calls').hidden = false; el.querySelector('.pf-calls').scrollTop = 0; renderCalls(); return; }
   if(which === 'updates'){ el.querySelector('.pf-home').hidden = true; el.querySelector('.pf-updates').hidden = false; el.querySelector('.pf-updates').scrollTop = 0; upRender(); upLoad(); upFlush(); return; }
@@ -8349,6 +8385,47 @@ window.storyS3Page = function(which){
   el.querySelector('.pf-msgs').hidden = !msgs;
   if(msgs){ el.querySelector('.pf-msgs').scrollTop = 0; renderMsgList(); }
 };
+// ---- Sign-up: name + @username, checked by Lockedintool's server (format, taken, "Lockedintool" reserved). ----
+let suNext = 'profile', suBusy = false;
+function suDone(){ const p = profileData(); return !!(p.name && p.username); }
+function suOpen(next){
+  const el = upEl(); if(!el) return;
+  suNext = next || 'profile';
+  const f = el.querySelector('.pf-signup'), p = profileData();
+  f.hidden = false; f.scrollTop = 0;
+  f.querySelector('.su-name').value = p.name || ''; f.querySelector('.su-user').value = p.username || '';
+  suCheck(); if(!msgAccount()) msgEnsureAccount();
+}
+function suCheck(){
+  const el = upEl(); if(!el) return false;
+  const f = el.querySelector('.pf-signup'), n = f.querySelector('.su-name'), u = f.querySelector('.su-user');
+  const low = u.value.toLowerCase().replace(/\s+/g, ''); if(low !== u.value) u.value = low;
+  const name = n.value.trim(), un = u.value.trim();
+  const brand = s=>s.toLowerCase().replace(/[^a-z0-9]/g, '').includes('lockedintool');
+  const problem = !name ? '' : brand(name) ? 'Only Lockedintool’s own profile can use that name.' : !un ? '' : usernameProblem(un) || (brand(un) ? 'Only Lockedintool’s own profile can use that name.' : '');
+  const msg = f.querySelector('.su-msg'); msg.textContent = problem; msg.classList.add('bad');
+  f.querySelector('.su-go').disabled = !!problem || !name || !un || suBusy;
+  return !problem && !!name && !!un;
+}
+async function suGo(){
+  const el = upEl(); if(!el || suBusy || !suCheck()) return;
+  const f = el.querySelector('.pf-signup'), name = f.querySelector('.su-name').value.trim(), username = f.querySelector('.su-user').value.trim();
+  const msg = f.querySelector('.su-msg');
+  if(!msgAccount()){ msg.textContent = 'Connecting to Lockedintool… try again in a moment.'; msgEnsureAccount(); return; }
+  suBusy = true; f.querySelector('.su-go').disabled = true; f.querySelector('.su-go').textContent = 'Checking…';
+  try{
+    const r = await msgApi('/v1/me', { name, username });
+    profileLocksSave(r);
+    saveProfileData({ name: r.name || name, username: r.username || username });
+    const ae = document.activeElement; if(ae && ae.blur) ae.blur();
+    suBusy = false; f.querySelector('.su-go').textContent = 'Continue';
+    window.storyS3Page(suNext);
+  }catch(e){
+    suBusy = false; f.querySelector('.su-go').textContent = 'Continue';
+    msg.textContent = e.code === 'username-taken' ? '@' + username + ' is taken - try another.' : e.code === 'reserved' ? 'Only Lockedintool’s own profile can use that name.' : e.code === 'username' ? usernameProblem(username) || 'That @username can’t be used.' : 'No connection right now - try again.';
+    f.querySelector('.su-go').disabled = false;
+  }
+}
 // ---- Create (Station 3's +): the real camera shows through this window (the app runs it underneath). ----
 // Shutter: tap = picture, hold = video (Video box: tap to start, tap to stop - videos only). After you make
 // something you see it (a video plays) and ✓ posts it: Video / Profile -> your profile's posts; Highlight -> asks
