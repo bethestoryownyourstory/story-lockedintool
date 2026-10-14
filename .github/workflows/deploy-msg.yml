@@ -68,4 +68,4 @@ jobs:
         if: steps.ready.outputs.ok == 'true'
         run: |
           sleep 5
-          curl -s https://story-msg.$(curl -s -H "Authorization: Bearer ${{ secrets.CLOUDFLARE_API_TOKEN }}" https://api.cloudflare.com/client/v4/accounts/${{ secrets.CLOUDFLARE_ACCOUNT_ID }}/workers/subdomain | python3 -c 'import sys,json; print(json.load(sys.stdin)["result"]["subdomain"])').workers.dev/v1/health | tee -a "$GITHUB_STEP_SUMMARY"
+          curl -s https://story-msg.$(curl -s -H "Authorization: Bearer ${{ secrets.CLOUDFLARE_API_TOKEN }}" https://api.cloudflare.com/client/v4/accounts/${{ secrets.CLOUDFLARE_ACCOUNT_ID }}/workers/subdomain | python3 -c 'import sys,json; print(json.load(sys.stdin)["result"]["subdomain"])').workers.dev/v1/health?pay=1 | tee -a "$GITHUB_STEP_SUMMARY"

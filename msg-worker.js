@@ -76,7 +76,12 @@ export class Hub {
     const url = new URL(req.url), path = url.pathname;
     try {
       if (path === '/v1/ws') return this.ws(req, url);
-      if (path === '/v1/health') return json({ ok: true, sms: !!(this.env.TWILIO_VERIFY_SID || this.env.TWILIO_FROM) });
+      if (path === '/v1/health') {
+        // Payments: can the server really sign in to Stitch? (just a sign-in - no payment is made)
+        let pay = this.payReady() ? 'keys' : 'no-keys';
+        if (url.searchParams.get('pay') === '1' && this.payReady()) { try { await this.stitchToken(); pay = 'ok'; } catch (e) { pay = String(e.message || e).slice(0, 160); } }
+        return json({ ok: true, sms: !!(this.env.TWILIO_VERIFY_SID || this.env.TWILIO_FROM), pay, subs: this.subReady() });
+      }
       if (path === '/v1/pay/return') return new Response('<!doctype html><meta name=viewport content="width=device-width,initial-scale=1"><body style="margin:0;background:#000;color:#fff;font:600 18px system-ui;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center;padding:24px;box-sizing:border-box">Done - go back to STORY to see your payment.</body>', { headers: { 'content-type': 'text/html; charset=utf-8' } });
       const body = req.method === 'POST' ? await req.json().catch(() => ({})) : {};
       if (path === '/v1/register') return this.register(body, req.headers.get('cf-connecting-ip') || '');
