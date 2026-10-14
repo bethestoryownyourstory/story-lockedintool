@@ -58,6 +58,8 @@ export class Hub {
     this.sql.exec(`CREATE TABLE IF NOT EXISTS payments (id TEXT PRIMARY KEY, uid TEXT, to_uid TEXT, to_name TEXT, to_bank TEXT, to_mask TEXT, cents INTEGER, ref TEXT, stitch TEXT, status TEXT, created INTEGER, updated INTEGER)`);
     this.sql.exec(`CREATE INDEX IF NOT EXISTS payments_uid ON payments(uid, created)`);
     this.sql.exec(`CREATE INDEX IF NOT EXISTS payments_to ON payments(to_uid, created)`);
+    try { this.sql.exec(`ALTER TABLE payments ADD COLUMN kind TEXT`); } catch (e) {}
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS subs (uid TEXT PRIMARY KEY, plan TEXT, until INTEGER, updated INTEGER)`);
     // STORY's own Stories feed (Community > Stories): one shared public group everyone posts their stories to.
     this.sql.exec(`INSERT OR IGNORE INTO groups (id, name, about, type, image, category, country, creator, calljoin, created) VALUES ('g-stories', 'Stories', 'Real people sharing their life and success stories, and the advice that got them there.', 'stories', '', 'Life', 'Global', 'story', 'open', 0)`);
   }
@@ -86,6 +88,7 @@ export class Hub {
       if (path === '/v1/find') return this.find(me, url.searchParams.get('q') || '');
       if (path.startsWith('/v1/groups/')) return this.groups(me, path.slice(11), body, url.searchParams);
       if (path.startsWith('/v1/pay/')) return this.pay(me, path.slice(8), body, url);
+      if (path.startsWith('/v1/sub/')) return this.sub(me, path.slice(8), body, url);
       if (path === '/v1/user') { const u = this.one('SELECT * FROM users WHERE id = ?', url.searchParams.get('id') || ''); return u ? json(this.pubView(u, me)) : json({ error: 'notfound' }, 404); }
       return json({ error: 'notfound' }, 404);
     } catch (e) { return json({ error: 'server', detail: String(e && e.message || e).slice(0, 200) }, 500); }
@@ -331,6 +334,61 @@ export class Hub {
     pair[1].send(JSON.stringify({ t: 'hello', id: me.id }));
     return new Response(null, { status: 101, webSocket: pair[0] });
   }
+  // ---- LOCKED IN TOOL subscription (owner: Basic $1 / Premium $5 a month; no plan = STORY doesn't open). Paid like a
+  //      money transfer - approved in your own bank through Stitch - into LOCKED IN TOOL's business account
+  //      (SUB_PAY_NAME / SUB_PAY_BANK / SUB_PAY_ACCT); each payment gives 30 days. Prices in rand: SUB_BASIC_ZAR /
+  //      SUB_PREMIUM_ZAR (Stitch pays in rand). ----
+  subPlans() {
+    return { basic: { usd: 1, zar: Number(this.env.SUB_BASIC_ZAR || 19) }, premium: { usd: 5, zar: Number(this.env.SUB_PREMIUM_ZAR || 95) } };
+  }
+  subReady() { return this.payReady() && !!(this.env.SUB_PAY_ACCT && this.env.SUB_PAY_BANK && PAY_BANKS[this.env.SUB_PAY_BANK]); }
+  subView(me) {
+    const r = this.one('SELECT * FROM subs WHERE uid = ?', me.id), now = Date.now();
+    const active = !!(r && r.until > now);
+    return { connected: this.subReady(), plan: active ? r.plan : null, until: r ? r.until : 0, active, plans: this.subPlans() };
+  }
+  async sub(me, op, b, url) {
+    const now = Date.now();
+    if (op === 'info') return json(this.subView(me));
+    if (op === 'buy') {
+      const plans = this.subPlans(), plan = String(b.plan || '');
+      if (!plans[plan]) return json({ error: 'plan' }, 400);
+      if (!this.subReady()) return json({ error: 'not-connected' }, 503);
+      const cents = Math.round(plans[plan].zar * 100), id = 'p' + rand(9), ref = 'LIT ' + plan.toUpperCase();
+      const d = await this.stitch(`mutation Pay($amount: MoneyInput!, $payerReference: String!, $beneficiaryReference: String!, $externalReference: String, $name: String!, $bankId: BankBeneficiaryBankId!, $acct: String!) {
+        clientPaymentInitiationRequestCreate(input: { amount: $amount, payerReference: $payerReference, beneficiaryReference: $beneficiaryReference, externalReference: $externalReference,
+          beneficiary: { bankAccount: { name: $name, bankId: $bankId, accountNumber: $acct } } }) { paymentInitiationRequest { id url } } }`,
+        { amount: { quantity: (cents / 100).toFixed(2), currency: 'ZAR' }, payerReference: 'LOCKED IN', beneficiaryReference: (ref + ' ' + me.id).slice(0, 20), externalReference: id,
+          name: this.env.SUB_PAY_NAME || 'LOCKED IN TOOL', bankId: this.env.SUB_PAY_BANK, acct: this.env.SUB_PAY_ACCT });
+      const pr = d.clientPaymentInitiationRequestCreate.paymentInitiationRequest;
+      this.sql.exec('INSERT INTO payments (id, uid, to_uid, to_name, to_bank, to_mask, cents, ref, stitch, status, created, updated, kind) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        id, me.id, 'LOCKED IN TOOL ' + plan, this.env.SUB_PAY_BANK, '', cents, ref, pr.id, 'pending', now, now, 'sub:' + plan);
+      const back = this.env.STITCH_REDIRECT || (url.origin + '/v1/pay/return');
+      return json({ id, url: pr.url + (pr.url.includes('?') ? '&' : '?') + 'redirect_uri=' + encodeURIComponent(back) });
+    }
+    if (op === 'status') {
+      const p = this.one("SELECT * FROM payments WHERE id = ? AND uid = ? AND kind LIKE 'sub:%'", url.searchParams.get('id') || '', me.id);
+      if (!p) return json({ error: 'notfound' }, 404);
+      if (p.status === 'pending' && this.payReady()) {
+        const d = await this.stitch(`query St($id: ID!) { node(id: $id) { ... on PaymentInitiationRequest { status { __typename } } } }`, { id: p.stitch });
+        const tn = d && d.node && d.node.status && d.node.status.__typename || '';
+        const st = /Completed/.test(tn) ? 'paid' : /Cancelled/.test(tn) ? 'cancelled' : /Expired/.test(tn) ? 'expired' : 'pending';
+        if (st !== 'pending') {
+          this.sql.exec('UPDATE payments SET status = ?, updated = ? WHERE id = ?', st, now, p.id);
+          p.status = st;
+          if (st === 'paid') {
+            // 30 days of the plan you paid for; renewing the same plan adds on, a different plan starts now.
+            const plan = p.kind.slice(4), cur = this.one('SELECT * FROM subs WHERE uid = ?', me.id);
+            const from = cur && cur.plan === plan && cur.until > now ? cur.until : now;
+            this.sql.exec('INSERT OR REPLACE INTO subs (uid, plan, until, updated) VALUES (?, ?, ?, ?)', me.id, plan, from + 30 * 86400000, now);
+          }
+        }
+      }
+      return json(Object.assign({ status: p.status }, this.subView(me)));
+    }
+    return json({ error: 'notfound' }, 404);
+  }
+
   // ---- Money transfer (Stitch) ----
   // (STITCH_BASE: local tests only - a stand-in Stitch, like TWILIO_BASE)
   payReady() { return !!(this.env.STITCH_CLIENT_ID && this.env.STITCH_CLIENT_SECRET); }
@@ -375,7 +433,7 @@ export class Hub {
       return json({ ok: true, bank: { name: k.name, bank: k.bank, mask: k.acct.slice(-3) } });
     }
     if (op === 'history') {
-      const rows = this.sql.exec('SELECT * FROM payments WHERE (uid = ? OR (to_uid = ? AND status = ?)) ORDER BY created DESC LIMIT 100', me.id, me.id, 'paid').toArray();
+      const rows = this.sql.exec("SELECT * FROM payments WHERE (kind IS NULL OR kind NOT LIKE 'sub:%') AND (uid = ? OR (to_uid = ? AND status = ?)) ORDER BY created DESC LIMIT 100", me.id, me.id, 'paid').toArray();
       return json({ payments: rows.map(p => this.payView(p, me)) });
     }
     if (op === 'send') {
@@ -402,7 +460,7 @@ export class Hub {
       return json({ id, url: pr.url + (pr.url.includes('?') ? '&' : '?') + 'redirect_uri=' + encodeURIComponent(back) });
     }
     if (op === 'status') {
-      const p = this.one('SELECT * FROM payments WHERE id = ? AND uid = ?', url.searchParams.get('id') || '', me.id);
+      const p = this.one("SELECT * FROM payments WHERE id = ? AND uid = ? AND (kind IS NULL OR kind NOT LIKE 'sub:%')", url.searchParams.get('id') || '', me.id);
       if (!p) return json({ error: 'notfound' }, 404);
       if (p.status === 'pending' && this.payReady()) {
         const d = await this.stitch(`query St($id: ID!) { node(id: $id) { ... on PaymentInitiationRequest { status { __typename } } } }`, { id: p.stitch });

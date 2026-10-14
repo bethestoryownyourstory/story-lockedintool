@@ -6,6 +6,8 @@ name: Deploy STORY message server
 #   TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN - Twilio
 #   TWILIO_FROM (STORY's Twilio number) or TWILIO_VERIFY_SID - only for verifying a phone number when STORY needs to.
 #   STITCH_CLIENT_ID, STITCH_CLIENT_SECRET - Stitch (money transfer: send to STORY profiles and to any bank account);
+#   SUB_PAY_NAME, SUB_PAY_BANK (absa / capitec / fnb / nedbank / standard_bank ...), SUB_PAY_ACCT - LOCKED IN TOOL's business bank account that
+#   subscriptions are paid into; SUB_BASIC_ZAR / SUB_PREMIUM_ZAR (optional) - the monthly prices in rand ($1 / $5).
 #   STITCH_REDIRECT (optional) - the page Stitch returns to after you approve a payment (default: this server's /v1/pay/return).
 on:
   push:
@@ -52,8 +54,13 @@ jobs:
           STITCH_CLIENT_ID: ${{ secrets.STITCH_CLIENT_ID }}
           STITCH_CLIENT_SECRET: ${{ secrets.STITCH_CLIENT_SECRET }}
           STITCH_REDIRECT: ${{ secrets.STITCH_REDIRECT }}
+          SUB_PAY_NAME: ${{ secrets.SUB_PAY_NAME }}
+          SUB_PAY_BANK: ${{ secrets.SUB_PAY_BANK }}
+          SUB_PAY_ACCT: ${{ secrets.SUB_PAY_ACCT }}
+          SUB_BASIC_ZAR: ${{ secrets.SUB_BASIC_ZAR }}
+          SUB_PREMIUM_ZAR: ${{ secrets.SUB_PREMIUM_ZAR }}
         run: |
-          for k in TWILIO_ACCOUNT_SID TWILIO_AUTH_TOKEN TWILIO_FROM TWILIO_VERIFY_SID PHONE_SALT STITCH_CLIENT_ID STITCH_CLIENT_SECRET STITCH_REDIRECT; do
+          for k in TWILIO_ACCOUNT_SID TWILIO_AUTH_TOKEN TWILIO_FROM TWILIO_VERIFY_SID PHONE_SALT STITCH_CLIENT_ID STITCH_CLIENT_SECRET STITCH_REDIRECT SUB_PAY_NAME SUB_PAY_BANK SUB_PAY_ACCT SUB_BASIC_ZAR SUB_PREMIUM_ZAR; do
             v="${!k}"
             if [ -n "$v" ]; then printf '%s' "$v" | npx --yes wrangler@4 secret put "$k" -c msg-wrangler.toml >/dev/null && echo "$k set"; fi
           done

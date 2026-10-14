@@ -1358,6 +1358,19 @@
   .pay-wait-who{ font-size:15px; color:var(--muted); }
   .pay-wait-status{ font-size:13px; line-height:1.4; margin:6px 0 4px; }
   .pay-recv-who{ font-size:20px; font-weight:800; }
+  /* LOCKED IN TOOL subscription */
+  .sub-head{ font-size:22px; font-weight:800; letter-spacing:0.5px; margin:6px 0 4px; }
+  .sub-status{ font-size:13px; color:var(--muted); margin-bottom:14px; line-height:1.4; }
+  .sub-card{ border:1px solid #2a2a2a; border-radius:18px; padding:18px 16px; margin-bottom:12px; background:#000000; }
+  .sub-premium{ border-color:#555555; }
+  .sub-top{ display:flex; justify-content:space-between; align-items:baseline; gap:10px; }
+  .sub-name{ font-size:22px; font-weight:800; }
+  .sub-price{ font-size:20px; font-weight:800; }
+  .sub-badge{ display:inline-block; margin-top:8px; padding:3px 10px; border-radius:10px; background:rgba(62,207,106,0.14); color:var(--green); font-size:12px; font-weight:700; }
+  .sub-tag{ font-size:15px; font-weight:800; margin:10px 0 8px; }
+  .sub-text{ font-size:13.5px; line-height:1.5; color:var(--text); }
+  .sub-list{ margin:10px 0 14px; padding-left:20px; font-size:13.5px; line-height:1.7; }
+  .sub-zar{ font-size:11px; color:var(--muted); text-align:center; margin-top:8px; }
   /* 3D Circle's pages keep their own top (name + buttons); the back button and page dots stay out of a preview. */
   .preview-top .dash-back, .preview-top .page-dots{ visibility:hidden !important; }
   /* Home screen widget pictures: the page only - no veils, bubbles or Station 3 pieces over it. */
@@ -4451,7 +4464,7 @@ function dashboardScreen(){
           <div class="sidebar-item" data-nav="notes">NOTES</div>
           <div class="sidebar-item" data-nav="community">COMMUNITY</div>
           <div class="sidebar-item" data-nav="settings">SETTINGS</div>
-          <div class="sidebar-item" data-dash="subs">SUBSCRIPTIONS</div>
+          <div class="sidebar-item" data-nav="subscription">SUBSCRIPTIONS</div>
           <div class="sidebar-item" data-nav="information">INFORMATION</div>
           <div class="sidebar-item" data-dash="camera">CAMERA</div>
           <div class="sidebar-item" data-dash="gallery">GALLERY</div>
@@ -7092,6 +7105,92 @@ function payRecvSave(){
     r.busy = false; r.editing = false; r.acct = ''; if(state.pay.info) state.pay.info.bank = x.bank; showToast('Saved - people on STORY can send you money'); payShow();
   }).catch(e=>{ r.busy = false; r.msg = PAY_ERRORS[e.code] || 'Couldn’t save - try again.'; payShow(); });
 }
+// ---- LOCKED IN TOOL subscription (owner: Basic $1 / Premium $5 a month; no plan = STORY doesn't open). Paid in your
+// own bank through Stitch (msg-worker.js /v1/sub/*), 30 days per payment. Nobody is ever asked before payments are
+// really connected, and the owner's own phone (Test channel, /preview/) always has everything. ----
+const SUB_KEY = 'story-sub';
+const STORY_OWNER = /\/preview\//.test(location.pathname);
+function subState(){ try{ return JSON.parse(localStorage.getItem(SUB_KEY) || 'null'); }catch(e){ return null; } }
+function subSave(v){ try{ localStorage.setItem(SUB_KEY, JSON.stringify(Object.assign({}, v, { checked:Date.now() }))); }catch(e){} }
+function subActive(){ const s = subState(); return !!(s && s.plan && s.until > Date.now()); }
+function subLocked(){ const s = subState(); return !!(s && s.connected) && !subActive() && !STORY_OWNER; }
+function subPremium(){ const s = subState(); return STORY_OWNER || !(s && s.connected) || (subActive() && s.plan === 'premium'); }
+function subRefresh(force){
+  if(!msgAccount() || IN_STATION3_WINDOW) return;
+  const s = subState();
+  if(!force && s && Date.now() - (s.checked || 0) < 3 * 3600000) return;
+  msgApi('/v1/sub/info').then(i=>{ const was = subLocked(); subSave(i); if(was !== subLocked() || state.current === 'subscription') renderDevice(); }).catch(()=>{});
+}
+setTimeout(()=>subRefresh(false), 4000);
+const SUB_PLANS = [
+  { key:'basic', name:'Basic', tag:'Your essentials. Stay locked in.', badge:'',
+    text:'Get the core LOCKED IN TOOL experience with your three essential pages: Money, Home/Wallet, and Focus. Keep your finances, wallet, and goals in one place, with the freedom to build your daily routine around what matters most.',
+    list:['Money page', 'Home/Wallet page', 'Customizable Focus page', 'Three-page layout', 'Essential focus tools'] },
+  { key:'premium', name:'Premium', tag:'Your goals. Your setup. Your rules.', badge:'Full access',
+    text:'Unlock the full LOCKED IN TOOL experience. Expand beyond the three essential pages, customize your workspace, and build a setup that fits your goals, whether you’re focused on trading, business, e-commerce, studying, or personal growth.',
+    list:['Unlimited pages', 'Expanded layouts and customization', 'More tools for your goals', 'Greater workspace flexibility', 'Access to premium features as they become available'] },
+];
+state.sub = { waiting:null, busy:false, msg:'' };
+function subscriptionScreen(){
+  const s = subState() || {};
+  if(!state.sub.asked){ state.sub.asked = true; subRefresh(true); }
+  const plans = s.plans || { basic:{ usd:1, zar:19 }, premium:{ usd:5, zar:95 } };
+  const locked = subLocked(), active = subActive();
+  const until = s.until ? new Date(s.until).toLocaleDateString('en-ZA', { day:'numeric', month:'short', year:'numeric' }) : '';
+  const w = state.sub.waiting;
+  const status = STORY_OWNER ? 'Owner - you have everything.'
+    : active ? 'Your plan: ' + (s.plan === 'premium' ? 'Premium' : 'Basic') + ' · paid until ' + until
+    : s.connected ? 'Choose a plan to use LOCKED IN TOOL.' : 'Subscriptions open once LOCKED IN TOOL’s payments are set up.';
+  return `
+    <div class="page-shell sub-page">
+    ${topBar('Subscription', false, '', 'dashboard', '', locked)}
+    <div class="sub-head">LOCKED IN TOOL</div>
+    <div class="sub-status">${escText(status)}</div>
+    ${w ? `<div class="row-card pay-wait">
+      <div class="pay-wait-amt">${escText(w.name)}</div>
+      <div class="pay-wait-who">$${w.usd}/month · R${Number(w.zar).toFixed(2)}</div>
+      <div class="pay-wait-status">${w.status === 'paid' ? 'Paid - your plan is on.' : w.status === 'pending' ? 'Approve it in your bank’s page that opened. This updates by itself.' : w.status === 'cancelled' ? 'Cancelled in your bank' : 'Not approved in time - nothing was paid'}</div>
+      ${w.status === 'pending' ? `<button class="btn-wide" data-action="sub-reopen">Open my bank’s page again</button>` : `<button class="btn-wide btn-primary" data-action="sub-done">Done</button>`}
+    </div>` : ''}
+    ${SUB_PLANS.map(p=>{ const pr = plans[p.key] || {}; const mine = active && s.plan === p.key; return `
+      <div class="sub-card${p.key === 'premium' ? ' sub-premium' : ''}">
+        <div class="sub-top"><div class="sub-name">${p.name}</div><div class="sub-price">$${pr.usd}/month</div></div>
+        ${p.badge ? `<div class="sub-badge">${p.badge}</div>` : ''}
+        <div class="sub-tag">${p.tag}</div>
+        <div class="sub-text">${p.text}</div>
+        <ul class="sub-list">${p.list.map(x=>`<li>${x}</li>`).join('')}</ul>
+        ${STORY_OWNER ? '' : `<button class="btn-wide${mine ? '' : ' btn-primary'}" data-action="sub-buy" data-plan="${p.key}"${state.sub.busy || w ? ' disabled' : ''}>${mine ? 'Add another month' : 'Choose ' + p.name}</button>
+        <div class="sub-zar">Paid in rand: R${Number(pr.zar || 0).toFixed(2)} a month, approved in your own bank</div>`}
+      </div>`; }).join('')}
+    ${state.sub.msg ? `<div class="note pay-msg">${escText(state.sub.msg)}</div>` : ''}
+    <div class="note" style="margin:12px 0 4px;">Both plans are designed to help you stay organized, focused, and consistent.</div>
+    </div>`;
+}
+let subPollT = 0;
+function subPoll(){
+  clearTimeout(subPollT);
+  const w = state.sub.waiting;
+  if(!w || w.status !== 'pending' || Date.now() - w.started > 20 * 60000) return;
+  if(document.visibilityState === 'hidden' || state.current !== 'subscription'){ subPollT = setTimeout(subPoll, 4000); return; }
+  msgApi('/v1/sub/status?id=' + encodeURIComponent(w.id)).then(r=>{
+    if(state.sub.waiting !== w) return;
+    if(r.status !== 'pending'){ w.status = r.status; subSave(r); if(r.status === 'paid') showToast(w.name + ' is on - thank you'); renderDevice(); }
+    else subPollT = setTimeout(subPoll, 3000);
+  }).catch(()=>{ subPollT = setTimeout(subPoll, 5000); });
+}
+function subBuy(plan){
+  const s = subState() || {};
+  if(!s.connected){ showToast('Subscriptions open once LOCKED IN TOOL’s payments are set up'); return; }
+  if(!msgAccount()){ showToast('Your STORY account is being set up - try again in a moment'); return; }
+  const p = SUB_PLANS.find(x=>x.key === plan), pr = (s.plans || {})[plan] || {};
+  state.sub.busy = true; state.sub.msg = '';
+  msgApi('/v1/sub/buy', { plan }).then(r=>{
+    state.sub.busy = false;
+    state.sub.waiting = { id:r.id, url:r.url, name:p.name, usd:pr.usd, zar:pr.zar, status:'pending', started:Date.now() };
+    payOpenBank(r.url); renderDevice(); subPollT = setTimeout(subPoll, 4000);
+  }).catch(e=>{ state.sub.busy = false; state.sub.msg = e.code === 'not-connected' ? 'Subscriptions open once LOCKED IN TOOL’s payments are set up.' : 'Couldn’t start the payment - try again.'; renderDevice(); });
+}
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState === 'visible'){ if(state.sub && state.sub.waiting) subPoll(); subRefresh(false); } });
 function txHistoryScreen(){
   return `
     <div class="page-shell">
@@ -10711,6 +10810,7 @@ function renderScreenContent(){
     case 'tx-history': return txHistoryScreen();
     case 'layouts': return layoutsScreen();
     case 'information': return informationScreen();
+    case 'subscription': return subscriptionScreen();
     case 'layouts-dashboard': return layoutsDashboardScreen();
     case 'layouts-homescreen': return layoutsHomeScreenScreen();
     case 'layouts-arrangement': return layoutsArrangementScreen();
@@ -11725,6 +11825,8 @@ notesDb().then(db=>new Promise(res=>{
 }).catch(()=>{ notesLoaded = true; });
 document.addEventListener('visibilitychange', ()=>{ if(document.hidden){ if(noteLiveSaveT){ clearTimeout(noteLiveSaveT); noteLiveSaveT = null; } persistNotesNow(); } });
 function renderDevice(){
+  // No plan (once subscriptions are really on) = LOCKED IN TOOL shows only its Subscription page (owner).
+  if(subLocked() && state.current !== 'subscription' && !IN_STATION3_WINDOW){ state.current = 'subscription'; state.rowsViewOpen = false; state.pageStyleViewOpen = false; }
   // A live home screen widget never leaves its page (owner: the Money widget stays on Money, the Dashboard widget on
   // the Dashboard): anything that would go to another page opens STORY full screen on it instead.
   if(window.__storyWidgetPinned && state.current !== window.__storyWidget){
@@ -13324,6 +13426,7 @@ function attachHandlers(){
         case 'app-turn-into-page': {
           const a = state.installedApps.find(x=>x.id===state.appMenuId);
           state.appMenuId = null;
+          if(a && a.pkg && !appPagesStored().some(x=>x.pkg === a.pkg) && !subPremium()){ showToast('More pages come with Premium'); state.current = 'subscription'; break; }
           if(a && a.pkg) toggleAppPage(a); else showToast('Only apps on your phone can become a page');
           break;
         }
@@ -14009,6 +14112,9 @@ function attachHandlers(){
         }
         case 'send-open': state.current = 'send-money'; state.pay.info = null; state.pay.loading = false; break;
         case 'receive-open': state.current = 'receive-money'; state.pay.info = null; state.pay.loading = false; break;
+        case 'sub-buy': subBuy(el.getAttribute('data-plan')); break;
+        case 'sub-reopen': if(state.sub.waiting) payOpenBank(state.sub.waiting.url); break;
+        case 'sub-done': state.sub.waiting = null; break;
         case 'pay-mode': state.pay.mode = el.getAttribute('data-v'); state.pay.msg = ''; break;
         case 'pay-bank': state.pay.bank = el.getAttribute('data-v'); break;
         case 'pay-unpick': state.pay.to = null; break;
