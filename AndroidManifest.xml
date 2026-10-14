@@ -138,22 +138,6 @@
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_community" />
         </receiver>
-        <receiver android:name=".AppsWidget" android:exported="true" android:label="Apps">
-            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
-            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_apps" />
-        </receiver>
-        <receiver android:name=".SettingsWidget" android:exported="true" android:label="Settings">
-            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
-            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_settings" />
-        </receiver>
-        <receiver android:name=".InformationWidget" android:exported="true" android:label="Information">
-            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
-            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_information" />
-        </receiver>
-        <receiver android:name=".LayoutsWidget" android:exported="true" android:label="Layouts">
-            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
-            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_layouts" />
-        </receiver>
         <receiver android:name=".MoneyWidget" android:exported="true" android:label="Money">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_money" />
