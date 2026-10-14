@@ -2304,6 +2304,59 @@
   #story-profile .pf-gap-clip svg{ position:absolute; left:0; top:0; width:100%; height:100%; overflow:visible; }
   /* Profile's background, with Station 3's gap cut clean out of it: a real gap, whatever is behind shows through. */
   #story-profile .pf-bg{ position:absolute; inset:0; background:var(--pf-bg); }
+  /* Updates (owner): search, statuses of people you follow at the top, other profiles under them. */
+  #story-profile .up-status-row{ display:flex; gap:14px; overflow-x:auto; scrollbar-width:none; padding:16px 2px 6px; }
+  #story-profile .up-status-row::-webkit-scrollbar{ display:none; }
+  #story-profile .up-st{ position:relative; flex:0 0 66px; display:flex; flex-direction:column; align-items:center; gap:7px; border:none; background:transparent; color:var(--pf-fg); font-family:inherit; padding:4px 0 0; }
+  #story-profile .up-st .msg-pic{ width:56px; height:56px; }
+  #story-profile .msg-pic.up-ring{ outline:2px solid var(--pf-fg); outline-offset:2.5px; }
+  #story-profile .msg-pic.up-ring.seen{ outline-color:var(--pf-muted); }
+  #story-profile .up-st-add{ position:absolute; top:42px; left:42px; width:20px; height:20px; border-radius:50%; background:var(--pf-fg); color:var(--pf-bg); font-size:15px; font-weight:800; line-height:20px; text-align:center; border:2px solid var(--pf-bg); }
+  #story-profile .up-st-n{ width:66px; font-size:11px; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #story-profile .up-h{ font-size:11px; font-weight:800; letter-spacing:1.2px; text-transform:uppercase; color:var(--pf-muted); margin:14px 0 2px; }
+  #story-profile .up-row{ cursor:pointer; }
+  #story-profile .up-about{ font-size:12.5px; line-height:1.35; color:var(--pf-fg); opacity:0.85; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; white-space:normal; }
+  #story-profile .up-follow{ flex-shrink:0; padding:8px 14px; border-radius:10px; border:1px solid var(--pf-fg); background:var(--pf-fg); color:var(--pf-bg); font-size:12.5px; font-weight:700; font-family:inherit; }
+  #story-profile .up-follow.on{ background:transparent; color:var(--pf-fg); border-color:var(--pf-hair); }
+  #story-profile .up-empty{ padding-top:12vh; }
+  #story-profile .up-p-head{ display:flex; align-items:center; gap:16px; }
+  #story-profile .up-p-pic{ border:none; background:transparent; padding:4px; color:inherit; }
+  #story-profile .up-p-pic .msg-pic{ width:78px; height:78px; }
+  #story-profile .up-p-pic .msg-pic svg{ width:38px; height:38px; }
+  #story-profile .up-p-about{ font-size:14px; line-height:1.45; margin-bottom:10px; }
+  #story-profile .up-p-bio{ border:1px solid var(--pf-hair); border-radius:14px; padding:12px 14px; font-size:14px; line-height:1.5; white-space:pre-wrap; margin-bottom:12px; }
+  #story-profile .up-p-btns{ display:flex; gap:10px; margin:4px 0 16px; }
+  #story-profile .up-follow-lg{ flex:1; padding:11px 0; font-size:14px; }
+  #story-profile .up-p-btns .up-follow-lg[data-pf="up-message"]{ background:transparent; color:var(--pf-fg); }
+  #story-profile .up-p-note{ text-align:center; color:var(--pf-muted); font-size:14px; padding:30px 0; }
+  #story-profile .up-grid{ display:grid; grid-template-columns:repeat(3, 1fr); gap:3px; padding-bottom:20px; }
+  #story-profile .up-cell{ position:relative; aspect-ratio:3 / 4; border:none; padding:0; background:var(--pf-hair); overflow:hidden; }
+  #story-profile .up-cell img{ width:100%; height:100%; object-fit:cover; display:block; }
+  #story-profile .up-cell-v{ position:absolute; right:6px; top:5px; font-size:11px; color:#fff; text-shadow:0 0 3px #000; }
+  #story-profile .pf-ed-note{ font-size:12px; color:var(--pf-muted); line-height:1.4; padding:2px 2px 10px; }
+  /* Viewing a status / post: the whole window, black. */
+  #story-profile .up-viewer{ position:fixed; inset:0; z-index:6; background:#000; }
+  #story-profile .up-v-media{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; }
+  #story-profile .up-v-media img, #story-profile .up-v-media video{ max-width:100%; max-height:100%; object-fit:contain; }
+  #story-profile .up-v-tap{ position:absolute; top:0; bottom:0; border:none; background:transparent; padding:0; }
+  #story-profile .up-v-prev{ left:0; width:32%; }
+  #story-profile .up-v-next{ right:0; width:68%; }
+  #story-profile .up-v-top{ position:absolute; left:14px; right:14px; top:calc(var(--pf-top, 24px) + 8px); }
+  #story-profile .up-v-bars{ display:flex; gap:4px; }
+  #story-profile .up-v-bar{ flex:1; height:2.5px; border-radius:2px; background:rgba(255,255,255,0.35); overflow:hidden; }
+  #story-profile .up-v-bar i{ display:block; height:100%; width:0; background:#fff; }
+  #story-profile .up-v-bar.done i{ width:100%; }
+  #story-profile .up-v-head{ display:flex; align-items:center; gap:8px; margin-top:10px; color:#fff; }
+  #story-profile .up-v-who{ flex:1; min-width:0; display:flex; align-items:center; gap:9px; }
+  #story-profile .up-v-who .msg-pic{ width:34px; height:34px; border-color:#fff; }
+  #story-profile .up-v-who .msg-pic svg{ width:18px; height:18px; }
+  #story-profile .up-v-name{ font-size:14px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #story-profile .up-v-time{ font-size:12px; opacity:0.7; flex-shrink:0; }
+  #story-profile .up-v-btn{ width:38px; height:38px; border:none; border-radius:50%; background:rgba(0,0,0,0.35); color:#fff; font-size:24px; line-height:1; display:flex; align-items:center; justify-content:center; padding:0; }
+  /* Create > Profile > ✓: Status or Post pops up right beside ✓ (where it comes from). */
+  #story-profile .cr-pick{ position:absolute; right:72px; top:calc(var(--pf-top, 24px) + 12px); display:flex; flex-direction:column; gap:8px; z-index:3; }
+  #story-profile .cr-pick button{ min-width:108px; padding:12px 18px; border-radius:23px; border:1.5px solid #fff; background:rgba(0,0,0,0.6); color:#fff; font-size:14px; font-weight:700; font-family:inherit; }
+  #story-profile .cr-pick button:active{ opacity:0.7; }
   #story-profile.pf-main .pf-gap, #story-profile.pf-main .pf-line, #story-profile.pf-gap-only .pf-scroll{ display:none; }
   /* A hairline halo so the little men stay visible on whatever shows through the gap. */
   #story-profile .pf-gap-clip svg{ filter:drop-shadow(0 0 0.8px var(--pf-bg)) drop-shadow(0 0 0.8px var(--pf-bg)); }
@@ -7373,7 +7426,7 @@ function saveQuickAccess(patch){
 function storyPrivacy(){ try{ return JSON.parse(localStorage.getItem('story-privacy') || '{}') || {}; }catch(e){ return {}; } }
 function setStoryPrivacy(p){ try{ localStorage.setItem('story-privacy', JSON.stringify(p)); }catch(e){} try{ const q = JSON.parse(localStorage.getItem('story-msg-outbox') || '[]') || []; q.push({ at: Date.now(), type:'privacy', privacy: p }); localStorage.setItem('story-msg-outbox', JSON.stringify(q.slice(-500))); }catch(e){} }
 function privacySettingsHTML(){
-  const p = storyPrivacy(), calls = p.calls || 'everyone', picked = p.callPeople || [];
+  const p = storyPrivacy(), calls = p.calls || 'everyone', picked = p.callPeople || [], status = p.status || 'followers';
   let people = []; try{ people = (JSON.parse(localStorage.getItem('story-messages') || '[]') || []).filter(c=>c && c.kind !== 'group'); }catch(e){}
   return `
     <div class="section-title">PRIVACY</div>
@@ -7391,6 +7444,14 @@ function privacySettingsHTML(){
           <div class="set2-text"><div class="set2-name">${escText(c.name || (c.username ? '@' + c.username : 'Chat'))}</div></div>
           <span class="privacy-check${picked.includes(c.id) ? ' on' : ''}">${picked.includes(c.id) ? '✓' : ''}</span>
         </div>`).join('') : `<div class="set2-row set2-nested"><div class="set2-text"><div class="set2-sub">People you chat with show here to pick from.</div></div></div>`) : ''}
+      <div class="set2-row set2-stack">
+        <div class="set2-text"><div class="set2-name">Who can see your status</div><div class="set2-sub">${status === 'everyone' ? 'Anyone on Lockedintool' : status === 'nobody' ? 'Only you' : 'Only people who follow you'}</div></div>
+        <div class="set2-seg">
+          <button class="theme-opt${status === 'everyone' ? ' on' : ''}" data-action="privacy-status" data-value="everyone">Everyone</button>
+          <button class="theme-opt${status === 'followers' ? ' on' : ''}" data-action="privacy-status" data-value="followers">Followers</button>
+          <button class="theme-opt${status === 'nobody' ? ' on' : ''}" data-action="privacy-status" data-value="nobody">No one</button>
+        </div>
+      </div>
     </div>`;
 }
 // ---- Information (Dashboard sidebar): STORY's own information - what it is, how it works, everything real, your
@@ -7411,12 +7472,13 @@ const LEGAL = {
     ['Kept only on your phone', [
       'Money and Wallet: payments read from the notifications and bank SMS your bank and payment apps put on your phone (amount, who, date, balance, the card or account’s last 4 digits). One-time PINs, chats, email and adverts are skipped.',
       'Cards you add: bank name, last 4 digits and expiry. The full card number and CVV are only checked while you add the card and are never kept. Pictures of scanned cards are kept with the long number and CVV covered.',
-      'Notes, drawings, pictures and audio you add to notes; your profile picture; highlights and posts you make with Create; your settings.',
+      'Notes, drawings, pictures and audio you add to notes; highlights you make with Create; your settings.',
       'Trading: the sign-in tokens and API keys of the broker accounts you add, in Lockedintool’s private storage. Your broker password is never kept.',
       'Call history: calls made with Lockedintool, and contact names if you allow contacts.',
       'Removing Lockedintool from your phone removes all of this.' ]],
     ['Kept on our server', [
-      'Your account: a random ID, the public half of your encryption key, your name and @username (so people can find you) and your privacy choices (who can message and call you).',
+      'Your account: a random ID, the public half of your encryption key, your name, @username, profile picture, bio and About (so people can find you and see who you are) and your privacy choices (who can message and call you and who can see your status).',
+      'Updates: who you follow and who follows you, the posts you share to your profile (anyone on Lockedintool can see them) and your statuses (deleted after 24 hours; only seen by who your status setting allows).',
       'Messages and calls: locked messages waiting for a phone that is offline (deleted once delivered), and whether a message was delivered, seen or read. Calls go straight from phone to phone; our server only helps them connect.',
       'Community: groups you create or join, and what you post, like or comment in public groups - public groups are visible to everyone. Private group messages are end-to-end encrypted.',
       'Payments: your plan, its price, status and dates, and the payment reference from our payment partner. If you add a bank account to receive money, it is kept to pay you - anyone viewing it sees only the last 3 digits, and people sending you money never see it.',
@@ -7774,7 +7836,7 @@ function profileData(){
   // Name and username are each optional (owner: some want only one). 'NAME' / 'username' were the old
   // placeholders, never real values -- an old save may have stored them, so they count as empty.
   const name = d.name === 'NAME' ? '' : (d.name || ''), username = d.username === 'username' ? '' : (d.username || '');
-  return { name, username, bio: d.bio || '' };
+  return { name, username, bio: d.bio || '', about: d.about || '' };
 }
 function saveProfileData(patch){
   const d = Object.assign(profileData(), patch);
@@ -7794,6 +7856,7 @@ window.storyProfileText = function(){
   el.querySelector('[data-pf="ed-name"] .pf-ed-val').textContent = p.name;
   el.querySelector('[data-pf="ed-username"] .pf-ed-val').textContent = p.username ? '@' + p.username : '';
   el.querySelector('[data-pf="ed-bio"] .pf-ed-val').textContent = p.bio;
+  el.querySelector('[data-pf="ed-about"] .pf-ed-val').textContent = p.about;
   // Bio: the word "BIO" shows only while it's empty; once there's text, only the text shows.
   el.querySelector('.pf-bio-l').hidden = !!p.bio;
   el.querySelector('.pf-bio-t').innerHTML = p.bio ? escText(p.bio) : '<span style="color:var(--pf-muted)">Nothing here yet.</span>';
@@ -7813,11 +7876,13 @@ function openProfileField(k){
   const p = profileData();
   const f = el.querySelector('.pf-field');
   f.setAttribute('data-field', k);
-  f.querySelector('.pf-ed-title').textContent = k === 'name' ? 'Name' : k === 'username' ? 'Username' : 'Bio';
+  const long = k === 'bio' || k === 'about';
+  f.querySelector('.pf-ed-title').textContent = k === 'name' ? 'Name' : k === 'username' ? 'Username' : k === 'about' ? 'About' : 'Bio';
   f.querySelector('.pf-field-at').hidden = k !== 'username';
-  f.querySelector('input').hidden = k === 'bio'; f.querySelector('textarea').hidden = k !== 'bio';
+  f.querySelector('input').hidden = long; f.querySelector('textarea').hidden = !long;
   const inp = profileFieldBox();
   if(k === 'bio'){ inp.value = p.bio; inp.placeholder = 'Tell people about you'; }
+  else if(k === 'about'){ inp.value = p.about; inp.placeholder = 'Who you are or what you do - shown in Updates'; }
   else {
     inp.maxLength = 30;
     inp.value = k === 'name' ? p.name : p.username;
@@ -7828,11 +7893,11 @@ function openProfileField(k){
   el.querySelector('.pf-editor').hidden = true; f.hidden = false;
   profileTypingOn();
   inp.focus();
-  if(k === 'bio') inp.setSelectionRange(inp.value.length, inp.value.length);
+  if(long) inp.setSelectionRange(inp.value.length, inp.value.length);
 }
 function profileFieldBox(){
   const f = document.querySelector('#story-profile .pf-field'); if(!f) return null;
-  return f.getAttribute('data-field') === 'bio' ? f.querySelector('textarea') : f.querySelector('input');
+  return ['bio', 'about'].includes(f.getAttribute('data-field')) ? f.querySelector('textarea') : f.querySelector('input');
 }
 // Ask the app for the keyboard (as the box opens and whenever it's tapped).
 function profileTypingOn(){ if(NATIVE && window.StoryNative.setTyping) try{ window.StoryNative.setTyping(true); }catch(err){} }
@@ -7843,8 +7908,8 @@ function checkProfileField(){
   const v = inp.value.trim();
   // Either can be left empty -- but not both (a profile always has a name or a username).
   const other = k === 'name' ? profileData().username : k === 'username' ? profileData().name : 'x';
-  const problem = k === 'bio' ? '' : !v ? (other ? '' : 'Add a name or a username.') : k === 'username' ? usernameProblem(v) : '';
-  f.querySelector('.pf-field-msg').textContent = k === 'bio' ? inp.value.length + ' / 150' : problem || (k === 'username' && !v ? 'Your @ on Lockedintool.' : '');
+  const problem = k === 'bio' || k === 'about' ? '' : !v ? (other ? '' : 'Add a name or a username.') : k === 'username' ? usernameProblem(v) : '';
+  f.querySelector('.pf-field-msg').textContent = k === 'bio' || k === 'about' ? inp.value.length + ' / 150' : problem || (k === 'username' && !v ? 'Your @ on Lockedintool.' : '');
   f.querySelector('.pf-field-msg').classList.toggle('bad', !!problem);
   f.querySelector('[data-pf="field-save"]').disabled = !!problem;
   return !problem;
@@ -7852,7 +7917,7 @@ function checkProfileField(){
 function saveProfileField(){
   const f = document.querySelector('#story-profile .pf-field'); if(!f || !checkProfileField()) return;
   const k = f.getAttribute('data-field'), v = profileFieldBox().value.trim();
-  saveProfileData(k === 'name' ? { name: v } : k === 'username' ? { username: v } : { bio: v.replace(/\n{3,}/g, '\n\n') });
+  saveProfileData(k === 'name' ? { name: v } : k === 'username' ? { username: v } : k === 'about' ? { about: v.replace(/\n{3,}/g, '\n\n') } : { bio: v.replace(/\n{3,}/g, '\n\n') });
   closeProfileField();
 }
 function closeProfileField(){
@@ -7899,6 +7964,8 @@ window.storyProfileOnly = function(){
       <div class="pf-ed-row" data-pf="ed-name"><span>Name</span><span class="pf-ed-val">${escText(p.name)}</span></div>
       <div class="pf-ed-row" data-pf="ed-username"><span>Username</span><span class="pf-ed-val">@${escText(p.username)}</span></div>
       <div class="pf-ed-row" data-pf="ed-bio"><span>Bio</span><span class="pf-ed-val">${p.bio ? escText(p.bio) : 'Nothing here yet.'}</span></div>
+      <div class="pf-ed-row" data-pf="ed-about"><span>About</span><span class="pf-ed-val">${escText(p.about)}</span></div>
+      <div class="pf-ed-note">About shows in Updates, to people who don’t follow you yet: who you are or what you do.</div>
     </div>
     <div class="pf-scroll pf-field" hidden>
       <div class="pf-ed-head"><button class="pf-ed-back" data-pf="field-back" aria-label="Back">‹</button><div class="pf-ed-title">Name</div><button class="pf-field-save" data-pf="field-save">Save</button></div>
@@ -7942,6 +8009,27 @@ window.storyProfileOnly = function(){
       <div class="pf-calls-list"></div>
       <div class="pf-msgs-empty pf-calls-empty"><div class="pf-msgs-empty-t">No call history yet</div></div>
     </div>
+    <div class="pf-scroll pf-updates" hidden>
+      <div class="pf-msgs-top">
+        <label class="pf-msgs-search"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="search" placeholder="Search anyone on Lockedintool" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="search"></label>
+      </div>
+      <div class="up-status-row"></div>
+      <div class="up-h">Profiles</div>
+      <div class="up-list"></div>
+      <div class="pf-msgs-empty up-empty" hidden><div class="pf-msgs-empty-t"></div></div>
+    </div>
+    <div class="pf-scroll pf-person" hidden>
+      <div class="pf-ed-head"><button class="pf-ed-back" data-pf="up-person-back" aria-label="Back">‹</button><div class="pf-ed-title"></div></div>
+      <div class="up-p-body"></div>
+    </div>
+    <div class="up-viewer" hidden>
+      <div class="up-v-media"><img alt="" hidden><video playsinline hidden></video></div>
+      <button class="up-v-tap up-v-prev" data-pf="upv-prev" aria-label="Back"></button>
+      <button class="up-v-tap up-v-next" data-pf="upv-next" aria-label="Next"></button>
+      <div class="up-v-top"><div class="up-v-bars"></div><div class="up-v-head"><div class="up-v-who"></div>
+        <button class="up-v-btn" data-pf="upv-delete" aria-label="Delete" hidden><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>
+        <button class="up-v-btn" data-pf="upv-close" aria-label="Close">×</button></div></div>
+    </div>
     <div class="pf-scroll pf-chat" hidden>
       <div class="pf-chat-head">
         <button class="pf-ed-back" data-pf="chat-back" aria-label="Back">‹</button>
@@ -7983,6 +8071,10 @@ window.storyProfileOnly = function(){
           <button class="cr-mode" data-pf="cr-mode" data-m="profile">Profile</button>
           <button class="cr-mode" data-pf="cr-mode" data-m="highlight">Highlight</button>
         </div>
+      </div>
+      <div class="cr-pick" hidden>
+        <button data-pf="cr-as" data-k="status">Status</button>
+        <button data-pf="cr-as" data-k="post">Post</button>
       </div>
       <div class="cr-sheet" hidden>
         <div class="cr-sheet-card">
@@ -8048,6 +8140,29 @@ window.storyProfileOnly = function(){
       if(access === 'none') window.StoryNative.requestPhotoAccess(); else openPhotoGrid(access);
     }
     else if(k === 'cr-post') crPost();
+    else if(k === 'cr-as') crPostAs(b.getAttribute('data-k'));
+    else if(k === 'up-st-me'){
+      const mine = ((UP.data || {}).statuses || []).find(s=>s.user.id === (msgAccount() || {}).id);
+      if(mine) upView(mine.user, mine.items, 0, true);
+      else showToast('Add a status: + then Profile, then Status');
+    }
+    else if(k === 'up-st-open'){ const s = ((UP.data || {}).statuses || []).find(x=>x.user.id === b.getAttribute('data-id')); if(s){ const seen = upSeen(); const first = s.items.findIndex(i=>!seen[i.id]); upView(s.user, s.items, first < 0 ? 0 : first, true); } }
+    else if(k === 'up-person') upOpenPerson(b.getAttribute('data-id'));
+    else if(k === 'up-follow'){ e.stopPropagation(); upFollow(b.getAttribute('data-id'), b); }
+    else if(k === 'up-person-back') upClosePerson();
+    else if(k === 'up-p-status'){ const p = UP.person; if(p && (p.statuses || []).length) upView(p, p.statuses, 0, true); }
+    else if(k === 'up-post'){ const p = UP.person; if(p) upView(p, p.postList || [], +b.getAttribute('data-i'), false); }
+    else if(k === 'up-message'){
+      const p = UP.person; if(!p) return;
+      setMsgPeer(p.id, { pub:p.pub, name:p.name, username:p.username, canCall:p.canCall, canMsg:p.canMsg });
+      const c = chatFor(p.id, { name:p.name, username:p.username }); c.canCall = p.canCall; saveMsgChats();
+      el.querySelector('.pf-person').hidden = true; openChat(p.id);
+    }
+    else if(k === 'upv-next') upNext();
+    else if(k === 'upv-prev') upPrev();
+    else if(k === 'upv-close') upCloseView();
+    else if(k === 'upv-delete') upDeleteShown();
+    else if(k === 'ed-about') openProfileField('about');
     else if(k === 'cr-hl-pick') crAddToHighlight(b.getAttribute('data-id'));
     else if(k === 'cr-hl-new'){
       const inp = el.querySelector('.cr-sheet-new input'), name = inp.value.trim();
@@ -8119,6 +8234,11 @@ window.storyProfileOnly = function(){
   ['pointerup', 'pointercancel', 'pointerleave'].forEach(t=>el.querySelector('.pf-msgs-list').addEventListener(t, ()=>clearTimeout(holdT)));
   el.querySelector('.pf-msgs-list').addEventListener('click', e=>{ if(held){ e.stopPropagation(); held = false; } }, true);
   el.querySelector('.pf-msgs').addEventListener('click', e=>{ if(msgView.menuFor && !e.target.closest('.pf-msgs-menu') && !e.target.closest('.msg-row')){ msgView.menuFor = null; renderMsgList(); } });
+  const upSearchBox = el.querySelector('.pf-updates .pf-msgs-search input');
+  upSearchBox.addEventListener('input', ()=>upSearch(upSearchBox.value));
+  upSearchBox.addEventListener('pointerdown', profileTypingOn);
+  upSearchBox.addEventListener('focus', profileTypingOn);
+  upSearchBox.addEventListener('blur', ()=>{ if(NATIVE && window.StoryNative.setTyping) try{ window.StoryNative.setTyping(false); }catch(err){} });
   const callSearch = el.querySelector('.pf-calls .pf-msgs-search input');
   callSearch.addEventListener('input', renderCalls);
   callSearch.addEventListener('pointerdown', profileTypingOn);
@@ -8157,6 +8277,7 @@ function profilePhoto(){
 }
 window.storyProfilePhotoChanged = function(){
   pfPhotoCache = null;
+  setTimeout(()=>{ if(typeof upSyncPhoto === 'function') upSyncPhoto(); }, 0);
   const el = document.getElementById('story-profile'); if(!el || PF_GAP_WINDOW) return;
   const src = profilePhoto();
   el.querySelectorAll('.pf-avatar').forEach(a=>{ a.innerHTML = src ? '<img alt="" src="' + src + '">' : PF_PHOTO_PLACEHOLDER; a.classList.toggle('has-photo', !!src); });
@@ -8168,6 +8289,10 @@ window.storyProfileReset = function(){
   const ae = document.activeElement; if(ae && ae.closest && ae.closest('.pf-field')) ae.blur();
   el.querySelector('.pf-editor').hidden = true; el.querySelector('.pf-viewer').hidden = true; el.querySelector('.pf-photos').hidden = true; el.querySelector('.pf-field').hidden = true; el.querySelector('.pf-msgs').hidden = true;
   closeChat(true); el.querySelector('.pf-calls').hidden = true; el.querySelector('.pf-calls .pf-msgs-search input').value = '';
+  if(UP.view) upCloseView();
+  el.querySelector('.pf-updates').hidden = true; el.querySelector('.pf-person').hidden = true; UP.person = null;
+  el.querySelector('.pf-updates .pf-msgs-search input').value = ''; UP.q = ''; UP.found = null;
+  el.querySelector('.cr-pick').hidden = true;
   const ms = el.querySelector('.pf-msgs .pf-msgs-search input'); if(ms){ ms.value = ''; } msgView.q = ''; msgView.menuFor = null;
   if(crRecording && NATIVE && window.StoryNative.createVideo) window.StoryNative.createVideo(false);
   if(crHas && NATIVE && window.StoryNative.createDiscard) window.StoryNative.createDiscard();
@@ -8181,6 +8306,7 @@ window.storyS3Page = function(which){
   window.storyProfileReset();
   if(which === 'create'){ el.querySelector('.pf-home').hidden = true; crShow(); return; }
   if(which === 'calls'){ el.querySelector('.pf-home').hidden = true; el.querySelector('.pf-calls').hidden = false; el.querySelector('.pf-calls').scrollTop = 0; renderCalls(); return; }
+  if(which === 'updates'){ el.querySelector('.pf-home').hidden = true; el.querySelector('.pf-updates').hidden = false; el.querySelector('.pf-updates').scrollTop = 0; upRender(); upLoad(); upFlush(); return; }
   const msgs = which === 'messages';
   el.querySelector('.pf-home').hidden = msgs;
   el.querySelector('.pf-msgs').hidden = !msgs;
@@ -8277,11 +8403,19 @@ function crPost(){
   if(!crHas){ showToast('Take a picture or video first'); return; }
   if(!crMode){ showToast('Choose Video, Profile or Highlight to post'); return; }
   if(crMode === 'highlight'){ crOpenHighlights(); return; }
+  // Profile (owner): two choices pop up beside ✓ - Status (24 hours) or Post (stays on your profile).
+  if(crMode === 'profile'){ const pk = document.querySelector('#story-profile .cr-pick'); if(pk) pk.hidden = !pk.hidden; return; }
+  crPostAs('post');
+}
+function crPostAs(as){
+  const pk = document.querySelector('#story-profile .cr-pick'); if(pk) pk.hidden = true;
   const kept = window.StoryNative.createKeep(); if(!kept){ showToast('That didn’t work — try again'); return; }
   const [id, kind] = kept.split(':');
+  if(as === 'status'){ upAddToServer(id, kind, 'status'); crClear(); showToast('Sharing your status…'); return; }
   const posts = profilePosts(); posts.unshift({ id, kind, at: Date.now() });
   try{ localStorage.setItem('story-posts', JSON.stringify(posts)); }catch(e){}
   bumpProfileStat('posts', 1); window.storyProfileRefresh();
+  upAddToServer(id, kind, 'post');
   crClear(); showToast('Posted to your profile');
 }
 function crOpenHighlights(){
@@ -8316,6 +8450,241 @@ function renderHighlights(){
   }).join('');
 }
 window.addEventListener('storage', e=>{ if(e.key === 'story-highlights') renderHighlights(); });
+// ---- Updates (owner; Station 3's Updates button, the same window as Profile / Messages): a search bar for anyone on
+//      Lockedintool, the statuses of the people you follow at the top (24 hours; who sees them = each person's privacy
+//      setting), and other profiles at the bottom with their About. Follow anyone instantly. Everything comes from
+//      Lockedintool's server (msg-worker.js /v1/updates|profile|follow|uposts, pictures / videos at /v1/media/<id>).
+const UP = { data:null, loading:false, q:'', found:null, findT:0, person:null, view:null, viewT:0 };
+const UP_SEEN_KEY = 'story-status-seen';
+function upSeen(){ try{ return JSON.parse(localStorage.getItem(UP_SEEN_KEY) || '{}') || {}; }catch(e){ return {}; } }
+function upMarkSeen(id){ const s = upSeen(); s[id] = Date.now(); const keep = {}; for(const k in s) if(Date.now() - s[k] < 2 * 86400000) keep[k] = s[k]; try{ localStorage.setItem(UP_SEEN_KEY, JSON.stringify(keep)); }catch(e){} }
+function upPic(u, cls){ return '<span class="msg-pic' + (cls ? ' ' + cls : '') + '">' + (u && u.photo ? '<img alt="" loading="lazy" src="' + escText(u.photo) + '">' : PF_PHOTO_PLACEHOLDER) + '</span>'; }
+function upName(u){ return u.name || (u.username ? '@' + u.username : 'Lockedintool user'); }
+function upAgo(at){ const m = Math.max(0, Math.round((Date.now() - at) / 60000)); return m < 1 ? 'Just now' : m < 60 ? m + 'm' : Math.floor(m / 60) + 'h'; }
+function upEl(){ const el = document.getElementById('story-profile'); return el && !PF_GAP_WINDOW ? el : null; }
+async function upLoad(){
+  const el = upEl(); if(!el || UP.loading) return;
+  if(!msgAccount()){ msgEnsureAccount(); upRender(); return; }
+  UP.loading = true; upRender();
+  try{
+    UP.data = await msgApi('/v1/updates');
+    const me = UP.data.me; if(me) upSaveStats(me);
+  }catch(e){ if(!UP.data) UP.data = { error:true }; }
+  UP.loading = false; upRender();
+}
+// Your Following / Followers on Profile are the real numbers from the server.
+function upSaveStats(me){
+  const st = profileStats();
+  if(st.following === me.following && st.followers === me.followers) return;
+  try{ localStorage.setItem(PF_STATS_KEY, JSON.stringify({ following: me.following, followers: me.followers, posts: st.posts, v: 2 })); }catch(e){}
+  window.storyProfileRefresh();
+}
+function upStatusRowHTML(){
+  const d = UP.data || {}, seen = upSeen(), mine = (d.statuses || []).find(s=>s.user.id === (msgAccount() || {}).id);
+  const me = Object.assign({ photo: (d.me || {}).photo || '' }, d.me || {});
+  let h = '<button class="up-st" data-pf="up-st-me">' + upPic(me, mine ? 'up-ring' + (mine.items.every(i=>seen[i.id]) ? ' seen' : '') : '') +
+    (mine ? '' : '<span class="up-st-add">+</span>') + '<span class="up-st-n">Your status</span></button>';
+  for(const s of (d.statuses || [])){
+    if(mine && s === mine) continue;
+    const all = s.items.every(i=>seen[i.id]);
+    h += '<button class="up-st" data-pf="up-st-open" data-id="' + escText(s.user.id) + '">' + upPic(s.user, 'up-ring' + (all ? ' seen' : '')) + '<span class="up-st-n">' + escText(upName(s.user)) + '</span></button>';
+  }
+  return h;
+}
+function upPersonRowHTML(u){
+  const me = u.id === (msgAccount() || {}).id;
+  return '<div class="msg-row up-row" data-pf="up-person" data-id="' + escText(u.id) + '">' + upPic(u) +
+    '<span class="msg-mid"><span class="msg-who">' + escText(upName(u)) + '</span>' +
+    (u.name && u.username ? '<span class="msg-last">@' + escText(u.username) + '</span>' : '') +
+    (u.about ? '<span class="up-about">' + escText(u.about) + '</span>' : '') + '</span>' +
+    (me ? '' : '<button class="up-follow' + (u.isFollowing ? ' on' : '') + '" data-pf="up-follow" data-id="' + escText(u.id) + '">' + (u.isFollowing ? 'Following' : 'Follow') + '</button>') + '</div>';
+}
+function upRender(){
+  const el = upEl(); if(!el) return;
+  const box = el.querySelector('.pf-updates'); if(!box || box.hidden) return;
+  const d = UP.data;
+  box.querySelector('.up-status-row').innerHTML = upStatusRowHTML();
+  const searching = UP.q.trim().replace(/^@/, '').length >= 2;
+  const list = searching ? (UP.found || []) : ((d && d.profiles) || []);
+  box.querySelector('.up-h').textContent = searching ? 'Results' : 'Profiles';
+  box.querySelector('.up-list').innerHTML = list.map(upPersonRowHTML).join('');
+  const empty = box.querySelector('.up-empty');
+  empty.hidden = list.length > 0;
+  empty.querySelector('.pf-msgs-empty-t').textContent = !msgAccount() ? 'Connecting to Lockedintool…'
+    : searching ? (UP.found === null ? 'Searching…' : 'No one on Lockedintool by that name yet.')
+    : UP.loading && !d ? 'Loading…' : d && d.error ? 'No connection right now' : 'No other profiles yet.';
+}
+function upSearch(q){
+  UP.q = q; clearTimeout(UP.findT);
+  const t = q.trim();
+  if(t.replace(/^@/, '').length < 2){ UP.found = null; upRender(); return; }
+  UP.found = null; upRender();
+  UP.findT = setTimeout(async ()=>{
+    let found = [];
+    try{ found = (await msgApi('/v1/find?q=' + encodeURIComponent(t))).people || []; }catch(e){}
+    if(UP.q.trim() !== t) return;
+    // Follow buttons need to know who you already follow.
+    const fol = new Set(((UP.data && UP.data.profiles) || []).filter(u=>u.isFollowing).map(u=>u.id));
+    UP.found = found.map(u=>Object.assign({ isFollowing: fol.has(u.id) }, u));
+    upRender();
+  }, 300);
+}
+async function upFollow(id, btn){
+  const all = [].concat((UP.data && UP.data.profiles) || [], UP.found || [], UP.person ? [UP.person] : []);
+  const u = all.find(x=>x.id === id); const on = !(u && u.isFollowing);
+  for(const x of all) if(x.id === id) x.isFollowing = on;   // instant (owner: follow anyone instantly)
+  upRender(); if(UP.person && UP.person.id === id) upRenderPerson();
+  try{
+    const r = await msgApi('/v1/follow', { id, on });
+    if(UP.person && UP.person.id === id){ Object.assign(UP.person, { followers:r.followers, isFollowing:r.isFollowing }); upRenderPerson(); }
+    upLoad();
+  }catch(e){ for(const x of all) if(x.id === id) x.isFollowing = !on; upRender(); if(UP.person) upRenderPerson(); showToast('No connection right now'); }
+}
+// Someone's profile (tap a row): picture, name, @username, their numbers, About (for people who don't follow them
+// yet - owner), bio, Follow + Message, and their posts.
+async function upOpenPerson(id){
+  const el = upEl(); if(!el) return;
+  const pre = [].concat((UP.data && UP.data.profiles) || [], UP.found || []).find(x=>x.id === id);
+  UP.person = Object.assign({ id, loading:true }, pre || {});
+  el.querySelector('.pf-updates').hidden = true; const pv = el.querySelector('.pf-person'); pv.hidden = false; pv.scrollTop = 0;
+  upRenderPerson();
+  try{ const r = await msgApi('/v1/profile?id=' + encodeURIComponent(id)); if(UP.person && UP.person.id === id){ UP.person = r; upRenderPerson(); } }
+  catch(e){ if(UP.person && UP.person.id === id){ UP.person.loading = false; UP.person.error = true; upRenderPerson(); } }
+}
+function upClosePerson(){
+  const el = upEl(); if(!el) return;
+  UP.person = null; el.querySelector('.pf-person').hidden = true; el.querySelector('.pf-updates').hidden = false; upRender();
+}
+function upRenderPerson(){
+  const el = upEl(); if(!el) return;
+  const p = UP.person, pv = el.querySelector('.pf-person'); if(!p || pv.hidden) return;
+  const meId = (msgAccount() || {}).id, isMe = p.id === meId, seen = upSeen();
+  const st = p.statuses || [];
+  pv.querySelector('.pf-ed-title').textContent = p.username ? '@' + p.username : upName(p);
+  const posts = p.postList || [];
+  pv.querySelector('.up-p-body').innerHTML =
+    '<div class="up-p-head"><button class="up-p-pic" data-pf="up-p-status"' + (st.length ? '' : ' disabled') + '>' + upPic(p, st.length ? 'up-ring' + (st.every(i=>seen[i.id]) ? ' seen' : '') : '') + '</button>' +
+    '<div class="pf-names"><div class="pf-name">' + escText(upName(p)) + '</div>' + (p.name && p.username ? '<div class="pf-user">@' + escText(p.username) + '</div>' : '') + '</div></div>' +
+    '<div class="pf-stats">' + [['following', 'Following'], ['followers', 'Followers'], ['posts', 'Posts']].map(([k, l])=>'<div class="pf-stat"><div class="pf-stat-n">' + (p[k] === undefined ? '—' : fmtCount(p[k])) + '</div><div class="pf-stat-l">' + l + '</div></div>').join('') + '</div>' +
+    (p.about && !p.isFollowing && !isMe ? '<div class="up-p-about">' + escText(p.about) + '</div>' : '') +
+    (p.bio ? '<div class="up-p-bio">' + escText(p.bio) + '</div>' : '') +
+    (isMe ? '' : '<div class="up-p-btns"><button class="up-follow up-follow-lg' + (p.isFollowing ? ' on' : '') + '" data-pf="up-follow" data-id="' + escText(p.id) + '">' + (p.isFollowing ? 'Following' : 'Follow') + '</button>' +
+      (p.canMsg === false ? '' : '<button class="up-follow up-follow-lg" data-pf="up-message">Message</button>') + '</div>') +
+    (p.loading ? '<div class="up-p-note">Loading…</div>' : p.error ? '<div class="up-p-note">No connection right now</div>'
+      : posts.length ? '<div class="up-grid">' + posts.map((x, i)=>'<button class="up-cell" data-pf="up-post" data-i="' + i + '"><img alt="" loading="lazy" src="' + escText(x.type === 'video' ? (x.thumb || '') : x.url) + '">' + (x.type === 'video' ? '<span class="up-cell-v">▶</span>' : '') + '</button>').join('') + '</div>'
+      : '<div class="up-p-note">No posts yet</div>');
+}
+// Viewing statuses / posts: full screen in this window; a status shows 5 s (a video until it ends) then the next one.
+function upView(user, items, start, isStatus){
+  const el = upEl(); if(!el || !items.length) return;
+  UP.view = { user, items, i: Math.max(0, start || 0), status: !!isStatus };
+  el.querySelector('.up-viewer').hidden = false;
+  upShowItem();
+}
+function upShowItem(){
+  const el = upEl(); const v = UP.view; if(!el || !v) return;
+  clearTimeout(UP.viewT);
+  const it = v.items[v.i], box = el.querySelector('.up-viewer');
+  const meId = (msgAccount() || {}).id;
+  if(v.status) upMarkSeen(it.id);
+  box.querySelector('.up-v-bars').innerHTML = v.status ? v.items.map((x, i)=>'<span class="up-v-bar' + (i < v.i ? ' done' : '') + '"><i' + (i === v.i ? ' class="run"' : '') + '></i></span>').join('') : '';
+  box.querySelector('.up-v-who').innerHTML = upPic(v.user) + '<span class="up-v-name">' + escText(upName(v.user)) + '</span><span class="up-v-time">' + upAgo(it.at) + '</span>';
+  box.querySelector('[data-pf="upv-delete"]').hidden = v.user.id !== meId;
+  const img = box.querySelector('img'), vid = box.querySelector('video');
+  try{ vid.pause(); }catch(e){}
+  if(it.type === 'video'){
+    img.hidden = true; img.removeAttribute('src'); vid.hidden = false; vid.src = it.url; vid.loop = !v.status;
+    vid.onended = v.status ? upNext : null; vid.play().catch(()=>{});
+  } else {
+    vid.hidden = true; vid.removeAttribute('src'); try{ vid.load(); }catch(e){} img.hidden = false; img.src = it.url;
+    if(v.status){ const bar = box.querySelector('.up-v-bar i.run'); if(bar){ bar.style.transition = 'none'; bar.style.width = '0'; void bar.offsetWidth; bar.style.transition = 'width 5s linear'; bar.style.width = '100%'; } UP.viewT = setTimeout(upNext, 5000); }
+  }
+}
+function upNext(){ const v = UP.view; if(!v) return; if(v.i < v.items.length - 1){ v.i++; upShowItem(); } else if(v.status) upCloseView(); }
+function upPrev(){ const v = UP.view; if(!v) return; if(v.i > 0){ v.i--; upShowItem(); } else upShowItem(); }
+function upCloseView(){
+  const el = upEl(); if(!el) return;
+  clearTimeout(UP.viewT); UP.view = null;
+  const box = el.querySelector('.up-viewer'), vid = box.querySelector('video');
+  try{ vid.pause(); }catch(e){} vid.removeAttribute('src'); try{ vid.load(); }catch(e){}
+  box.querySelector('img').removeAttribute('src');
+  box.hidden = true; upRender(); upRenderPerson();
+}
+async function upDeleteShown(){
+  const v = UP.view; if(!v) return;
+  const it = v.items[v.i];
+  try{ await msgApi('/v1/uposts/delete', { id: it.id }); }catch(e){ showToast('No connection right now'); return; }
+  v.items.splice(v.i, 1);
+  showToast(v.status ? 'Status deleted' : 'Post deleted');
+  if(!v.items.length) upCloseView(); else { v.i = Math.min(v.i, v.items.length - 1); upShowItem(); }
+  upLoad();
+}
+// ---- Putting your pictures / videos on Lockedintool's server (posts, statuses, your profile picture). ----
+const UP_QUEUE = 'story-upost-queue';
+async function upBytes(url, max){
+  const r = await fetch(url); if(!r.ok) throw new Error('file');
+  const blob = await r.blob();
+  if(!max) return { bytes: new Uint8Array(await blob.arrayBuffer()), mime: 'video/mp4' };
+  // Pictures are made smaller first (max side `max` px, JPEG) so they upload fast and look sharp.
+  const bmp = await createImageBitmap(blob);
+  const k = Math.min(1, max / Math.max(bmp.width, bmp.height));
+  const c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+  c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+  const out = await new Promise(res=>c.toBlob(res, 'image/jpeg', 0.86));
+  return { bytes: new Uint8Array(await out.arrayBuffer()), mime: 'image/jpeg' };
+}
+async function upPutMedia(f){
+  const a = msgAccount(); if(!a) throw new Error('signin');
+  if(f.bytes.length > 40 * 1048576) throw Object.assign(new Error('big'), { code:'big' });
+  const id = Array.from(crypto.getRandomValues(new Uint8Array(18)), b=>'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'[b % 62]).join('');
+  const CH = 1048576, n = Math.max(1, Math.ceil(f.bytes.length / CH));
+  for(let i = 0; i < n; i++){
+    const r = await fetch(MSG_API + '/v1/media/put?id=' + id + '&i=' + i + '&n=' + n + '&mime=' + encodeURIComponent(f.mime), { method:'POST', headers:{ authorization:'Bearer ' + a.token, 'content-type':'application/octet-stream' }, body: f.bytes.subarray(i * CH, (i + 1) * CH) });
+    if(!r.ok) throw new Error('upload');
+  }
+  return id;
+}
+function upQueue(){ try{ return JSON.parse(localStorage.getItem(UP_QUEUE) || '[]') || []; }catch(e){ return []; } }
+function upQueueSave(q){ try{ localStorage.setItem(UP_QUEUE, JSON.stringify(q)); }catch(e){} }
+// Create's ✓: a post or a status goes into the queue and up to the server (kept trying until it's there).
+function upAddToServer(localId, type, kind){ const q = upQueue(); q.push({ localId, type, kind, at: Date.now() }); upQueueSave(q); upFlush(); }
+let upFlushing = false;
+async function upFlush(){
+  if(upFlushing || !MSG_ENGINE || !msgAccount()) return;
+  upFlushing = true;
+  try{
+    let q = upQueue();
+    while(q.length){
+      const job = q[0];
+      if(job.kind === 'status' && Date.now() - job.at > 86400000){ q.shift(); upQueueSave(q); continue; }   // a status is only for 24 hours
+      try{
+        const media = await upPutMedia(await upBytes(PF_PHOTO_BASE + 'post/' + job.localId, job.type === 'video' ? 0 : 1440));
+        let thumb = '';
+        if(job.type === 'video'){ try{ thumb = await upPutMedia(await upBytes(PF_PHOTO_BASE + 'postthumb/' + job.localId, 720)); }catch(e){} }
+        await msgApi('/v1/uposts/create', { kind: job.kind, type: job.type, media, thumb });
+        if(job.kind === 'status') showToast('Your status is up');
+      }catch(e){
+        if(e.code === 'big' || e.message === 'file'){ showToast(e.code === 'big' ? 'That video is too big to share (40 MB max)' : 'That file is gone'); }
+        else break;   // no connection: try again later
+      }
+      q = upQueue(); q.shift(); upQueueSave(q);
+    }
+  } finally { upFlushing = false; }
+  upLoad();
+}
+// Your profile picture, name, @username, bio and About on the server, so people see them in Updates.
+async function upSyncPhoto(){
+  if(!MSG_ENGINE || !msgAccount()) return;
+  const src = profilePhoto();
+  let sent = ''; try{ sent = localStorage.getItem('story-photo-up') || ''; }catch(e){}
+  if(src === sent) return;
+  try{
+    const photo = src ? await upPutMedia(await upBytes(src, 480)) : '';
+    await msgApi('/v1/me', { photo });
+    try{ localStorage.setItem('story-photo-up', src); }catch(e){}
+  }catch(e){}
+}
+
 // ---- Messages list (STORY's own end-to-end encrypted messages) ----
 // Chats live on the phone (localStorage 'story-messages', already unlocked); the message server fills it.
 // Each chat: { id, kind:'chat'|'group', groupType:'public'|'private', name, username, photo, archived, request,
@@ -8591,7 +8960,7 @@ function msgConnect(){
   clearTimeout(msgWsTimer);
   let ws; try{ ws = new WebSocket(MSG_API.replace(/^http/, 'ws') + '/v1/ws?token=' + encodeURIComponent(a.token)); }catch(e){ return msgRetry(); }
   msgWs = ws;
-  ws.onopen = ()=>{ msgWsOpen = true; msgWsTry = 0; clearInterval(msgPing); msgPing = setInterval(()=>{ try{ ws.send('{"t":"ping"}'); }catch(e){} }, 25000); msgFlush(); msgSyncProfile(); msgSyncGroups(); };
+  ws.onopen = ()=>{ msgWsOpen = true; msgWsTry = 0; clearInterval(msgPing); msgPing = setInterval(()=>{ try{ ws.send('{"t":"ping"}'); }catch(e){} }, 25000); msgFlush(); msgSyncProfile(); msgSyncGroups(); upFlush(); };
   ws.onmessage = e=>{ let m; try{ m = JSON.parse(e.data); }catch(err){ return; } msgOnServer(m).catch(()=>{}); };
   ws.onclose = ()=>{ msgWsOpen = false; clearInterval(msgPing); if(msgWs === ws){ msgWs = null; msgRetry(); } };
   ws.onerror = ()=>{ try{ ws.close(); }catch(e){} };
@@ -8794,9 +9163,10 @@ window.addEventListener('storage', e=>{ if(e.key === MSG_OUTBOX) msgFlush(); if(
 let msgProfSent = '';
 async function msgSyncProfile(){
   if(!MSG_ENGINE || !msgAccount()) return;
-  const p = profileData(), key = (p.name || '') + '|' + (p.username || '');
+  upSyncPhoto();
+  const p = profileData(), key = [p.name, p.username, p.bio, p.about].map(x=>x || '').join('|');
   if(key === msgProfSent) return;
-  try{ await msgApi('/v1/me', { name: p.name || '', username: (p.username || '').toLowerCase(), privacy: storyPrivacy() }); msgProfSent = key; }
+  try{ await msgApi('/v1/me', { name: p.name || '', username: (p.username || '').toLowerCase(), bio: p.bio || '', about: p.about || '', privacy: storyPrivacy() }); msgProfSent = key; }
   catch(e){ if(e.code === 'username-taken'){ msgProfSent = key; showToast('@' + p.username + ' is taken on Lockedintool - pick another in Edit profile'); } }
 }
 // ---- Your STORY account (owner: no phone number in Messages): made by this phone the first time - only the public
@@ -11015,6 +11385,9 @@ function station3BarHTML(){
       </button>` : ''}
       <button class="station3-btn" data-action="station3-call-history" title="Call history">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path transform="translate(0.4 6.6) scale(0.7)" stroke-width="2.8" d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/><circle cx="18" cy="6.2" r="4.9" stroke-width="1.8"/><path d="M18 3.7v2.5l1.7 1.1" stroke-width="1.6"/></svg>
+      </button>
+      <button class="station3-btn" data-action="station3-updates" title="Updates">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.2"/><circle cx="12" cy="12" r="9.5" stroke-dasharray="4.6 2.9"/></svg>
       </button>
       <button class="station3-btn-plus" data-action="station3-create-post" title="Create &amp; post">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -13733,6 +14106,7 @@ function attachHandlers(){
           else showToast('Create new contact — coming soon');
           break;
         case 'station3-create-post': if(NATIVE && window.StoryNative.toggleCreate){ window.StoryNative.toggleCreate(); } else { showToast('Create & post — coming soon'); } break;
+        case 'station3-updates': if(NATIVE && window.StoryNative.toggleUpdates){ window.StoryNative.toggleUpdates(); } else { showToast('Updates — coming soon'); } break;
         case 'station3-call-history': if(NATIVE && window.StoryNative.toggleCalls){ window.StoryNative.toggleCalls(); } else { showToast('Call history — coming soon'); } break;
         case 'station3-messages': if(NATIVE && window.StoryNative.toggleMessages){ window.StoryNative.toggleMessages(); } else { showToast('Messages — coming soon'); } break;
         case 'station3-profile': if(NATIVE && window.StoryNative.toggleProfile){ window.StoryNative.toggleProfile(); } else { showToast('Profile — coming soon'); } break;
@@ -14270,6 +14644,7 @@ function attachHandlers(){
         case 'pay-recv-edit': { const m = state.pay.info && state.pay.info.bank; Object.assign(state.pay.recv, { editing:true, name: m ? m.name : '', bank: m ? m.bank : '', acct:'', msg:'' }); break; }
         case 'pay-recv-cancel': state.pay.recv.editing = false; state.pay.recv.msg = ''; break;
         case 'pay-recv-remove': msgApi('/v1/pay/bank', { remove:true }).then(()=>{ if(state.pay.info) state.pay.info.bank = null; showToast('Removed'); payShow(); }).catch(()=>showToast('Couldn\u2019t remove - try again')); break;
+        case 'privacy-status': { const p = storyPrivacy(); p.status = el.getAttribute('data-value'); setStoryPrivacy(p); break; }
         case 'privacy-calls': { const p = storyPrivacy(); p.calls = el.getAttribute('data-value'); setStoryPrivacy(p); break; }
         case 'privacy-call-person': { const p = storyPrivacy(), id = el.getAttribute('data-value'); const l = p.callPeople || []; p.callPeople = l.includes(id) ? l.filter(x=>x !== id) : l.concat(id); setStoryPrivacy(p); break; }
         case 'cal-open': state.calOpen = true; state.calSel = null; state.calView = null; break;

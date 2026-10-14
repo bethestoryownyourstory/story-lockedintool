@@ -1364,6 +1364,7 @@ class OverlayService : Service(), StoryBridge.Host {
     override fun toggleProfile() = toggleS3Page("profile")
     override fun toggleMessages() = toggleS3Page("messages")
     override fun toggleCreate() = toggleS3Page("create")
+    override fun toggleUpdates() = toggleS3Page("updates")
     /** Station 3's call history button: Call history in the same window. The first time, ask once to read the
      *  phone's call log (for when each STORY call ended and how long it lasted) and contacts (names). */
     override fun toggleCalls() {

@@ -60,6 +60,15 @@ export class Hub {
     this.sql.exec(`CREATE INDEX IF NOT EXISTS payments_to ON payments(to_uid, created)`);
     try { this.sql.exec(`ALTER TABLE payments ADD COLUMN kind TEXT`); } catch (e) {}
     this.sql.exec(`CREATE TABLE IF NOT EXISTS subs (uid TEXT PRIMARY KEY, plan TEXT, until INTEGER, updated INTEGER)`);
+    // Updates (owner): following, profile posts and 24-hour statuses, and the pictures / videos they show.
+    try { this.sql.exec(`ALTER TABLE users ADD COLUMN about TEXT`); } catch (e) {}
+    try { this.sql.exec(`ALTER TABLE users ADD COLUMN bio TEXT`); } catch (e) {}
+    try { this.sql.exec(`ALTER TABLE users ADD COLUMN photo TEXT`); } catch (e) {}
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS follows (uid TEXT, fid TEXT, at INTEGER, PRIMARY KEY (uid, fid))`);
+    this.sql.exec(`CREATE INDEX IF NOT EXISTS follows_fid ON follows(fid)`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS media (id TEXT, i INTEGER, n INTEGER, uid TEXT, mime TEXT, data BLOB, at INTEGER, PRIMARY KEY (id, i))`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS uposts (id TEXT PRIMARY KEY, uid TEXT, kind TEXT, type TEXT, media TEXT, thumb TEXT, at INTEGER)`);
+    this.sql.exec(`CREATE INDEX IF NOT EXISTS uposts_uid ON uposts(uid, kind, at)`);
     // STORY's own Stories feed (Community > Stories): one shared public group everyone posts their stories to.
     this.sql.exec(`INSERT OR IGNORE INTO groups (id, name, about, type, image, category, country, creator, calljoin, created) VALUES ('g-stories', 'Stories', 'Real people sharing their life and success stories, and the advice that got them there.', 'stories', '', 'Life', 'Global', 'story', 'open', 0)`);
   }
@@ -67,15 +76,23 @@ export class Hub {
   one(q, ...a) { const r = this.sql.exec(q, ...a).toArray(); return r[0] || null; }
   phoneHash(p) { return sha('story-phone-v1|' + (this.env.PHONE_SALT || '') + '|' + p); }
   async userByToken(t) { return t ? this.one('SELECT * FROM users WHERE token = ?', await sha('tok|' + t)) : null; }
-  privacy(u) { try { return Object.assign({ messages: 'everyone', calls: 'everyone', callPeople: [] }, JSON.parse(u.privacy || '{}')); } catch (e) { return { messages: 'everyone', calls: 'everyone', callPeople: [] }; } }
+  privacy(u) { try { return Object.assign({ messages: 'everyone', calls: 'everyone', callPeople: [], status: 'followers' }, JSON.parse(u.privacy || '{}')); } catch (e) { return { messages: 'everyone', calls: 'everyone', callPeople: [], status: 'followers' }; } }
   canCall(from, to) { const p = this.privacy(to); return p.calls === 'everyone' || (p.calls === 'people' && (p.callPeople || []).includes(from.id)); }
   canMsg(from, to) { const p = this.privacy(to); return p.messages !== 'none' && p.messages !== 'nobody'; }
-  pubView(u, me) { return { id: u.id, name: u.name || '', username: u.username || '', pub: u.pub, canCall: me ? this.canCall(me, u) : true, canMsg: me ? this.canMsg(me, u) : true, canPay: !!this.one('SELECT uid FROM paybank WHERE uid = ?', u.id) }; }
+  pubView(u, me) { return { id: u.id, name: u.name || '', username: u.username || '', pub: u.pub, canCall: me ? this.canCall(me, u) : true, canMsg: me ? this.canMsg(me, u) : true, canPay: !!this.one('SELECT uid FROM paybank WHERE uid = ?', u.id), photo: this.mediaUrl(u.photo), about: u.about || '' }; }
 
   async fetch(req) {
     const url = new URL(req.url), path = url.pathname;
+    this.origin = url.origin;
     try {
       if (path === '/v1/ws') return this.ws(req, url);
+      // Pictures / videos of profiles, posts and statuses: anyone with the link (long random ids, only handed to
+      // people allowed to see them). Uploads come in pieces of up to 1.5 MB (signed in).
+      if (path.startsWith('/v1/media/') && path !== '/v1/media/put' && req.method === 'GET') return this.mediaGet(path.slice(10), req);
+      if (path === '/v1/media/put') {
+        const who = await this.userByToken((req.headers.get('authorization') || '').replace(/^Bearer\s+/i, ''));
+        return who ? this.mediaPut(who, url, req) : json({ error: 'signin' }, 401);
+      }
       if (path === '/v1/health') {
         // Payments: can the server really sign in to Stitch? (just a sign-in - no payment is made)
         let pay = this.expressReady() ? 'keys' : 'no-keys';
@@ -94,6 +111,10 @@ export class Hub {
       if (path.startsWith('/v1/groups/')) return this.groups(me, path.slice(11), body, url.searchParams);
       if (path.startsWith('/v1/pay/')) return this.pay(me, path.slice(8), body, url);
       if (path.startsWith('/v1/sub/')) return this.sub(me, path.slice(8), body, url);
+      if (path === '/v1/follow') return this.follow(me, body);
+      if (path === '/v1/profile') return this.profile(me, url.searchParams.get('id') || me.id);
+      if (path === '/v1/updates') return this.updates(me);
+      if (path.startsWith('/v1/uposts/')) return this.uposts(me, path.slice(11), body);
       if (path === '/v1/user') { const u = this.one('SELECT * FROM users WHERE id = ?', url.searchParams.get('id') || ''); return u ? json(this.pubView(u, me)) : json({ error: 'notfound' }, 404); }
       return json({ error: 'notfound' }, 404);
     } catch (e) { return json({ error: 'server', detail: String(e && e.message || e).slice(0, 200) }, 500); }
@@ -173,8 +194,16 @@ export class Hub {
     }
     if (b.privacy !== undefined) {
       const p = b.privacy || {};
-      const clean = { messages: ['everyone', 'requests', 'nobody'].includes(p.messages) ? p.messages : 'everyone', calls: ['everyone', 'people', 'nobody'].includes(p.calls) ? p.calls : p.calls === 'none' ? 'nobody' : 'everyone', callPeople: (Array.isArray(p.callPeople) ? p.callPeople : []).map(String).slice(0, 500) };
+      const clean = { messages: ['everyone', 'requests', 'nobody'].includes(p.messages) ? p.messages : 'everyone', calls: ['everyone', 'people', 'nobody'].includes(p.calls) ? p.calls : p.calls === 'none' ? 'nobody' : 'everyone', callPeople: (Array.isArray(p.callPeople) ? p.callPeople : []).map(String).slice(0, 500), status: ['everyone', 'followers', 'nobody'].includes(p.status) ? p.status : 'followers' };
       sets.push('privacy = ?'); vals.push(JSON.stringify(clean));
+    }
+    if (b.about !== undefined) { sets.push('about = ?'); vals.push(String(b.about || '').slice(0, 150) || null); }
+    if (b.bio !== undefined) { sets.push('bio = ?'); vals.push(String(b.bio || '').slice(0, 150) || null); }
+    if (b.photo !== undefined) {
+      const ph = String(b.photo || '');
+      if (ph && !this.mediaDone(ph, me.id)) return json({ error: 'media' }, 400);
+      if (me.photo && me.photo !== ph) this.sql.exec('DELETE FROM media WHERE id = ?', me.photo);
+      sets.push('photo = ?'); vals.push(ph || null);
     }
     if (sets.length) this.sql.exec('UPDATE users SET ' + sets.join(', ') + ' WHERE id = ?', ...vals, me.id);
     const u = this.one('SELECT * FROM users WHERE id = ?', me.id);
@@ -190,7 +219,104 @@ export class Hub {
       `SELECT * FROM users WHERE id != ? AND (username LIKE ? ESCAPE '\\' OR (? = 0 AND lower(name) LIKE ? ESCAPE '\\'))
        ORDER BY (username = ?) DESC, (username LIKE ? ESCAPE '\\') DESC, (lower(name) LIKE ? ESCAPE '\\') DESC, name LIMIT 20`,
       me.id, like, t.startsWith('@') ? 1 : 0, like, un, start, start).toArray();
-    return json({ people: rows.map(u => this.pubView(u, me)) });
+    return json({ people: rows.map(u => Object.assign(this.pubView(u, me), { isFollowing: this.follows(me.id, u.id) })) });
+  }
+
+  // ---- Updates (owner): follow anyone instantly; profile posts; statuses that last 24 hours, seen by who the
+  //      owner's privacy setting allows (everyone / followers / no one). ----
+  mediaUrl(id) { return id ? (this.origin || '') + '/v1/media/' + id : ''; }
+  mediaDone(id, uid) {
+    const r = this.one('SELECT COUNT(*) AS c, MAX(n) AS n, MIN(uid) AS u, MAX(uid) AS u2 FROM media WHERE id = ?', id);
+    return !!(r && r.c && r.c === r.n && r.u === uid && r.u2 === uid);
+  }
+  async mediaPut(me, url, req) {
+    const data = await req.arrayBuffer();   // always read the whole body first
+    const id = url.searchParams.get('id') || '', i = +url.searchParams.get('i'), n = +url.searchParams.get('n'), mime = url.searchParams.get('mime') || '';
+    if (!/^[A-Za-z0-9_-]{16,40}$/.test(id) || !(i >= 0 && i < n && n <= 40 && Number.isInteger(i) && Number.isInteger(n)) || !['image/jpeg', 'video/mp4'].includes(mime)) return json({ error: 'bad' }, 400);
+    const owner = this.one('SELECT uid FROM media WHERE id = ? LIMIT 1', id);
+    if (owner && owner.uid !== me.id) return json({ error: 'bad' }, 403);
+    if (!data.byteLength || data.byteLength > 1572864) return json({ error: 'size' }, 413);
+    this.sql.exec('INSERT OR REPLACE INTO media (id, i, n, uid, mime, data, at) VALUES (?, ?, ?, ?, ?, ?, ?)', id, i, n, me.id, mime, data, Date.now());
+    return json({ ok: true, done: this.mediaDone(id, me.id) });
+  }
+  mediaGet(id, req) {
+    const rows = this.sql.exec('SELECT i, n, mime, data FROM media WHERE id = ? ORDER BY i', id).toArray();
+    if (!rows.length || rows.length !== rows[0].n) return new Response('Not found', { status: 404, headers: { 'access-control-allow-origin': '*' } });
+    const parts = rows.map(r => new Uint8Array(r.data)), len = parts.reduce((s, p) => s + p.length, 0), all = new Uint8Array(len);
+    let o = 0; for (const p of parts) { all.set(p, o); o += p.length; }
+    const h = { 'content-type': rows[0].mime, 'cache-control': 'public, max-age=31536000, immutable', 'access-control-allow-origin': '*', 'accept-ranges': 'bytes' };
+    const m = /bytes=(\d*)-(\d*)/.exec(req.headers.get('range') || '');
+    if (m && len) {
+      const s = m[1] ? +m[1] : 0, e = Math.min(m[2] ? +m[2] : len - 1, len - 1);
+      if (s <= e) return new Response(all.slice(s, e + 1), { status: 206, headers: Object.assign(h, { 'content-range': `bytes ${s}-${e}/${len}`, 'content-length': String(e - s + 1) }) });
+    }
+    return new Response(all, { headers: Object.assign(h, { 'content-length': String(len) }) });
+  }
+  follows(a, b) { return !!this.one('SELECT 1 AS x FROM follows WHERE uid = ? AND fid = ?', a, b); }
+  canSeeStatus(viewer, owner) {
+    if (viewer.id === owner.id) return true;
+    const s = this.privacy(owner).status;
+    return s === 'everyone' || (s === 'followers' && this.follows(viewer.id, owner.id));
+  }
+  dropOldStatuses() {
+    const old = this.sql.exec("SELECT id, media, thumb FROM uposts WHERE kind = 'status' AND at < ?", Date.now() - 86400000).toArray();
+    for (const p of old) { this.sql.exec('DELETE FROM media WHERE id = ? OR id = ?', p.media, p.thumb || ''); this.sql.exec('DELETE FROM uposts WHERE id = ?', p.id); }
+  }
+  postView(p) { return { id: p.id, kind: p.kind, type: p.type, url: this.mediaUrl(p.media), thumb: this.mediaUrl(p.thumb), at: p.at }; }
+  personView(u, me) {
+    const n = q => this.one(q, u.id).n;
+    return Object.assign(this.pubView(u, me), {
+      bio: u.bio || '',
+      followers: n('SELECT COUNT(*) AS n FROM follows WHERE fid = ?'), following: n('SELECT COUNT(*) AS n FROM follows WHERE uid = ?'),
+      posts: n("SELECT COUNT(*) AS n FROM uposts WHERE uid = ? AND kind = 'post'"),
+      isFollowing: u.id !== me.id && this.follows(me.id, u.id), followsYou: u.id !== me.id && this.follows(u.id, me.id), me: u.id === me.id });
+  }
+  statusesOf(u, me) {
+    if (!this.canSeeStatus(me, u)) return [];
+    return this.sql.exec("SELECT * FROM uposts WHERE uid = ? AND kind = 'status' AND at >= ? ORDER BY at", u.id, Date.now() - 86400000).toArray().map(p => this.postView(p));
+  }
+  follow(me, b) {
+    const u = this.one('SELECT * FROM users WHERE id = ?', String(b.id || ''));
+    if (!u || u.id === me.id) return json({ error: 'notfound' }, 404);
+    if (b.on === false) this.sql.exec('DELETE FROM follows WHERE uid = ? AND fid = ?', me.id, u.id);
+    else this.sql.exec('INSERT OR IGNORE INTO follows (uid, fid, at) VALUES (?, ?, ?)', me.id, u.id, Date.now());
+    return json(this.personView(u, me));
+  }
+  profile(me, id) {
+    const u = this.one('SELECT * FROM users WHERE id = ?', id);
+    if (!u) return json({ error: 'notfound' }, 404);
+    this.dropOldStatuses();
+    const posts = this.sql.exec("SELECT * FROM uposts WHERE uid = ? AND kind = 'post' ORDER BY at DESC LIMIT 90", u.id).toArray().map(p => this.postView(p));
+    return json(Object.assign(this.personView(u, me), { postList: posts, statuses: this.statusesOf(u, me) }));
+  }
+  updates(me) {
+    this.dropOldStatuses();
+    const lite = u => { const v = this.pubView(u, me); return { id: v.id, name: v.name, username: v.username, photo: v.photo, about: v.about, isFollowing: this.follows(me.id, u.id), followers: this.one('SELECT COUNT(*) AS n FROM follows WHERE fid = ?', u.id).n }; };
+    const people = this.sql.exec("SELECT DISTINCT u.* FROM uposts p JOIN users u ON u.id = p.uid WHERE p.kind = 'status' AND p.at >= ? AND (u.id = ? OR u.id IN (SELECT fid FROM follows WHERE uid = ?))", Date.now() - 86400000, me.id, me.id).toArray();
+    const statuses = people.map(u => ({ user: lite(u), items: this.statusesOf(u, me) })).filter(s => s.items.length)
+      .sort((a, b) => (b.user.id === me.id) - (a.user.id === me.id) || b.items[b.items.length - 1].at - a.items[a.items.length - 1].at);
+    const profiles = this.sql.exec(`SELECT u.*, (SELECT COUNT(*) FROM follows f WHERE f.fid = u.id) AS fc FROM users u
+       WHERE u.id != ? AND (u.name IS NOT NULL OR u.username IS NOT NULL) ORDER BY fc DESC, u.created DESC LIMIT 60`, me.id).toArray().map(lite);
+    return json({ me: this.personView(me, me), statuses, profiles });
+  }
+  uposts(me, op, b) {
+    if (op === 'create') {
+      const kind = b.kind === 'status' ? 'status' : 'post', type = b.type === 'video' ? 'video' : 'photo';
+      const media = String(b.media || ''), thumb = String(b.thumb || '');
+      if (!this.mediaDone(media, me.id) || (thumb && !this.mediaDone(thumb, me.id))) return json({ error: 'media' }, 400);
+      const id = 'u' + rand(10);
+      this.sql.exec('INSERT INTO uposts (id, uid, kind, type, media, thumb, at) VALUES (?, ?, ?, ?, ?, ?, ?)', id, me.id, kind, type, media, thumb || null, Date.now());
+      this.dropOldStatuses();
+      return json(this.postView(this.one('SELECT * FROM uposts WHERE id = ?', id)));
+    }
+    if (op === 'delete') {
+      const p = this.one('SELECT * FROM uposts WHERE id = ? AND uid = ?', String(b.id || ''), me.id);
+      if (!p) return json({ error: 'notfound' }, 404);
+      this.sql.exec('DELETE FROM media WHERE id = ? OR id = ?', p.media, p.thumb || '');
+      this.sql.exec('DELETE FROM uposts WHERE id = ?', p.id);
+      return json({ ok: true });
+    }
+    return json({ error: 'notfound' }, 404);
   }
 
   // ---- Groups ----
