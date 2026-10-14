@@ -2519,6 +2519,8 @@
   .pswitch-rows-tiles.many::-webkit-scrollbar{ display:none; }
   .pswitch-rows-tiles.many .pswitch-tile{ scroll-snap-align:start; }
   .pswitch-rows-tiles .pswitch-tile{ height:130px; --mscale:0.38; }
+  /* A label never runs past its tile (narrow phones cut "Home / Wallet"): it wraps only when it doesn't fit. */
+  .pswitch-rows-tiles .pswitch-tile-label{ max-width:calc(100% - 16px); white-space:normal; line-height:1.15; }
   .pswitch-rows-row-placeholder .pswitch-rows-row-label{ opacity:0.3; }
   .pswitch-rows-empty-slot{
     height:130px; border:1.5px dashed var(--line); border-radius:14px;
@@ -2637,7 +2639,12 @@
     display:flex; gap:10px; justify-content:center; align-items:center;
     background:transparent; border:none;
     border-radius:20px; padding:10px; margin:0 auto; width:fit-content;
+    max-width:100%; box-sizing:border-box;   /* never wider than the screen: narrow phones cut the last button */
   }
+  .wallet-float-bar .wfab{ flex:0 0 auto; }
+  .wallet-float-bar .wfab-wide{ flex:0 1 auto; min-width:0; }
+  .wallet-float-bar .wfab svg{ flex:0 0 auto; }
+  @media (max-width:400px){ .wallet-float-bar{ gap:8px; } .wallet-float-bar .wfab-wide{ padding:0 12px; } }
   .wfab{
     /* Bevel edges (bright top, dark bottom, both inset) plus a real drop shadow underneath
        -- so each button reads as a small lit piece of glass actually sitting above the
@@ -3750,19 +3757,25 @@ const WHEEL_CAP_BAND = 28;
 // than useful. All 3 panels are the same size now, sized to whatever Wallet/Trading need;
 // Money just shows as much as that common height fits, cropped like any other mini preview,
 // the same way it behaves in every other Page Style (Rows, Circle, etc).
-function wheelPageTileHeights(){
+// Every panel is as tall as the TALLEST page, Money included (owner: nothing may be cut - every page shows whole).
+function wheelPageTileHeights(clean){
   const heights = {};
   PAGE_SWITCH_ITEMS.forEach(item=>{
-    const natural = measureNaturalHeight(pageCleanHTML(item.key, true), WHEEL_DESIGN_W);
+    const natural = measureNaturalHeight(clean[item.key], WHEEL_DESIGN_W);
     heights[item.key] = Math.max(160, Math.round(natural * WHEEL_MSCALE));
   });
-  const others = PAGE_SWITCH_ITEMS.filter(item=>item.key!=='money').map(item=>heights[item.key]);
-  const uniformH = others.length ? Math.max(...others) : Math.max(...Object.values(heights));
+  const uniformH = Math.max(...Object.values(heights));
   PAGE_SWITCH_ITEMS.forEach(item=>{ heights[item.key] = uniformH; });
   return heights;
 }
 function pswitchWheel3dHTML(navAttr){
-  const tileH = wheelPageTileHeights();
+  // Each page is built ONCE and reused by all 14 of its strips (fast to open - it used to be built 14 times over).
+  const clean = {}, preview = {};
+  PAGE_SWITCH_ITEMS.forEach(item=>{
+    clean[item.key] = pageCleanHTML(item.key, true);
+    preview[item.key] = clean[item.key] ? `<div class="mini-preview-frame"><div class="mini-preview-inner">${clean[item.key]}</div></div>` : '';
+  });
+  const tileH = wheelPageTileHeights(clean);
   // No wall/rim framing any more -- every page is already forced to the same content
   // height (wheelPageTileHeights), so the drum height is just that shared content height,
   // with no cap band padding above/below it to fill.
@@ -3786,7 +3799,7 @@ function pswitchWheel3dHTML(navAttr){
             const marginLeft = (-WHEEL_SLICE_W/2).toFixed(2);
             slices += `
               <div class="curve-slice" data-angle="${angle.toFixed(2)}" style="width:${(WHEEL_SLICE_W + 0.8).toFixed(2)}px;height:${h}px;margin:${-h/2}px 0 0 ${marginLeft}px;transform:rotateY(${angle.toFixed(2)}deg) translateZ(${radius.toFixed(2)}px);">
-                <div class="curve-slice-inner" style="left:${cropLeft}px;height:${h}px;">${miniPagePreviewHTML(item.key, true)}</div>
+                <div class="curve-slice-inner" style="left:${cropLeft}px;height:${h}px;">${preview[item.key]}</div>
               </div>
             `;
           }
@@ -10827,7 +10840,10 @@ function positionStation3(){
   // closed (the common case -- quickRow/sideCard only exist while it's open).
   const moneyFab = document.querySelector('.money-transfer-fab-wrap');
   if(moneyFab){
-    const fabArrowRect = arrow.getBoundingClientRect();
+    // In the app the page draws no Station 3 (the app's own 40x40 button sits in the bottom-right corner), so the
+    // arrow here has no size - the button then sat off the left edge of the screen. Use the real button's place.
+    const ar0 = arrow.getBoundingClientRect();
+    const fabArrowRect = ar0.width > 0 ? ar0 : { left:vw - 40, right:vw - 8, top:vh - 40, bottom:vh };   // 8px in, so its green badge isn't cut by the screen's edge
     const fabGap = 14; // deliberate, visible gap -- the two buttons must never touch
     moneyFab.style.visibility = state.moneyTransferOpen ? 'hidden' : '';
     moneyFab.style.left = 'auto';
@@ -14952,6 +14968,13 @@ const FIT_CACHE = {};
 function fitPageToScreen(area, el, pageKey){
   if(!area) return;
   el = el || area.firstElementChild;
+  // Rows and Page Styles are laid out for the screen themselves: never zoomed (they used to take the zoom of the page
+  // they were opened from - the 3D Circle came out 35% bigger from Wallet, smaller from Focus - and the whole 3D
+  // drum was measured over and over).
+  if(!pageKey && PAGES.includes(state.current) && (state.rowsViewOpen || (state.pageStyleOn && state.pageStyleViewOpen))){
+    if(el && el.style) el.style.zoom = '';
+    return;
+  }
   const page = pageKey || state.current;
   if(!el || NO_FIT_SCREENS.has(page)) return;
   if(el.id === 'page-swipe-track') return;
