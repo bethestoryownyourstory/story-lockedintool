@@ -1,5 +1,5 @@
 <resources>
-    <string name="a11y_desc">Lets Lockedintool open your phone\'s recent apps and lock the screen. It does not read your screen.</string>
+    <string name="a11y_desc">Lets Lockedintool open your phone\'s recent apps and lock the screen, move the lock screen dial pad out of the way when your PIN page or quick settings show, and find Lockedintool\'s widgets on your home screen. What it sees is only used on your phone at that moment - never stored or sent.</string>
     <string name="widget_dashboard_desc">Your Dashboard in Lockedintool, working right on the home screen.</string>
     <string name="widget_money_desc">Your Money page in Lockedintool, working right on the home screen.</string>
     <string name="widget_wallet_desc">Your Home / Wallet page in Lockedintool, working right on the home screen.</string>
