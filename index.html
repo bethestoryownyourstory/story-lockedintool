@@ -3864,11 +3864,6 @@ const NOTE_PAGE_CHAR_LIMIT = 1200;
 const NOTE_DEFAULT_PAGE_COUNT = 4;
 const NOTE_TABLE_MAX_COLS = 6;
 const NOTE_TABLE_MAX_ROWS = 12;
-// Placeholder copy for the built-in "STORY" group that explains Community to new users -- the
-// user said they'll supply the real text later, so it's kept as a single named constant here to
-// make that swap trivial.
-const COMMUNITY_STORY_GROUP_INTRO = 'Learn how Community works — more details coming soon.';
-
 // Basic, honest, prototype-level safety net checked against a new group's name/description (and
 // against post text before it's allowed into Stories) -- this is a keyword filter, NOT a real
 // content-moderation system, and the create-group UI says so explicitly rather than implying
@@ -3899,93 +3894,14 @@ function recordPolicyStrike(reason){
   }
 }
 
-// The groups that ship with the app and can't be deleted by the user. Five of them (market
-// prices, News, Bricks, USA, Palestine) are meant to show real, free, public data -- each carries
-// a liveDataKind so fetchGroupLiveData() knows which real endpoint to try; until it succeeds they say so.
-// Small inlined placeholder photos for the built-in group cards (Community groups + Trending),
-// so a group card shows a picture behind its centered name instead of a flat card. These are
-// procedurally generated stand-ins, not real photography -- a user-created group gets its own
-// uploaded picture via the Create Group flow instead of one of these.
-const COMMUNITY_GROUP_IMAGES = {
-  story: 'data:image/jpeg;base64,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',
-  market: 'data:image/jpeg;base64,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',
-  news: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAA4KCw0LCQ4NDA0QDw4RFiQXFhQUFiwgIRokNC43NjMuMjI6QVNGOj1OPjIySGJJTlZYXV5dOEVmbWVabFNbXVn/2wBDAQ8QEBYTFioXFypZOzI7WVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVn/wAARCACMAIwDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDz+ilopgJRS0UAJRS0UAJRS0UAJRS0UAJRS0UAJRS0UAJRS0UAJRS0UAFFLRTASilooASilooASilooASilooASilooASilooASilooASilooAWiiigAooooAKKKKACiiigAooooAKKKKACiikc4HFAC0VFvPrRvPrSAkJA60m5fWmEkqM0lAE9FLTHbbjimA6imLJkgYqSgBKKWigQlFLRQAlFLRQAlFLUcvagY+mSfdqOlH3D9aQCUUUUAKfuikpT9wfWkoAsVHN1FS1FN1FMBiffFL5jetIn3xSUgJY2LZzT6ijIUEmn+YvvTAdRQpDDIpaBCUUtFACVHL2qWopu1AyOlH3D9aSlH3D9aQCUUUUAKfuD6mkpT9wfU0lAFqoZuopfO/2f1psjbgp6UwGp98UlLH98UlIBR9w/UUlKPuN9RSUATQ/c/GpKjh+5+NSUwCovN9v1qWqp6mgCTzv9n9aSRtyqaZTj9xfxpANpR/qz9RSU4f6s/UUANooooAU/cH1NJSn7i/U0lABTm+4v402nN9xfxoAI/vim06P/WCm0AOH+rb6im04f6tvqKbQA8MVjGPWjzW9vypD/qx9TTaAJFkYsAcdajPU0qffX60h6mgApx/1a/jTacf9Wv1NADacP9WfqKbTh/q2+ooAbRRRQA4/6tfqabTj/q1+pptABTm+4n402nN9xPxoAI/9YKbTo/8AWCm0AOH+rb6im04f6tvqKbQA4/6ofU02nH/VD6mm0AKn31+tIeppY/8AWL9aQ9TQAU4/6tfqabTj/q1+poAbTh/q2+optOH+qb6igBtFFFADj/q1+pptOP8Aq1+pptABTm/1afjTac3+rT8aACL/AFi02nRf6xabQA4f6pvqKbTh/qm+optADj/ql+pptOP+qX6mm0AOj/1i/WmnqadH/rF+tNPU0AFOP+rX6mm05v8AVp9TQA2nD/VN9RTacP8AVN9RQA2iiigBx/1S/U02nH/VL9TTaAP/2Q==',
-  bricks: 'data:image/jpeg;base64,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',
-  usa: 'data:image/jpeg;base64,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',
-  palestine: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAA4KCw0LCQ4NDA0QDw4RFiQXFhQUFiwgIRokNC43NjMuMjI6QVNGOj1OPjIySGJJTlZYXV5dOEVmbWVabFNbXVn/2wBDAQ8QEBYTFioXFypZOzI7WVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVn/wAARCACMAIwDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDkNQtdpM0Y+U/eHp71QroyAQQRkHqKxby2NvJkf6tuh9PasaU76M9PHYXkftIbdStRRRWx5gUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAdHTJY1ljKOOD+lPorgPrGk1ZmBPC0EpRvwPqKjrcurcXEWOjD7prEZSjFWGCOCK64T5kfPYrDOjLTZ7CUUUVocgUUUUAFFFFABRRRQAUUUUAFFFFABRRRQB0dFFFcB9aFUr+181fMQfOvUeoq7RTjJxd0Z1aUasXGRzlFaN9Ztv8AMhUnd1UevrVT7LP/AM8n/KuxTTVz52ph6kJONiGipvss/wDzyf8AKj7LP/zyf8qfMu5Hsp/yv7iGipvss/8Azyf8qPss/wDzyf8AKjmXcPZT/lf3ENFTfZZ/+eT/AJUfZZ/+eT/lRzLuHsp/yv7iGipvss//ADyf8qPss/8Azyf8qOZdw9lP+V/cQ0VN9ln/AOeT/lR9ln/55P8AlRzLuHsp/wAr+4hoqb7LP/zyf8qPss//ADyf8qOZdw9lP+V/cbtFFFcJ9SFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRQBmlwaLNmFTFUacuWckmJRS4NGDT5WZ/XsN/OvvEopcGjBo5WH17Dfzr7xKKXBowaOVh9ew386+8SilwaMGjlYfXsN/OvvEopcGjBo5WH17Dfzr7xKKXBowaOVh9ew386+8SiiikdYUUU4DFOKucWNxccNT5ur2FAxRRRWx8ZOcpycpO7YUUUUEhRRRQAUUUUAFFFFABRRRQAUUUUAMoopQM1glc+9rVoUYOc9kKB3paKK2SsfFYnESxFRzl/wwUUUUznCiiigAooooAKKKKACiiigAooooAKKKKAGgZp1IOlLUxVkelmWLlXquPSP9XCiiiqPNCiiigAooooAKKKKACiiigAooooAKKKKACiiigD//2Q==',
-};
-
-// All the categories currently in use across STORY's groups, plus "All" for the browse filter.
-const COMMUNITY_CATEGORIES = ['All','Info','Finance','News','World','Life','Community'];
-// A broad list of countries for the browse filter, plus "Global" for groups not tied to one place.
-const COMMUNITY_COUNTRIES = ['All','Global',
-  'Afghanistan','Albania','Algeria','Andorra','Angola','Argentina','Armenia','Australia','Austria','Azerbaijan',
-  'Bahamas','Bahrain','Bangladesh','Barbados','Belarus','Belgium','Belize','Benin','Bhutan','Bolivia',
-  'Bosnia and Herzegovina','Botswana','Brazil','Brunei','Bulgaria','Burkina Faso','Burundi','Cambodia','Cameroon','Canada',
-  'Cape Verde','Central African Republic','Chad','Chile','China','Colombia','Comoros','Congo','Costa Rica','Croatia',
-  'Cuba','Cyprus','Czech Republic','Denmark','Djibouti','Dominica','Dominican Republic','Ecuador','Egypt','El Salvador',
-  'Equatorial Guinea','Eritrea','Estonia','Eswatini','Ethiopia','Fiji','Finland','France','Gabon','Gambia',
-  'Georgia','Germany','Ghana','Greece','Grenada','Guatemala','Guinea','Guinea-Bissau','Guyana','Haiti',
-  'Honduras','Hungary','Iceland','India','Indonesia','Iran','Iraq','Ireland','Israel','Italy',
-  'Ivory Coast','Jamaica','Japan','Jordan','Kazakhstan','Kenya','Kiribati','Kosovo','Kuwait','Kyrgyzstan',
-  'Laos','Latvia','Lebanon','Lesotho','Liberia','Libya','Liechtenstein','Lithuania','Luxembourg','Madagascar',
-  'Malawi','Malaysia','Maldives','Mali','Malta','Marshall Islands','Mauritania','Mauritius','Mexico','Micronesia',
-  'Moldova','Monaco','Mongolia','Montenegro','Morocco','Mozambique','Myanmar','Namibia','Nauru','Nepal',
-  'Netherlands','New Zealand','Nicaragua','Niger','Nigeria','North Korea','North Macedonia','Norway','Oman','Pakistan',
-  'Palau','Palestine','Panama','Papua New Guinea','Paraguay','Peru','Philippines','Poland','Portugal','Qatar',
-  'Romania','Russia','Rwanda','Saint Lucia','Samoa','San Marino','Saudi Arabia','Senegal','Serbia','Seychelles',
-  'Sierra Leone','Singapore','Slovakia','Slovenia','Solomon Islands','Somalia','South Africa','South Korea','South Sudan','Spain',
-  'Sri Lanka','Sudan','Suriname','Sweden','Switzerland','Syria','Taiwan','Tajikistan','Tanzania','Thailand',
-  'Timor-Leste','Togo','Tonga','Trinidad and Tobago','Tunisia','Turkey','Turkmenistan','Tuvalu','Uganda','Ukraine',
-  'United Arab Emirates','United Kingdom','United States','Uruguay','Uzbekistan','Vanuatu','Vatican City','Venezuela','Vietnam','Yemen',
-  'Zambia','Zimbabwe',
-];
+// Community has no made-up groups (owner: "everything real, even the groups"): only the groups people really create
+// (on STORY's server) - plus Stories, STORY's one real shared feed (Community > Stories), which isn't a group card.
 function buildBuiltinCommunityGroups(){
-  const now = 'Just now';
-  return [
-    {
-      id:'g-story', name:'STORY', description:'How Community works on STORY.', type:'public', builtin:true, category:'Info', country:'Global', image:COMMUNITY_GROUP_IMAGES.story,
-      banned:false, warned:false, creator:'STORY', leaders:['STORY'], members:['You'],
-      pendingRequests:[], liveDataKind:null,
-      posts:[{ id:'p-story-intro', authorName:'STORY', timestamp:'Pinned', type:'note', textContent:COMMUNITY_STORY_GROUP_INTRO, caption:'', imageDataUrl:null, likes:0, likedByMe:false, shares:0, comments:[] }],
-    },
-    {
-      id:'g-stories', name:'Stories', description:'Real people sharing their life and success stories, and the advice that got them there.', type:'public', builtin:true, category:'Life', country:'Global',
-      banned:false, warned:false, creator:'STORY', leaders:['STORY'], members:['You'],
-      pendingRequests:[], liveDataKind:null,
-      posts:[],   // only real stories people post (owner: no made-up posts) - they come from STORY's server
-    },
-    {
-      id:'g-market', name:'Stock News', description:'Free public market prices -- crypto pairs, refreshed from a public source when this device is online.', type:'public', builtin:true, category:'Finance', country:'Global', image:COMMUNITY_GROUP_IMAGES.market,
-      banned:false, warned:false, creator:'STORY', leaders:['STORY'], members:['You'],
-      pendingRequests:[], liveDataKind:'market', liveStatus:'pending', liveFetchAttempted:false,
-      liveItems:null, posts:[],
-    },
-    {
-      id:'g-news', name:'News', description:'Public headlines, refreshed from a public source when this device is online.', type:'public', builtin:true, category:'News', country:'Global', image:COMMUNITY_GROUP_IMAGES.news,
-      banned:false, warned:false, creator:'STORY', leaders:['STORY'], members:['You'],
-      pendingRequests:[], liveDataKind:'hn-topic', liveQuery:'', liveStatus:'pending', liveFetchAttempted:false,
-      liveItems:null, posts:[],
-    },
-    {
-      id:'g-bricks', name:'Bricks', description:'Public headlines mentioning "BRICS", refreshed from a public source when this device is online.', type:'public', builtin:true, category:'World', country:'Global', image:COMMUNITY_GROUP_IMAGES.bricks,
-      banned:false, warned:false, creator:'STORY', leaders:['STORY'], members:['You'],
-      pendingRequests:[], liveDataKind:'hn-topic', liveQuery:'BRICS', liveStatus:'pending', liveFetchAttempted:false,
-      liveItems:null, posts:[],
-    },
-    {
-      id:'g-usa', name:'USA', description:'Public headlines about the United States, refreshed from a public source when this device is online.', type:'public', builtin:true, category:'World', country:'United States', image:COMMUNITY_GROUP_IMAGES.usa,
-      banned:false, warned:false, creator:'STORY', leaders:['STORY'], members:['You'],
-      pendingRequests:[], liveDataKind:'hn-topic', liveQuery:'USA', liveStatus:'pending', liveFetchAttempted:false,
-      liveItems:null, posts:[],
-    },
-    {
-      id:'g-palestine', name:'Palestine', description:'Public headlines about Palestine, refreshed from a public source when this device is online.', type:'public', builtin:true, category:'World', country:'Palestine', image:COMMUNITY_GROUP_IMAGES.palestine,
-      banned:false, warned:false, creator:'STORY', leaders:['STORY'], members:['You'],
-      pendingRequests:[], liveDataKind:'hn-topic', liveQuery:'Palestine', liveStatus:'pending', liveFetchAttempted:false,
-      liveItems:null, posts:[],
-    },
-  ];
+  return [{
+    id:'g-stories', name:'Stories', description:'Real people sharing their life and success stories, and the advice that got them there.', type:'public', builtin:true, category:'Life', country:'Global',
+    banned:false, warned:false, creator:'STORY', leaders:['STORY'], members:['You'], pendingRequests:[], liveDataKind:null,
+    posts:[],   // only real stories people post - they come from STORY's server
+  }];
 }
 // Abbreviates an engagement count the way social feeds do (1000 -> "1k", 1500 -> "1.5k",
 // 1200000 -> "1.2m"), leaving small numbers as plain digits.
@@ -4000,42 +3916,6 @@ function formatCount(n){
   return abbrev(n, 'm');
 }
 
-// Real, free, public, no-login/no-key endpoints only (CoinGecko for prices, the Algolia-powered
-// HN Search API for headlines) -- honest about the outcome either way: on a genuine fetch success
-// liveStatus becomes 'live' and liveItems holds the real response; on any failure (no network in
-// this sandboxed test environment, CORS, etc.) liveStatus becomes 'fallback' and the group's
-// group says it couldn't load live updates - never sample items (owner: everything real).
-async function fetchGroupLiveData(group){
-  try{
-    if(group.liveDataKind === 'market'){
-      const res = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana&vs_currencies=usd&include_24hr_change=true');
-      if(!res.ok) throw new Error('bad status');
-      const data = await res.json();
-      const items = Object.entries(data).map(([coin, v])=>({
-        title: coin.toUpperCase() + ': $' + Number(v.usd).toLocaleString(undefined,{maximumFractionDigits:2}),
-        sub: (v.usd_24h_change>=0?'+':'') + Number(v.usd_24h_change||0).toFixed(2) + '% (24h) — live',
-      }));
-      if(!items.length) throw new Error('empty');
-      group.liveItems = items;
-      group.liveStatus = 'live';
-    } else if(group.liveDataKind === 'hn-topic'){
-      const url = group.liveQuery
-        ? `https://hn.algolia.com/api/v1/search?query=${encodeURIComponent(group.liveQuery)}&tags=story&hitsPerPage=5`
-        : `https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=5`;
-      const res = await fetch(url);
-      if(!res.ok) throw new Error('bad status');
-      const data = await res.json();
-      const hits = (data.hits||[]).filter(h=>h.title);
-      if(!hits.length) throw new Error('no results');
-      group.liveItems = hits.map(h=>({ title:h.title, sub:(h.points||0)+' points · '+(h.author||'unknown')+' — live' }));
-      group.liveStatus = 'live';
-    }
-  }catch(e){
-    group.liveStatus = 'fallback';
-  }
-  group.liveFetchAttempted = true;
-  renderDevice();
-}
 function findCommunityPostById(id){
   for(const g of state.communityGroups){
     const post = g.posts.find(p=>p.id===id);
@@ -4167,13 +4047,8 @@ let state = {
   scratchId:null,       // the drawing open in the drawing space
   notesTab:'notes',     // Notes left column: 'notes' (Saved notes) or 'drawings'
   scratchPageIndex:0,
-  // Community: groups-first, per the user's own spec -- posts live INSIDE a group (group.posts),
-  // never in one flat feed. A handful of groups ship with the app and can't be deleted (builtin:
-  // true): a STORY group that explains Community itself, a Stories group (personal life/success
-  // posts -- this IS the "Stories" feed shown on the Community home screen, not a separate
-  // aggregation), and several real-data groups (market prices, News, Bricks, USA, Palestine) that
-  // attempt a real free/public fetch and honestly fall back to labeled sample content if that
-  // fetch fails (see fetchGroupLiveData). Users can create their own public or private groups.
+  // Community: groups-first, per the user's own spec -- posts live INSIDE a group (group.posts), never in one flat
+  // feed. Only real groups (from STORY's server) + Stories, STORY's real shared feed (owner: no made-up groups).
   communityGroups: buildBuiltinCommunityGroups(),
   communityActiveGroupId:null,
   communityOpenComments:null,
@@ -13993,7 +13868,7 @@ function attachHandlers(){
           const g = findCommunityGroupById(el.getAttribute('data-groupid'));
           const input = document.getElementById('community-new-post-input');
           const text = input ? input.value.trim() : '';
-          if(g && g.server && text){
+          if(g && communityShared(g) && text){
             if(communityTextViolatesPolicy(text)){ recordPolicyStrike('a blocked post'); showToast('That post isn’t allowed under STORY’s content policy.'); break; }
             if(!g.members.includes('You')){ showToast('Join the group to post'); break; }
             communityServerDo('post', { id:g.id, text }).then(r=>{ if(r){ g.posts = communityPostsFromServer(r.posts); renderDevice(); } });
@@ -14100,16 +13975,8 @@ function attachHandlers(){
 
   clampFloatPopovers();
 
-  // Kick off each built-in live-data group's real fetch at most once (liveFetchAttempted guards
-  // it), the first time Community is actually visible -- not eagerly at load, and never refetched
-  // just because of an unrelated re-render.
+  // Community on screen: the real groups and Stories from STORY's server.
   if(state.current === 'community' || state.current === 'community-group') communitySync();
-  if(state.current === 'community' || state.current === 'community-group'){
-    state.communityGroups.filter(g=>g.liveDataKind && !g.liveFetchAttempted).forEach(g=>{
-      g.liveFetchAttempted = true;
-      fetchGroupLiveData(g);
-    });
-  }
 }
 
 // The font/size/color popovers are centered on their trigger button by default
@@ -14509,8 +14376,6 @@ function communityGroupScreen(){
   if(!g) return `<div class="page-shell">${topBar('Community', false, '', 'community')}<div class="section-title">Group not found</div></div>`;
   const isMember = g.members.includes('You');
   const isLeader = g.leaders.includes('You') || g.creator==='You';
-  const isLive = !!g.liveDataKind;
-  const items = isLive && g.liveStatus==='live' ? g.liveItems : null;   // only real live items - never samples (owner)
   return `
     <div class="page-shell">
     ${topBar(g.name, false, '', 'community')}
@@ -14520,14 +14385,12 @@ function communityGroupScreen(){
         <span class="community-group-badge">${communityGroupTypeBadge(g.type)}</span>
         ${g.id === 'g-stories'
           ? `<span class="community-group-badge">Number of stories ever posted: ${g.posts.length}</span>`
-          : g.id === 'g-story'
-          ? `<span class="community-group-badge">Number of posts ever posted: ${g.posts.length}</span>`
           : `<span class="community-group-badge">${g.members.length} member${g.members.length===1?'':'s'}</span>`}
         ${g.warned ? `<span class="community-group-badge warn">Warned</span>` : ''}
         ${g.banned ? `<span class="community-group-badge warn">Banned</span>` : ''}
-        ${g.id !== 'g-stories' && g.id !== 'g-story' ? communityGroupJoinActionHTML(g) : ''}
-        ${g.id !== 'g-stories' && g.id !== 'g-story' ? `<button class="community-join-btn" data-action="community-share-group" data-groupid="${g.id}">Share</button>` : ''}
-        ${(isMember || isLeader) && g.id !== 'g-stories' && g.id !== 'g-story' && !g.liveCall ? `<button class="community-join-btn community-call-btn" data-action="community-group-call" data-groupid="${g.id}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/></svg> Call</button>` : ''}
+        ${g.id !== 'g-stories' ? communityGroupJoinActionHTML(g) : ''}
+        ${g.id !== 'g-stories' ? `<button class="community-join-btn" data-action="community-share-group" data-groupid="${g.id}">Share</button>` : ''}
+        ${(isMember || isLeader) && g.id !== 'g-stories' && !g.liveCall ? `<button class="community-join-btn community-call-btn" data-action="community-group-call" data-groupid="${g.id}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/></svg> Call</button>` : ''}
       </div>
     </div>
     ${g.liveCall ? `
@@ -14558,18 +14421,6 @@ function communityGroupScreen(){
       </div>
     ` : ''}
 
-    ${isLive ? `
-      <div class="section-title">LIVE</div>
-      ${!g.liveFetchAttempted || g.liveStatus === 'pending' ? `<div class="community-empty-note">Checking for live updates…</div>` : g.liveStatus !== 'live' ? `<div class="community-empty-note">Couldn’t load live updates right now - check your connection.</div>` : ''}
-      <div class="community-live-list">
-        ${(items||[]).map(it=>`
-          <div class="community-live-item">
-            <div class="community-live-item-title">${escText(it.title)}</div>
-            ${it.sub ? `<div class="community-live-item-sub">${escText(it.sub)}</div>` : ''}
-          </div>
-        `).join('')}
-      </div>
-    ` : ''}
     ${g.type==='public' && !g.banned ? `
       <div class="community-comment-input-row" style="margin-bottom:10px;">
         <input id="community-new-post-input" class="community-comment-input" placeholder="Share something with this group…" maxlength="600">
