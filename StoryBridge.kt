@@ -17,7 +17,8 @@ import java.io.ByteArrayOutputStream
 /** What the overlay panel (which shows the STORY screens) can ask the phone to do. JS name: window.StoryNative */
 class StoryBridge(private val ctx: Context, private val host: Host, private val station3: Boolean = false, private val dial: Boolean = false, private val profile: Boolean = false, private val lock: Boolean = false,
                   /** A home-screen widget's out-of-sight page: reads only; its answers go back to it. */
-                  private val widget: Boolean = false, private val evalTo: ((String) -> Unit)? = null) {
+                  private val widget: Boolean = false, private val evalTo: ((String) -> Unit)? = null,
+                  private val onTyping: ((Boolean) -> Unit)? = null) {
 
     interface Host {
         fun hidePanel()
@@ -134,7 +135,7 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
 
     /** The Pages report when a text box is being typed in (so the keyboard can show above them). */
     @JavascriptInterface
-    fun setTyping(on: Boolean) { if (profile) host.profileTyping(on) else if (!station3) host.setTyping(on) }
+    fun setTyping(on: Boolean) { if (widget) onTyping?.invoke(on) else if (profile) host.profileTyping(on) else if (!station3) host.setTyping(on) }
 
     /** STORY's one message bubble ("... - coming soon"), the same on the Pages, Station 3 and over apps. */
     @JavascriptInterface

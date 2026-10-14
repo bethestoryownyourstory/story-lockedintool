@@ -848,7 +848,26 @@ class OverlayService : Service(), StoryBridge.Host {
         ui.removeCallbacks(widgetScanRun); ui.postDelayed(widgetScanRun, if (moving) 450L else 200L)
     } }
     private fun hideLiveWidgets() { liveWidgets.values.forEach { hideLive(it) }; lastFound = emptyMap(); ui.removeCallbacks(widgetScanRun) }
+    // Typing in a widget (a search box...): its window takes the keyboard only while a box is being typed in.
+    private var liveTyping: LiveW? = null
+    private fun liveTypingSet(w: LiveW, on: Boolean) {
+        val imm = getSystemService(android.view.inputmethod.InputMethodManager::class.java)
+        if (on) {
+            if (!w.shown) return
+            liveTyping = w
+            w.lp.flags = w.lp.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
+            runCatching { wm.updateViewLayout(w.holder, w.lp) }
+            w.web.requestFocus()
+            ui.postDelayed({ runCatching { imm.showSoftInput(w.web, 0) } }, 120)
+        } else if (liveTyping === w) {
+            liveTyping = null
+            runCatching { imm.hideSoftInputFromWindow(w.web.windowToken, 0) }
+            w.lp.flags = w.lp.flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+            runCatching { wm.updateViewLayout(w.holder, w.lp) }
+        }
+    }
     private fun hideLive(w: LiveW) {
+        if (liveTyping === w) liveTypingSet(w, false)
         if (!w.shown) return
         w.shown = false
         w.holder.visibility = View.GONE
@@ -910,7 +929,11 @@ class OverlayService : Service(), StoryBridge.Host {
         web.settings.javaScriptEnabled = true; web.settings.domStorageEnabled = true
         web.settings.useWideViewPort = true; web.settings.loadWithOverviewMode = true
         web.isVerticalScrollBarEnabled = false; web.isHorizontalScrollBarEnabled = false
-        web.addJavascriptInterface(StoryBridge(this, this, widget = true, evalTo = { js -> ui.post { if (liveWidgets[id] === lw) web.evaluateJavascript(js, null) } }), "StoryNative")
+        web.addJavascriptInterface(StoryBridge(this, this, widget = true, evalTo = { js -> ui.post { if (liveWidgets[id] === lw) web.evaluateJavascript(js, null) } },
+            onTyping = { on -> ui.post { liveTypingSet(lw, on) } }), "StoryNative")
+        // Back while typing in a widget: the typing ends and the home screen gets its keys back.
+        web.setOnKeyListener { _, code, e -> if (code == android.view.KeyEvent.KEYCODE_BACK && e.action == android.view.KeyEvent.ACTION_UP && liveTyping === lw) {
+            web.evaluateJavascript("document.activeElement&&document.activeElement.blur&&document.activeElement.blur()", null); liveTypingSet(lw, false); true } else false }
         val loader = WebViewAssetLoader.Builder().addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this)).build()
         val query = "?widget=" + page + "&live=1&pw=" + pwCss
         web.webViewClient = object : WebViewClient() {
@@ -938,7 +961,7 @@ class OverlayService : Service(), StoryBridge.Host {
             }
         }
         // A touch anywhere else on the home screen may start a swipe: step aside, come back once it's still.
-        holder.setOnTouchListener { _, e -> if (e.actionMasked == MotionEvent.ACTION_OUTSIDE) widgetLiveEvent(true); false }
+        holder.setOnTouchListener { _, e -> if (e.actionMasked == MotionEvent.ACTION_OUTSIDE && liveTyping !== lw) widgetLiveEvent(true); false }
         holder.addView(web, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         if (runCatching { wm.addView(holder, lp) }.isFailure) { web.destroy(); return null }
         liveWidgets[id] = lw

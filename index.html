@@ -24,7 +24,7 @@
   // the keyboard hand-off, Rows / Page Styles, closing the Pages).
   if(/[?&]live=1/.test(location.search)){
     window.__storyWidgetLive = true;
-    const OFF = new Set(['tvVersion','tvPlace','tvOpen','setTyping','pagesAction','closePanel','openRecents','showApps']);
+    const OFF = new Set(['tvVersion','tvPlace','tvOpen','pagesAction','closePanel','openRecents','showApps']);
     const live = new Proxy({}, { get(t, k){ if(OFF.has(k)) return ()=>''; const f = real[k]; return typeof f === 'function' ? (...a)=>real[k](...a) : f; } });
     try{ window.StoryNative = live; }catch(e){}
     if(window.StoryNative !== live) Object.defineProperty(window, 'StoryNative', { value:live, configurable:true });
@@ -7190,6 +7190,8 @@ const NATIVE = (typeof window !== 'undefined') && !!window.StoryNative;
 if(NATIVE && window.StoryNative.setTyping && !/[?&]s3=1/.test(location.search)){
   const editable = el=>!!el && (el.tagName==='INPUT' || el.tagName==='TEXTAREA' || el.isContentEditable);
   document.addEventListener('focusin', e=>{ if(editable(e.target)) try{ window.StoryNative.setTyping(true); }catch(err){} }, true);
+  // A live home screen widget gives the keyboard back as soon as the box is left.
+  if(window.__storyWidgetLive) document.addEventListener('focusout', e=>{ if(editable(e.target)) setTimeout(()=>{ if(!editable(document.activeElement)) try{ window.StoryNative.setTyping(false); }catch(err){} }, 50); }, true);
 }
 function appIconHTML(a){
   if(a && a.iconUrl) return `<img src="${a.iconUrl}" alt="" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:contain;border-radius:10px;">`;

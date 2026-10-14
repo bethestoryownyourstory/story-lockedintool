@@ -4,4 +4,10 @@
     <string name="widget_money_desc">Your Money page, as it looks on the Pages. Tap to open it.</string>
     <string name="widget_wallet_desc">Your Home / Wallet page, as it looks on the Pages. Tap to open it.</string>
     <string name="widget_focus_desc">Your Focus page, as it looks on the Pages. Tap to open it.</string>
+    <string name="widget_notes_desc">Your Notes page in STORY, working right on the home screen.</string>
+    <string name="widget_community_desc">Your Community page in STORY, working right on the home screen.</string>
+    <string name="widget_apps_desc">Your Apps page in STORY, working right on the home screen.</string>
+    <string name="widget_settings_desc">Your Settings page in STORY, working right on the home screen.</string>
+    <string name="widget_information_desc">Your Information page in STORY, working right on the home screen.</string>
+    <string name="widget_layouts_desc">Your Layouts page in STORY, working right on the home screen.</string>
 </resources>
