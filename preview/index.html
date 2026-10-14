@@ -1347,6 +1347,8 @@
   #story-profile .pf-newgroup-form button{ padding:0 14px; border-radius:12px; border:0; background:#ffffff; color:#000000; font-weight:700; }
   #story-profile .msg-lock{ display:inline-flex; margin-right:4px; vertical-align:-1px; opacity:0.8; font-style:normal; }
   .info-hero{ text-align:center; padding:18px 0 22px; }
+  /* 3D Circle's pages keep their own top (name + buttons); the back button and page dots stay out of a preview. */
+  .preview-top .dash-back, .preview-top .page-dots{ visibility:hidden !important; }
   /* Home screen widget pictures: the page only - no veils, bubbles or Station 3 pieces over it. */
   html.story-widget #system-dimmer, html.story-widget #device-dimmer, html.story-widget .app-toast,
   html.story-widget .station3-region{ display:none !important; }
@@ -3579,7 +3581,7 @@ function stripPageTop(html){
   if(topEl) topEl.remove();
   return tmp.innerHTML;
 }
-function pageCleanHTML(key){
+function pageCleanHTML(key, keepTop){
   const fn = key==='money' ? moneyScreen : key==='wallet' ? walletScreen : key==='trading' ? tradingScreen : isAppPage(key) ? ()=>appPageScreen(key) : null;
   if(!fn) return '';
   // Strip duplicate ids (multiple simultaneous previews of the same real screen would
@@ -3588,10 +3590,13 @@ function pageCleanHTML(key){
   const html = fn()
     .replace(/\sid="[^"]*"/g, '')
     .replace(/<span class="home-badge">[^<]*<\/span>/g, '');
+  // 3D Circle keeps the page's own top - its name and its buttons (owner: Wallet's name and its transaction history
+  // button must show) - only the back button and page dots are left out (kept as space, so the layout is the page's).
+  if(keepTop) return html.replace('class="page-top"', 'class="page-top preview-top"');
   return stripPageTop(html);
 }
-function miniPagePreviewHTML(key){
-  const html = pageCleanHTML(key);
+function miniPagePreviewHTML(key, keepTop){
+  const html = pageCleanHTML(key, keepTop);
   if(!html) return '';
   return `<div class="mini-preview-frame"><div class="mini-preview-inner">${html}</div></div>`;
 }
@@ -3748,7 +3753,7 @@ const WHEEL_CAP_BAND = 28;
 function wheelPageTileHeights(){
   const heights = {};
   PAGE_SWITCH_ITEMS.forEach(item=>{
-    const natural = measureNaturalHeight(pageCleanHTML(item.key), WHEEL_DESIGN_W);
+    const natural = measureNaturalHeight(pageCleanHTML(item.key, true), WHEEL_DESIGN_W);
     heights[item.key] = Math.max(160, Math.round(natural * WHEEL_MSCALE));
   });
   const others = PAGE_SWITCH_ITEMS.filter(item=>item.key!=='money').map(item=>heights[item.key]);
@@ -3781,7 +3786,7 @@ function pswitchWheel3dHTML(navAttr){
             const marginLeft = (-WHEEL_SLICE_W/2).toFixed(2);
             slices += `
               <div class="curve-slice" data-angle="${angle.toFixed(2)}" style="width:${(WHEEL_SLICE_W + 0.8).toFixed(2)}px;height:${h}px;margin:${-h/2}px 0 0 ${marginLeft}px;transform:rotateY(${angle.toFixed(2)}deg) translateZ(${radius.toFixed(2)}px);">
-                <div class="curve-slice-inner" style="left:${cropLeft}px;height:${h}px;">${miniPagePreviewHTML(item.key)}</div>
+                <div class="curve-slice-inner" style="left:${cropLeft}px;height:${h}px;">${miniPagePreviewHTML(item.key, true)}</div>
               </div>
             `;
           }
