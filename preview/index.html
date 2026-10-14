@@ -9,6 +9,25 @@
   if(/[?&]s3=1/.test(location.search)){ document.documentElement.classList.add('s3-early'); }
   if(/[?&]profile=1/.test(location.search)){ document.documentElement.classList.add('profile-early'); }
 }catch(e){} })();
+/* A home screen widget's out-of-sight page (?widget=<page>, OverlayService.widgetSnap): it only READS - it draws the
+   page so the phone can take its picture. Anything that would do something (toasts, brightness, TradingView's window,
+   saving keys, opening apps...) does nothing here. */
+(function(){ try{
+  const m = /[?&]widget=([a-z]+)/.exec(location.search);
+  if(!m) return;
+  window.__storyWidget = m[1];
+  document.documentElement.classList.add('story-widget');
+  const real = window.StoryNative;
+  if(!real) return;
+  const READ = new Set(['getApps','appVersion','getTheme','getProfilePhoto','photoAccess','secretGet','moneyList','moneyAccess','notifList','getCalls','mediaAccess','getQuickAccess','listPhotos']);
+  const safe = new Proxy({}, { get(t, k){
+    if(k === 'http') return (id, method, url, h, body)=> String(method).toUpperCase() === 'DELETE' ? undefined : real.http(id, method, url, h, body);
+    if(READ.has(k)) return (...a)=>real[k](...a);
+    return ()=>'';
+  } });
+  try{ window.StoryNative = safe; }catch(e){}
+  if(window.StoryNative !== safe) Object.defineProperty(window, 'StoryNative', { value:safe, configurable:true });
+}catch(e){} })();
 </script>
 <meta charset="UTF-8">
 <title>STORY — Prototype</title>
@@ -1305,6 +1324,9 @@
   #story-profile .pf-newgroup-form button{ padding:0 14px; border-radius:12px; border:0; background:#ffffff; color:#000000; font-weight:700; }
   #story-profile .msg-lock{ display:inline-flex; margin-right:4px; vertical-align:-1px; opacity:0.8; font-style:normal; }
   .info-hero{ text-align:center; padding:18px 0 22px; }
+  /* Home screen widget pictures: the page only - no veils, bubbles or Station 3 pieces over it. */
+  html.story-widget #system-dimmer, html.story-widget #device-dimmer, html.story-widget .app-toast,
+  html.story-widget .station3-region{ display:none !important; }
   /* App pages: the app's own icon and name; landing here opens the real app. */
   .app-page-body{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; min-height:360px; padding:24px 0; }
   .app-page-icon{ width:96px; height:96px; display:flex; align-items:center; justify-content:center; }
@@ -5103,7 +5125,7 @@ function saveTradeAccounts(list){ try{ localStorage.setItem(TRADE_ACCOUNTS_KEY, 
 // gone (its sign-in keys thrown away) - next time you log in again. It also never outlives STORY being restarted
 // (sessionStorage survives a screen reload, not a restart; anything left over is wiped at start).
 const TRADE_TEMP_KEY = 'story-trade-temp';
-state.tempAccount = (()=>{ try{ return JSON.parse(sessionStorage.getItem(TRADE_TEMP_KEY) || 'null'); }catch(e){ return null; } })();
+state.tempAccount = (()=>{ try{ return JSON.parse(sessionStorage.getItem(TRADE_TEMP_KEY) || (window.__storyWidget ? localStorage.getItem(TRADE_TEMP_KEY) : null) || 'null'); }catch(e){ return null; } })();
 function forgetAccountKeys(a){
   const saved = tradeAccounts();
   if(!a || saved.some(b=>b.id === a.id)) return;
@@ -5121,7 +5143,7 @@ function setTempAccount(a){
   }catch(e){}
 }
 // Left over from before STORY restarted: throw its keys away.
-try{ if(!state.tempAccount){ const left = JSON.parse(localStorage.getItem(TRADE_TEMP_KEY) || 'null'); if(left){ localStorage.removeItem(TRADE_TEMP_KEY); setTimeout(()=>forgetAccountKeys(left), 0); } } }catch(e){}
+try{ if(!state.tempAccount && !window.__storyWidget){ const left = JSON.parse(localStorage.getItem(TRADE_TEMP_KEY) || 'null'); if(left){ localStorage.removeItem(TRADE_TEMP_KEY); setTimeout(()=>forgetAccountKeys(left), 0); } } }catch(e){}
 // Every account you can be on: your saved ones, plus the unsaved one you're on now.
 function tradeList(){ const l = tradeAccounts(); const t = state.tempAccount; return t && !l.some(a=>a.id === t.id) ? l.concat([t]) : l; }
 // Go to an account; leaving the unsaved one drops it.
@@ -7187,6 +7209,13 @@ function loadNativeApps(){
     }
   }catch(err){ console.warn('native apps unavailable', err); }
 }
+// A home screen widget's picture: just that page, exactly as it shows on the Pages (no Station 3, no pop-ups).
+window.storyWidget = function(page){
+  state.recentsOpen=false; state.homePickerOpen=false; state.appMenuId=null; state.station3Open=false;
+  state.rowsViewOpen=false; state.pageStyleViewOpen=false; state.chartFullscreen=false; state.toastMessage=null;
+  state.current = page;
+  renderDevice();
+};
 // Called by the Android overlay: open STORY on a given page (and optionally with Station 3 open).
 window.storyShow = function(page, station3){
   state.recentsOpen=false; state.homePickerOpen=false; state.appMenuId=null;
