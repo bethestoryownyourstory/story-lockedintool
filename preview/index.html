@@ -882,8 +882,11 @@
   .sortpage-btn:disabled{ opacity:0.3; cursor:default; }
   .sortpage-btn.danger{ color:#e63946; border-color:rgba(230,57,70,0.4); }
 
+  /* Pop-ups always sit on the SCREEN, never inside the page's scrolling content (owner: "they pop out of place" -
+     on a scrolled page they used to open off screen). position:fixed lands on the phone screen itself (.phone-screen
+     holds the containing block), whatever the page's scroll. */
   .notes-popover-overlay{
-    position:absolute; inset:0; background:rgba(0,0,0,0.35); display:flex;
+    position:fixed; inset:0; background:rgba(0,0,0,0.35); display:flex;
     align-items:flex-start; justify-content:flex-end; z-index:20; border-radius:inherit;
     padding:54px 10px 0;
   }
@@ -1651,7 +1654,7 @@
   .app-row{ -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; }
 
   .modal-overlay{
-    position:absolute; inset:0; background:rgba(0,0,0,0.72); display:flex;
+    position:fixed; inset:0; background:rgba(0,0,0,0.72); display:flex;
     align-items:flex-end; justify-content:center; z-index:20; border-radius:inherit;
   }
   .modal-sheet{
@@ -3987,6 +3990,31 @@ function recordPolicyStrike(reason){
   }
 }
 
+// All the categories currently in use across STORY's groups, plus "All" for the browse filter.
+const COMMUNITY_CATEGORIES = ['All','Info','Finance','News','World','Life','Community'];
+// A broad list of countries for the browse filter, plus "Global" for groups not tied to one place.
+const COMMUNITY_COUNTRIES = ['All','Global',
+  'Afghanistan','Albania','Algeria','Andorra','Angola','Argentina','Armenia','Australia','Austria','Azerbaijan',
+  'Bahamas','Bahrain','Bangladesh','Barbados','Belarus','Belgium','Belize','Benin','Bhutan','Bolivia',
+  'Bosnia and Herzegovina','Botswana','Brazil','Brunei','Bulgaria','Burkina Faso','Burundi','Cambodia','Cameroon','Canada',
+  'Cape Verde','Central African Republic','Chad','Chile','China','Colombia','Comoros','Congo','Costa Rica','Croatia',
+  'Cuba','Cyprus','Czech Republic','Denmark','Djibouti','Dominica','Dominican Republic','Ecuador','Egypt','El Salvador',
+  'Equatorial Guinea','Eritrea','Estonia','Eswatini','Ethiopia','Fiji','Finland','France','Gabon','Gambia',
+  'Georgia','Germany','Ghana','Greece','Grenada','Guatemala','Guinea','Guinea-Bissau','Guyana','Haiti',
+  'Honduras','Hungary','Iceland','India','Indonesia','Iran','Iraq','Ireland','Israel','Italy',
+  'Ivory Coast','Jamaica','Japan','Jordan','Kazakhstan','Kenya','Kiribati','Kosovo','Kuwait','Kyrgyzstan',
+  'Laos','Latvia','Lebanon','Lesotho','Liberia','Libya','Liechtenstein','Lithuania','Luxembourg','Madagascar',
+  'Malawi','Malaysia','Maldives','Mali','Malta','Marshall Islands','Mauritania','Mauritius','Mexico','Micronesia',
+  'Moldova','Monaco','Mongolia','Montenegro','Morocco','Mozambique','Myanmar','Namibia','Nauru','Nepal',
+  'Netherlands','New Zealand','Nicaragua','Niger','Nigeria','North Korea','North Macedonia','Norway','Oman','Pakistan',
+  'Palau','Palestine','Panama','Papua New Guinea','Paraguay','Peru','Philippines','Poland','Portugal','Qatar',
+  'Romania','Russia','Rwanda','Saint Lucia','Samoa','San Marino','Saudi Arabia','Senegal','Serbia','Seychelles',
+  'Sierra Leone','Singapore','Slovakia','Slovenia','Solomon Islands','Somalia','South Africa','South Korea','South Sudan','Spain',
+  'Sri Lanka','Sudan','Suriname','Sweden','Switzerland','Syria','Taiwan','Tajikistan','Tanzania','Thailand',
+  'Timor-Leste','Togo','Tonga','Trinidad and Tobago','Tunisia','Turkey','Turkmenistan','Tuvalu','Uganda','Ukraine',
+  'United Arab Emirates','United Kingdom','United States','Uruguay','Uzbekistan','Vanuatu','Vatican City','Venezuela','Vietnam','Yemen',
+  'Zambia','Zimbabwe',
+];
 // Community has no made-up groups (owner: "everything real, even the groups"): only the groups people really create
 // (on STORY's server) - plus Stories, STORY's one real shared feed (Community > Stories), which isn't a group card.
 function buildBuiltinCommunityGroups(){
