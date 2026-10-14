@@ -7154,7 +7154,8 @@ function subscriptionScreen(){
       <div class="pay-wait-amt">${escText(w.name)}</div>
       <div class="pay-wait-who">$${w.usd}/month · R${Number(w.zar).toFixed(2)}</div>
       <div class="pay-wait-status">${w.status === 'paid' ? 'Paid - your plan is on.' : w.status === 'pending' ? 'Approve it in your bank’s page that opened. This updates by itself.' : w.status === 'cancelled' ? 'Cancelled in your bank' : 'Not approved in time - nothing was paid'}</div>
-      ${w.status === 'pending' ? `<button class="btn-wide" data-action="sub-reopen">Open my bank’s page again</button>` : `<button class="btn-wide btn-primary" data-action="sub-done">Done</button>`}
+      ${w.status === 'pending' ? `<button class="btn-wide" data-action="sub-reopen">Open my bank’s page again</button>
+      <button class="btn-wide" data-action="sub-cancel"${state.sub.busy ? ' disabled' : ''}>Cancel - nothing is paid</button>` : `<button class="btn-wide btn-primary" data-action="sub-done">Done</button>`}
     </div>` : ''}
     ${SUB_PLANS.map(p=>{ const pr = plans[p.key] || {}; const mine = active && s.plan === p.key; return `
       <div class="sub-card${p.key === 'premium' ? ' sub-premium' : ''}">
@@ -7163,7 +7164,7 @@ function subscriptionScreen(){
         <div class="sub-tag">${p.tag}</div>
         <div class="sub-text">${p.text}</div>
         <ul class="sub-list">${p.list.map(x=>`<li>${x}</li>`).join('')}</ul>
-        ${`<button class="btn-wide${mine ? '' : ' btn-primary'}" data-action="sub-buy" data-plan="${p.key}"${state.sub.busy || w ? ' disabled' : ''}>${mine ? 'Add another month' : 'Choose ' + p.name}</button>
+        ${`<button class="btn-wide${mine ? '' : ' btn-primary'}" data-action="sub-buy" data-plan="${p.key}"${state.sub.busy || (w && w.status === 'pending' && w.plan === p.key) ? ' disabled' : ''}>${w && w.status === 'pending' && w.plan === p.key ? 'Waiting for your bank' : w && w.status === 'pending' ? 'Switch to ' + p.name : mine ? 'Add another month' : 'Choose ' + p.name}</button>
         <div class="sub-zar">Paid in rand: R${Number(pr.zar || 0).toFixed(2)} a month, approved in your own bank</div>`}
       </div>`; }).join('')}
     ${state.sub.msg ? `<div class="note pay-msg">${escText(state.sub.msg)}</div>` : ''}
@@ -7190,9 +7191,27 @@ function subBuy(plan){
   state.sub.busy = true; state.sub.msg = '';
   msgApi('/v1/sub/buy', { plan }).then(r=>{
     state.sub.busy = false;
-    state.sub.waiting = { id:r.id, url:r.url, name:p.name, usd:pr.usd, zar:pr.zar, status:'pending', started:Date.now() };
+    state.sub.waiting = { id:r.id, url:r.url, plan, name:p.name, usd:pr.usd, zar:pr.zar, status:'pending', started:Date.now() };
     payOpenBank(r.url); renderDevice(); subPollT = setTimeout(subPoll, 4000);
   }).catch(e=>{ state.sub.busy = false; state.sub.msg = e.code === 'not-connected' ? 'Subscriptions open once LOCKED IN TOOL’s payments are set up.' : 'Couldn’t start the payment - try again.'; renderDevice(); });
+}
+// Changed your mind before paying (owner: a customer must be able to go back and pick the other plan): the plan you
+// started is cancelled at Stitch (its link can't be paid any more) and you choose again. Choosing the other plan while
+// one waits does the same on the server (sub/buy cancels any unpaid one first). Already paid -> it counts as paid.
+function subCancel(){
+  const w = state.sub.waiting;
+  if(!w || w.status !== 'pending' || state.sub.busy) return;
+  clearTimeout(subPollT);
+  state.sub.busy = true; state.sub.msg = ''; renderDevice();
+  msgApi('/v1/sub/cancel', { id:w.id }).then(r=>{
+    state.sub.busy = false;
+    if(state.sub.waiting !== w) return;
+    subSave(r);
+    if(r.status === 'cancelled' || r.status === 'expired'){ state.sub.waiting = null; showToast('Cancelled - nothing was paid. Choose a plan.'); }
+    else if(r.status === 'paid'){ w.status = 'paid'; showToast(w.name + ' was already paid - it’s on'); }
+    else { state.sub.msg = 'Your bank is already processing this payment - wait for it to finish.'; subPollT = setTimeout(subPoll, 3000); }
+    renderDevice();
+  }).catch(()=>{ state.sub.busy = false; state.sub.msg = 'Couldn’t cancel - check your connection and try again.'; subPollT = setTimeout(subPoll, 3000); renderDevice(); });
 }
 document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState === 'visible'){ if(state.sub && state.sub.waiting) subPoll(); subRefresh(false); } });
 function txHistoryScreen(){
@@ -14118,6 +14137,7 @@ function attachHandlers(){
         case 'sub-buy': subBuy(el.getAttribute('data-plan')); break;
         case 'sub-reopen': if(state.sub.waiting) payOpenBank(state.sub.waiting.url); break;
         case 'sub-done': state.sub.waiting = null; break;
+        case 'sub-cancel': subCancel(); break;
         case 'pay-mode': state.pay.mode = el.getAttribute('data-v'); state.pay.msg = ''; break;
         case 'pay-bank': state.pay.bank = el.getAttribute('data-v'); break;
         case 'pay-unpick': state.pay.to = null; break;
