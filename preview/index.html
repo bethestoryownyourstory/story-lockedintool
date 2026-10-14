@@ -3139,6 +3139,15 @@
   .community-filter-group-label{ font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--text); opacity:.6; margin:14px 0 8px; }
   .community-chip-row{ display:flex; flex-wrap:wrap; gap:8px; }
   .community-chip-row-scroll{ max-height:160px; overflow-y:auto; }
+  .group-country-row{ max-height:96px; margin-bottom:8px; scrollbar-width:none; }
+  .group-country-row::-webkit-scrollbar{ display:none; }
+  .create-group-sheet{ scrollbar-width:none; }
+  .create-group-sheet::-webkit-scrollbar{ display:none; }
+  .group-photo-grid{ display:grid; grid-template-columns:repeat(3, 1fr); gap:4px; margin-top:6px; }
+  .group-photo{ aspect-ratio:1; padding:0; border:none; border-radius:8px; overflow:hidden; background:var(--card-2); }
+  .group-photo img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .group-photo-more{ display:flex; flex-direction:column; align-items:center; justify-content:center; color:var(--text); font-size:22px; font-weight:700; border:1px dashed var(--line); }
+  .group-photo-more span{ font-size:10px; font-weight:700; margin-top:2px; }
   .community-chip{
     font-size:11.5px; padding:8px 12px; border-radius:20px; background:var(--card); border:1px solid var(--line);
     color:var(--text); cursor:pointer; font-family:var(--font-body);
@@ -9499,6 +9508,7 @@ let noteAccessWaiting = null;
 window.storyNoteAccessDone = function(kind){
   const w = noteAccessWaiting; noteAccessWaiting = null;
   if(w && w.kind === kind && document.getElementById('note-panel')) w.then();
+  else if(state.groupDraftPicking && kind === 'photos') renderDevice();   // Create Group's picture grid
   if(cardAccessWaiting && kind === 'camera'){ cardAccessWaiting = false; const w = document.getElementById('card-cam'); if(w) openCardCamera(w.dataset.side); }
 };
 // Picture: the phone's real pictures in STORY's own grid (thumbnails straight from the phone); tap one -> in the note.
@@ -12646,8 +12656,12 @@ function attachHandlers(){
   if(groupDraftNameInput) groupDraftNameInput.addEventListener('input', ()=>{ state.groupDraftName = groupDraftNameInput.value; });
   const groupDraftDescInput = document.getElementById('group-draft-desc');
   if(groupDraftDescInput) groupDraftDescInput.addEventListener('input', ()=>{ state.groupDraftDesc = groupDraftDescInput.value; });
-  const groupDraftCountrySelect = document.getElementById('group-draft-country');
-  if(groupDraftCountrySelect) groupDraftCountrySelect.addEventListener('change', ()=>{ state.groupDraftCountry = groupDraftCountrySelect.value; });
+  // Create Group's country list shows the one you picked.
+  const ctyRow = document.querySelector('.group-country-row'), ctyOn = ctyRow && ctyRow.querySelector('.community-chip.active');
+  if(ctyOn) ctyRow.scrollTop = Math.max(0, ctyOn.offsetTop - ctyRow.offsetTop - 34);
+  // More pictures as you scroll Create Group's picture grid.
+  const groupSheet = document.querySelector('.create-group-sheet');
+  if(groupSheet && state.groupDraftPicking) groupSheet.addEventListener('scroll', ()=>{ if(groupSheet.scrollTop + groupSheet.clientHeight > groupSheet.scrollHeight - 300){ const top = groupSheet.scrollTop; state.groupDraftShown = (state.groupDraftShown || 60) + 60; renderDevice(); const n = document.querySelector('.create-group-sheet'); if(n) n.scrollTop = top; } }, { passive:true });
   const groupDraftImageInput = document.getElementById('group-draft-image-input');
   if(groupDraftImageInput) groupDraftImageInput.addEventListener('change', ()=>{
     const file = groupDraftImageInput.files && groupDraftImageInput.files[0];
@@ -14040,10 +14054,22 @@ function attachHandlers(){
           break;
         }
         case 'community-group-pick-image': {
+          // In the app: STORY's own grid of the phone's pictures, right inside Create Group (the browser's file
+          // picker doesn't exist in STORY's window). The browser preview keeps the file picker.
+          if(NATIVE && window.StoryNative.listPhotos){ groupDraftKeepText(); state.groupDraftPicking = true; state.groupDraftShown = 60; break; }
           const fileInput = document.getElementById('group-draft-image-input');
           if(fileInput) fileInput.click();
           return; // opening the native file picker shouldn't trigger a re-render
         }
+        case 'community-group-pick-back': state.groupDraftPicking = false; break;
+        case 'community-group-pick-allow': groupDraftKeepText(); noteAccessWaiting = { kind:'photos', then: ()=>renderDevice() }; window.StoryNative.noteAsk('photos'); return;
+        case 'community-group-pick-photo': {
+          const id = el.getAttribute('data-photo');
+          state.groupDraftPicking = false;
+          groupPictureFromPhone(id).then(url=>{ if(url){ state.groupDraftImage = url; renderDevice(); } else showToast('Couldn\u2019t use that picture'); });
+          break;
+        }
+        case 'community-set-group-country': groupDraftKeepText(); state.groupDraftCountry = el.getAttribute('data-value'); break;
         case 'community-set-filter': state.communityGroupFilter = el.getAttribute('data-value'); break;
         case 'community-search-toggle': state.communityGroupSearchOpen = true; state.communityGroupSearchQuery=''; break;
         case 'community-search-close-bg':
@@ -14066,7 +14092,7 @@ function attachHandlers(){
         case 'community-create-group-open':
           state.communityCreateGroupOpen = true;
           state.groupDraftName = ''; state.groupDraftDesc = ''; state.groupDraftType = 'public';
-          state.groupDraftPolicyAgreed = false; state.groupDraftError = ''; state.groupDraftImage = null; state.groupDraftCountry = 'Global';
+          state.groupDraftPolicyAgreed = false; state.groupDraftError = ''; state.groupDraftImage = null; state.groupDraftCountry = 'Global'; state.groupDraftPicking = false;
           break;
         case 'community-create-group-close-bg':
         case 'community-create-group-close': state.communityCreateGroupOpen = false; break;
@@ -14659,12 +14685,40 @@ function groupSearchTemplate(){
     ${state.groupFilterSheetOpen ? communityFilterSheetTemplate() : ''}
   `;
 }
+// Create Group keeps what you typed while the picture grid or the country list redraws the sheet.
+function groupDraftKeepText(){
+  const n = document.getElementById('group-draft-name'), d = document.getElementById('group-draft-desc');
+  if(n) state.groupDraftName = n.value; if(d) state.groupDraftDesc = d.value;
+}
+// The chosen picture, made square and small (it goes to STORY's server with the group): from the phone's own preview.
+async function groupPictureFromPhone(id){
+  try{
+    const blob = await (await fetch(ProfileThumbBase + 'thumb/' + encodeURIComponent(id))).blob();
+    const bmp = await createImageBitmap(blob);
+    const side = Math.min(bmp.width, bmp.height), out = Math.min(480, side);
+    const c = document.createElement('canvas'); c.width = c.height = out;
+    c.getContext('2d').drawImage(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side, 0, 0, out, out);
+    return c.toDataURL('image/jpeg', 0.82);
+  }catch(e){ return null; }
+}
+function groupPhotoPickerHTML(){
+  const access = window.StoryNative.photoAccess ? window.StoryNative.photoAccess() : 'none';
+  let ids = []; if(access !== 'none') try{ ids = JSON.parse(window.StoryNative.listPhotos() || '[]'); }catch(e){}
+  const shown = ids.slice(0, state.groupDraftShown || 60);
+  return `
+    <div class="modal-head"><button class="modal-close" data-action="community-group-pick-back" aria-label="Back">‹</button><span class="modal-title">Choose a picture</span><span style="width:26px"></span></div>
+    ${access === 'none'
+      ? `<div class="community-empty-note">Let STORY show your pictures here.</div><button class="notes-create-btn" style="width:100%;margin-top:8px;" data-action="community-group-pick-allow">Allow</button>`
+      : `<div class="group-photo-grid">${access === 'partial' ? `<button class="group-photo group-photo-more" data-action="community-group-pick-allow">+<span>More pictures</span></button>` : ''}${shown.map(id=>`<button class="group-photo" data-action="community-group-pick-photo" data-photo="${escText(String(id))}"><img loading="lazy" alt="" src="${ProfileThumbBase}thumb/${escText(String(id))}"></button>`).join('')}</div>
+         ${ids.length ? '' : '<div class="community-empty-note">No pictures on this phone yet.</div>'}`}`;
+}
 function createGroupTemplate(){
   const type = state.groupDraftType;
   const chip = (val,label)=>`<div class="notes-style-chip${type===val?' selected':''}" data-action="community-set-group-type" data-value="${val}">${label}</div>`;
   return `
     <div class="notes-popover-overlay" data-action="community-create-group-close-bg" style="align-items:center;justify-content:center;padding:0;">
-      <div class="notes-popover-sheet" style="width:86%;max-width:300px;max-height:80vh;overflow-y:auto;" onclick="event.stopPropagation()">
+      <div class="notes-popover-sheet create-group-sheet" style="width:86%;max-width:300px;max-height:80vh;overflow-y:auto;" onclick="event.stopPropagation()">
+        ${state.groupDraftPicking ? groupPhotoPickerHTML() : `
         <div class="modal-head"><span class="modal-title">Create Group</span><button class="modal-close" data-action="community-create-group-close">×</button></div>
         <div class="community-group-pic-picker" data-action="community-group-pick-image" style="${state.groupDraftImage?`background-image:url('${state.groupDraftImage}')`:''}">
           ${state.groupDraftImage ? '' : `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg><span>Add picture</span>`}
@@ -14673,9 +14727,7 @@ function createGroupTemplate(){
         <input id="group-draft-name" class="share-caption-input" placeholder="Group name" value="${escText(state.groupDraftName)}" maxlength="40">
         <input id="group-draft-desc" class="share-caption-input" placeholder="What's this group about? (optional)" value="${escText(state.groupDraftDesc)}" maxlength="140">
         <div class="section-title" style="margin-top:2px;">COUNTRY (OPTIONAL)</div>
-        <select id="group-draft-country" class="share-caption-input" style="margin-bottom:8px;">
-          ${COMMUNITY_COUNTRIES.filter(c=>c!=='All').map(c=>`<option value="${escText(c)}" ${state.groupDraftCountry===c?'selected':''}>${escText(c)}</option>`).join('')}
-        </select>
+        <div class="community-chip-row community-chip-row-scroll group-country-row">${COMMUNITY_COUNTRIES.filter(c=>c!=='All').map(c=>`<div class="community-chip${(state.groupDraftCountry || 'Global')===c?' active':''}" data-action="community-set-group-country" data-value="${escText(c)}">${escText(c)}</div>`).join('')}</div>
         <!-- Community groups are always PUBLIC - free to join, no request (owner). Private groups are made only
              in Messages and never show in Community. -->
         <div class="community-policy-box">
@@ -14686,7 +14738,7 @@ function createGroupTemplate(){
           <span>I agree to this policy</span>
         </label>
         ${state.groupDraftError ? `<div class="community-error-note">${escText(state.groupDraftError)}</div>` : ''}
-        <button class="notes-create-btn" style="width:100%;margin-top:10px;" data-action="community-create-group-submit">${state.groupDraftBusy ? 'Creating…' : 'Create Group'}</button>
+        <button class="notes-create-btn" style="width:100%;margin-top:10px;" data-action="community-create-group-submit">${state.groupDraftBusy ? 'Creating…' : 'Create Group'}</button>`}
       </div>
     </div>
   `;
