@@ -1347,6 +1347,17 @@
   #story-profile .pf-newgroup-form button{ padding:0 14px; border-radius:12px; border:0; background:#ffffff; color:#000000; font-weight:700; }
   #story-profile .msg-lock{ display:inline-flex; margin-right:4px; vertical-align:-1px; opacity:0.8; font-style:normal; }
   .info-hero{ text-align:center; padding:18px 0 22px; }
+  /* Money transfer */
+  .pay-tabs{ margin:4px 0 2px; }
+  .pay-tabs .order-type-btn:not(.active){ color:var(--text); }
+  .pay-banks{ margin:10px 0 8px; flex-wrap:wrap; }
+  .pay-amount{ font-size:22px; text-align:center; padding:16px; }
+  .note.pay-msg{ color:var(--red); margin-top:10px; }
+  .pay-wait{ text-align:center; padding:26px 16px; display:flex; flex-direction:column; gap:10px; align-items:center; }
+  .pay-wait-amt{ font-size:30px; font-weight:800; }
+  .pay-wait-who{ font-size:15px; color:var(--muted); }
+  .pay-wait-status{ font-size:13px; line-height:1.4; margin:6px 0 4px; }
+  .pay-recv-who{ font-size:20px; font-weight:800; }
   /* 3D Circle's pages keep their own top (name + buttons); the back button and page dots stay out of a preview. */
   .preview-top .dash-back, .preview-top .page-dots{ visibility:hidden !important; }
   /* Home screen widget pictures: the page only - no veils, bubbles or Station 3 pieces over it. */
@@ -4336,9 +4347,6 @@ let state = {
   moneyTransferOpen:false,
   walletCardIndex:(()=>{ try{ const l = (JSON.parse(localStorage.getItem('story-cards') || '[]') || []).filter(c=>c && c.checked); const a = localStorage.getItem('story-card-active'); const i = l.findIndex(c=>c.id === a); return i >= 0 ? i + 1 : (a === '' || !l.length ? 0 : 1); }catch(e){ return 0; } })(),
   txHistoryBackTarget:'wallet',
-  sendAmount:'',
-  sendToContactId:null,
-  sendConfirmOpen:false,
   // Wallet / Money show only your real payments (moneyTx - read from your bank apps' notifications); nothing is seeded.
   walletActivity:[],
   transactions:[],
@@ -6915,54 +6923,174 @@ function walletOverviewScreen(){
   `;
 }
 
+// ---- Money transfer (owner: send money profile to profile - and to anyone, even people not on STORY). Real, through
+// Stitch (South African payment partner - msg-worker.js /v1/pay/*): you approve it in your OWN bank and it goes
+// straight into their bank account; STORY never holds the money. A STORY profile is paid into the bank account they
+// added under Receive (nobody sending sees it); anyone else by their name + bank + account number. ----
+const PAY_BANKS_UI = { absa:'Absa', african_bank:'African Bank', capitec:'Capitec', discovery_bank:'Discovery Bank', fnb:'FNB', investec:'Investec', nedbank:'Nedbank', standard_bank:'Standard Bank', tymebank:'TymeBank' };
+state.pay = { mode:'story', q:'', found:[], to:null, name:'', bank:'', acct:'', amount:'', ref:'', busy:false, msg:'', info:null, history:null, waiting:null,
+  recv:{ name:'', bank:'', acct:'', editing:false, busy:false, msg:'' } };
+function payBanks(){ return (state.pay.info && state.pay.info.banks) || PAY_BANKS_UI; }
+function payMoney(n){ return 'R' + Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits:2, maximumFractionDigits:2 }); }
+function payShow(){ if(state.current === 'send-money' || state.current === 'receive-money') renderDevice(); }
+function payLoad(){
+  if(!msgAccount()) return;
+  msgApi('/v1/pay/info').then(i=>{ state.pay.info = i; payShow(); }).catch(()=>{});
+  msgApi('/v1/pay/history').then(h=>{ state.pay.history = h.payments || []; payShow(); }).catch(()=>{});
+}
+const PAY_ERRORS = { 'not-connected':'Money transfer connects once STORY’s payment partner (Stitch) is set up.', 'no-bank':'They haven’t added a bank account to receive money yet.',
+  'bank-details':'Check the name, bank and account number.', amount:'Send between R1 and R50 000.', self:'That’s you.', notfound:'That STORY account doesn’t exist any more.', signin:'Your STORY account isn’t ready yet - try again in a moment.' };
+function payBankChips(sel, action){
+  return `<div class="community-chip-row pay-banks">${Object.entries(payBanks()).map(([k, n])=>`<div class="community-chip${sel === k ? ' active' : ''}" data-action="${action}" data-v="${k}">${escText(n)}</div>`).join('')}</div>`;
+}
+let payFindT = 0;
+function payFind(q){
+  clearTimeout(payFindT);
+  const t = q.trim();
+  if(t.replace(/^@/, '').length < 2 || !msgAccount()){ state.pay.found = []; payFoundDraw(); return; }
+  payFindT = setTimeout(async ()=>{
+    try{ const r = await msgApi('/v1/find?q=' + encodeURIComponent(t)); if(state.pay.q.trim() === t){ state.pay.found = r.people || []; payFoundDraw(); } }
+    catch(e){ state.pay.found = []; payFoundDraw(); }
+  }, 300);
+}
+function payFoundHTML(){
+  const p = state.pay;
+  if(!p.found.length) return p.q.trim().replace(/^@/, '').length >= 2 ? '<div class="note" style="padding:10px 4px;">No one on STORY by that name yet.</div>' : '';
+  return `<div class="row-card">${p.found.map(u=>`
+    <div class="row" data-action="pay-pick" data-id="${escText(u.id)}" style="cursor:pointer;${u.canPay ? '' : 'opacity:0.5;'}">
+      <div class="row-left"><div class="row-icon">${PAY_PERSON}</div><div><div class="row-name">${escText(u.name || '@' + u.username)}</div><div class="row-sub">${u.name && u.username ? '@' + escText(u.username) + ' · ' : ''}${u.canPay ? 'Can receive money' : 'Hasn’t added a bank account yet'}</div></div></div>
+    </div>`).join('')}</div>`;
+}
+function payFoundDraw(){ const el = document.querySelector('#device-wrap #pay-found'); if(el) el.innerHTML = payFoundHTML(); attachPayFound(); }
+function attachPayFound(){
+  document.querySelectorAll('#device-wrap #pay-found [data-action="pay-pick"]').forEach(el=>{ el.onclick = (e)=>{ e.stopPropagation(); payPick(el.getAttribute('data-id')); }; });
+}
+function payPick(id){
+  const u = state.pay.found.find(x=>x.id === id); if(!u) return;
+  if(!u.canPay){ showToast((u.name || '@' + u.username) + ' hasn’t added a bank account to receive money yet'); return; }
+  state.pay.to = u; state.pay.found = []; state.pay.q = ''; state.pay.msg = ''; renderDevice();
+}
+const PAY_PERSON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>';
+const PAY_BANK_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 10l9-6 9 6"/><path d="M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20h18"/></svg>';
+function payHistoryHTML(){
+  const h = state.pay.history;
+  if(!h || !h.length) return '';
+  const word = { pending:'Waiting for your bank', paid:'Paid', cancelled:'Cancelled', expired:'Not approved in time' };
+  return `<div class="section-title">TRANSFERS</div><div class="row-card">${h.slice(0, 30).map(t=>`
+    <div class="row"><div class="row-left"><div class="row-icon">${t.dir === 'in' ? '↙' : '↗'}</div><div><div class="row-name">${escText(t.who || '')}</div><div class="row-sub">${escText(word[t.status] || t.status)}${t.ref ? ' · ' + escText(t.ref) : ''} · ${moneyDate(t.at)}</div></div></div>
+    <div class="row-amt" style="color:${t.dir === 'in' ? 'var(--green)' : 'var(--text)'};">${t.dir === 'in' ? '+' : '-'}${payMoney(t.amount)}</div></div>`).join('')}</div>`;
+}
 function sendMoneyScreen(){
-  const selected = state.contacts.find(c=>c.id===state.sendToContactId);
+  const p = state.pay;
+  if(p.info === null && !p.loading){ p.loading = true; payLoad(); }
+  const w = p.waiting;
+  if(w) return `
+    <div class="page-shell">
+    ${topBar('Send Money', false, '', 'wallet')}
+    <div class="row-card pay-wait">
+      <div class="pay-wait-amt">${payMoney(w.amount)}</div>
+      <div class="pay-wait-who">to ${escText(w.who)}</div>
+      <div class="pay-wait-status">${w.status === 'paid' ? 'Paid - it’s on its way to their bank' : w.status === 'cancelled' ? 'Cancelled in your bank' : w.status === 'expired' ? 'Not approved in time - nothing was paid' : 'Approve it in your bank’s page that opened. This updates by itself.'}</div>
+      ${w.status === 'pending' ? `<button class="btn-wide" data-action="pay-reopen">Open my bank’s page again</button>` : `<button class="btn-wide btn-primary" data-action="pay-done">Done</button>`}
+    </div>
+    </div>`;
+  const ready = !!msgAccount();
+  const who = p.mode === 'story'
+    ? (p.to ? `<div class="row-card"><div class="row"><div class="row-left"><div class="row-icon">${PAY_PERSON}</div><div><div class="row-name">${escText(p.to.name || '@' + p.to.username)}</div><div class="row-sub">${p.to.name && p.to.username ? '@' + escText(p.to.username) : 'On STORY'}</div></div></div><button class="order-corner-btn" data-action="pay-unpick" title="Change">✕</button></div></div>`
+      : `<input class="field-input" data-pay-input="q" type="text" autocomplete="off" placeholder="Search @username or name" value="${escText(p.q)}"><div id="pay-found">${payFoundHTML()}</div>`)
+    : `<input class="field-input" data-pay-input="name" type="text" autocomplete="off" placeholder="Their name (as on the account)" value="${escText(p.name)}">
+       ${payBankChips(p.bank, 'pay-bank')}
+       <input class="field-input" data-pay-input="acct" type="text" inputmode="numeric" autocomplete="off" placeholder="Account number" value="${escText(p.acct)}">`;
+  const toName = p.mode === 'story' ? (p.to ? (p.to.name || '@' + p.to.username) : '') : p.name.trim();
+  const amt = parseFloat(String(p.amount).replace(',', '.'));
   return `
     <div class="page-shell">
     ${topBar('Send Money', false, '', 'wallet')}
-    <div class="section-title">AMOUNT</div>
-    <input class="field-input" id="send-amount-input" type="text" inputmode="decimal" placeholder="$0.00" value="${state.sendAmount}" style="font-size:22px;text-align:center;padding:16px;">
+    <div class="order-type-grid pay-tabs">
+      <button class="order-type-btn${p.mode === 'story' ? ' active' : ''}" data-action="pay-mode" data-v="story">STORY profile</button>
+      <button class="order-type-btn${p.mode === 'bank' ? ' active' : ''}" data-action="pay-mode" data-v="bank">Anyone</button>
+    </div>
     <div class="section-title">SEND TO</div>
-    <div class="row-card">
-      ${state.contacts.map(c=>`
-        <div class="row" data-sendto="${c.id}" style="cursor:pointer;${state.sendToContactId===c.id?'background:rgba(182,242,122,0.08);':''}">
-          <div class="row-left"><div class="row-icon">${c.avatar}</div><div class="row-name">${c.name}</div></div>
-          ${state.sendToContactId===c.id?'<div style="color:#b6f27a;font-weight:800;">✓</div>':''}
-        </div>
-      `).join('')}
-    </div>
-    <button class="btn-wide btn-primary" data-action="send-confirm" style="margin-top:14px;">Send${state.sendAmount?' $'+state.sendAmount:''}${selected?' to '+selected.name:''}</button>
-    </div>
-
-    ${state.sendConfirmOpen ? sendConfirmTemplate() : ''}
-  `;
+    ${ready ? who : '<div class="note">Your STORY account is being set up - one moment.</div>'}
+    <div class="section-title">AMOUNT</div>
+    <input class="field-input pay-amount" data-pay-input="amount" type="text" inputmode="decimal" autocomplete="off" placeholder="R0.00" value="${escText(p.amount)}">
+    <input class="field-input" data-pay-input="ref" type="text" autocomplete="off" maxlength="20" placeholder="Reference (optional)" value="${escText(p.ref)}" style="margin-top:8px;">
+    ${p.msg ? `<div class="note pay-msg">${escText(p.msg)}</div>` : ''}
+    <button class="btn-wide btn-primary" data-action="pay-send" style="margin-top:14px;"${p.busy ? ' disabled' : ''}>${p.busy ? 'One moment…' : 'Send' + (amt > 0 ? ' ' + payMoney(amt) : '') + (toName ? ' to ' + escText(toName) : '')}</button>
+    <div class="note" style="margin-top:10px;">You approve every payment in your own bank. It goes straight from your account into theirs - STORY never holds your money.</div>
+    ${payHistoryHTML()}
+    </div>`;
 }
-
-function sendConfirmTemplate(){
-  const selected = state.contacts.find(c=>c.id===state.sendToContactId);
-  return `
-    <div class="modal-overlay" data-action="send-confirm-bg">
-      <div class="confirm-sheet" onclick="event.stopPropagation()">
-        <div class="confirm-title">Sent!</div>
-        <div class="confirm-sub">$${state.sendAmount || '0.00'} sent to ${selected ? selected.name : 'your contact'}.</div>
-        <button class="btn-wide btn-primary" style="margin-top:4px;" data-action="send-done">Done</button>
-      </div>
-    </div>
-  `;
-}
-
 function receiveMoneyScreen(){
+  const p = state.pay, r = p.recv;
+  if(p.info === null && !p.loading){ p.loading = true; payLoad(); }
+  const prof = (()=>{ try{ return JSON.parse(localStorage.getItem('story-profile') || '{}') || {}; }catch(e){ return {}; } })();
+  const mine = p.info && p.info.bank;
+  const form = `
+    <input class="field-input" data-pay-input="rname" type="text" autocomplete="off" placeholder="Name on the account" value="${escText(r.name)}">
+    ${payBankChips(r.bank, 'pay-recv-bank')}
+    <input class="field-input" data-pay-input="racct" type="text" inputmode="numeric" autocomplete="off" placeholder="Account number" value="${escText(r.acct)}">
+    ${r.msg ? `<div class="note pay-msg">${escText(r.msg)}</div>` : ''}
+    <button class="btn-wide btn-primary" data-action="pay-recv-save" style="margin-top:12px;"${r.busy ? ' disabled' : ''}>${r.busy ? 'One moment…' : 'Save'}</button>
+    ${mine ? `<button class="btn-wide" data-action="pay-recv-cancel" style="margin-top:8px;">Cancel</button>` : ''}`;
   return `
     <div class="page-shell">
     ${topBar('Receive Money', false, '', 'wallet')}
-    <div class="row-card" style="text-align:center;padding:22px 16px;">
-      <div class="qr-box">
-        ${Array.from({length:49}).map((_,i)=>`<div class="qr-cell" style="opacity:${(i*37)%5===0?1:0};"></div>`).join('')}
-      </div>
-      <div class="note" style="margin-top:14px;">Scan this code in any app that supports receiving money — PayPal, Venmo, Cash App, or a bank transfer.</div>
+    <div class="row-card" style="text-align:center;padding:18px 16px;">
+      <div class="pay-recv-who">${escText(prof.username ? '@' + prof.username : (prof.name || 'Your STORY profile'))}</div>
+      <div class="note" style="margin-top:6px;">People on STORY send you money by your ${prof.username ? '@username' : 'name'}.${prof.username ? '' : ' Add a @username in your profile so they can find you easily.'}</div>
     </div>
-    </div>
-  `;
+    <div class="section-title">PAID INTO</div>
+    ${!msgAccount() ? '<div class="note">Your STORY account is being set up - one moment.</div>'
+      : p.info === null ? '<div class="note">Loading…</div>'
+      : mine && !r.editing ? `<div class="row-card"><div class="row"><div class="row-left"><div class="row-icon">${PAY_BANK_ICON}</div><div><div class="row-name">${escText(payBanks()[mine.bank] || mine.bank)} ••${escText(mine.mask)}</div><div class="row-sub">${escText(mine.name)}</div></div></div></div></div>
+        <div class="confirm-btn-row" style="margin-top:10px;"><button class="btn-wide" style="margin-top:0;" data-action="pay-recv-edit">Change</button><button class="btn-wide" style="margin-top:0;color:var(--red);" data-action="pay-recv-remove">Remove</button></div>`
+      : form}
+    <div class="note" style="margin-top:12px;">Your account number stays on STORY's server only to pay you - nobody sending you money ever sees it.</div>
+    </div>`;
+}
+// Waiting for the bank: STORY asks how the payment stands every few seconds - only while this screen is up.
+let payPollT = 0;
+function payPoll(){
+  clearTimeout(payPollT);
+  const w = state.pay.waiting;
+  if(!w || w.status !== 'pending') return;
+  if(Date.now() - w.started > 20 * 60000) return;
+  if(document.visibilityState === 'hidden' || state.current !== 'send-money'){ payPollT = setTimeout(payPoll, 4000); return; }
+  msgApi('/v1/pay/status?id=' + encodeURIComponent(w.id)).then(r=>{
+    if(state.pay.waiting !== w) return;
+    if(r.status !== 'pending'){ w.status = r.status; showToast(r.status === 'paid' ? payMoney(w.amount) + ' paid to ' + w.who : r.status === 'cancelled' ? 'Payment cancelled' : 'Payment not approved in time'); payLoad(); payShow(); }
+    else payPollT = setTimeout(payPoll, 3000);
+  }).catch(()=>{ payPollT = setTimeout(payPoll, 5000); });
+}
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState === 'visible' && state.pay && state.pay.waiting) payPoll(); });
+function paySend(){
+  const p = state.pay;
+  if(p.busy) return;
+  const amt = parseFloat(String(p.amount).replace(',', '.'));
+  if(p.mode === 'story' && !p.to){ p.msg = 'Choose who you’re sending to.'; return; }
+  if(p.mode === 'bank' && (!p.name.trim() || !p.bank || !/^\d{6,16}$/.test(p.acct.replace(/\s+/g, '')))){ p.msg = PAY_ERRORS['bank-details']; return; }
+  if(!(amt >= 1 && amt <= 50000)){ p.msg = PAY_ERRORS.amount; return; }
+  const body = p.mode === 'story' ? { to:p.to.id, amount:amt, ref:p.ref } : { bank:{ name:p.name.trim(), bank:p.bank, acct:p.acct.replace(/\s+/g, '') }, amount:amt, ref:p.ref };
+  const who = p.mode === 'story' ? (p.to.name || '@' + p.to.username) : p.name.trim();
+  p.busy = true; p.msg = '';
+  msgApi('/v1/pay/send', body).then(r=>{
+    p.busy = false;
+    p.waiting = { id:r.id, url:r.url, amount:amt, who, status:'pending', started:Date.now() };
+    p.amount = ''; p.ref = '';
+    payOpenBank(r.url); payShow(); payPollT = setTimeout(payPoll, 4000);
+  }).catch(e=>{ p.busy = false; p.msg = PAY_ERRORS[e.code] || 'Couldn’t start the payment - try again.'; payShow(); });
+}
+function payOpenBank(url){ if(!url) return; if(NATIVE && window.StoryNative.openUrl) window.StoryNative.openUrl(url); else window.open(url, '_blank'); }
+function payRecvSave(){
+  const r = state.pay.recv;
+  if(r.busy) return;
+  const acct = r.acct.replace(/\s+/g, '');
+  if(r.name.trim().length < 2 || !r.bank || !/^\d{6,16}$/.test(acct)){ r.msg = PAY_ERRORS['bank-details']; return; }
+  r.busy = true; r.msg = '';
+  msgApi('/v1/pay/bank', { name:r.name.trim(), bank:r.bank, acct }).then(x=>{
+    r.busy = false; r.editing = false; r.acct = ''; if(state.pay.info) state.pay.info.bank = x.bank; showToast('Saved - people on STORY can send you money'); payShow();
+  }).catch(e=>{ r.busy = false; r.msg = PAY_ERRORS[e.code] || 'Couldn’t save - try again.'; payShow(); });
 }
 function txHistoryScreen(){
   return `
@@ -7351,8 +7479,6 @@ const COMING_SOON = [
   ['.search-row', ()=>'Search'],
   ['.avatar-add:not([data-action="add-card"] .avatar-add)', ()=>'Add'],
   ['.btn-row-action:not([data-action])', el=>el.textContent.trim()],
-  ['[data-action="send-open"]', ()=>'Send money'],
-  ['[data-action="receive-open"]', ()=>'Receive money'],
   ['[data-action="favorites-open"]', ()=>'Favorites'],
   ['.membership-add', ()=>'Memberships'],
   ['[data-action="notes-unavailable"]', el=>el.textContent.trim()],
@@ -8285,6 +8411,11 @@ async function msgOnServer(m){
   if(m.t === 'typing'){ window.storyMsgTyping(m.chat, m.who || ''); return; }
   if(m.t === 'fail'){
     for(const c of msgChats()){ const x = (c.messages || []).find(y=>y.id === m.id); if(x){ x.status = 'failed'; saveMsgChats(); renderChat(); showToast(m.error === 'blocked' ? 'They don’t take messages from you' : 'Couldn’t send'); break; } }
+    return;
+  }
+  if(m.t === 'paid'){   // money sent to you on STORY (Stitch) - it lands in the bank account you added under Receive
+    if(NATIVE && window.StoryNative.msgNotify) try{ window.StoryNative.msgNotify('Money received', (m.name || (m.username ? '@' + m.username : 'Someone')) + ' sent you R' + Number(m.amount || 0).toFixed(2) + (m.ref ? ' · ' + m.ref : '')); }catch(e){}
+    if(m.seq) msgSend({ t:'ack', seq:m.seq });
     return;
   }
   if(m.t === 'signedout'){ msgSignedOut(); return; }
@@ -12477,24 +12608,26 @@ function attachHandlers(){
     paycardSwipe.addEventListener('pointercancel', e=>{ e.stopPropagation(); if(e.pointerId!==pid) return; pLastX=e.clientX; pLastY=e.clientY; finish(); });
   }
 
-  document.querySelectorAll('[data-sendto]').forEach(el=>{
-    el.addEventListener('click', ()=>{
-      state.sendToContactId = el.getAttribute('data-sendto');
-      renderDevice();
-    });
-  });
   document.querySelectorAll('[data-sendto-fav]').forEach(el=>{
     el.addEventListener('click', ()=>{
-      state.sendToContactId = el.getAttribute('data-sendto-fav');
       state.favoritesOpen = false;
       state.current = 'send-money';
       renderDevice();
     });
   });
-  const sendAmountInput = document.getElementById('send-amount-input');
-  if(sendAmountInput){
-    sendAmountInput.addEventListener('input', ()=>{ state.sendAmount = sendAmountInput.value; });
-  }
+  // Money transfer's boxes keep what you type (no redraw while typing; the people search fills in under its box).
+  document.querySelectorAll('#device-wrap [data-pay-input]').forEach(el=>{
+    const k = el.getAttribute('data-pay-input');
+    el.addEventListener('input', ()=>{
+      const p = state.pay;
+      if(k === 'q'){ p.q = el.value; payFind(el.value); }
+      else if(k === 'rname') p.recv.name = el.value;
+      else if(k === 'racct') p.recv.acct = el.value;
+      else p[k] = el.value;
+      if(k === 'amount'){ const b = document.querySelector('#device-wrap [data-action="pay-send"]'); const amt = parseFloat(String(el.value).replace(',', '.')); const to = p.mode === 'story' ? (p.to ? (p.to.name || '@' + p.to.username) : '') : p.name.trim(); if(b && !p.busy) b.textContent = 'Send' + (amt > 0 ? ' ' + payMoney(amt) : '') + (to ? ' to ' + to : ''); }
+    });
+  });
+  attachPayFound();
 
   const searchInput = document.getElementById('search-input');
   if(searchInput){
@@ -13874,32 +14007,19 @@ function attachHandlers(){
           state.drawToolsPopoverOpen = false;
           break;
         }
-        case 'send-open': state.current = 'send-money'; break;
-        case 'receive-open': state.current = 'receive-money'; break;
-        case 'send-confirm': {
-          state.sendConfirmOpen = true;
-          // Record the real send the moment it's confirmed (this is also the moment the
-          // "Sent!" sheet appears), stamped with the real time -- this is what lets its
-          // amount show red for the first 10 minutes on the Wallet page before fading to
-          // white, same as any other wallet activity row.
-          const amt = parseFloat(state.sendAmount);
-          if(!isNaN(amt) && amt > 0){
-            const contact = state.contacts.find(c=>c.id===state.sendToContactId);
-            state.walletActivity.unshift({
-              id:'wa-' + Date.now(), icon:'↗️',
-              name: contact ? ('Sent to ' + contact.name) : 'Sent',
-              sub: null, amt: -amt, ts: Date.now(),
-            });
-          }
-          break;
-        }
-        case 'send-confirm-bg':
-        case 'send-done':
-          state.sendConfirmOpen = false;
-          state.sendAmount = '';
-          state.sendToContactId = null;
-          state.current = 'wallet';
-          break;
+        case 'send-open': state.current = 'send-money'; state.pay.info = null; state.pay.loading = false; break;
+        case 'receive-open': state.current = 'receive-money'; state.pay.info = null; state.pay.loading = false; break;
+        case 'pay-mode': state.pay.mode = el.getAttribute('data-v'); state.pay.msg = ''; break;
+        case 'pay-bank': state.pay.bank = el.getAttribute('data-v'); break;
+        case 'pay-unpick': state.pay.to = null; break;
+        case 'pay-send': paySend(); break;
+        case 'pay-reopen': if(state.pay.waiting) payOpenBank(state.pay.waiting.url); break;
+        case 'pay-done': state.pay.waiting = null; break;
+        case 'pay-recv-bank': state.pay.recv.bank = el.getAttribute('data-v'); break;
+        case 'pay-recv-save': payRecvSave(); break;
+        case 'pay-recv-edit': { const m = state.pay.info && state.pay.info.bank; Object.assign(state.pay.recv, { editing:true, name: m ? m.name : '', bank: m ? m.bank : '', acct:'', msg:'' }); break; }
+        case 'pay-recv-cancel': state.pay.recv.editing = false; state.pay.recv.msg = ''; break;
+        case 'pay-recv-remove': msgApi('/v1/pay/bank', { remove:true }).then(()=>{ if(state.pay.info) state.pay.info.bank = null; showToast('Removed'); payShow(); }).catch(()=>showToast('Couldn\u2019t remove - try again')); break;
         case 'privacy-calls': { const p = storyPrivacy(); p.calls = el.getAttribute('data-value'); setStoryPrivacy(p); break; }
         case 'privacy-call-person': { const p = storyPrivacy(), id = el.getAttribute('data-value'); const l = p.callPeople || []; p.callPeople = l.includes(id) ? l.filter(x=>x !== id) : l.concat(id); setStoryPrivacy(p); break; }
         case 'cal-open': state.calOpen = true; state.calSel = null; state.calView = null; break;
