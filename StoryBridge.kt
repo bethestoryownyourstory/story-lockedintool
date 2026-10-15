@@ -55,6 +55,7 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         fun removeProfilePhoto()
         fun requestPhotoAccess()
         fun chatPick(kind: String)
+        fun confirmIdentity(title: String)
         fun chatOpenFile(url: String, key: String, iv: String, name: String, mime: String, fromProfile: Boolean)
         fun useProfilePhoto(id: Long)
         fun profileTyping(on: Boolean)
@@ -179,6 +180,10 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
 
     /** Chats, groups and community posts (owner): pick a document ("doc") or an audio file ("audio") with the phone's
      *  own picker - answer: window.storyChatPicked(json) in the Pages and Profile windows. */
+    /** The phone's own fingerprint / face / PIN check (Delete account) - answer: window.storyIdentity('ok'|'fail'|'nolock'). */
+    @JavascriptInterface
+    fun confirmIdentity(title: String) { if (profile || pages) host.confirmIdentity(title) }
+
     @JavascriptInterface
     fun chatPick(kind: String) { if ((profile || pages) && (kind == "doc" || kind == "audio")) host.chatPick(kind) }
 

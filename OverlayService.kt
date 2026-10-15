@@ -1439,6 +1439,15 @@ class OverlayService : Service(), StoryBridge.Host {
     } }
     // ---- Files in chats / groups / community posts (owner): the phone's own picker for documents and audio, and
     //      opening a file someone sent with the phone's own app (STORY steps aside like opening any app). ----
+    override fun confirmIdentity(title: String) { ui.post {
+        if (!stepAsideForSystem()) return@post
+        runCatching { startActivity(Intent(this, IdentityActivity::class.java).putExtra(IdentityActivity.EXTRA_TITLE, title).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)) }
+            .onFailure { identityDone("fail") }
+    } }
+    fun identityDone(result: String) { ui.post {
+        comeBackFromSystem()
+        for (p in listOfNotNull(profilePane, pagesPane)) p.web?.evaluateJavascript("window.storyIdentity&&window.storyIdentity('$result')", null)
+    } }
     override fun chatPick(kind: String) { ui.post {
         if (!stepAsideForSystem()) return@post
         runCatching { startActivity(Intent(this, ChatFileActivity::class.java).putExtra(ChatFileActivity.EXTRA_KIND, kind).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)) }

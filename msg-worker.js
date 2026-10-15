@@ -96,6 +96,11 @@ export class Hub {
     this.sql.exec(`CREATE TABLE IF NOT EXISTS blocks (uid TEXT, bid TEXT, at INTEGER, PRIMARY KEY (uid, bid))`);
     // Reports (owner): anyone can report a profile / status / post / comment / group post / public group / chat;
     // the official profile reviews them (remove the content, ban the account, or dismiss).
+    // Delete account (owner): a request confirmed with a code on a web page; deleted accounts' sign-in keys are
+    // remembered (hashed) so their phones know the account is gone; why people leave is kept with no name on it.
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS delreq (token TEXT PRIMARY KEY, uid TEXT, code TEXT, exp INTEGER, tries INTEGER, ok INTEGER, reason TEXT, note TEXT)`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS tombs (tok TEXT PRIMARY KEY, at INTEGER)`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS delreasons (reason TEXT, note TEXT, at INTEGER)`);
     this.sql.exec(`CREATE TABLE IF NOT EXISTS reports (id TEXT PRIMARY KEY, uid TEXT, kind TEXT, target TEXT, owner TEXT, reason TEXT, text TEXT, at INTEGER, status TEXT)`);
     this.sql.exec(`CREATE TABLE IF NOT EXISTS ucomments (id TEXT PRIMARY KEY, pid TEXT, uid TEXT, text TEXT, at INTEGER)`);
     this.sql.exec(`CREATE INDEX IF NOT EXISTS ucomments_pid ON ucomments(pid, at)`);
@@ -143,10 +148,12 @@ export class Hub {
         return json({ ok: true, sms: !!(this.env.TWILIO_VERIFY_SID || this.env.TWILIO_FROM), pay, subs: this.subReady(), transfers: this.payReady() });
       }
       if (path === '/v1/pay/return') return new Response('<!doctype html><meta name=viewport content="width=device-width,initial-scale=1"><body style="margin:0;background:#000;color:#fff;font:600 18px system-ui;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center;padding:24px;box-sizing:border-box">Done - go back to Lockedintool to see your payment.</body>', { headers: { 'content-type': 'text/html; charset=utf-8' } });
+      if (path === '/v1/delete') return this.deletePage(req, url);
       const body = req.method === 'POST' ? await req.json().catch(() => ({})) : {};
       if (path === '/v1/register') return this.register(body, req.headers.get('cf-connecting-ip') || '');
-      const me = await this.userByToken((req.headers.get('authorization') || '').replace(/^Bearer\s+/i, ''));
-      if (!me) return json({ error: 'signin' }, 401);
+      const tok = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
+      const me = await this.userByToken(tok);
+      if (!me) return json({ error: tok && this.one('SELECT tok FROM tombs WHERE tok = ?', await sha('tok|' + tok)) ? 'deleted' : 'signin' }, 401);
       if (path === '/v1/start') return this.start(body);
       if (path === '/v1/verify') return this.verify(me, body);
       if (path === '/v1/me') return this.saveMe(me, body);
@@ -163,7 +170,8 @@ export class Hub {
       if (path === '/v1/report') return this.report(me, body);
       if (path === '/v1/reports') return this.reportsList(me);
       if (path === '/v1/reports/act') return this.reportAct(me, body);
-      if (path === '/v1/account/delete') { if (body.confirm !== 'DELETE') return json({ error: 'confirm' }, 400); this.deleteUser(me.id); return json({ ok: true }); }
+      if (path === '/v1/account/delete-start') return this.deleteStart(me, body);
+      if (path === '/v1/account/delete') return json({ error: 'use-link' }, 400);   // only through the link + code (owner)
       if (path.startsWith('/v1/uposts/')) return this.uposts(me, path.slice(11), body);
       if (path === '/v1/user') { const u = this.one('SELECT * FROM users WHERE id = ?', url.searchParams.get('id') || ''); return u ? json(this.pubView(u, me)) : json({ error: 'notfound' }, 404); }
       return json({ error: 'notfound' }, 404);
@@ -461,6 +469,57 @@ export class Hub {
       size: Math.max(0, +f.size || 0), kind: ['photo', 'video', 'doc', 'audio'].includes(f.kind) ? f.kind : 'doc' };
   }
 
+  // ---- Delete account (owner): reason -> warning -> the phone's PIN / biometrics -> Lockedintool sends a message with a
+  //      link and a code -> the link's page: enter the code, Confirm, then Delete account. ----
+  async deleteStart(me, b) {
+    const now = Date.now();
+    const reasons = ['not-using', 'notifications', 'privacy', 'new-account', 'not-working', 'other'];
+    this.sql.exec('DELETE FROM delreq WHERE uid = ? OR exp < ?', me.id, now);
+    const token = rand(18), code = String(100000 + (crypto.getRandomValues(new Uint32Array(1))[0] % 900000));
+    this.sql.exec('INSERT INTO delreq (token, uid, code, exp, tries, ok, reason, note) VALUES (?, ?, ?, ?, 0, 0, ?, ?)',
+      token, me.id, await sha('del|' + token + '|' + code), now + 30 * 60000, reasons.includes(b.reason) ? b.reason : 'other', String(b.note || '').slice(0, 300));
+    const link = (this.origin || '') + '/v1/delete?t=' + token;
+    this.alert(me.id, 'You asked to delete your Lockedintool account. To confirm, open this link and enter the code ' + code + ':\n' + link + '\nThe link and code work for 30 minutes. If this wasn’t you, ignore this message - your account stays.');
+    return json({ ok: true, exp: now + 30 * 60000 });
+  }
+  async deletePage(req, url) {
+    const page = (inner) => new Response('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Delete account</title><style>' +
+      ':root{color-scheme:dark}body{margin:0;background:#000;color:#fff;font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}main{max-width:420px;margin:0 auto;padding:48px 20px}' +
+      'h1{font-size:22px;margin:0 0 10px}p{color:#bbb;margin:0 0 16px}input{width:100%;box-sizing:border-box;padding:14px;border-radius:12px;border:1px solid #444;background:#000;color:#fff;font-size:22px;letter-spacing:6px;text-align:center}' +
+      'button{width:100%;margin-top:14px;padding:15px;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;background:#fff;color:#000}button.red{background:#ff3b30;color:#fff}.err{color:#ff6b60}ul{color:#bbb;padding-left:20px;margin:0 0 8px}</style></head><body><main>' + inner + '</main></body></html>',
+      { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'x-frame-options': 'DENY' } });
+    const esc = v => String(v).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    let f = {};
+    if (req.method === 'POST') { try { f = Object.fromEntries(new URLSearchParams(await req.text())); } catch (e) {} }
+    const token = String(f.t || url.searchParams.get('t') || '').slice(0, 40);
+    const r = token && this.one('SELECT * FROM delreq WHERE token = ?', token);
+    if (!r || r.exp < Date.now()) return page('<h1>This link has expired</h1><p>Start again in Lockedintool: Settings &gt; Privacy &gt; Delete account.</p>');
+    const form = (body) => '<form method="post"><input type="hidden" name="t" value="' + esc(token) + '">' + body + '</form>';
+    if (req.method === 'POST' && f.step === 'delete') {
+      if (!r.ok) return page('<h1>Enter the code first</h1>');
+      const u = this.one('SELECT * FROM users WHERE id = ?', r.uid);
+      if (u) this.deleteUser(u.id);
+      this.sql.exec('INSERT INTO delreasons (reason, note, at) VALUES (?, ?, ?)', r.reason || 'other', r.note || '', Date.now());
+      this.sql.exec('DELETE FROM delreq WHERE token = ?', token);
+      return page('<h1>Your account is deleted</h1><p>Everything on your Lockedintool account is gone. You can close this page.</p>');
+    }
+    if (req.method === 'POST' && f.step === 'code') {
+      if (r.tries >= 5) return page('<h1>Too many tries</h1><p>Start again in Lockedintool: Settings &gt; Privacy &gt; Delete account.</p>');
+      if ((await sha('del|' + token + '|' + String(f.code || '').replace(/\D/g, ''))) === r.code) {
+        this.sql.exec('UPDATE delreq SET ok = 1 WHERE token = ?', token);
+        return page('<h1>Code confirmed</h1><p>Deleting your account removes everything on it and can’t be undone:</p><ul><li>your profile, name and @username</li><li>your followers and who you follow</li><li>your posts, statuses and comments</li><li>your chats and your community</li><li>your plan - payments can’t be refunded</li></ul>' +
+          form('<input type="hidden" name="step" value="delete"><button class="red" type="submit">Delete account</button>'));
+      }
+      this.sql.exec('UPDATE delreq SET tries = tries + 1 WHERE token = ?', token);
+      const left = 4 - r.tries;
+      return page('<h1>Delete your account</h1><p class="err">That code isn’t right' + (left > 0 ? ' - ' + left + (left === 1 ? ' try' : ' tries') + ' left.' : '.') + '</p>' +
+        form('<input type="hidden" name="step" value="code"><input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000" autofocus><button type="submit">Confirm</button>'));
+    }
+    if (r.ok) return page('<h1>Code confirmed</h1><p>This deletes your account and everything on it. It can’t be undone.</p>' + form('<input type="hidden" name="step" value="delete"><button class="red" type="submit">Delete account</button>'));
+    return page('<h1>Delete your account</h1><p>Enter the 6-digit code Lockedintool sent you in Messages.</p>' +
+      form('<input type="hidden" name="step" value="code"><input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000" autofocus><button type="submit">Confirm</button>'));
+  }
+
   // ---- Block, report, delete account (owner) ----
   block(me, b) {
     const u = this.one('SELECT id FROM users WHERE id = ?', String(b.id || ''));
@@ -579,6 +638,8 @@ export class Hub {
       ['follows', 'uid'], ['follows', 'fid'], ['contacts', 'uid'], ['contacts', 'cid'], ['blocks', 'uid'], ['blocks', 'bid'], ['queue', 'uid'],
       ['paybank', 'uid'], ['subs', 'uid'], ['reports', 'uid']];
     for (const [t, c] of del) this.sql.exec(`DELETE FROM ${t} WHERE ${c} = ?`, uid);
+    const gone = this.one('SELECT token FROM users WHERE id = ?', uid);
+    if (gone && gone.token) this.sql.exec('INSERT OR IGNORE INTO tombs (tok, at) VALUES (?, ?)', gone.token, Date.now());   // its phone learns the account is gone
     this.sql.exec('DELETE FROM users WHERE id = ?', uid);
     for (const ws of this.ctx.getWebSockets(uid)) { try { ws.close(4001, 'deleted'); } catch (e) {} }
   }
