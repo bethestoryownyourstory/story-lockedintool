@@ -77,6 +77,11 @@ export class Hub {
     try { this.sql.exec(`ALTER TABLE users ADD COLUMN name_at INTEGER`); } catch (e) {}
     try { this.sql.exec(`ALTER TABLE users ADD COLUMN username_at INTEGER`); } catch (e) {}
     try { this.sql.exec(`ALTER TABLE users ADD COLUMN official INTEGER`); } catch (e) {}
+    // Accounts (owner): sign up with a password, log in on any phone, log out. The password never comes here - only a
+    // key worked out from it on the phone (auth), kept hashed. Your chats and your message key are backed up LOCKED
+    // with a second key from the password (bksalt) - the server can't open them.
+    for (const c of ['pw TEXT', 'pwsalt TEXT', 'bksalt TEXT', 'keybox TEXT', 'backup TEXT']) { try { this.sql.exec(`ALTER TABLE users ADD COLUMN ${c}`); } catch (e) {} }
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS logins (k TEXT PRIMARY KEY, n INTEGER, until INTEGER)`);
     for (const un of OFFICIAL_USERNAMES) this.sql.exec('UPDATE users SET official = 1 WHERE username = ?', un);
     this.sql.exec(`CREATE TABLE IF NOT EXISTS follows (uid TEXT, fid TEXT, at INTEGER, PRIMARY KEY (uid, fid))`);
     this.sql.exec(`CREATE INDEX IF NOT EXISTS follows_fid ON follows(fid)`);
@@ -150,8 +155,10 @@ export class Hub {
       }
       if (path === '/v1/pay/return') return new Response('<!doctype html><meta name=viewport content="width=device-width,initial-scale=1"><body style="margin:0;background:#000;color:#fff;font:600 18px system-ui;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center;padding:24px;box-sizing:border-box">Done - go back to Lockedintool to see your payment.</body>', { headers: { 'content-type': 'text/html; charset=utf-8' } });
       if (path === '/v1/delete') return this.deletePage(req, url);
+      if (path === '/v1/login/salt') return this.loginSalt(url.searchParams.get('u') || '');
       const body = req.method === 'POST' ? await req.json().catch(() => ({})) : {};
       if (path === '/v1/register') return this.register(body, req.headers.get('cf-connecting-ip') || '');
+      if (path === '/v1/login') return this.login(body);
       const tok = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
       const me = await this.userByToken(tok);
       const tomb = !me && tok ? this.one('SELECT why FROM tombs WHERE tok = ?', await sha('tok|' + tok)) : null;
@@ -172,6 +179,10 @@ export class Hub {
       if (path === '/v1/report') return this.report(me, body);
       if (path === '/v1/reports') return this.reportsList(me);
       if (path === '/v1/reports/act') return this.reportAct(me, body);
+      if (path === '/v1/auth/set') return this.authSet(me, body);
+      if (path === '/v1/backup/set') return this.backupSet(me, body);
+      if (path === '/v1/backup/get') return json({ backup: me.backup ? JSON.parse(me.backup) : null, keybox: me.keybox ? JSON.parse(me.keybox) : null, bksalt: me.bksalt || '' });
+      if (path === '/v1/logout') { this.sql.exec('UPDATE users SET token = ? WHERE id = ?', await sha('tok|' + rand(32)), me.id); return json({ ok: true }); }
       if (path === '/v1/account/delete-start') return this.deleteStart(me, body);
       if (path === '/v1/account/delete') return json({ error: 'use-link' }, 400);   // only through the link + code (owner)
       if (path.startsWith('/v1/uposts/')) return this.uposts(me, path.slice(11), body);
@@ -273,6 +284,7 @@ export class Hub {
       const clean = { messages: ['everyone', 'requests', 'nobody'].includes(p.messages) ? p.messages : 'everyone', calls: ['everyone', 'people', 'nobody'].includes(p.calls) ? p.calls : p.calls === 'none' ? 'nobody' : 'everyone', callPeople: (Array.isArray(p.callPeople) ? p.callPeople : []).map(String).slice(0, 500), status: ['everyone', 'followers', 'nobody'].includes(p.status) ? p.status : 'followers', profile: p.profile === 'private' ? 'private' : 'public' };
       sets.push('privacy = ?'); vals.push(JSON.stringify(clean));
     }
+    if (b.pub !== undefined) { const pub = String(b.pub || ''); if (pub && pub.length <= 400) { sets.push('pub = ?'); vals.push(pub); } }
     if (b.about !== undefined) { sets.push('about = ?'); vals.push(String(b.about || '').slice(0, 150) || null); }
     if (b.bio !== undefined) { sets.push('bio = ?'); vals.push(String(b.bio || '').slice(0, 150) || null); }
     if (b.photo !== undefined) {
@@ -469,6 +481,45 @@ export class Hub {
     if (!f || typeof f !== 'object' || !/^[A-Za-z0-9_-]{16,40}$/.test(String(f.m || ''))) return null;
     return { m: String(f.m), name: String(f.name || 'file').slice(0, 120), mime: String(f.mime || 'application/octet-stream').slice(0, 80),
       size: Math.max(0, +f.size || 0), kind: ['photo', 'video', 'doc', 'audio'].includes(f.kind) ? f.kind : 'doc' };
+  }
+
+  // ---- Accounts: password, log in, log out, locked backup (owner) ----
+  async fakeSalt(u) { let s = (this.one("SELECT v FROM meta WHERE k = 'fake'") || {}).v; if (!s) { s = rand(24); this.sql.exec("INSERT OR REPLACE INTO meta (k, v) VALUES ('fake', ?)", s); } return (await sha('salt|' + s + '|' + u)).slice(0, 24); }
+  async loginSalt(u) {
+    u = String(u).toLowerCase().replace(/^@/, '').slice(0, 30);
+    const r = u && this.one('SELECT pwsalt FROM users WHERE username = ? AND pw IS NOT NULL', u);
+    return json({ salt: r ? r.pwsalt : await this.fakeSalt(u) });   // unknown names get a steady made-up salt (no guessing who's on)
+  }
+  async login(b) {
+    const u = String(b.username || '').toLowerCase().replace(/^@/, '').slice(0, 30), now = Date.now();
+    const lock = this.one('SELECT * FROM logins WHERE k = ?', u);
+    if (lock && lock.until > now) return json({ error: 'locked', until: lock.until }, 429);
+    const me = u && this.one('SELECT * FROM users WHERE username = ? AND pw IS NOT NULL', u);
+    if (!me || (await sha('pw|' + String(b.auth || ''))) !== me.pw) {
+      const n = (lock && lock.until <= now && lock.until ? 0 : (lock ? lock.n : 0)) + 1;
+      this.sql.exec('INSERT OR REPLACE INTO logins (k, n, until) VALUES (?, ?, ?)', u, n >= 5 ? 0 : n, n >= 5 ? now + 15 * 60000 : 0);
+      return json({ error: 'wrong' }, 401);
+    }
+    this.sql.exec('DELETE FROM logins WHERE k = ?', u);
+    const token = rand(32);
+    this.sql.exec('UPDATE users SET token = ? WHERE id = ?', await sha('tok|' + token), me.id);
+    for (const ws of this.ctx.getWebSockets(me.id)) { try { ws.close(4002, 'signed-in-elsewhere'); } catch (e) {} }   // the phone it was on is signed out
+    return json({ id: me.id, token, name: me.name || '', username: me.username || '', bksalt: me.bksalt || '', keybox: me.keybox ? JSON.parse(me.keybox) : null, backup: me.backup ? JSON.parse(me.backup) : null });
+  }
+  authSet(me, b) {
+    if (me.pw) return json({ error: 'has-password' }, 409);
+    const auth = String(b.auth || ''), pwsalt = String(b.pwsalt || ''), bksalt = String(b.bksalt || '');
+    if (auth.length < 20 || !/^[A-Za-z0-9_-]{16,40}$/.test(pwsalt) || !/^[A-Za-z0-9_-]{16,40}$/.test(bksalt)) return json({ error: 'bad' }, 400);
+    const kb = b.keybox && typeof b.keybox === 'object' ? JSON.stringify({ box: String(b.keybox.box || '').slice(0, 4000), iv: String(b.keybox.iv || '').slice(0, 40) }) : null;
+    return sha('pw|' + auth).then(h => { this.sql.exec('UPDATE users SET pw = ?, pwsalt = ?, bksalt = ?, keybox = ? WHERE id = ?', h, pwsalt, bksalt, kb, me.id); return json({ ok: true }); });
+  }
+  backupSet(me, b) {
+    const media = String(b.media || ''), iv = String(b.iv || '');
+    if (!this.mediaDone(media, me.id) || !/^[A-Za-z0-9+/=]{8,40}$/.test(iv)) return json({ error: 'bad' }, 400);
+    const old = me.backup ? JSON.parse(me.backup) : null;
+    if (old && old.media && old.media !== media) this.sql.exec('DELETE FROM media WHERE id = ?', old.media);
+    this.sql.exec('UPDATE users SET backup = ? WHERE id = ?', JSON.stringify({ media, iv, at: Date.now(), z: b.z ? 1 : 0 }), me.id);
+    return json({ ok: true });
   }
 
   // ---- Delete account (owner): reason -> warning -> the phone's PIN / biometrics -> Lockedintool sends a message with a
