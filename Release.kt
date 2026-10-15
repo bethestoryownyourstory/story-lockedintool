@@ -30,7 +30,8 @@ object Release {
     fun base(ctx: Context) = if (isOwner(ctx)) TEST_BASE else LIVE_BASE
 
     /** The user signed "Automatic updates - I agree" once: updates install by themselves, never asked again. */
-    fun agreedAuto(ctx: Context) = prefs(ctx).getBoolean("auto_agreed", false)
+    // Owner: Lockedintool ALWAYS updates itself - no "I agree" screen, no choice. Every phone counts as agreed.
+    @Suppress("UNUSED_PARAMETER") fun agreedAuto(ctx: Context) = true
     fun setAgreedAuto(ctx: Context) { prefs(ctx).edit().putBoolean("auto_agreed", true).apply() }
 
     // ---- Live users: the pending update and its 3-day clock ----
