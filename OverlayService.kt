@@ -1435,7 +1435,30 @@ class OverlayService : Service(), StoryBridge.Host {
     fun photoAccessDone(access: String) { ui.post {
         comeBackFromSystem()
         profilePane?.web?.evaluateJavascript("window.storyPhotoAccessDone&&window.storyPhotoAccessDone('$access')", null)
+        for (p in listOfNotNull(profilePane, pagesPane)) p.web?.evaluateJavascript("window.storyChatAccessDone&&window.storyChatAccessDone('$access')", null)
     } }
+    // ---- Files in chats / groups / community posts (owner): the phone's own picker for documents and audio, and
+    //      opening a file someone sent with the phone's own app (STORY steps aside like opening any app). ----
+    override fun chatPick(kind: String) { ui.post {
+        if (!stepAsideForSystem()) return@post
+        runCatching { startActivity(Intent(this, ChatFileActivity::class.java).putExtra(ChatFileActivity.EXTRA_KIND, kind).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)) }
+            .onFailure { chatFilePicked(org.json.JSONObject().put("error", "fail").toString()) }
+    } }
+    fun chatFilePicked(json: String) { ui.post {
+        comeBackFromSystem()
+        val q = org.json.JSONObject.quote(json)
+        for (p in listOfNotNull(profilePane, pagesPane)) p.web?.evaluateJavascript("window.storyChatPicked&&window.storyChatPicked($q)", null)
+    } }
+    override fun chatOpenFile(url: String, key: String, iv: String, name: String, mime: String, fromProfile: Boolean) {
+        Thread {
+            val ok = ChatFiles.open(this, url, key, iv, name, mime)
+            ui.post {
+                if (!ok) { showToast("Couldn't open that file"); return@post }
+                if (fromProfile) profilePane?.takeIf { it.shown }?.let { hideOne(it) } else pagesPane?.takeIf { it.shown }?.let { hideOne(it) }
+                updateBubble()
+            }
+        }.start()
+    }
     /** A picture tapped in STORY's own grid: saved in the background, Profile shows it already. */
     override fun useProfilePhoto(id: Long) {
         Thread {
@@ -1455,6 +1478,7 @@ class OverlayService : Service(), StoryBridge.Host {
             "post" -> seg.getOrNull(2)?.let { CreateCameraActivity.postFile(this, it) }
             "postthumb" -> seg.getOrNull(2)?.let { CreateCameraActivity.postThumb(this, it) }
             "note" -> seg.getOrNull(2)?.let { NoteTools.file(this, it) }
+            "chatfile" -> seg.getOrNull(2)?.let { ChatFiles.file(this, it) }
             else -> null
         }
         if (file != null) return fileResponse(file, r.requestHeaders)
@@ -1485,7 +1509,7 @@ class OverlayService : Service(), StoryBridge.Host {
         } else WebResourceResponse("image/jpeg", null, 404, "Not Found", mapOf(), java.io.ByteArrayInputStream(ByteArray(0)))
     }
     private fun fileResponse(f: java.io.File, headers: Map<String, String>): WebResourceResponse {
-        val mime = if (f.extension == "mp4") "video/mp4" else if (f.parentFile?.name == "notes") NoteTools.mimeOf(f) else "image/jpeg"
+        val mime = if (f.parentFile?.name == "chat") "application/octet-stream" else if (f.extension == "mp4") "video/mp4" else if (f.parentFile?.name == "notes") NoteTools.mimeOf(f) else "image/jpeg"
         val len = f.length()
         val range = headers.entries.firstOrNull { it.key.equals("Range", true) }?.value
         val m = range?.let { Regex("bytes=(\\d*)-(\\d*)").find(it) }

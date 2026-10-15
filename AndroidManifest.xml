@@ -69,6 +69,14 @@
             android:taskAffinity=""
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
+        <!-- Chats / groups / community posts: the phone's own picker for a document or audio file to send (see-through). -->
+        <activity
+            android:name=".ChatFileActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
         <!-- Notes > Print: the phone's own print screen (everything else in Notes happens inside STORY). -->
         <activity
             android:name=".NoteMediaActivity"

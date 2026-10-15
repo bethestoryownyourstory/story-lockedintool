@@ -54,6 +54,8 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         fun pickProfilePhoto()
         fun removeProfilePhoto()
         fun requestPhotoAccess()
+        fun chatPick(kind: String)
+        fun chatOpenFile(url: String, key: String, iv: String, name: String, mime: String, fromProfile: Boolean)
         fun useProfilePhoto(id: Long)
         fun profileTyping(on: Boolean)
         fun noteAsk(kind: String)
@@ -173,7 +175,16 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
     fun listPhotos(): String = ProfilePhotoActivity.listPhotos(ctx)
 
     @JavascriptInterface
-    fun requestPhotoAccess() { if (profile) host.requestPhotoAccess() }
+    fun requestPhotoAccess() { if (profile || pages) host.requestPhotoAccess() }
+
+    /** Chats, groups and community posts (owner): pick a document ("doc") or an audio file ("audio") with the phone's
+     *  own picker - answer: window.storyChatPicked(json) in the Pages and Profile windows. */
+    @JavascriptInterface
+    fun chatPick(kind: String) { if ((profile || pages) && (kind == "doc" || kind == "audio")) host.chatPick(kind) }
+
+    /** A file someone sent: downloaded, unlocked on the phone and opened with the phone's own app. */
+    @JavascriptInterface
+    fun chatOpenFile(url: String, key: String, iv: String, name: String, mime: String) { if (profile || pages) host.chatOpenFile(url, key, iv, name, mime, profile) }
 
     @JavascriptInterface
     fun useProfilePhoto(id: String) { if (profile) id.toLongOrNull()?.let { host.useProfilePhoto(it) } }

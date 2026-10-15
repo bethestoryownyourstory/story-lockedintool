@@ -28,6 +28,7 @@ const rand = n => b64u(crypto.getRandomValues(new Uint8Array(n)));
 const PHONE = /^\+[1-9]\d{6,14}$/;
 // The official Lockedintool profile (owner: "only us can use our name and username"). Its account is the official
 // one; later team accounts are added here. Nobody else may have "lockedintool" in their name or @username.
+const REPORT_REASONS = { spam: 'spam', scam: 'scam or fraud', abuse: 'bullying or harassment', hate: 'hate speech', violence: 'violence or threats', nudity: 'nudity or sexual content', other: 'breaking the rules' };
 const OFFICIAL_USERNAMES = ['officiallockedintoolprofile'];
 const BRAND = 'lockedintool';
 const brandIn = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '').includes(BRAND);
@@ -60,7 +61,8 @@ export class Hub {
     this.sql.exec(`CREATE TABLE IF NOT EXISTS glikes (pid TEXT, uid TEXT, PRIMARY KEY (pid, uid))`);
     this.sql.exec(`CREATE TABLE IF NOT EXISTS gcomments (id TEXT PRIMARY KEY, pid TEXT, uid TEXT, text TEXT, at INTEGER)`);
     try { this.sql.exec(`ALTER TABLE groups ADD COLUMN shares INTEGER DEFAULT 0`); } catch (e) {}
-    try { this.sql.exec(`ALTER TABLE groups ADD COLUMN team INTEGER`); } catch (e) {}   // Your community (owner): one per person
+    try { this.sql.exec(`ALTER TABLE groups ADD COLUMN team INTEGER`); } catch (e) {}
+    try { this.sql.exec(`ALTER TABLE gposts ADD COLUMN files TEXT`); } catch (e) {}   // pictures / videos / documents / audio on group posts   // Your community (owner): one per person
     this.sql.exec(`CREATE TABLE IF NOT EXISTS paybank (uid TEXT PRIMARY KEY, name TEXT, bank TEXT, acct TEXT, updated INTEGER)`);
     this.sql.exec(`CREATE TABLE IF NOT EXISTS payments (id TEXT PRIMARY KEY, uid TEXT, to_uid TEXT, to_name TEXT, to_bank TEXT, to_mask TEXT, cents INTEGER, ref TEXT, stitch TEXT, status TEXT, created INTEGER, updated INTEGER)`);
     this.sql.exec(`CREATE INDEX IF NOT EXISTS payments_uid ON payments(uid, created)`);
@@ -295,7 +297,7 @@ export class Hub {
   async mediaPut(me, url, req) {
     const data = await req.arrayBuffer();   // always read the whole body first
     const id = url.searchParams.get('id') || '', i = +url.searchParams.get('i'), n = +url.searchParams.get('n'), mime = url.searchParams.get('mime') || '';
-    if (!/^[A-Za-z0-9_-]{16,40}$/.test(id) || !(i >= 0 && i < n && n <= 40 && Number.isInteger(i) && Number.isInteger(n)) || !['image/jpeg', 'video/mp4'].includes(mime)) return json({ error: 'bad' }, 400);
+    if (!/^[A-Za-z0-9_-]{16,40}$/.test(id) || !(i >= 0 && i < n && n <= 40 && Number.isInteger(i) && Number.isInteger(n)) || !['image/jpeg', 'video/mp4', 'application/octet-stream'].includes(mime)) return json({ error: 'bad' }, 400);
     const owner = this.one('SELECT uid FROM media WHERE id = ? LIMIT 1', id);
     if (owner && owner.uid !== me.id) return json({ error: 'bad' }, 403);
     if (!data.byteLength || data.byteLength > 1572864) return json({ error: 'size' }, 413);
@@ -451,6 +453,14 @@ export class Hub {
     return json({ posts: out, more, next: out.length ? out[out.length - 1].at : 0 });
   }
 
+  // A file in a chat / group / post (owner): only its description travels - the bytes are in media (locked ones can
+  // only be opened by the people the key was sent to).
+  fileMeta(f) {
+    if (!f || typeof f !== 'object' || !/^[A-Za-z0-9_-]{16,40}$/.test(String(f.m || ''))) return null;
+    return { m: String(f.m), name: String(f.name || 'file').slice(0, 120), mime: String(f.mime || 'application/octet-stream').slice(0, 80),
+      size: Math.max(0, +f.size || 0), kind: ['photo', 'video', 'doc', 'audio'].includes(f.kind) ? f.kind : 'doc' };
+  }
+
   // ---- Block, report, delete account (owner) ----
   block(me, b) {
     const u = this.one('SELECT id FROM users WHERE id = ?', String(b.id || ''));
@@ -485,20 +495,46 @@ export class Hub {
     const reason = ['spam', 'abuse', 'nudity', 'violence', 'scam', 'hate', 'other'].includes(b.reason) ? b.reason : 'other';
     this.sql.exec('INSERT INTO reports (id, uid, kind, target, owner, reason, text, at, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
       'r' + rand(9), me.id, kind, id, t.owner, reason, String(b.text || '').slice(0, 2000), Date.now(), 'open');
+    // Lockedintool warns the account (owner): how many reports came in about what - never who reported it.
+    const n = this.one('SELECT COUNT(*) AS n FROM reports WHERE kind = ? AND target = ?', kind, id).n;
+    if ([1, 3, 5, 10, 20].includes(n) && t.owner) this.alert(t.owner, 'Your ' + this.reportWhat(kind, id) + ' has been reported ' + (n === 1 ? 'once' : n + ' times') + ' for ' + REPORT_REASONS[reason] + '. Please keep to Lockedintool’s rules - accounts that keep breaking them can be removed.');
     return json({ ok: true });
+  }
+  alert(uid, text) { this.deliver(uid, { t: 'alert', text, at: Date.now() }); }
+  reportWhat(kind, id) {
+    const cut = (x, n) => { x = String(x || '').trim(); return x.length > n ? x.slice(0, n) + '…' : x; };
+    if (kind === 'profile') return 'profile';
+    if (kind === 'chat') return 'messages';
+    if (kind === 'status') return 'status';
+    if (kind === 'post') { const p = this.one('SELECT title, text FROM uposts WHERE id = ?', id) || {}; const s = cut(p.title || p.text, 40); return 'post' + (s ? ' “' + s + '”' : ''); }
+    if (kind === 'comment' || kind === 'gcomment') { const c = this.one(`SELECT text FROM ${kind === 'comment' ? 'ucomments' : 'gcomments'} WHERE id = ?`, id) || {}; return 'comment' + (c.text ? ' “' + cut(c.text, 40) + '”' : ''); }
+    if (kind === 'gpost') { const p = this.one('SELECT text FROM gposts WHERE id = ?', id) || {}; return 'group post' + (p.text ? ' “' + cut(p.text, 40) + '”' : ''); }
+    if (kind === 'group') { const g = this.one('SELECT name FROM groups WHERE id = ?', id) || {}; return 'group' + (g.name ? ' “' + cut(g.name, 40) + '”' : ''); }
+    return kind;
   }
   reportsList(me) {
     if (!me.official) return json({ error: 'official' }, 403);
     const who = id => { const u = this.one('SELECT name, username FROM users WHERE id = ?', id); return u ? (u.name || '') + (u.username ? ' @' + u.username : '') : '(deleted)'; };
-    const rows = this.sql.exec("SELECT * FROM reports WHERE status = 'open' ORDER BY at DESC LIMIT 200").toArray();
-    return json({ reports: rows.map(r => { const t = this.reportTarget(r.kind, r.target) || {}; return { id: r.id, kind: r.kind, reason: r.reason, text: r.text || '', at: r.at, by: who(r.uid), owner: r.owner, ownerName: who(r.owner), look: t.look || '(already gone)', media: t.media || '', gone: !t.owner }; }) });
+    // One card per reported thing: how many reports, for what - never who reported it (owner).
+    const rows = this.sql.exec("SELECT * FROM reports WHERE status = 'open' ORDER BY at DESC LIMIT 1000").toArray(), cards = new Map();
+    for (const r of rows) {
+      const k = r.kind + '|' + r.target;
+      if (!cards.has(k)) { const t = this.reportTarget(r.kind, r.target) || {}; cards.set(k, { id: r.id, kind: r.kind, at: r.at, count: 0, reasons: {}, text: '', owner: r.owner, ownerName: who(r.owner), look: t.look || '(already gone)', media: t.media || '', gone: !t.owner }); }
+      const c = cards.get(k); c.count++; c.reasons[r.reason] = (c.reasons[r.reason] || 0) + 1; if (!c.text && r.text) c.text = r.text;
+    }
+    return json({ reports: [...cards.values()].slice(0, 200) });
   }
   reportAct(me, b) {
     if (!me.official) return json({ error: 'official' }, 403);
     const r = this.one('SELECT * FROM reports WHERE id = ?', String(b.id || ''));
     if (!r) return json({ error: 'notfound' }, 404);
     const act = b.action;
-    if (act === 'remove') this.removeContent(r.kind, r.target);
+    if (act === 'remove') {
+      const what = this.reportWhat(r.kind, r.target);
+      const top = this.one("SELECT reason, COUNT(*) AS n FROM reports WHERE kind = ? AND target = ? GROUP BY reason ORDER BY n DESC LIMIT 1", r.kind, r.target);
+      this.removeContent(r.kind, r.target);
+      if (r.owner && ['status', 'post', 'comment', 'gpost', 'gcomment', 'group'].includes(r.kind)) this.alert(r.owner, 'Your ' + what + ' was removed by Lockedintool after reports for ' + REPORT_REASONS[(top || {}).reason || 'other'] + '.');
+    }
     if (act === 'ban' && r.owner) { const o = this.one('SELECT official FROM users WHERE id = ?', r.owner); if (o && !o.official) this.deleteUser(r.owner); }
     // Everything else about the same thing is done too.
     this.sql.exec("UPDATE reports SET status = ? WHERE kind = ? AND target = ? AND status = 'open'", act === 'dismiss' ? 'dismissed' : 'done', r.kind, r.target);
@@ -655,8 +691,9 @@ export class Hub {
       if (g.type !== 'public' && g.type !== 'stories') return json({ error: 'public' }, 400);
       if (g.type === 'public' && this.isPrivate(me)) return json({ error: 'private-account' }, 403);
       const text = str(b.text, 600), image = /^data:image\/(png|jpeg|webp);base64,/.test(String(b.image || '')) && String(b.image).length < 600000 ? String(b.image) : '';
-      if (!text && !image) return json({ error: 'empty' }, 400);
-      this.sql.exec('INSERT INTO gposts (id, gid, uid, text, image, at) VALUES (?, ?, ?, ?, ?, ?)', 'p' + rand(9), g.id, me.id, text, image, now);
+      const files = (Array.isArray(b.files) ? b.files : []).slice(0, 10).map(f => this.fileMeta(f)).filter(f => f && this.mediaDone(f.m, me.id));
+      if (!text && !image && !files.length) return json({ error: 'empty' }, 400);
+      this.sql.exec('INSERT INTO gposts (id, gid, uid, text, image, at, files) VALUES (?, ?, ?, ?, ?, ?, ?)', 'p' + rand(9), g.id, me.id, text, image, now, files.length ? JSON.stringify(files) : null);
       return json({ posts: this.postsOf(g.id, me) });
     }
     if (op === 'like') {
@@ -681,6 +718,7 @@ export class Hub {
     const who = uid => { const u = this.one('SELECT name, username FROM users WHERE id = ?', uid); return u ? (u.name || (u.username ? '@' + u.username : 'Someone')) : 'Someone'; };
     return this.sql.exec('SELECT * FROM gposts WHERE gid = ? ORDER BY at DESC LIMIT 100', gid).toArray().filter(p => !this.blocked(me.id, p.uid)).map(p => ({
       id: p.id, author: p.uid === me.id ? 'You' : who(p.uid), mine: p.uid === me.id, text: p.text, image: p.image || '', at: p.at, likes: p.likes, shares: p.shares || 0,
+      files: (() => { try { return (JSON.parse(p.files || '[]') || []).map(f => Object.assign({}, f, { url: this.mediaUrl(f.m) })); } catch (e) { return []; } })(),
       liked: !!this.one('SELECT pid FROM glikes WHERE pid = ? AND uid = ?', p.id, me.id),
       comments: this.sql.exec('SELECT * FROM gcomments WHERE pid = ? ORDER BY at LIMIT 200', p.id).toArray().filter(c => !this.blocked(me.id, c.uid)).map(c => ({ id: c.id, author: c.uid === me.id ? 'You' : who(c.uid), mine: c.uid === me.id, text: c.text, at: c.at }))
     }));
@@ -957,7 +995,7 @@ export class Hub {
         for (const mid of this.memberIds(g.id)) {
           if (mid === uid) continue;
           if (g.type === 'private') { const bx = boxes[mid]; if (!bx || String(bx.box || '').length > 64000) continue; this.deliver(mid, { t: 'msg', group: g.id, from: uid, id, box: String(bx.box), iv: String(bx.iv || ''), at: now, name: me.name || '', username: me.username || '' }); }
-          else this.deliver(mid, { t: 'msg', group: g.id, from: uid, id, text: String(m.text || '').slice(0, 4000), at: now, name: me.name || '', username: me.username || '' });
+          else this.deliver(mid, { t: 'msg', group: g.id, from: uid, id, text: String(m.text || '').slice(0, 4000), file: this.fileMeta(m.file), at: now, name: me.name || '', username: me.username || '' });
         }
         ws.send(JSON.stringify({ t: 'sent', id: m.id, at: now }));
         return; }

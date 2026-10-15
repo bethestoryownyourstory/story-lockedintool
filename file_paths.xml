@@ -4,4 +4,6 @@
     <cache-path name="updates" path="." />
     <!-- Notes: the phone's camera app saves a photo straight into STORY's notes folder. -->
     <files-path name="notes" path="notes/" />
+    <!-- Files from chats, unlocked on the phone and opened with the phone's own app. -->
+    <files-path name="chatopen" path="chatopen/" />
 </paths>
