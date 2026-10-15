@@ -60,6 +60,7 @@ export class Hub {
     this.sql.exec(`CREATE TABLE IF NOT EXISTS glikes (pid TEXT, uid TEXT, PRIMARY KEY (pid, uid))`);
     this.sql.exec(`CREATE TABLE IF NOT EXISTS gcomments (id TEXT PRIMARY KEY, pid TEXT, uid TEXT, text TEXT, at INTEGER)`);
     try { this.sql.exec(`ALTER TABLE groups ADD COLUMN shares INTEGER DEFAULT 0`); } catch (e) {}
+    try { this.sql.exec(`ALTER TABLE groups ADD COLUMN team INTEGER`); } catch (e) {}   // Your community (owner): one per person
     this.sql.exec(`CREATE TABLE IF NOT EXISTS paybank (uid TEXT PRIMARY KEY, name TEXT, bank TEXT, acct TEXT, updated INTEGER)`);
     this.sql.exec(`CREATE TABLE IF NOT EXISTS payments (id TEXT PRIMARY KEY, uid TEXT, to_uid TEXT, to_name TEXT, to_bank TEXT, to_mask TEXT, cents INTEGER, ref TEXT, stitch TEXT, status TEXT, created INTEGER, updated INTEGER)`);
     this.sql.exec(`CREATE INDEX IF NOT EXISTS payments_uid ON payments(uid, created)`);
@@ -399,7 +400,7 @@ export class Hub {
     const count = this.one('SELECT COUNT(*) AS n FROM gmembers WHERE gid = ?', g.id).n;
     const mine = me ? this.member(g.id, me.id) : null;
     const v = { id: g.id, name: g.name, about: g.about || '', type: g.type, image: g.image || '', category: g.category || 'Community', country: g.country || 'Global',
-      creator: g.creator, callJoin: g.calljoin || 'open', created: g.created, count, member: !!mine, leader: !!mine && mine.role === 'leader',
+      creator: g.creator, callJoin: g.calljoin || 'open', created: g.created, count, team: !!g.team, member: !!mine, leader: !!mine && mine.role === 'leader',
       // Real numbers for Trending: members, times the group was shared, likes and comments on its posts.
       shares: g.shares || 0,
       likes: this.one('SELECT COALESCE(SUM(likes), 0) AS n FROM gposts WHERE gid = ?', g.id).n,
@@ -423,12 +424,16 @@ export class Hub {
     const str = (v, n) => String(v || '').trim().slice(0, n);
     const get = id => this.one('SELECT * FROM groups WHERE id = ?', String(id || ''));
     if (op === 'create') {
-      const name = str(b.name, 60), type = b.type === 'private' ? 'private' : 'public';
+      const team = !!b.team, name = str(b.name, 60), type = team || b.type === 'private' ? 'private' : 'public';
       if (!name) return json({ error: 'name' }, 400);
+      // Your community (owner): ONE community you make - a private, locked team room; only you add people.
+      if (team) { const had = this.one('SELECT * FROM groups WHERE creator = ? AND team = 1', me.id); if (had && this.member(had.id, me.id)) return json(this.groupView(had, me, true)); }
+      if (type === 'public' && this.isPrivate(me)) return json({ error: 'private-account' }, 403);
       const image = String(b.image || '');
       const id = 'grp' + rand(9);
       this.sql.exec('INSERT INTO groups (id, name, about, type, image, category, country, creator, calljoin, created) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         id, name, str(b.about, 500), type, image.length < 300000 ? image : '', str(b.category, 30) || 'Community', str(b.country, 40) || 'Global', me.id, 'open', now);
+      if (team) this.sql.exec('UPDATE groups SET team = 1 WHERE id = ?', id);
       this.sql.exec('INSERT INTO gmembers (gid, uid, role, joined) VALUES (?, ?, ?, ?)', id, me.id, 'leader', now);
       for (const uid of (Array.isArray(b.members) ? b.members : []).map(String).slice(0, 255))
         if (uid !== me.id && this.one('SELECT id FROM users WHERE id = ?', uid)) this.sql.exec('INSERT OR IGNORE INTO gmembers (gid, uid, role, joined) VALUES (?, ?, ?, ?)', id, uid, 'member', now);
@@ -456,6 +461,7 @@ export class Hub {
     if (op === 'get') return json(this.groupView(g, me, true));
     if (op === 'join') {
       if (g.type !== 'public') return json({ error: 'private' }, 403);   // public = free to join (owner)
+      if (this.isPrivate(me)) return json({ error: 'private-account' }, 403);   // private accounts have only their own community (owner)
       if (!mine) { this.sql.exec('INSERT INTO gmembers (gid, uid, role, joined) VALUES (?, ?, ?, ?)', g.id, me.id, 'member', now); this.groupTell(g.id); }
       return json(this.groupView(g, me, true));
     }
@@ -474,6 +480,7 @@ export class Hub {
     if (op === 'add') {
       // Private: only its leaders add people. Public: any member can bring people in.
       if (g.type === 'private' && mine.role !== 'leader') return json({ error: 'leader' }, 403);
+      if (g.team && g.creator !== me.id) return json({ error: 'leader' }, 403);   // Your community: only you add people
       const added = [];
       for (const uid of (Array.isArray(b.members) ? b.members : []).map(String).slice(0, 255))
         if (this.one('SELECT id FROM users WHERE id = ?', uid) && !this.member(g.id, uid)) { this.sql.exec('INSERT INTO gmembers (gid, uid, role, joined) VALUES (?, ?, ?, ?)', g.id, uid, 'member', now); added.push(uid); }
@@ -492,6 +499,7 @@ export class Hub {
     if (op === 'posts') return json({ posts: this.postsOf(g.id, me) });
     if (op === 'post') {
       if (g.type !== 'public' && g.type !== 'stories') return json({ error: 'public' }, 400);
+      if (g.type === 'public' && this.isPrivate(me)) return json({ error: 'private-account' }, 403);
       const text = str(b.text, 600), image = /^data:image\/(png|jpeg|webp);base64,/.test(String(b.image || '')) && String(b.image).length < 600000 ? String(b.image) : '';
       if (!text && !image) return json({ error: 'empty' }, 400);
       this.sql.exec('INSERT INTO gposts (id, gid, uid, text, image, at) VALUES (?, ?, ?, ?, ?, ?)', 'p' + rand(9), g.id, me.id, text, image, now);

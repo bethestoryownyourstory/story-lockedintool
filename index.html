@@ -3267,6 +3267,52 @@
   /* Stacked layout: Trending groups (top) -> Community groups (middle, the main focus, sized
      up) -> Stories (bottom), each a full-width section rather than the old two-column split. */
   .community-stack{ display:flex; flex-direction:column; gap:22px; }
+  /* Community (owner): Your Community | Publics community, side by side like Layouts' Dashboard | Pages. */
+  .cm-tabs{ margin-top:6px; }
+  .cm-tabs .layouts-tab{ min-width:0; padding:9px 8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .cm-always{ display:flex; align-items:center; justify-content:space-between; gap:14px; padding:12px 14px; border:1px solid var(--line); border-radius:12px; }
+  .cm-always-t{ font-size:13px; font-weight:700; color:var(--text); }
+  .cm-always-d{ margin-top:3px; font-size:11px; color:var(--muted); line-height:1.4; }
+  .cm-switch{ width:34px; height:30px; border-radius:10px; border:1px solid var(--line); background:transparent; color:var(--text); display:flex; align-items:center; justify-content:center; padding:0; cursor:pointer; }
+  .cm-switch:active{ transform:scale(0.94); }
+  /* Your Community: one big chat, like a team room (owner) - looks like Messages' chats. */
+  .page-shell.team-shell{ display:flex; flex-direction:column; height:100%; box-sizing:border-box; }
+  .team-head{ display:flex; align-items:center; gap:10px; padding:2px 0 10px; border-bottom:1px solid var(--line); }
+  .team-head-txt{ flex:1; min-width:0; }
+  .team-name{ display:block; max-width:100%; padding:0; border:none; background:transparent; color:var(--text); font:inherit; font-size:17px; font-weight:800; text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer; }
+  .team-sub{ margin-top:2px; font-size:11px; color:var(--muted); }
+  .team-add{ flex:none; padding:8px 12px; border-radius:18px; border:1px solid var(--text); background:transparent; color:var(--text); font:inherit; font-size:12px; font-weight:700; cursor:pointer; }
+  .team-add:active, .team-send:active{ opacity:0.6; }
+  .team-list{ flex:1; min-height:0; overflow-y:auto; padding:12px 2px; display:flex; flex-direction:column; gap:10px; scrollbar-width:none; }
+  .team-list::-webkit-scrollbar{ display:none; }
+  .team-e2e{ align-self:center; font-size:11px; color:var(--muted); display:flex; align-items:center; gap:5px; margin-bottom:4px; }
+  .team-msg{ max-width:78%; display:flex; flex-direction:column; }
+  .team-msg.them{ align-self:flex-start; align-items:flex-start; }
+  .team-msg.me{ align-self:flex-end; align-items:flex-end; }
+  .team-who{ font-size:11px; font-weight:700; color:var(--muted); margin:0 4px 3px; }
+  .team-bub{ padding:9px 12px; border:1.5px solid var(--text); color:var(--text); font-size:14px; line-height:1.35; white-space:pre-wrap; word-break:break-word; }
+  .team-msg.them .team-bub{ border-radius:6px; }
+  .team-msg.me .team-bub{ border-radius:18px; }
+  .team-time{ font-size:10px; color:var(--muted); margin:3px 4px 0; }
+  .team-empty{ margin:auto; text-align:center; color:var(--muted); font-size:13px; }
+  /* Kept above the bottom 40px: that band is Station 3's (its button in the corner, its bar when open). */
+  .team-box{ display:flex; align-items:flex-end; gap:8px; padding:8px 0 4px; margin-bottom:44px; border-top:1px solid var(--line); }
+  .team-box textarea{ flex:1; min-width:0; resize:none; max-height:110px; padding:10px 14px; border-radius:20px; border:1px solid var(--line); background:transparent; color:var(--text); font:inherit; font-size:14px; outline:none; }
+  .team-send{ flex:none; width:40px; height:40px; border-radius:50%; border:none; background:var(--text); color:var(--bg-app); display:flex; align-items:center; justify-content:center; cursor:pointer; }
+  .team-new{ display:flex; flex-direction:column; gap:12px; padding:18px 2px; }
+  .team-new-t{ font-size:20px; font-weight:800; color:var(--text); }
+  .team-new-d{ font-size:13px; color:var(--muted); line-height:1.45; }
+  .team-new input, .team-sheet input{ width:100%; box-sizing:border-box; padding:12px 14px; border-radius:12px; border:1px solid var(--line); background:transparent; color:var(--text); font:inherit; font-size:14px; outline:none; }
+  .team-btn{ padding:12px; border-radius:12px; border:none; background:var(--text); color:var(--bg-app); font:inherit; font-size:14px; font-weight:800; cursor:pointer; }
+  .team-btn[disabled]{ opacity:0.5; }
+  .modal-sheet.team-sheet{ display:flex; flex-direction:column; gap:10px; padding-bottom:56px; }
+  .team-people{ display:flex; flex-direction:column; max-height:300px; overflow-y:auto; scrollbar-width:none; }
+  .team-people::-webkit-scrollbar{ display:none; }
+  .team-person{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 2px; border-top:1px solid var(--line); font-size:13px; color:var(--text); }
+  .team-person small{ display:block; color:var(--muted); font-size:11px; }
+  .team-person button{ flex:none; padding:7px 12px; border-radius:16px; border:1px solid var(--text); background:transparent; color:var(--text); font:inherit; font-size:12px; font-weight:700; cursor:pointer; }
+  .team-person button[disabled]{ opacity:0.5; }
+  .team-note{ font-size:12px; color:var(--muted); padding:6px 2px; }
   .community-section{ width:100%; }
 
   .community-colhead-wrap{ position:relative; margin-bottom:8px; }
@@ -7525,7 +7571,7 @@ function privacySettingsHTML(){
 // ---- Privacy Policy + Terms of Service (owner, under Information). Written from how Lockedintool really works; the
 //      owner's details: Lockedintool, lockedintool@gmail.com, no refunds (except where the law requires). Also reachable from the
 //      Subscription page (someone without a plan sees only that page, and must be able to read what they agree to).
-const LEGAL_UPDATED = '14 October 2026';
+const LEGAL_UPDATED = '15 October 2026';
 const LEGAL = {
   'legal-privacy': { title:'Privacy Policy', sections:[
     ['Who we are', [
@@ -7543,10 +7589,10 @@ const LEGAL = {
       'Call history: calls made with Lockedintool, and contact names if you allow contacts.',
       'Removing Lockedintool from your phone removes all of this.' ]],
     ['Kept on our server', [
-      'Your account: a random ID, the public half of your encryption key, your name, @username, profile picture, bio and About (so people can find you and see who you are) and your privacy choices (who can message and call you and who can see your status).',
+      'Your account: a random ID, the public half of your encryption key, your name, @username, profile picture, bio and About (so people can find you and see who you are - a private profile can’t be found and only shows to people you follow, message or share a group with) and your privacy choices (who can see your profile, who can message and call you and who can see your status).',
       'Updates: who you follow and who follows you, the posts you share to your profile (anyone on Lockedintool can see them) and your statuses (deleted after 24 hours with their hearts and comments; only seen by who your status setting allows), and the hearts and comments you leave on statuses.',
       'Messages and calls: locked messages waiting for a phone that is offline (deleted once delivered), and whether a message was delivered, seen or read. Calls go straight from phone to phone; our server only helps them connect.',
-      'Community: groups you create or join, and what you post, like or comment in public groups - public groups are visible to everyone. Private group messages are end-to-end encrypted.',
+      'Community: groups you create or join, and what you post, like or comment in public groups - public groups are visible to everyone. Private group messages and Your Community’s chat are end-to-end encrypted.',
       'Payments: your plan, its price, status and dates, and the payment reference from our payment partner. If you add a bank account to receive money, it is kept to pay you - anyone viewing it sees only the last 3 digits, and people sending you money never see it.',
       'Phone number: only if Lockedintool ever needs to verify something, and then only kept as a scrambled (hashed) value - never used to find you.',
       'Your internet address (IP) for a short time to stop abuse such as mass sign-ups.' ]],
@@ -9319,7 +9365,7 @@ function groupChatFromServer(v){
   const list = msgChats(); let c = list.find(x=>x.id === v.id);
   if(v.gone || v.member === false){ if(c){ list.splice(list.indexOf(c), 1); if(msgView.chat === v.id) closeChat(); } return null; }
   if(!c){ c = { id:v.id, kind:'group', messages:[] }; list.push(c); }
-  Object.assign(c, { groupType: v.type, name: v.name, photo: v.image || c.photo || '', callJoin: v.callJoin || 'open', count: v.count, about: v.about || '' });
+  Object.assign(c, { groupType: v.type, name: v.name, photo: v.image || c.photo || '', callJoin: v.callJoin || 'open', count: v.count, about: v.about || '', team: !!v.team, creator: v.creator || c.creator });
   if(v.members){
     const me = (msgAccount() || {}).id;
     c.members = v.members.map(m=>({ id:m.id, name:m.name, username:m.username, role:m.role }));
@@ -13121,6 +13167,8 @@ function attachHandlers(){
       const target = el.getAttribute('data-nav');
       // A live home screen widget stays on its own page (owner): going anywhere else opens STORY full screen there.
       if(window.__storyWidgetPinned && target !== window.__storyWidget){ try{ window.StoryNative.widgetOpenPages(target); }catch(e){} return; }
+      // Pressing Community (not coming back from one of its groups): the choose screen, or Your Community (owner).
+      if(target === 'community' && state.current !== 'community-group' && state.current !== 'community') state.communityMode = cmStartMode();
       state.current = target;
       if(PAGES.includes(target)) state.lastPage = target;
       renderDevice();
@@ -14961,6 +15009,32 @@ function attachHandlers(){
         case 'pay-recv-edit': { const m = state.pay.info && state.pay.info.bank; Object.assign(state.pay.recv, { editing:true, name: m ? m.name : '', bank: m ? m.bank : '', acct:'', msg:'' }); break; }
         case 'pay-recv-cancel': state.pay.recv.editing = false; state.pay.recv.msg = ''; break;
         case 'pay-recv-remove': msgApi('/v1/pay/bank', { remove:true }).then(()=>{ if(state.pay.info) state.pay.info.bank = null; showToast('Removed'); payShow(); }).catch(()=>showToast('Couldn\u2019t remove - try again')); break;
+        case 'cm-pick': state.communityMode = el.getAttribute('data-value') === 'public' && !cmPrivate() ? 'public' : 'mine'; break;
+        case 'cm-back': if(!cmPrivate()) state.communityMode = null; break;
+        case 'cm-always': try{ localStorage.setItem(CM_ALWAYS_KEY, cmAlwaysMine() ? '0' : '1'); }catch(e){} break;
+        case 'team-send': teamSend(); return;
+        case 'team-create': {
+          const tm = state.team || (state.team = {}), inp = document.querySelector('.team-new-name'), name = (inp ? inp.value : '').trim();
+          if(!name){ if(inp) inp.focus(); return; }
+          if(tm.busy) return;
+          tm.busy = true;
+          msgApi('/v1/groups/create', { name, team:true }).then(v=>{ groupChatFromServer(v); saveMsgChats(); tm.newName = ''; })
+            .catch(()=>showToast('No connection to Lockedintool right now')).finally(()=>{ tm.busy = false; renderDevice(); });
+          break;
+        }
+        case 'team-add-open': (state.team || (state.team = {})).addOpen = true; setTimeout(()=>{ const q = document.querySelector('.team-add-q'); if(q) q.focus(); }, 50); break;
+        case 'team-add-close': Object.assign(state.team || (state.team = {}), { addOpen:false, q:'', found:null }); break;
+        case 'team-rename': { const t = teamChat(); if(t && t.creator === (msgAccount() || {}).id) (state.team || (state.team = {})).renameOpen = true; break; }
+        case 'team-rename-close': (state.team || (state.team = {})).renameOpen = false; break;
+        case 'team-rename-save': {
+          const t = teamChat(), inp = document.querySelector('.team-rename-in'), name = (inp ? inp.value : '').trim();
+          if(!t || !name){ if(inp) inp.focus(); return; }
+          state.team.renameOpen = false;
+          const old = t.name; t.name = name; saveMsgChats();
+          msgApi('/v1/groups/update', { id: t.id, name }).then(v=>{ groupChatFromServer(v); saveMsgChats(); renderDevice(); })
+            .catch(()=>{ t.name = old; saveMsgChats(); showToast('Couldn’t rename - no connection'); renderDevice(); });
+          break;
+        }
         case 'privacy-status': { const p = storyPrivacy(); p.status = el.getAttribute('data-value'); setStoryPrivacy(p); break; }
         case 'privacy-calls': { const p = storyPrivacy(); p.calls = el.getAttribute('data-value'); setStoryPrivacy(p); break; }
         case 'privacy-call-person': { const p = storyPrivacy(), id = el.getAttribute('data-value'); const l = p.callPeople || []; p.callPeople = l.includes(id) ? l.filter(x=>x !== id) : l.concat(id); setStoryPrivacy(p); break; }
@@ -15405,7 +15479,7 @@ function groupLiveDotHTML(g){ return g && g.liveCall ? '<i class="group-live-dot
 window.storyGroupLive = function(groupId, live){
   const g = findCommunityGroupById(groupId); if(!g) return;
   g.liveCall = live ? (typeof live === 'object' ? live : {}) : null;
-  if(state.current === 'community' || state.current === 'community-group') renderDevice();
+  if(state.current === 'community-group' || (state.current === 'community' && cmMode() !== 'mine')) renderDevice();
 };
 // Your groups are kept on the phone: groups you made + the ones you joined ('story-community'); the groups you're in
 // also show in Messages > Groups ('story-community-chats', read by the Messages window).
@@ -15465,7 +15539,7 @@ async function communitySync(force){
     // Stories: the real stories everyone posted.
     try{ const st = findCommunityGroupById('g-stories'), r = await msgApi('/v1/groups/posts?id=g-stories'); if(st) st.posts = communityPostsFromServer(r.posts); }catch(e){}
     communitySyncedAt = Date.now(); saveCommunity();
-    if(state.current === 'community' || state.current === 'community-group') renderDevice();
+    if(state.current === 'community-group' || (state.current === 'community' && cmMode() !== 'mine')) renderDevice();
   }catch(e){}
   communitySyncing = false;
 }
@@ -15709,10 +15783,150 @@ YOU 🫵 NEXT !!
     </div>
   `;
 }
-function communityScreen(){
+// ---- Community (owner): Your Community (your own team room) | Publics community (the groups, Stories... as before).
+// A PUBLIC account opens on the choose screen (the two side by side, like Layouts' Dashboard | Pages) unless it chose
+// to always open Your Community; the corner button goes back to the choose screen. A PRIVATE account has only Your
+// Community. Your Community = ONE community you make (private group with team:true on the server, locked like a
+// private group, only you add people) shown as one big chat. ----
+const CM_ALWAYS_KEY = 'story-community-always-mine';
+function cmAlwaysMine(){ try{ return localStorage.getItem(CM_ALWAYS_KEY) === '1'; }catch(e){ return false; } }
+function cmPrivate(){ return typeof profilePrivacy === 'function' && profilePrivacy() === 'private'; }
+function cmStartMode(){ return cmPrivate() || cmAlwaysMine() ? 'mine' : null; }
+function cmMode(){ if(cmPrivate()) return 'mine'; if(state.communityMode === undefined) state.communityMode = cmStartMode(); return state.communityMode; }
+function teamChat(){ const me = (msgAccount() || {}).id; return me ? msgChats().find(c=>c.team && c.creator === me) || null : null; }
+function cmSwitchBtn(){
+  return cmPrivate() ? '' : `<button class="cm-switch" data-action="cm-back" aria-label="Your Community or Publics community"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="7.5" height="14" rx="2"/><rect x="13.5" y="5" width="7.5" height="14" rx="2"/></svg></button>`;
+}
+function communityChooseScreen(){
+  const t = teamChat();
   return `
     <div class="page-shell">
-    ${topBar('', false, '', 'dashboard')}
+    ${topBar('Community', false, '', 'dashboard')}
+    <div class="layouts-tabs cm-tabs">
+      <div class="layouts-tab" data-action="cm-pick" data-value="mine">${escText(t ? t.name : 'Your Community')}</div>
+      <div class="layouts-tab" data-action="cm-pick" data-value="public">Publics community</div>
+    </div>
+    <div class="cm-always">
+      <div><div class="cm-always-t">Always open ${escText(t ? t.name : 'Your Community')}</div><div class="cm-always-d">Community opens straight on your community every time you press it.</div></div>
+      <button class="toggle-switch${cmAlwaysMine() ? ' on' : ''}" data-action="cm-always"><span class="toggle-knob"></span></button>
+    </div>
+    </div>`;
+}
+function teamMsgsHTML(t){
+  const msgs = (t.messages || []).slice(-300);
+  const lock = '<div class="team-e2e"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>End-to-end encrypted</div>';
+  if(!msgs.length) return lock + '<div class="team-empty">No messages yet.<br>Say hi to your community.</div>';
+  return lock + msgs.map(m=>{
+    const mine = m.from === 'me';
+    return '<div class="team-msg ' + (mine ? 'me' : 'them') + '">' + (!mine && m.who ? '<div class="team-who">' + escText(m.who) + '</div>' : '') +
+      '<div class="team-bub">' + escText(m.text || '') + '</div><div class="team-time">' + escText(msgTime(m.at)) + (mine && m.status === 'failed' ? ' · Not sent' : '') + '</div></div>';
+  }).join('');
+}
+function teamScreen(){
+  const a = msgAccount(), t = teamChat(), tm = state.team || (state.team = {});
+  const head = topBar('', false, cmSwitchBtn(), 'dashboard');
+  if(!t){
+    return `<div class="page-shell">${head}
+      <div class="team-new">
+        <div class="team-new-t">Your Community</div>
+        <div class="team-new-d">Make your own community - your team room. One big chat with the people you add. Only you can add people, and only people in it can see it.</div>
+        ${a ? `<input class="team-new-name" type="text" maxlength="60" placeholder="Name your community" autocomplete="off" enterkeyhint="done" value="${escText(tm.newName || '')}">
+        <button class="team-btn" data-action="team-create"${tm.busy ? ' disabled' : ''}>${tm.busy ? 'Creating…' : 'Create your community'}</button>`
+        : '<div class="team-note">Connecting to Lockedintool… open Profile from Station 3 once to set up your account.</div>'}
+      </div></div>`;
+  }
+  // Seeing the chat = you've read it (the Messages number goes down).
+  const last = (t.messages || [])[(t.messages || []).length - 1];
+  if(last && last.at > (t.readAt || 0)){ t.readAt = Date.now(); saveMsgChats(); }
+  const count = t.count || (t.members || []).length || 1;
+  return `<div class="page-shell team-shell">${head}
+    <div class="team-head"><div class="team-head-txt"><button class="team-name" data-action="team-rename">${escText(t.name)}</button>
+      <div class="team-sub">${count} ${count === 1 ? 'member' : 'members'}</div></div>
+      <button class="team-add" data-action="team-add-open">+ Add people</button></div>
+    <div class="team-list">${teamMsgsHTML(t)}</div>
+    <div class="team-box"><textarea rows="1" maxlength="4000" placeholder="Message"></textarea>
+      <button class="team-send" data-action="team-send" aria-label="Send"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M13 6l6 6-6 6"/></svg></button></div>
+    </div>
+    ${tm.addOpen ? teamAddSheet(t) : ''}${tm.renameOpen ? teamRenameSheet(t) : ''}`;
+}
+function teamPeopleHTML(t){
+  const tm = state.team || {}, ids = new Set((t.members || []).map(m=>m.id)), me = (msgAccount() || {}).id;
+  if(!tm.q || tm.q.replace(/^@/, '').length < 2) return '<div class="team-note">Type a name or @username.</div>';
+  if(tm.searching && !tm.found) return '<div class="team-note">Searching…</div>';
+  const list = (tm.found || []).filter(p=>p.id !== me);
+  if(!list.length) return '<div class="team-note">No one found. Private profiles can’t be found.</div>';
+  return list.map(p=>'<div class="team-person"><div>' + escText(p.name || '@' + p.username) + (p.name && p.username ? '<small>@' + escText(p.username) + '</small>' : '') + '</div>' +
+    (ids.has(p.id) ? '<button disabled>In</button>' : '<button data-team-add="' + escText(p.id) + '">Add</button>') + '</div>').join('');
+}
+function teamAddSheet(t){
+  const tm = state.team || {};
+  return `<div class="modal-overlay" data-action="team-add-close"><div class="modal-sheet team-sheet" onclick="event.stopPropagation()">
+    <div class="modal-head"><span class="modal-title">Add people</span><button class="modal-close" data-action="team-add-close">×</button></div>
+    <input class="team-add-q" type="search" placeholder="Search name or @username" autocomplete="off" autocorrect="off" spellcheck="false" value="${escText(tm.q || '')}">
+    <div class="team-people">${teamPeopleHTML(t)}</div></div></div>`;
+}
+function teamRenameSheet(t){
+  return `<div class="modal-overlay" data-action="team-rename-close"><div class="modal-sheet team-sheet" onclick="event.stopPropagation()">
+    <div class="modal-head"><span class="modal-title">Rename your community</span><button class="modal-close" data-action="team-rename-close">×</button></div>
+    <input class="team-rename-in" type="text" maxlength="60" value="${escText(t.name)}" autocomplete="off" enterkeyhint="done">
+    <button class="team-btn" data-action="team-rename-save">Save</button></div></div>`;
+}
+// Live: a message saved by Profile's window (it keeps the connection) shows here at once; the typing box is left alone.
+function teamRefresh(){
+  if(state.current !== 'community' || cmMode() !== 'mine') return;
+  const t = teamChat(), list = document.querySelector('.team-list');
+  if(!t || !list){ if(t && !document.querySelector('.team-box textarea:focus')) renderDevice(); return; }
+  const atEnd = list.scrollHeight - list.scrollTop - list.clientHeight < 40;
+  list.innerHTML = teamMsgsHTML(t); if(atEnd) list.scrollTop = list.scrollHeight;
+  const last = (t.messages || [])[(t.messages || []).length - 1];
+  if(last && last.at > (t.readAt || 0)){ t.readAt = Date.now(); saveMsgChats(); }
+  const name = document.querySelector('.team-name'); if(name) name.textContent = t.name;
+}
+function teamSend(){
+  const t = teamChat(), box = document.querySelector('.team-box textarea'); if(!t || !box) return;
+  const text = box.value.replace(/\s+$/, '').replace(/^\s*\n/, ''); if(!text.trim()) return;
+  const m = { id: 'm' + Date.now() + Math.random().toString(36).slice(2, 6), from:'me', text, at: Date.now(), status:'sending' };
+  (t.messages = t.messages || []).push(m); t.readAt = m.at; saveMsgChats();
+  msgOut({ type:'send', chatId: t.id, id: m.id, text });
+  box.value = ''; box.style.height = '';
+  teamRefresh(); const list = document.querySelector('.team-list'); if(list) list.scrollTop = list.scrollHeight;
+}
+async function teamCheck(){
+  // Made on another visit but not in this phone's chats yet? Ask the server once.
+  if(state.teamChecked || teamChat() || !msgAccount()) return;
+  state.teamChecked = true;
+  try{ const r = await msgApi('/v1/groups/mine'); const me = msgAccount().id; const v = (r.groups || []).find(g=>g.team && g.creator === me);
+    if(v){ groupChatFromServer(await msgApi('/v1/groups/get?id=' + encodeURIComponent(v.id))); saveMsgChats(); if(state.current === 'community') renderDevice(); } }catch(e){ state.teamChecked = false; }
+}
+let teamFindT = 0;
+document.addEventListener('input', e=>{
+  const q = e.target.closest && e.target.closest('.team-add-q'); if(!q) return;
+  const tm = state.team || (state.team = {}); tm.q = q.value; tm.found = null; tm.searching = true;
+  const put = ()=>{ const t = teamChat(), box = document.querySelector('.team-people'); if(t && box) box.innerHTML = teamPeopleHTML(t); };
+  put(); clearTimeout(teamFindT);
+  teamFindT = setTimeout(async ()=>{
+    const v = tm.q.trim(); if(v.replace(/^@/, '').length < 2){ tm.searching = false; put(); return; }
+    try{ const r = await msgApi('/v1/find?q=' + encodeURIComponent(v)); if(tm.q.trim() === v){ tm.found = r.people || []; tm.searching = false; put(); } }
+    catch(err){ tm.searching = false; tm.found = []; put(); }
+  }, 300);
+});
+document.addEventListener('input', e=>{ const nm = e.target.closest && e.target.closest('.team-new-name'); if(nm) (state.team || (state.team = {})).newName = nm.value;
+  const ta = e.target.closest && e.target.closest('.team-box textarea'); if(ta){ ta.style.height = ''; ta.style.height = Math.min(110, ta.scrollHeight) + 'px'; } });
+document.addEventListener('click', async e=>{
+  const b = e.target.closest && e.target.closest('[data-team-add]'); if(!b || b.disabled) return;
+  const t = teamChat(); if(!t) return; b.disabled = true; b.textContent = 'Adding…';
+  try{ const v = await msgApi('/v1/groups/add', { id: t.id, members:[b.getAttribute('data-team-add')] }); groupChatFromServer(v); saveMsgChats(); b.textContent = 'In';
+    const sub = document.querySelector('.team-sub'); const c = teamChat(); if(sub && c){ const n = c.count || (c.members || []).length; sub.textContent = n + (n === 1 ? ' member' : ' members'); } }
+  catch(err){ b.disabled = false; b.textContent = 'Add'; showToast(err.code === 'leader' ? 'Only you can add people to your community' : 'No connection to Lockedintool right now'); }
+}, true);   // capture: the sheet stops clicks from bubbling out of it
+window.addEventListener('storage', e=>{ if(e.key === MSG_KEY) teamRefresh(); });
+function communityScreen(){
+  const mode = cmMode();
+  if(mode === 'mine'){ teamCheck(); return teamScreen(); }
+  if(mode !== 'public') return communityChooseScreen();
+  return `
+    <div class="page-shell">
+    ${topBar('', false, cmSwitchBtn(), 'dashboard')}
     <div class="community-stack">
       ${communityTrendingSectionHTML()}
       ${communityGroupsSectionHTML()}
