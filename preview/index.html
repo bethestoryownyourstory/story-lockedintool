@@ -8351,9 +8351,9 @@ window.storyProfileOnly = function(){
     else if(k === 'del-go') delAccount();
     else if(k === 'up-p-more'){ const p = UP.person; if(p) litPersonSheet(p, { after: ()=>upOpenPerson(p.id) }); }
     else if(k === 'upv-more'){ const v = UP.view; if(!v) return; const it = v.items[v.i]; upPause();
-      litSheet({ title: upName(v.user), onClose: ()=>{ if(UP.view === v) upShowItem(); }, items: [
+      litSheet({ onClose: ()=>{ if(UP.view === v) upShowItem(); }, items: [
         { label: v.status ? 'Report status' : 'Report post', fn: ()=>litReport(v.status ? 'status' : 'post', it.id, { onClose: ()=>{ if(UP.view === v) upShowItem(); } }) },
-        { label: 'Block ' + litName(v.user), danger:true, fn: ()=>{ if(UP.view === v) upShowItem(); litBlock(v.user, true, ()=>{ upCloseView(); upLoad(); }); } }] }); }
+        { label: 'Block', danger:true, fn: ()=>{ if(UP.view === v) upShowItem(); litBlock(v.user, true, ()=>{ upCloseView(); upLoad(); }); } }] }); }
     else if(k === 'upv-creport') litReport('comment', b.getAttribute('data-id'));
     else if(k === 'menu-privacy'){ el.querySelector('.pf-menu').hidden = true; main.hidden = true; const pv = el.querySelector('.pf-privacy'); pv.hidden = false; pv.scrollTop = 0; pvRender(); }
     else if(k === 'pv-back'){ el.querySelector('.pf-privacy').hidden = true; main.hidden = false; }
@@ -15949,14 +15949,14 @@ function litBlock(u, on, after){
     .then(()=>{ litSetBlocked(u.id, on ? u : null); showToast(on ? 'Blocked' : 'Unblocked'); if(after) after(); })
     .catch(()=>showToast('No connection to Lockedintool right now'));
   if(!on){ go(); return; }
-  litSheet({ title: 'Block ' + litName(u) + '?', text: 'They won’t be able to message or call you, see your profile or statuses, or find you - and you won’t see theirs. They aren’t told. You can unblock them in Settings > Privacy.',
+  litSheet({ title: 'Block this account?', text: 'They won’t be able to message or call you, see your profile or statuses, or find you - and you won’t see theirs. They aren’t told. You can unblock them in Settings > Privacy.',
     items: [{ label:'Block', danger:true, fn: go }] });
 }
 // A person: Block / Unblock and Report (chat reports carry their last messages).
 function litPersonSheet(u, opts){
   opts = opts || {};
   const isB = !!litBlocked()[u.id];
-  litSheet({ title: litName(u), onClose: opts.onClose, items: [
+  litSheet({ onClose: opts.onClose, items: [
     { label: isB ? 'Unblock' : 'Block', danger: !isB, fn: ()=>{ litBlock(u, !isB, opts.after); if(opts.onClose && !isB) {} } },
     { label: opts.chat ? 'Report chat' : 'Report profile', fn: ()=>litReport(opts.chat ? 'chat' : 'profile', u.id, { text: opts.text || '', onClose: opts.onClose }) }] });
 }
