@@ -532,7 +532,7 @@ export class Hub {
   subView(me) {
     const r = this.one('SELECT * FROM subs WHERE uid = ?', me.id), now = Date.now();
     const active = !!(r && r.until > now);
-    return { connected: this.subReady(), plan: active ? r.plan : null, until: r ? r.until : 0, active, plans: this.subPlans() };
+    return { connected: this.subReady(), enforced: this.env.SUB_ENFORCE === '1', plan: active ? r.plan : null, until: r ? r.until : 0, active, plans: this.subPlans() };
   }
   // Stitch Express REST API (express.stitch.money/api/v1, its own OpenAPI spec): a 15-minute token from clientId +
   // clientSecret, then payment links. Amounts are in cents.

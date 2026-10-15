@@ -1,5 +1,6 @@
 name: STORY screens - Test, then Approve
 # FULLY LIVE (owner's choice): a pushed index.html goes to the Test channel AND straight to everyone (/), no publishing.
+# Run workflow (= the owner's "Undo last update" button) puts the screens from before the last update back for everyone.
 # Approve (the owner's "Publish live update" button runs this through the release server,
 # or Actions -> this workflow -> Run workflow) -> the Test version goes LIVE for everyone:
 #   - the app: the "latest" (Test) release build is copied to the "live" release
@@ -50,39 +51,31 @@ jobs:
       - name: Fully live -> everyone gets it now (owner)
         if: github.event_name == 'push'
         run: |
+          # Keep the version it replaces, for Undo last update.
+          if [ -f site/index.html ] && ! cmp -s index.html site/index.html; then
+            mkdir -p site/prev
+            for f in index.html manifest.json icon-192.png icon-512.png; do cp site/$f site/prev/ 2>/dev/null || true; done
+            cp site/live-source.txt site/prev/source.txt 2>/dev/null || true
+          fi
           cp index.html manifest.json icon-192.png icon-512.png site/
           echo "${GITHUB_REF_NAME} ${GITHUB_SHA::7}" > site/live-source.txt
           git -C site add -A
           git -C site commit -qm "Live: ${GITHUB_REF_NAME} ${GITHUB_SHA::7}" || echo "Live already matches"
           git -C site push origin HEAD:gh-pages
           echo "### Live for everyone now: ${GITHUB_REF_NAME} ${GITHUB_SHA::7}" >> "$GITHUB_STEP_SUMMARY"
-      - name: Approve -> the Test app build goes live for everyone
-        if: github.event_name == 'workflow_dispatch'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          mkdir -p promote
-          gh release download latest -p app-debug.apk -p version.json -D promote --clobber
-          N=$(grep -o '[0-9]\+' promote/version.json)
-          if gh release view live >/dev/null 2>&1; then
-            # APK first, then version.json, so phones never see a new version number before its APK.
-            gh release upload live promote/app-debug.apk --clobber
-            gh release upload live promote/version.json --clobber
-            gh release edit live --title "STORY live build $N" --latest
-          else
-            gh release create live promote/app-debug.apk promote/version.json --title "STORY live build $N" --notes "Live channel: the STORY build every user gets" --latest
-          fi
-          echo "### Live app now: build $N" >> "$GITHUB_STEP_SUMMARY"
-      - name: Approve -> Test screens go live for everyone
+      - name: Undo last update -> the screens from before go back for everyone (owner)
         if: github.event_name == 'workflow_dispatch'
         run: |
-          if [ ! -f site/preview/index.html ]; then
-            echo "No Test screens yet - live screens unchanged." >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-          cp site/preview/index.html site/preview/manifest.json site/preview/icon-192.png site/preview/icon-512.png site/
-          cp site/preview/source.txt site/live-source.txt
+          if [ ! -f site/prev/index.html ]; then echo "Nothing to undo yet." >> "$GITHUB_STEP_SUMMARY"; exit 0; fi
+          mkdir -p swap
+          for f in index.html manifest.json icon-192.png icon-512.png; do
+            cp site/$f swap/ 2>/dev/null || true; cp site/prev/$f site/$f 2>/dev/null || true; cp swap/$f site/prev/$f 2>/dev/null || true
+          done
+          cp site/live-source.txt swap/source.txt 2>/dev/null || true
+          cp site/prev/source.txt site/live-source.txt 2>/dev/null || true
+          cp swap/source.txt site/prev/source.txt 2>/dev/null || true
+          mkdir -p site/preview && cp site/index.html site/manifest.json site/icon-192.png site/icon-512.png site/preview/ && cp site/live-source.txt site/preview/source.txt
           git -C site add -A
-          git -C site commit -qm "Approved for live: $(cat site/live-source.txt)" || echo "Live already matches Test"
+          git -C site commit -qm "Undo last update: back to $(cat site/live-source.txt 2>/dev/null)" || echo "Nothing changed"
           git -C site push origin HEAD:gh-pages
-          echo "### Live now: $(cat site/live-source.txt)" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Undone - everyone is back to: $(cat site/live-source.txt 2>/dev/null)" >> "$GITHUB_STEP_SUMMARY"

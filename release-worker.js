@@ -1,8 +1,8 @@
 // STORY release server - a Cloudflare Worker.
 // The app sends the PIN here; it is checked HERE, never inside the app.
 //   POST /verify  {"pin": "..."} -> {"ok": true} when the PIN is right (unlocks owner mode)
-//   POST /publish {"pin": "..."} -> runs "STORY screens - Test, then Approve" on GitHub,
-//                                   which copies the Test version (app + screens) to Live.
+//   POST /publish {"pin": "..."} -> runs "STORY screens - Test, then Approve" on GitHub = UNDO LAST UPDATE:
+//                                   the screens from before the last update go back for everyone (fully live).
 // Settings (Cloudflare -> this Worker -> Settings -> Variables and Secrets):
 //   PIN           (secret) the owner PIN. Change it there any time - no app update needed.
 //   GITHUB_TOKEN  (secret) fine-grained GitHub token: this repo only, "Actions: Read and write".
