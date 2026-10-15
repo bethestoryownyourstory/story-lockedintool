@@ -1458,8 +1458,22 @@ class OverlayService : Service(), StoryBridge.Host {
             else -> null
         }
         if (file != null) return fileResponse(file, r.requestHeaders)
+        // A video picked from the phone for a post (Updates > Create post): streamed as it is, for uploading.
+        if (seg.getOrNull(1) == "mediav") seg.getOrNull(2)?.toLongOrNull()?.let { id ->
+            runCatching {
+                val uri = android.content.ContentUris.withAppendedId(android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI, id)
+                val input = contentResolver.openInputStream(uri) ?: error("gone")
+                return WebResourceResponse("video/mp4", null, 200, "OK", mapOf("Access-Control-Allow-Origin" to "*", "Cache-Control" to "no-store"), input)
+            }
+        }
         val bytes = runCatching {
             when (seg.getOrNull(1)) {
+                // A picture picked from the phone for a post: upright, at most 1440px, JPEG.
+                "media" -> seg.getOrNull(2)?.toLongOrNull()?.let { id ->
+                    ProfilePhotoActivity.decodeUpright(this, android.content.ContentUris.withAppendedId(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id), 1440)?.let { bmp ->
+                        java.io.ByteArrayOutputStream().also { o -> bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 88, o) }.toByteArray()
+                    }
+                }
                 "profile" -> ProfilePhotoActivity.file(this).takeIf { it.exists() }?.readBytes()
                 "thumb" -> seg.getOrNull(2)?.toLongOrNull()?.let { ProfilePhotoActivity.thumbBytes(this, it) }
                 "thumbv" -> seg.getOrNull(2)?.toLongOrNull()?.let { ProfilePhotoActivity.videoThumbBytes(this, it) }
