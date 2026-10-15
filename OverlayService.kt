@@ -1688,7 +1688,7 @@ class OverlayService : Service(), StoryBridge.Host {
         val v = bubble ?: return
         if (on == activityOn) return
         activityOn = on
-        val d = (8 * dp).toInt(), m = (6 * dp).toInt(), s = (40 * dp).toInt()
+        val d = (8 * dp).toInt(); val m = (6 * dp).toInt(); val s = (40 * dp).toInt()
         activityDot.setBounds(s - m - d, m, s - m, m + d)
         if (on) v.overlay.add(activityDot) else v.overlay.remove(activityDot)
     }
