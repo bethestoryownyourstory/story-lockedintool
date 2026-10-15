@@ -254,6 +254,13 @@ class OverlayService : Service(), StoryBridge.Host {
     }
 
     private var relayerPending = false
+    /** For the setup screen: where Station 3 is right now (so a hidden Station 3 can be explained). */
+    fun station3State(): String = when {
+        bubble == null -> "not started"
+        bubble?.visibility != View.VISIBLE -> "hidden by Settings > Quick Access"
+        layerType == WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY -> "on top of everything"
+        else -> "NOT on top - the keyboard can cover it (Lockedintool system actions isn't connected)"
+    }
     private val topLayerCheck = Runnable { topLayerWarn() }
     /** Without Lockedintool system actions (the accessibility switch) Station 3 sits in the normal layer, where the
      *  keyboard and some screens cover it - say so once, with a tap straight to the switch. */

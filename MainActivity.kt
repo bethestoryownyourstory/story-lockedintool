@@ -100,7 +100,7 @@ class MainActivity : Activity() {
     private fun showUpdateStatus() {
         val (s, at) = Updater.status(this)
         val ago = if (at == 0L) "" else android.text.format.DateUtils.getRelativeTimeSpanString(at, System.currentTimeMillis(), android.text.format.DateUtils.SECOND_IN_MILLIS).toString()
-        updateLine?.text = "Updates: $s" + if (ago.isEmpty()) "" else "  ·  $ago"
+        updateLine?.text = "Updates: $s" + (if (ago.isEmpty()) "" else "  ·  $ago") + "\nStation 3: " + (OverlayService.instance?.station3State() ?: "Lockedintool isn't running")
         val pct = Updater.progress(this)
         updateBar?.apply {
             visibility = if (pct == null) android.view.View.GONE else android.view.View.VISIBLE
