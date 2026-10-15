@@ -1,8 +1,10 @@
 // STORY release server - a Cloudflare Worker.
 // The app sends the PIN here; it is checked HERE, never inside the app.
 //   POST /verify  {"pin": "..."} -> {"ok": true} when the PIN is right (unlocks owner mode)
-//   POST /publish {"pin": "..."} -> runs "STORY screens - Test, then Approve" on GitHub = UNDO LAST UPDATE:
-//                                   the screens from before the last update go back for everyone (fully live).
+//   POST /publish {"pin": "...", "action": "publish" | "undo"} -> runs "STORY screens - Test, then Approve" on GitHub:
+//        publish = the owner's "Publish live update": the Test screens + Test app build go to everyone
+//        undo    = the owner's "Undo last update": the screens from before the last publish come back
+//        (no action = undo, for owner phones still on the older app)
 // Settings (Cloudflare -> this Worker -> Settings -> Variables and Secrets):
 //   PIN           (secret) the owner PIN. Change it there any time - no app update needed.
 //   GITHUB_TOKEN  (secret) fine-grained GitHub token: this repo only, "Actions: Read and write".
@@ -35,6 +37,7 @@ export default {
     }
     if (path === '/verify') return json({ ok: true });
     if (path === '/publish') {
+      const action = body.action === 'publish' ? 'publish' : 'undo';
       if (!env.GITHUB_TOKEN) return json({ ok: false, error: 'GITHUB_TOKEN is not set on the server.' }, 500);
       const r = await fetch(`https://api.github.com/repos/${REPO}/actions/workflows/${WORKFLOW}/dispatches`, {
         method: 'POST',
@@ -44,7 +47,7 @@ export default {
           'X-GitHub-Api-Version': '2022-11-28',
           'User-Agent': 'story-release-server',
         },
-        body: JSON.stringify({ ref: 'main' }),
+        body: JSON.stringify({ ref: 'main', inputs: { action } }),
       });
       if (r.status === 204) return json({ ok: true });
       return json({ ok: false, error: `GitHub refused (${r.status}): ${(await r.text()).slice(0, 200)}` }, 502);

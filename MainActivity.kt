@@ -79,7 +79,8 @@ class MainActivity : Activity() {
         // Owner only: you see the newest version (Test channel) and can publish it to everyone.
         if (Release.isOwner(this)) {
             col.addView(title("Owner - Test channel: you always get the newest version first.", 15f).apply { setTextColor(Color.parseColor("#FFE8B23D")); setPadding(0, pad, 0, pad / 2) })
-            col.addView(btn("Undo last update") { askPin("Undo last update", "Everyone goes back to the screens from before the last update.") { pin -> publish(pin) } })
+            col.addView(btn("Publish live update") { askPin("Publish live update", "Everything you see on this phone now goes to everyone.") { pin -> publish(pin, "publish") } })
+            col.addView(btn("Undo last update") { askPin("Undo last update", "Everyone goes back to the screens from before the last update.") { pin -> publish(pin, "undo") } })
             col.addView(btn("Leave owner mode") { Release.setOwner(this, false); channelChanged() })
         }
         val info = packageManager.getPackageInfo(packageName, 0)
@@ -138,10 +139,11 @@ class MainActivity : Activity() {
         }
     }.start()
 
-    private fun publish(pin: String) = Thread {
-        val a = Release.askServer("publish", pin)
+    private fun publish(pin: String, action: String) = Thread {
+        val a = Release.askServer("publish", pin, action)
         runOnUiThread {
-            if (a.ok) say("Undoing", "Done. Everyone is back on the screens from before the last update in about a minute.")
+            if (action == "publish") { if (a.ok) say("Publishing", "Done. Everyone gets this version in about a minute.") else say("Not published", a.message) }
+            else if (a.ok) say("Undoing", "Done. Everyone is back on the screens from before the last update in about a minute.")
             else say("Not undone", a.message)
         }
     }.start()

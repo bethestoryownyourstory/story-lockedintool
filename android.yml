@@ -108,7 +108,7 @@ jobs:
           name: story-apk
           path: build_src/app/build/outputs/apk/debug/app-debug.apk
       # Test channel = the "latest" release: the owner's phone installs every main build by itself.
-      # Live channel = the "live" release: FULLY LIVE (owner) - every main build goes to everyone straight away.
+      # Live channel = the "live" release: only when the owner taps Publish live update (screens.yml publish copies latest -> live).
       - name: Publish this build to the Test channel
         if: github.ref == 'refs/heads/main'
         env:
@@ -119,13 +119,3 @@ jobs:
           echo "{\"versionCode\": $N}" > version.json
           gh release delete latest --yes --cleanup-tag || true
           gh release create latest app-debug.apk version.json --title "STORY test build $N" --notes "Test channel: newest STORY build (owner's phone)" --latest=false
-          # Fully live: every phone gets this build too (APK first, then version.json).
-          if gh release view live >/dev/null 2>&1; then
-            gh release upload live app-debug.apk --clobber
-            gh release upload live version.json --clobber
-            gh release edit live --title "STORY live build $N" --latest
-          else
-            gh release create live app-debug.apk version.json --title "STORY live build $N" --notes "Live channel: the STORY build every user gets" --latest
-          fi
-          # Everything fast: the message server tells every phone the new app version is out.
-          sleep 5; curl -s -X POST https://story-msg.percyjuniormaseko0.workers.dev/v1/release-ping || true

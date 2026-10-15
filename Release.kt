@@ -54,7 +54,7 @@ object Release {
     class Answer(val ok: Boolean, val message: String)
 
     /** Run off the main thread. path = "verify" or "publish". */
-    fun askServer(path: String, pin: String): Answer = try {
+    fun askServer(path: String, pin: String, action: String? = null): Answer = try {
         val server = JSONObject(get("$CONFIG?t=${System.currentTimeMillis()}")).optString("server").trimEnd('/')
         if (server.isEmpty()) Answer(false, "The release server isn't set up yet.")
         else {
@@ -62,7 +62,7 @@ object Release {
                 requestMethod = "POST"; doOutput = true; connectTimeout = 15000; readTimeout = 30000
                 setRequestProperty("Content-Type", "application/json")
             }
-            c.outputStream.use { it.write(JSONObject().put("pin", pin).toString().toByteArray()) }
+            c.outputStream.use { it.write(JSONObject().put("pin", pin).apply { if (action != null) put("action", action) }.toString().toByteArray()) }
             val body = (if (c.responseCode in 200..299) c.inputStream else c.errorStream)?.bufferedReader()?.use { it.readText() } ?: "{}"
             val j = runCatching { JSONObject(body) }.getOrDefault(JSONObject())
             Answer(j.optBoolean("ok"), j.optString("error", "Server answered ${c.responseCode}"))
