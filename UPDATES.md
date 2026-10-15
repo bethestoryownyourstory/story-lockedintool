@@ -7,4 +7,4 @@ commits, pushed as a new update) - nothing else changes.
 | # | Date | What changed | Commits |
 |---|------|--------------|---------|
 | 1 | 2026-10-15 | Paywall off until the owner switches it on (SUB_ENFORCE); the owner's setup-screen button is now "Undo last update"; every update goes live for everyone (fully live); no "I agree to updates" screen | cddf3b5, e6355ed, 23ab451 |
-| 2 | 2026-10-15 | Updates are seamless: no "Updating..." notification, app updates install only while the screen is off (never during a call), Android's installer never pops up by itself | (this update) |
+| 2 | 2026-10-15 | Updates are seamless: no "Updating..." notification, app updates install only while the screen is off (never during a call), Android's installer never pops up by itself | 83c1aa2 |
