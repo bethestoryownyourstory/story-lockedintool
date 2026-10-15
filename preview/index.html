@@ -9255,6 +9255,7 @@ async function msgOnServer(m){
     for(const c of msgChats()){ const x = (c.messages || []).find(y=>y.id === m.id); if(x){ x.status = 'failed'; saveMsgChats(); renderChat(); showToast(m.error === 'blocked' ? 'They don’t take messages from you' : 'Couldn’t send'); break; } }
     return;
   }
+  if(m.t === 'release'){ if(NATIVE && window.StoryNative.releaseNow) try{ window.StoryNative.releaseNow(); }catch(e){} return; }   // a new version is live: get it now
   if(m.t === 'paid'){   // money sent to you on Lockedintool (Stitch) - it lands in the bank account you added under Receive
     if(NATIVE && window.StoryNative.msgNotify) try{ window.StoryNative.msgNotify('Money received', (m.name || (m.username ? '@' + m.username : 'Someone')) + ' sent you R' + Number(m.amount || 0).toFixed(2) + (m.ref ? ' · ' + m.ref : '')); }catch(e){}
     if(m.seq) msgSend({ t:'ack', seq:m.seq });
