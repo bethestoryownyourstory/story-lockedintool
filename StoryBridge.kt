@@ -56,6 +56,7 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         fun requestPhotoAccess()
         fun chatPick(kind: String)
         fun confirmIdentity(title: String)
+        fun wipeAll()
         fun chatOpenFile(url: String, key: String, iv: String, name: String, mime: String, fromProfile: Boolean)
         fun useProfilePhoto(id: Long)
         fun profileTyping(on: Boolean)
@@ -181,6 +182,10 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
     /** Chats, groups and community posts (owner): pick a document ("doc") or an audio file ("audio") with the phone's
      *  own picker - answer: window.storyChatPicked(json) in the Pages and Profile windows. */
     /** The phone's own fingerprint / face / PIN check (Delete account) - answer: window.storyIdentity('ok'|'fail'|'nolock'). */
+    /** The account was deleted: everything Lockedintool keeps on this phone goes (only after the server said so). */
+    @JavascriptInterface
+    fun wipeAll(sure: String) { if ((profile || pages) && sure == "ACCOUNT-DELETED") host.wipeAll() }
+
     @JavascriptInterface
     fun confirmIdentity(title: String) { if (profile || pages) host.confirmIdentity(title) }
 

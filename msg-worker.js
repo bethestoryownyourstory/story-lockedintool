@@ -100,6 +100,7 @@ export class Hub {
     // remembered (hashed) so their phones know the account is gone; why people leave is kept with no name on it.
     this.sql.exec(`CREATE TABLE IF NOT EXISTS delreq (token TEXT PRIMARY KEY, uid TEXT, code TEXT, exp INTEGER, tries INTEGER, ok INTEGER, reason TEXT, note TEXT)`);
     this.sql.exec(`CREATE TABLE IF NOT EXISTS tombs (tok TEXT PRIMARY KEY, at INTEGER)`);
+    try { this.sql.exec(`ALTER TABLE tombs ADD COLUMN why TEXT`); } catch (e) {}   // 'deleted' (by its owner) | 'banned'
     this.sql.exec(`CREATE TABLE IF NOT EXISTS delreasons (reason TEXT, note TEXT, at INTEGER)`);
     this.sql.exec(`CREATE TABLE IF NOT EXISTS reports (id TEXT PRIMARY KEY, uid TEXT, kind TEXT, target TEXT, owner TEXT, reason TEXT, text TEXT, at INTEGER, status TEXT)`);
     this.sql.exec(`CREATE TABLE IF NOT EXISTS ucomments (id TEXT PRIMARY KEY, pid TEXT, uid TEXT, text TEXT, at INTEGER)`);
@@ -153,7 +154,8 @@ export class Hub {
       if (path === '/v1/register') return this.register(body, req.headers.get('cf-connecting-ip') || '');
       const tok = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
       const me = await this.userByToken(tok);
-      if (!me) return json({ error: tok && this.one('SELECT tok FROM tombs WHERE tok = ?', await sha('tok|' + tok)) ? 'deleted' : 'signin' }, 401);
+      const tomb = !me && tok ? this.one('SELECT why FROM tombs WHERE tok = ?', await sha('tok|' + tok)) : null;
+      if (!me) return json({ error: tomb ? (tomb.why === 'banned' ? 'banned' : 'deleted') : 'signin' }, 401);
       if (path === '/v1/start') return this.start(body);
       if (path === '/v1/verify') return this.verify(me, body);
       if (path === '/v1/me') return this.saveMe(me, body);
@@ -501,13 +503,13 @@ export class Hub {
       if (u) this.deleteUser(u.id);
       this.sql.exec('INSERT INTO delreasons (reason, note, at) VALUES (?, ?, ?)', r.reason || 'other', r.note || '', Date.now());
       this.sql.exec('DELETE FROM delreq WHERE token = ?', token);
-      return page('<h1>Your account is deleted</h1><p>Everything on your Lockedintool account is gone. You can close this page.</p>');
+      return page('<h1>Your account is deleted</h1><p>Everything that came with Lockedintool is gone - Lockedintool on your phone starts fresh. Nothing outside Lockedintool was touched. You can close this page.</p>');
     }
     if (req.method === 'POST' && f.step === 'code') {
       if (r.tries >= 5) return page('<h1>Too many tries</h1><p>Start again in Lockedintool: Settings &gt; Privacy &gt; Delete account.</p>');
       if ((await sha('del|' + token + '|' + String(f.code || '').replace(/\D/g, ''))) === r.code) {
         this.sql.exec('UPDATE delreq SET ok = 1 WHERE token = ?', token);
-        return page('<h1>Code confirmed</h1><p>Deleting your account removes everything on it and can’t be undone:</p><ul><li>your profile, name and @username</li><li>your followers and who you follow</li><li>your posts, statuses and comments</li><li>your chats and your community</li><li>your plan - payments can’t be refunded</li></ul>' +
+        return page('<h1>Code confirmed</h1><p>Deleting your account can’t be undone. Everything that comes with Lockedintool goes:</p><ul><li>your profile, name and @username</li><li>your followers and who you follow</li><li>your posts, statuses and comments</li><li>your chats and your community</li><li>your Pages, notes, money and wallet history, cards, trading accounts and settings on your phone</li><li>your Lockedintool plan - payments can’t be refunded</li></ul><p>Nothing outside Lockedintool is touched - your bank, payments, broker accounts and phone stay exactly as they are. It’s like deleting an app.</p>' +
           form('<input type="hidden" name="step" value="delete"><button class="red" type="submit">Delete account</button>'));
       }
       this.sql.exec('UPDATE delreq SET tries = tries + 1 WHERE token = ?', token);
@@ -515,7 +517,7 @@ export class Hub {
       return page('<h1>Delete your account</h1><p class="err">That code isn’t right' + (left > 0 ? ' - ' + left + (left === 1 ? ' try' : ' tries') + ' left.' : '.') + '</p>' +
         form('<input type="hidden" name="step" value="code"><input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000" autofocus><button type="submit">Confirm</button>'));
     }
-    if (r.ok) return page('<h1>Code confirmed</h1><p>This deletes your account and everything on it. It can’t be undone.</p>' + form('<input type="hidden" name="step" value="delete"><button class="red" type="submit">Delete account</button>'));
+    if (r.ok) return page('<h1>Code confirmed</h1><p>This deletes your account and everything that comes with Lockedintool. It can’t be undone. Nothing outside Lockedintool is touched.</p>' + form('<input type="hidden" name="step" value="delete"><button class="red" type="submit">Delete account</button>'));
     return page('<h1>Delete your account</h1><p>Enter the 6-digit code Lockedintool sent you in Messages.</p>' +
       form('<input type="hidden" name="step" value="code"><input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000" autofocus><button type="submit">Confirm</button>'));
   }
@@ -594,7 +596,7 @@ export class Hub {
       this.removeContent(r.kind, r.target);
       if (r.owner && ['status', 'post', 'comment', 'gpost', 'gcomment', 'group'].includes(r.kind)) this.alert(r.owner, 'Your ' + what + ' was removed by Lockedintool after reports for ' + REPORT_REASONS[(top || {}).reason || 'other'] + '.');
     }
-    if (act === 'ban' && r.owner) { const o = this.one('SELECT official FROM users WHERE id = ?', r.owner); if (o && !o.official) this.deleteUser(r.owner); }
+    if (act === 'ban' && r.owner) { const o = this.one('SELECT official FROM users WHERE id = ?', r.owner); if (o && !o.official) this.deleteUser(r.owner, 'banned'); }
     // Everything else about the same thing is done too.
     this.sql.exec("UPDATE reports SET status = ? WHERE kind = ? AND target = ? AND status = 'open'", act === 'dismiss' ? 'dismissed' : 'done', r.kind, r.target);
     if (act === 'ban') this.sql.exec("UPDATE reports SET status = 'done' WHERE owner = ? AND status = 'open'", r.owner);
@@ -620,7 +622,7 @@ export class Hub {
   }
   // Delete account (owner; POPIA): everything Lockedintool's server keeps about you goes. Payment records stay, as
   // the law requires (they never hold your card or bank login).
-  deleteUser(uid) {
+  deleteUser(uid, why = 'deleted') {
     for (const m of this.sql.exec('SELECT gid FROM gmembers WHERE uid = ?', uid).toArray()) {
       this.sql.exec('DELETE FROM gmembers WHERE gid = ? AND uid = ?', m.gid, uid);
       const left = this.memberIds(m.gid);
@@ -639,9 +641,9 @@ export class Hub {
       ['paybank', 'uid'], ['subs', 'uid'], ['reports', 'uid']];
     for (const [t, c] of del) this.sql.exec(`DELETE FROM ${t} WHERE ${c} = ?`, uid);
     const gone = this.one('SELECT token FROM users WHERE id = ?', uid);
-    if (gone && gone.token) this.sql.exec('INSERT OR IGNORE INTO tombs (tok, at) VALUES (?, ?)', gone.token, Date.now());   // its phone learns the account is gone
+    if (gone && gone.token) this.sql.exec('INSERT OR IGNORE INTO tombs (tok, at, why) VALUES (?, ?, ?)', gone.token, Date.now(), why);   // its phone learns the account is gone
     this.sql.exec('DELETE FROM users WHERE id = ?', uid);
-    for (const ws of this.ctx.getWebSockets(uid)) { try { ws.close(4001, 'deleted'); } catch (e) {} }
+    for (const ws of this.ctx.getWebSockets(uid)) { try { ws.close(why === 'banned' ? 4003 : 4001, why); } catch (e) {} }
   }
 
   // ---- Groups ----

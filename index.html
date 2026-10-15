@@ -7705,8 +7705,8 @@ function delStep1(){
 function delStep2(){
   const f = delFlow; if(!f) return;
   f.box.innerHTML = '<div class="lit-sheet-t">You’re going to lose everything</div>' +
-    '<div class="lit-sheet-d">Deleting your account can’t be undone. You lose:</div><ul class="lit-del-list"><li>Your profile, name and @username</li><li>Your followers and who you follow</li><li>Your posts, statuses, comments and hearts</li><li>Your chats and messages</li><li>Your community and your place in groups</li><li>Your plan - payments can’t be refunded</li></ul>' +
-    '<div class="lit-sheet-d">Notes, Money, Wallet cards and trading accounts are only on this phone and aren’t part of your account.</div>' +
+    '<div class="lit-sheet-d">Deleting your account can’t be undone. Everything that comes with Lockedintool goes:</div><ul class="lit-del-list"><li>Your profile, name and @username</li><li>Your followers and who you follow</li><li>Your posts, statuses, comments and hearts</li><li>Your chats, messages and call history</li><li>Your community and your place in groups</li><li>Your Pages, notes and drawings, Money and Wallet history, cards, trading accounts and settings</li><li>Your Lockedintool plan - payments can’t be refunded</li></ul>' +
+    '<div class="lit-sheet-d">Nothing outside Lockedintool is touched - your bank, your cards, your payments, your broker accounts and your phone stay exactly as they are. It’s like deleting an app.</div>' +
     delButtons([['danger', 'Continue', 'go'], ['cancel', 'Cancel', 'cancel']]);
   delOn(f.box, { go: delStep3, cancel: delClose });
 }
@@ -7740,12 +7740,19 @@ async function delStep4(noLock){
   }catch(e){ showToast('Couldn’t send - check your connection and try again'); delClose(); }
   delBusy = false;
 }
-// The account was deleted (on the link's page) or banned: this phone forgets it and starts again.
-function litAccountGone(){
+// The account was deleted (on the link's page): EVERYTHING that comes with Lockedintool on this phone goes too
+// (owner) - Pages, notes, money, cards, trading logins, settings - and Lockedintool starts fresh, like a new app.
+// A banned account only loses the account (its phone keeps its own notes and pages).
+function litAccountGone(why){
   delAccountForget();
-  try{ localStorage.setItem(ACCOUNT_DELETED_KEY, String(Date.now())); }catch(e){}
-  if(MSG_ENGINE){ try{ if(msgWs) msgWs.close(); }catch(e){} try{ indexedDB.deleteDatabase('story-keys'); }catch(e){} showToast('Your account is deleted'); setTimeout(()=>location.reload(), 600); }
-  else if(typeof renderDevice === 'function' && document.getElementById('content-area')) renderDevice();
+  if(why !== 'banned'){
+    if(NATIVE && window.StoryNative.wipeAll){ try{ localStorage.clear(); }catch(e){} window.StoryNative.wipeAll('ACCOUNT-DELETED'); return; }   // the app closes every window, clears it all and reopens them
+    try{ localStorage.clear(); }catch(e){}
+    ['story-keys', 'story-notes'].forEach(n=>{ try{ indexedDB.deleteDatabase(n); }catch(e){} });
+  }
+  try{ localStorage.setItem(ACCOUNT_DELETED_KEY, why === 'banned' ? 'b' + Date.now() : String(Date.now())); }catch(e){}
+  if(MSG_ENGINE){ try{ if(msgWs) msgWs.close(); }catch(e){} try{ indexedDB.deleteDatabase('story-keys'); }catch(e){} showToast(why === 'banned' ? 'This account was removed by Lockedintool' : 'Your account is deleted'); setTimeout(()=>location.reload(), 600); }
+  else setTimeout(()=>location.reload(), 300);
 }
 function delAccountForget(){
   ['story-msg-account', 'story-msg-peers', MSG_KEY, MSG_OUTBOX, 'story-profile', 'story-profile-stats', PF_LOCKS_KEY, 'story-posts', 'story-highlights', 'story-upost-queue',
@@ -7757,7 +7764,8 @@ function delAccountForget(){
 }
 // Profile's window keeps the connection and the keys: it closes them and starts clean.
 window.addEventListener('storage', e=>{
-  if(e.key !== ACCOUNT_DELETED_KEY || !e.newValue || !MSG_ENGINE) return;
+  if(e.key !== ACCOUNT_DELETED_KEY || !e.newValue) return;
+  if(!MSG_ENGINE){ setTimeout(()=>location.reload(), 300); return; }
   try{ if(msgWs) msgWs.close(); }catch(err){}
   try{ indexedDB.deleteDatabase('story-keys'); }catch(err){}
   setTimeout(()=>location.reload(), 300);
@@ -7852,7 +7860,7 @@ const LEGAL = {
     ['How long we keep it', [
       'On your phone: until you delete it or remove the app. On our server: your account until you delete it (Settings > Privacy > Delete account - it’s removed at once); delivered messages are removed; reports are kept while they’re reviewed; payment records as long as the law requires (usually 5 years).' ]],
     ['Your rights', [
-      'You can delete your account yourself at any time: Settings > Privacy > Delete account. You give a reason, confirm with your phone’s fingerprint, face or PIN, and Lockedintool sends a link and a code to your Messages; entering the code on that page and pressing Delete account removes your profile, followers, posts, statuses, comments, chats and your place in groups from our server straight away. Why people leave is kept without any name on it. You can also ask to see, correct or delete the information we hold about you by writing to lockedintool@gmail.com. You can also complain to South Africa’s Information Regulator (inforegulator.org.za).' ]],
+      'You can delete your account yourself at any time: Settings > Privacy > Delete account. You give a reason, confirm with your phone’s fingerprint, face or PIN, and Lockedintool sends a link and a code to your Messages; entering the code on that page and pressing Delete account removes your profile, followers, posts, statuses, comments, chats and your place in groups from our server straight away, and everything Lockedintool keeps on your phone (your Pages, notes, money and wallet history, cards, trading logins and settings). Nothing outside Lockedintool is touched - your bank, payments, broker accounts and phone stay as they are. Why people leave is kept without any name on it. You can also ask to see, correct or delete the information we hold about you by writing to lockedintool@gmail.com. You can also complain to South Africa’s Information Regulator (inforegulator.org.za).' ]],
     ['Children', [
       'Lockedintool is for people 18 and older because it includes trading and payments.' ]],
     ['Changes', [
@@ -9733,7 +9741,7 @@ async function msgApi(path, body){
   const a = msgAccount();
   const r = await fetch(MSG_API + path, { method: body ? 'POST' : 'GET', headers: Object.assign({ 'content-type':'application/json' }, a && a.token ? { authorization:'Bearer ' + a.token } : {}), body: body ? JSON.stringify(body) : undefined });
   const j = await r.json().catch(()=>({}));
-  if(r.status === 401 && a){ if(j.error === 'deleted'){ litAccountGone(); throw Object.assign(new Error('deleted'), { code:'deleted' }); } msgSignedOut(); }
+  if(r.status === 401 && a){ if(j.error === 'deleted' || j.error === 'banned'){ litAccountGone(j.error); throw Object.assign(new Error('deleted'), { code:'deleted' }); } msgSignedOut(); }
   if(!r.ok) throw Object.assign(new Error(j.error || 'server'), { code: j.error || 'server', info: j });
   return j;
 }
@@ -9798,7 +9806,7 @@ function msgConnect(){
   msgWs = ws;
   ws.onopen = ()=>{ msgWsOpen = true; msgWsTry = 0; clearInterval(msgPing); msgPing = setInterval(()=>{ try{ ws.send('{"t":"ping"}'); }catch(e){} }, 25000); msgFlush(); msgSyncProfile(); msgSyncGroups(); upFlush(); upReminder(); upLoad(); actRefreshSoon(); };
   ws.onmessage = e=>{ let m; try{ m = JSON.parse(e.data); }catch(err){ return; } msgOnServer(m).catch(()=>{}); };
-  ws.onclose = e=>{ msgWsOpen = false; clearInterval(msgPing); if(e && e.code === 4001){ msgWs = null; litAccountGone(); return; } if(msgWs === ws){ msgWs = null; msgRetry(); } };
+  ws.onclose = e=>{ msgWsOpen = false; clearInterval(msgPing); if(e && (e.code === 4001 || e.code === 4003)){ msgWs = null; litAccountGone(e.code === 4003 ? 'banned' : 'deleted'); return; } if(msgWs === ws){ msgWs = null; msgRetry(); } };
   ws.onerror = ()=>{ try{ ws.close(); }catch(e){} };
 }
 function msgRetry(){ clearTimeout(msgWsTimer); if(!msgAccount()) return; msgWsTimer = setTimeout(msgConnect, Math.min(30000, 1000 * Math.pow(2, msgWsTry++))); }

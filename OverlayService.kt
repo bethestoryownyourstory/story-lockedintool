@@ -255,6 +255,11 @@ class OverlayService : Service(), StoryBridge.Host {
     private fun rebuildLayer() {
         screensSeen = null
         val s3WasOpen = s3Pane?.shown == true
+        tearDownPanes()
+        pickLayer(); addBubble(); warmUp()
+        if (s3WasOpen) showPanel(station3Only = true)
+    }
+    private fun tearDownPanes() {
         removePanelNow()
         bubble?.let { runCatching { (bubbleWm ?: wm).removeView(it) } }; bubble = null
         removeBarBg()
@@ -266,9 +271,32 @@ class OverlayService : Service(), StoryBridge.Host {
         profileGapPane?.let { runCatching { it.wm.removeView(it.frame) }; it.web.destroy() }; profileGapPane = null
         lockDialPane?.let { runCatching { it.wm.removeView(it.frame) }; it.web.destroy() }; lockDialPane = null
         removeProfileStrip()
-        pickLayer(); addBubble(); warmUp()
-        if (s3WasOpen) showPanel(station3Only = true)
     }
+    /** Delete account (owner): EVERYTHING that comes with Lockedintool on this phone goes - the Pages, notes, money
+     *  and wallet history, cards, trading logins, profile, chats, settings - like deleting the app. Nothing outside
+     *  Lockedintool is touched (the bank, payments, broker accounts, the phone). Lockedintool stays on and starts fresh. */
+    override fun wipeAll() { ui.post {
+        tearDownPanes()   // no window can write anything back
+        runCatching { android.webkit.WebStorage.getInstance().deleteAllData() }
+        runCatching { android.webkit.CookieManager.getInstance().removeAllCookies(null); android.webkit.CookieManager.getInstance().flush() }
+        Thread {
+            val keep = Regex("^(enabled|owner|auto_agreed|upd_.*)$")   // only what keeps Lockedintool running and updating
+            runCatching {
+                val dir = java.io.File(applicationInfo.dataDir, "shared_prefs")
+                for (f in dir.listFiles() ?: arrayOf()) {
+                    val name = f.name.removeSuffix(".xml")
+                    if (name.startsWith("androidx") || name.contains("WorkManager", true)) continue
+                    val p = getSharedPreferences(name, MODE_PRIVATE)
+                    val e = p.edit()
+                    for (k in p.all.keys) if (name != "story" || !keep.matches(k)) e.remove(k)
+                    e.commit()
+                }
+            }
+            runCatching { filesDir.listFiles()?.forEach { it.deleteRecursively() } }
+            runCatching { cacheDir.listFiles()?.forEach { it.deleteRecursively() } }
+            ui.postDelayed({ rebuildLayer(); updateBubble() }, 400)
+        }.start()
+    } }
 
     private fun overlayParams(w: Int, h: Int, gravity: Int, x: Int, y: Int, focusable: Boolean = false): WindowManager.LayoutParams {
         var flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
