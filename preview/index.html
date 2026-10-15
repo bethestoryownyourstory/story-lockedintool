@@ -2288,7 +2288,25 @@
   #story-profile .pf-user{ font-size:13px; color:var(--pf-muted); margin-top:2px; }
   #story-profile .pf-more{ width:36px; height:36px; border-radius:50%; border:none; background:transparent; color:var(--pf-fg);
     font-size:22px; line-height:1; display:flex; align-items:center; justify-content:center; align-self:flex-start; }
-  #story-profile .pf-head-btns{ display:flex; flex-direction:column; align-items:center; align-self:flex-start; gap:2px; }
+  #story-profile .pf-head-btns{ display:flex; flex-direction:column; align-items:center; align-self:flex-start; gap:2px; position:relative; }
+  /* Profile's ⋮ menu: pops out right beside the ⋮ (a pop-up goes with where it comes from - owner). */
+  #story-profile .pf-menu{ position:absolute; right:40px; top:0; z-index:4; min-width:190px; background:var(--pf-bg); color:var(--pf-fg);
+    border:1px solid var(--pf-hair); border-radius:14px; box-shadow:0 8px 24px rgba(0,0,0,0.35); overflow:hidden; }
+  #story-profile .pf-menu button{ display:block; width:100%; text-align:left; padding:13px 16px; border:none; background:transparent; color:inherit; font:inherit; font-size:14px; font-weight:600; }
+  #story-profile .pf-menu button small{ display:block; margin-top:2px; font-size:12px; font-weight:400; color:var(--pf-muted); }
+  #story-profile .pf-menu button:active{ opacity:0.6; }
+  /* Profile privacy: Public / Private. */
+  #story-profile .pf-pv-opt{ display:flex; align-items:flex-start; gap:12px; width:100%; text-align:left; padding:14px 2px; border:none; border-top:1px solid var(--pf-hair);
+    background:transparent; color:var(--pf-fg); font:inherit; }
+  #story-profile .pf-pv-opt:last-of-type{ border-bottom:1px solid var(--pf-hair); }
+  #story-profile .pf-pv-opt:active{ opacity:0.6; }
+  #story-profile .pf-pv-txt{ flex:1; min-width:0; }
+  #story-profile .pf-pv-t{ font-size:15px; font-weight:700; }
+  #story-profile .pf-pv-d{ margin-top:3px; font-size:12px; line-height:1.4; color:var(--pf-muted); }
+  #story-profile .pf-pv-dot{ flex:none; width:20px; height:20px; margin-top:1px; border-radius:50%; border:2px solid var(--pf-muted); box-sizing:border-box; }
+  #story-profile .pf-pv-opt.on .pf-pv-dot{ border-color:var(--pf-fg); background:radial-gradient(circle, var(--pf-fg) 0 4.5px, transparent 5px); }
+  #story-profile .up-p-locked{ display:flex; flex-direction:column; align-items:center; gap:8px; padding:28px 0 8px; color:var(--pf-muted); font-size:14px; text-align:center; }
+  #story-profile .up-p-locked b{ color:var(--pf-fg); font-size:15px; }
   #story-profile .pf-stats{ display:flex; margin:22px 0 18px; }
   #story-profile .pf-stat{ flex:1; text-align:center; }
   #story-profile .pf-stat-n{ font-family:var(--font-mono); font-size:20px; font-weight:700; font-variant-numeric:tabular-nums; }
@@ -7465,6 +7483,13 @@ function saveQuickAccess(patch){
 // Everyone (anyone who opens your profile and taps Message sees the call button in their chat), Specific people
 // (picked from your chats) or No one. Kept in 'story-privacy' (calls, callPeople) and sent to the message server.
 function storyPrivacy(){ try{ return JSON.parse(localStorage.getItem('story-privacy') || '{}') || {}; }catch(e){ return {}; } }
+// Profile privacy (owner; Profile's ⋮ menu): 'public' (default) or 'private' - enforced by the message server.
+function profilePrivacy(){ return storyPrivacy().profile === 'private' ? 'private' : 'public'; }
+function pvRender(){
+  const el = document.getElementById('story-profile'); if(!el) return;
+  const v = profilePrivacy();
+  el.querySelectorAll('.pf-pv-opt').forEach(o=>o.classList.toggle('on', o.getAttribute('data-v') === v));
+}
 function setStoryPrivacy(p){ try{ localStorage.setItem('story-privacy', JSON.stringify(p)); }catch(e){} try{ const q = JSON.parse(localStorage.getItem('story-msg-outbox') || '[]') || []; q.push({ at: Date.now(), type:'privacy', privacy: p }); localStorage.setItem('story-msg-outbox', JSON.stringify(q.slice(-500))); }catch(e){} }
 function privacySettingsHTML(){
   const p = storyPrivacy(), calls = p.calls || 'everyone', picked = p.callPeople || [], status = p.status || 'followers';
@@ -7984,6 +8009,7 @@ window.storyProfileOnly = function(){
         <div class="pf-names"><div class="pf-name">${escText(p.name)}</div><div class="pf-user">@${escText(p.username)}</div></div>
         <div class="pf-head-btns">
           <button class="pf-more" data-pf="menu" aria-label="More">⋮</button>
+          <div class="pf-menu" hidden><button data-pf="menu-privacy">Profile privacy<small></small></button></div>
           <button class="pf-more pf-edit-btn" data-pf="edit" aria-label="Edit profile"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
         </div>
       </div>
@@ -8007,6 +8033,12 @@ window.storyProfileOnly = function(){
       <div class="pf-ed-row" data-pf="ed-bio"><span>Bio</span><span class="pf-ed-val">${p.bio ? escText(p.bio) : 'Nothing here yet.'}</span></div>
       <div class="pf-ed-row" data-pf="ed-about"><span>About</span><span class="pf-ed-val">${escText(p.about)}</span></div>
       <div class="pf-ed-note">About shows in Updates, to people who don’t follow you yet: who you are or what you do.</div>
+    </div>
+    <div class="pf-scroll pf-privacy" hidden>
+      <div class="pf-ed-head"><button class="pf-ed-back" data-pf="pv-back" aria-label="Back">‹</button><div class="pf-ed-title">Profile privacy</div></div>
+      <div class="pf-ed-note">Choose who can see your profile.</div>
+      <button class="pf-pv-opt" data-pf="pv-set" data-v="public"><span class="pf-pv-txt"><div class="pf-pv-t">Public</div><div class="pf-pv-d">Everyone can see your profile, and anyone can find it in search.</div></span><span class="pf-pv-dot"></span></button>
+      <button class="pf-pv-opt" data-pf="pv-set" data-v="private"><span class="pf-pv-txt"><div class="pf-pv-t">Private</div><div class="pf-pv-d">Only people you follow, people you’ve messaged and people in your groups and communities can see your profile. No one can find it in search.</div></span><span class="pf-pv-dot"></span></button>
     </div>
     <div class="pf-scroll pf-field" hidden>
       <div class="pf-ed-head"><button class="pf-ed-back" data-pf="field-back" aria-label="Back">‹</button><div class="pf-ed-title">Name</div><button class="pf-field-save" data-pf="field-save">Save</button></div>
@@ -8153,6 +8185,8 @@ window.storyProfileOnly = function(){
   document.body.appendChild(el);
   el.addEventListener('click', e=>{
     const b = e.target.closest('[data-pf]');
+    const pfMenu = el.querySelector('.pf-menu');
+    if(pfMenu && !pfMenu.hidden && !(b && (b.getAttribute('data-pf') === 'menu' || b.getAttribute('data-pf') === 'menu-privacy'))) pfMenu.hidden = true;
     if(!b) return;
     const k = b.getAttribute('data-pf');
     const main = el.querySelector('.pf-home'), ed = el.querySelector('.pf-editor'), viewer = el.querySelector('.pf-viewer');
@@ -8163,6 +8197,10 @@ window.storyProfileOnly = function(){
       viewer.querySelector('img').src = src; viewer.hidden = false;
     }
     else if(k === 'viewer-close') viewer.hidden = true;
+    else if(k === 'menu'){ const m = el.querySelector('.pf-menu'); m.querySelector('small').textContent = profilePrivacy() === 'private' ? 'Private' : 'Public'; m.hidden = !m.hidden; }
+    else if(k === 'menu-privacy'){ el.querySelector('.pf-menu').hidden = true; main.hidden = true; const pv = el.querySelector('.pf-privacy'); pv.hidden = false; pv.scrollTop = 0; pvRender(); }
+    else if(k === 'pv-back'){ el.querySelector('.pf-privacy').hidden = true; main.hidden = false; }
+    else if(k === 'pv-set'){ const p = storyPrivacy(); p.profile = b.getAttribute('data-v') === 'private' ? 'private' : 'public'; setStoryPrivacy(p); pvRender(); msgFlush(); }
     else if(k === 'edit'){ main.hidden = true; ed.hidden = false; ed.scrollTop = 0; }
     else if(k === 'edit-back'){ ed.hidden = true; main.hidden = false; }
     else if(k === 'photo-change') pickProfilePhoto();
@@ -8369,6 +8407,7 @@ window.storyProfileReset = function(){
   el.querySelector('.pf-updates').hidden = true; el.querySelector('.pf-person').hidden = true; UP.person = null;
   el.querySelector('.pf-updates .pf-msgs-search input').value = ''; UP.q = ''; UP.found = null;
   el.querySelector('.cr-pick').hidden = true;
+  el.querySelector('.pf-menu').hidden = true; el.querySelector('.pf-privacy').hidden = true;
   el.querySelector('.pf-signup').hidden = true;
   const ms = el.querySelector('.pf-msgs .pf-msgs-search input'); if(ms){ ms.value = ''; } msgView.q = ''; msgView.menuFor = null;
   if(crRecording && NATIVE && window.StoryNative.createVideo) window.StoryNative.createVideo(false);
@@ -8683,6 +8722,16 @@ function upRenderPerson(){
   const st = p.statuses || [];
   pv.querySelector('.pf-ed-title').textContent = p.username ? '@' + p.username : upName(p);
   const posts = p.postList || [];
+  if(p.locked){
+    // A private profile you're not allowed to see: only who it is (and Follow / Message as their settings allow).
+    pv.querySelector('.up-p-body').innerHTML =
+      '<div class="up-p-head"><button class="up-p-pic" disabled>' + upPic(p, '') + '</button>' +
+      '<div class="pf-names"><div class="pf-name">' + escText(upName(p)) + '</div>' + (p.name && p.username ? '<div class="pf-user">@' + escText(p.username) + '</div>' : '') + '</div></div>' +
+      '<div class="up-p-btns"><button class="up-follow up-follow-lg' + (p.isFollowing ? ' on' : '') + '" data-pf="up-follow" data-id="' + escText(p.id) + '">' + (p.isFollowing ? 'Following' : 'Follow') + '</button>' +
+      (p.canMsg === false ? '' : '<button class="up-follow up-follow-lg" data-pf="up-message">Message</button>') + '</div>' +
+      '<div class="up-p-locked"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><b>This profile is private</b></div>';
+    return;
+  }
   pv.querySelector('.up-p-body').innerHTML =
     '<div class="up-p-head"><button class="up-p-pic" data-pf="up-p-status"' + (st.length ? '' : ' disabled') + '>' + upPic(p, st.length ? 'up-ring' + (st.every(i=>seen[i.id]) ? ' seen' : '') : '') + '</button>' +
     '<div class="pf-names"><div class="pf-name">' + escText(upName(p)) + '</div>' + (p.name && p.username ? '<div class="pf-user">@' + escText(p.username) + '</div>' : '') + '</div></div>' +
