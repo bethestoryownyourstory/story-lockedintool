@@ -8576,10 +8576,11 @@ window.storyProfileOnly = function(){
     else if(k === 'cr-post') crPost();
     else if(k === 'cr-as') crPostAs(b.getAttribute('data-k'));
     else if(k === 'up-st-me'){
+      // Your status circle (owner): no status yet -> make one straight away; already one -> watch it (the + adds another).
       const mine = ((UP.data || {}).statuses || []).find(s=>s.user.id === (msgAccount() || {}).id);
-      if(mine) upView(mine.user, mine.items, 0, true);
-      else showToast('Add a status: + then Profile, then Status');
+      if(mine) upView(mine.user, mine.items, 0, true); else upNewStatus();
     }
+    else if(k === 'up-st-new'){ e.stopPropagation(); upNewStatus(); }
     else if(k === 'up-st-open'){ const s = ((UP.data || {}).statuses || []).find(x=>x.user.id === b.getAttribute('data-id')); if(s){ const seen = upSeen(); const first = s.items.findIndex(i=>!seen[i.id]); upView(s.user, s.items, first < 0 ? 0 : first, true); } }
     else if(k === 'up-person') upOpenPerson(b.getAttribute('data-id'));
     else if(k === 'up-follow'){ e.stopPropagation(); upFollow(b.getAttribute('data-id'), b); }
@@ -8767,6 +8768,7 @@ window.storyProfileReset = function(){
 // Profile and Messages share ONE window attached to Station 3 (same gap, line and scene): the app says which shows.
 window.storyS3Page = function(which){
   const el = document.getElementById('story-profile'); if(!el || PF_GAP_WINDOW) return;
+  if(which !== 'create') crForStatus = false;
   window.storyProfileReset();
   // Sign-up (owner): a new profile starts empty - before Profile, Messages, Updates or Create you choose your name
   // and @username. (Call history works without it.)
@@ -8792,6 +8794,7 @@ function profileHighlights(){ try{ return JSON.parse(localStorage.getItem('story
 function saveHighlights(h){ try{ localStorage.setItem('story-highlights', JSON.stringify(h)); }catch(e){} renderHighlights(); }
 function crShow(){
   const el = document.getElementById('story-profile'); if(!el) return;
+  if(crForStatus && !crMode) crMode = 'profile';
   const was = !el.querySelector('.pf-create').hidden;
   el.classList.add('pf-creating'); el.querySelector('.pf-create').hidden = false; crRender();
   if(!was && !crCameraReady) crWatchCamera();
@@ -8866,9 +8869,17 @@ function crShutterUp(){
   if(crHeld){ crHeld = false; crHoldT = 0; window.StoryNative.createVideo(false); crRecording = false; crRender(); }
   else if(crHoldT){ crHoldT = 0; window.StoryNative.createShutter(); }
 }
+// A status started from Updates' "Your status" circle: Create opens on the camera and ✓ shares it as a status
+// straight away (no Status / Post choice), then you're back in Updates.
+let crForStatus = false;
+function upNewStatus(){
+  crForStatus = true;
+  if(NATIVE && window.StoryNative.toggleCreate) window.StoryNative.toggleCreate(); else window.storyS3Page('create');
+}
 function crPost(){
   if(crRecording) return;
   if(!crHas){ showToast('Take a picture or video first'); return; }
+  if(crForStatus){ crPostAs('status'); return; }
   if(!crMode){ showToast('Choose Video, Profile or Highlight to post'); return; }
   if(crMode === 'highlight'){ crOpenHighlights(); return; }
   // Profile (owner): two choices pop up beside ✓ - Status (24 hours) or Post (stays on your profile).
@@ -8879,7 +8890,11 @@ function crPostAs(as){
   const pk = document.querySelector('#story-profile .cr-pick'); if(pk) pk.hidden = true;
   const kept = window.StoryNative.createKeep(); if(!kept){ showToast('That didn’t work — try again'); return; }
   const [id, kind] = kept.split(':');
-  if(as === 'status'){ upAddToServer(id, kind, 'status'); crClear(); showToast('Sharing your status…'); return; }
+  if(as === 'status'){
+    upAddToServer(id, kind, 'status'); crClear(); showToast('Sharing your status…');
+    if(crForStatus){ crForStatus = false; if(NATIVE && window.StoryNative.toggleUpdates) window.StoryNative.toggleUpdates(); else window.storyS3Page('updates'); }
+    return;
+  }
   const posts = profilePosts(); posts.unshift({ id, kind, at: Date.now() });
   try{ localStorage.setItem('story-posts', JSON.stringify(posts)); }catch(e){}
   bumpProfileStat('posts', 1); window.storyProfileRefresh();
@@ -8951,7 +8966,7 @@ function upStatusRowHTML(){
   const d = UP.data || {}, seen = upSeen(), mine = (d.statuses || []).find(s=>s.user.id === (msgAccount() || {}).id);
   const me = Object.assign({ photo: (d.me || {}).photo || '' }, d.me || {});
   let h = '<button class="up-st" data-pf="up-st-me">' + upPic(me, mine ? 'up-ring' + (mine.items.every(i=>seen[i.id]) ? ' seen' : '') : '') +
-    (mine ? '' : '<span class="up-st-add">+</span>') + '<span class="up-st-n">Your status</span></button>';
+    '<span class="up-st-add" data-pf="up-st-new" aria-label="Add a status">+</span><span class="up-st-n">Your status</span></button>';
   for(const s of (d.statuses || [])){
     if(mine && s === mine) continue;
     const all = s.items.every(i=>seen[i.id]);
