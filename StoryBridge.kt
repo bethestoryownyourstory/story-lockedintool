@@ -72,6 +72,7 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         fun callAsk(video: Boolean): String
         fun msgNotify(title: String, text: String)
         fun setActivityDot(on: Boolean)
+        fun releaseNow()
     }
 
     /** The phone's real launchable apps, with their real icons -- kept ready, so the Apps area opens instantly. */
@@ -296,6 +297,8 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
     @JavascriptInterface fun msgNotify(title: String, text: String) { if (profile) host.msgNotify(title, text) }
     /** Missed activity (unread messages / unseen statuses): a dot on Station 3's button (owner). */
     @JavascriptInterface fun setActivityDot(on: Boolean) { if (profile) host.setActivityDot(on) }
+    /** The server says a new version just went live: look for it now (screens + app). */
+    @JavascriptInterface fun releaseNow() { if (profile) host.releaseNow() }
 
     /** Wallet: reads a card photo on the phone (CardScan); answers window.storyCardScan(id, json). */
     @JavascriptInterface

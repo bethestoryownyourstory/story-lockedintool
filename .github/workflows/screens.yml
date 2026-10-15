@@ -63,6 +63,15 @@ jobs:
           git -C site commit -qm "Live: ${GITHUB_REF_NAME} ${GITHUB_SHA::7}" || echo "Live already matches"
           git -C site push origin HEAD:gh-pages
           echo "### Live for everyone now: ${GITHUB_REF_NAME} ${GITHUB_SHA::7}" >> "$GITHUB_STEP_SUMMARY"
+      - name: Tell every phone at once (everything fast)
+        if: github.event_name == 'push'
+        run: |
+          # Wait until GitHub Pages really serves the new screens, then the message server tells every phone.
+          for i in $(seq 1 60); do
+            if curl -sf "https://bethestoryownyourstory.github.io/story-lockedintool/live-source.txt?t=$(date +%s%N)" | grep -q "${GITHUB_SHA::7}"; then break; fi
+            sleep 3
+          done
+          curl -s -X POST https://story-msg.percyjuniormaseko0.workers.dev/v1/release-ping || true
       - name: Undo last update -> the screens from before go back for everyone (owner)
         if: github.event_name == 'workflow_dispatch'
         run: |

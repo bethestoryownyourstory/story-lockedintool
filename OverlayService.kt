@@ -1678,6 +1678,9 @@ class OverlayService : Service(), StoryBridge.Host {
     // ---- Missed activity (owner): a small red dot on the Station 3 button while there are unread messages or
     //      unseen statuses; the numbers show on Station 3's Messages / Updates buttons. The button itself never moves
     //      or changes - the dot is drawn on top of it (its overlay) and only shown / hidden. ----
+    // Everything fast (owner): the server says a new version is live -> new screens are fetched now (windows you're
+    // looking at refresh once hidden) and a new app version downloads now (it installs when the screen is off).
+    override fun releaseNow() { ui.post { checkScreens(); Updater.check(this, force = true) } }
     private var activityOn = false
     private val activityDot by lazy {
         android.graphics.drawable.ShapeDrawable(android.graphics.drawable.shapes.OvalShape()).apply { paint.color = Color.parseColor("#FFFF3B30") }

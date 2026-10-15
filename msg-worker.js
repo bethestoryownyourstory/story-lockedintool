@@ -66,6 +66,7 @@ export class Hub {
     this.sql.exec(`CREATE INDEX IF NOT EXISTS payments_to ON payments(to_uid, created)`);
     try { this.sql.exec(`ALTER TABLE payments ADD COLUMN kind TEXT`); } catch (e) {}
     this.sql.exec(`CREATE TABLE IF NOT EXISTS subs (uid TEXT PRIMARY KEY, plan TEXT, until INTEGER, updated INTEGER)`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT)`);
     // Updates (owner): following, profile posts and 24-hour statuses, and the pictures / videos they show.
     try { this.sql.exec(`ALTER TABLE users ADD COLUMN about TEXT`); } catch (e) {}
     try { this.sql.exec(`ALTER TABLE users ADD COLUMN bio TEXT`); } catch (e) {}
@@ -107,6 +108,7 @@ export class Hub {
         const who = await this.userByToken((req.headers.get('authorization') || '').replace(/^Bearer\s+/i, ''));
         return who ? this.mediaPut(who, url, req) : json({ error: 'signin' }, 401);
       }
+      if (path === '/v1/release-ping') return this.releasePing();
       if (path === '/v1/health') {
         // Payments: can the server really sign in to Stitch? (just a sign-in - no payment is made)
         let pay = this.expressReady() ? 'keys' : 'no-keys';
@@ -508,6 +510,23 @@ export class Hub {
   }
 
   // ---- Live connection ----
+  // ---- Everything fast (owner): the moment a new version is live, every connected phone is told (t:'release') and
+  //      picks it up at once, instead of waiting for its next look. Anyone may call this - the server checks the truth
+  //      itself (the live screens' source.txt + the live app's version.json) and only tells phones when it changed. ----
+  async releasePing() {
+    const now = Date.now(), last = +(this.one("SELECT v FROM meta WHERE k = 'ping_at'") || {}).v || 0;
+    if (now - last < 4000) return json({ ok: true, wait: true });
+    this.sql.exec("INSERT OR REPLACE INTO meta (k, v) VALUES ('ping_at', ?)", String(now));
+    const get = async u => { try { const r = await fetch(u + '?t=' + now, { cf: { cacheTtl: 0 } }); return r.ok ? (await r.text()).trim().slice(0, 200) : ''; } catch (e) { return ''; } };
+    const [screens, app] = await Promise.all([get('https://bethestoryownyourstory.github.io/story-lockedintool/live-source.txt'), get('https://github.com/bethestoryownyourstory/story-lockedintool/releases/download/live/version.json')]);
+    const v = screens + '|' + app, before = (this.one("SELECT v FROM meta WHERE k = 'release'") || {}).v || '';
+    if (!screens && !app) return json({ ok: false });
+    if (v === before) return json({ ok: true, changed: false });
+    this.sql.exec("INSERT OR REPLACE INTO meta (k, v) VALUES ('release', ?)", v);
+    let n = 0; const msg = JSON.stringify({ t: 'release', screens, app });
+    for (const ws of this.ctx.getWebSockets()) { try { ws.send(msg); n++; } catch (e) {} }
+    return json({ ok: true, changed: true, told: n });
+  }
   async ws(req, url) {
     if (req.headers.get('upgrade') !== 'websocket') return json({ error: 'websocket' }, 426);
     const me = await this.userByToken(url.searchParams.get('token') || '');

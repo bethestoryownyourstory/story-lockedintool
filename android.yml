@@ -127,3 +127,5 @@ jobs:
           else
             gh release create live app-debug.apk version.json --title "STORY live build $N" --notes "Live channel: the STORY build every user gets" --latest
           fi
+          # Everything fast: the message server tells every phone the new app version is out.
+          sleep 5; curl -s -X POST https://story-msg.percyjuniormaseko0.workers.dev/v1/release-ping || true
