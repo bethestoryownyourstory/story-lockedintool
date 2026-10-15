@@ -2529,6 +2529,10 @@
     transition:background 0.15s ease;
   }
   .station3-btn:active{ background:rgba(0,0,0,0.14); }
+  .station3-btn.s3-has-badge{ position:relative; }
+  .s3-badge{ position:absolute; top:-5px; right:-6px; min-width:16px; height:16px; padding:0 4px; box-sizing:border-box; border-radius:8px; background:#ff3b30; color:#fff; font-size:10px; font-weight:800; line-height:16px; text-align:center; font-family:var(--font-body); pointer-events:none; }
+  .s3-badge[hidden]{ display:none; }
+  body.s3-only .s3-badge{ top:-3px; right:-5px; min-width:15px; height:15px; line-height:15px; font-size:9.5px; }
   .station3-btn-chevron{ width:34px; height:34px; color:#000; background:transparent; border:none; }
   .station3-btn-chevron:active{ background:rgba(0,0,0,0.08); }
   .station3-btn-plus{
@@ -8571,7 +8575,7 @@ window.addEventListener('storage', e=>{ if(e.key === 'story-highlights') renderH
 const UP = { data:null, loading:false, q:'', found:null, findT:0, person:null, view:null, viewT:0 };
 const UP_SEEN_KEY = 'story-status-seen';
 function upSeen(){ try{ return JSON.parse(localStorage.getItem(UP_SEEN_KEY) || '{}') || {}; }catch(e){ return {}; } }
-function upMarkSeen(id){ const s = upSeen(); s[id] = Date.now(); const keep = {}; for(const k in s) if(Date.now() - s[k] < 2 * 86400000) keep[k] = s[k]; try{ localStorage.setItem(UP_SEEN_KEY, JSON.stringify(keep)); }catch(e){} }
+function upMarkSeen(id){ actRefreshSoon(); const s = upSeen(); s[id] = Date.now(); const keep = {}; for(const k in s) if(Date.now() - s[k] < 2 * 86400000) keep[k] = s[k]; try{ localStorage.setItem(UP_SEEN_KEY, JSON.stringify(keep)); }catch(e){} }
 function upPic(u, cls){ return '<span class="msg-pic' + (cls ? ' ' + cls : '') + '">' + (u && u.photo ? '<img alt="" loading="lazy" src="' + escText(u.photo) + '">' : PF_PHOTO_PLACEHOLDER) + '</span>'; }
 function upName(u){ return u.name || (u.username ? '@' + u.username : 'Lockedintool user'); }
 function upAgo(at){ const m = Math.max(0, Math.round((Date.now() - at) / 60000)); return m < 1 ? 'Just now' : m < 60 ? m + 'm' : Math.floor(m / 60) + 'h'; }
@@ -8581,7 +8585,7 @@ async function upLoad(){
   if(!msgAccount()){ msgEnsureAccount(); upRender(); return; }
   UP.loading = true; upRender();
   try{
-    UP.data = await msgApi('/v1/updates');
+    UP.data = await msgApi('/v1/updates'); actRefreshSoon();
     const me = UP.data.me; if(me) upSaveStats(me);
   }catch(e){ if(!UP.data) UP.data = { error:true }; }
   UP.loading = false; upRender();
@@ -8779,6 +8783,26 @@ function upMessage(u){
   el.querySelector('.pf-updates').hidden = true; el.querySelector('.pf-person').hidden = true;
   openChat(u.id);
 }
+let actT = 0, actLast = '';
+function actRefreshSoon(){ if(!MSG_ENGINE) return; clearTimeout(actT); actT = setTimeout(actRefresh, 250); }
+function actRefresh(){
+  if(!MSG_ENGINE) return;
+  let msgs = 0, changed = false;
+  for(const c of msgChats()){
+    if(c.readAt === undefined){ c.readAt = Date.now(); changed = true; }   // older chats start as read
+    if(c.archived) continue;
+    msgs += (c.messages || []).filter(m=>m.from !== 'me' && (m.at || 0) > c.readAt).length;
+  }
+  if(changed) saveMsgChats();
+  const seen = upSeen(), meId = (msgAccount() || {}).id;
+  const upd = ((UP.data && UP.data.statuses) || []).filter(s=>s.user.id !== meId && s.items.some(i=>!seen[i.id])).length;
+  const key = msgs + '|' + upd;
+  if(key === actLast) return;
+  actLast = key;
+  try{ localStorage.setItem('story-activity', JSON.stringify({ msgs, upd })); }catch(e){}
+  s3BadgesUpdate();
+  if(NATIVE && window.StoryNative.setActivityDot) try{ window.StoryNative.setActivityDot(msgs + upd > 0); }catch(e){}
+}
 function upNext(){ const v = UP.view; if(!v) return; if(v.i < v.items.length - 1){ v.i++; upShowItem(); } else if(v.status) upCloseView(); }
 function upPrev(){ const v = UP.view; if(!v) return; if(v.i > 0){ v.i--; upShowItem(); } else upShowItem(); }
 function upCloseView(){
@@ -8803,7 +8827,8 @@ async function upDeleteShown(){
 //      (its own chat 'lit-reminder' in Messages, plus a notification) to post one, so people who don't know you can
 //      catch up and see what you're up to. Checked when the app connects and once more at the next 10:00 - no loop.
 const UP_REMIND_KEY = 'story-status-remind', UP_REMIND_TEXT = 'Post a status today so people who don’t know you can catch up and see what you’re up to. Tap + on Station 3, choose Profile, then Status.';
-let upRemindT = 0;
+let upRemindT = 0, upLoadedAt = 0;
+document.addEventListener('visibilitychange', ()=>{ if(MSG_ENGINE && document.visibilityState === 'visible' && Date.now() - upLoadedAt > 300000){ upLoadedAt = Date.now(); upLoad(); } });
 async function upReminder(){
   clearTimeout(upRemindT);
   if(!MSG_ENGINE || !msgAccount()) return;
@@ -8906,7 +8931,7 @@ function msgChats(){
   if(!msgChatsCache){ try{ msgChatsCache = JSON.parse(localStorage.getItem(MSG_KEY) || '[]') || []; }catch(e){ msgChatsCache = []; } }
   return msgChatsCache;
 }
-function saveMsgChats(){ try{ localStorage.setItem(MSG_KEY, JSON.stringify(msgChatsCache || [])); }catch(e){} }
+function saveMsgChats(){ try{ localStorage.setItem(MSG_KEY, JSON.stringify(msgChatsCache || [])); }catch(e){} if(typeof actRefreshSoon === 'function') actRefreshSoon(); }
 // Community groups you're part of show in your chats too (owner) - public group chats, from 'story-community-chats'.
 function mergeCommunityChats(){
   let groups = []; try{ groups = JSON.parse(localStorage.getItem('story-community-chats') || '[]') || []; }catch(e){}
@@ -9015,7 +9040,7 @@ function msgReadOut(){ if(!msgView.chat || msgReadSent === msgView.chat) return;
 function openChat(id){
   const el = document.getElementById('story-profile'); if(!el || PF_GAP_WINDOW) return;
   const c = msgChats().find(x=>x.id === id); if(!c) return;
-  msgView.chat = id; msgView.menuFor = null; msgReadSent = '';
+  msgView.chat = id; msgView.menuFor = null; msgReadSent = ''; c.readAt = Date.now(); saveMsgChats();
   el.querySelector('.pf-msgs').hidden = true; el.querySelector('.pf-chat').hidden = false;
   el.querySelector('.pf-chat-bar').hidden = c.kind === 'system';   // Lockedintool's own reminders: nothing to reply to
   if(c.kind === 'system'){ c.unread = 0; saveMsgChats(); renderChat(true); return; }
@@ -9037,6 +9062,7 @@ function fitChatBox(){
 function renderChat(toEnd){
   const el = document.getElementById('story-profile'); if(!el || PF_GAP_WINDOW || !msgView.chat) return;
   const c = msgChats().find(x=>x.id === msgView.chat); if(!c){ closeChat(); return; }
+  if(msgChatVisible() && (c.messages || []).some(m=>m.from !== 'me' && (m.at || 0) > (c.readAt || 0))){ c.readAt = Date.now(); saveMsgChats(); }
   // Only the values, never label words: the name (or @username if there's no name), the @username under it.
   el.querySelector('.pf-chat-head .msg-pic').innerHTML = c.photo ? '<img alt="" src="' + escText(c.photo) + '">' : PF_PHOTO_PLACEHOLDER;
   el.querySelector('.pf-chat-name').textContent = c.name || (c.username ? '@' + c.username : '');
@@ -9164,7 +9190,7 @@ function msgConnect(){
   clearTimeout(msgWsTimer);
   let ws; try{ ws = new WebSocket(MSG_API.replace(/^http/, 'ws') + '/v1/ws?token=' + encodeURIComponent(a.token)); }catch(e){ return msgRetry(); }
   msgWs = ws;
-  ws.onopen = ()=>{ msgWsOpen = true; msgWsTry = 0; clearInterval(msgPing); msgPing = setInterval(()=>{ try{ ws.send('{"t":"ping"}'); }catch(e){} }, 25000); msgFlush(); msgSyncProfile(); msgSyncGroups(); upFlush(); upReminder(); };
+  ws.onopen = ()=>{ msgWsOpen = true; msgWsTry = 0; clearInterval(msgPing); msgPing = setInterval(()=>{ try{ ws.send('{"t":"ping"}'); }catch(e){} }, 25000); msgFlush(); msgSyncProfile(); msgSyncGroups(); upFlush(); upReminder(); upLoad(); actRefreshSoon(); };
   ws.onmessage = e=>{ let m; try{ m = JSON.parse(e.data); }catch(err){ return; } msgOnServer(m).catch(()=>{}); };
   ws.onclose = ()=>{ msgWsOpen = false; clearInterval(msgPing); if(msgWs === ws){ msgWs = null; msgRetry(); } };
   ws.onerror = ()=>{ try{ ws.close(); }catch(e){} };
@@ -11600,6 +11626,17 @@ window.storyQuickAccessChanged = function(){ renderDevice(); };
 // The app says when the phone locks / unlocks (Station 3's dial pad button follows it).
 window.__storyLocked = false;
 window.storyLockState = function(locked){ if(window.__storyLocked === !!locked) return; window.__storyLocked = !!locked; renderDevice(); };
+// ---- Missed activity (owner): numbers on Station 3's Messages (unread messages) and Updates (people whose new
+//      statuses you haven't seen) buttons, and a dot on the Station 3 button while there's any. Worked out in
+//      Profile's window (it holds the chats and statuses) and shared through 'story-activity'. ----
+function storyActivity(){ try{ return JSON.parse(localStorage.getItem('story-activity') || '{}') || {}; }catch(e){ return {}; } }
+function s3BadgeText(n){ return n > 99 ? '99+' : String(n); }
+function s3BadgeHTML(k){ const n = +storyActivity()[k] || 0; return '<span class="s3-badge" data-badge="' + k + '"' + (n ? '' : ' hidden') + '>' + s3BadgeText(n) + '</span>'; }
+function s3BadgesUpdate(){
+  const a = storyActivity();
+  document.querySelectorAll('.s3-badge').forEach(b=>{ const n = +a[b.getAttribute('data-badge')] || 0; b.hidden = !n; b.textContent = s3BadgeText(n); });
+}
+window.addEventListener('storage', e=>{ if(e.key === 'story-activity') s3BadgesUpdate(); });
 function station3BarHTML(){
   // "Station 3 with dial pad": always. "Station 3 dial pad separate": only while the phone is unlocked (locked,
   // the dial pad lives on the lock screen instead). "Dial pad only": no Station 3.
@@ -11613,13 +11650,13 @@ function station3BarHTML(){
       <button class="station3-btn" data-action="station3-call-history" title="Call history">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path transform="translate(0.4 6.6) scale(0.7)" stroke-width="2.8" d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/><circle cx="18" cy="6.2" r="4.9" stroke-width="1.8"/><path d="M18 3.7v2.5l1.7 1.1" stroke-width="1.6"/></svg>
       </button>
-      <button class="station3-btn" data-action="station3-updates" title="Updates">
+      <button class="station3-btn s3-has-badge" data-action="station3-updates" title="Updates">${s3BadgeHTML('upd')}
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.2"/><circle cx="12" cy="12" r="9.5" stroke-dasharray="4.6 2.9"/></svg>
       </button>
       <button class="station3-btn-plus" data-action="station3-create-post" title="Create &amp; post">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       </button>
-      <button class="station3-btn" data-action="station3-messages" title="Messages">
+      <button class="station3-btn s3-has-badge" data-action="station3-messages" title="Messages">${s3BadgeHTML('msgs')}
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-4.3-1.2L3 20l1.2-5.2A8.38 8.38 0 0 1 3 11.5 8.5 8.5 0 0 1 11.5 3a8.38 8.38 0 0 1 8.5 8.5Z"/></svg>
       </button>
       <button class="station3-btn" data-action="station3-profile" title="Profile">

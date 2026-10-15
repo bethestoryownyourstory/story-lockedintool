@@ -334,6 +334,8 @@ class OverlayService : Service(), StoryBridge.Host {
         bubbleWm = layerWm
         bubbleLp = overlayParams(size, size, Gravity.BOTTOM or Gravity.END, 0, 0).also { it.type = layerType }
         layerWm.addView(v, bubbleLp)  // flush in the bottom-right corner
+        activityOn = false
+        showActivityDot(getSharedPreferences("story", MODE_PRIVATE).getBoolean("activity_dot", false))
     }
     private var bubbleLp: WindowManager.LayoutParams? = null
 
@@ -1670,6 +1672,25 @@ class OverlayService : Service(), StoryBridge.Host {
         if (need.isEmpty()) return "ok"
         ui.post { callAsking = true; askPermissions(need.toTypedArray()) }
         return "asking"
+    }
+    // ---- Missed activity (owner): a small red dot on the Station 3 button while there are unread messages or
+    //      unseen statuses; the numbers show on Station 3's Messages / Updates buttons. The button itself never moves
+    //      or changes - the dot is drawn on top of it (its overlay) and only shown / hidden. ----
+    private var activityOn = false
+    private val activityDot by lazy {
+        android.graphics.drawable.ShapeDrawable(android.graphics.drawable.shapes.OvalShape()).apply { paint.color = Color.parseColor("#FFFF3B30") }
+    }
+    override fun setActivityDot(on: Boolean) { ui.post {
+        getSharedPreferences("story", MODE_PRIVATE).edit().putBoolean("activity_dot", on).apply()
+        showActivityDot(on)
+    } }
+    private fun showActivityDot(on: Boolean) {
+        val v = bubble ?: return
+        if (on == activityOn) return
+        activityOn = on
+        val d = (8 * dp).toInt(), m = (6 * dp).toInt(), s = (40 * dp).toInt()
+        activityDot.setBounds(s - m - d, m, s - m, m + d)
+        if (on) v.overlay.add(activityDot) else v.overlay.remove(activityDot)
     }
     override fun msgNotify(title: String, text: String) { ui.post {
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) return@post
