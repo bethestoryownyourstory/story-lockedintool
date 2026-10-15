@@ -11,3 +11,4 @@ commits, pushed as a new update) - nothing else changes.
 | 3 | 2026-10-15 | Everything fast: as soon as an update is live, the server tells every phone and they get it at once (no waiting for their next check) | 34c1cd8 |
 | 4 | 2026-10-15 | Download page for new users at /get/: logo, Download for Android (the live app) and the install steps | 723486e |
 | 5 | 2026-10-15 | Profile privacy (Profile's ⋮ menu): Public / Private - private profiles can't be found in search and only show to people you follow, message or share a group with. Also: nothing goes live until the owner taps Publish live update; the download page waits for launch | 2fe2de7, ecaaefe |
+| 6 | 2026-10-15 | Community: Your Community (your own end-to-end encrypted team chat - you name it and add people) and Publics community (Community as before); public accounts choose (or always open theirs), private accounts only have their own | 1ef8789 |
