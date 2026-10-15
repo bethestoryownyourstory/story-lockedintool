@@ -82,6 +82,8 @@ export class Hub {
     this.sql.exec(`CREATE INDEX IF NOT EXISTS uposts_uid ON uposts(uid, kind, at)`);
     // Hearts and comments on statuses (owner).
     this.sql.exec(`CREATE TABLE IF NOT EXISTS ulikes (pid TEXT, uid TEXT, at INTEGER, PRIMARY KEY (pid, uid))`);
+    // Who you've messaged (Profile privacy: a private profile shows to people its owner has messaged).
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS contacts (uid TEXT, cid TEXT, at INTEGER, PRIMARY KEY (uid, cid))`);
     this.sql.exec(`CREATE TABLE IF NOT EXISTS ucomments (id TEXT PRIMARY KEY, pid TEXT, uid TEXT, text TEXT, at INTEGER)`);
     this.sql.exec(`CREATE INDEX IF NOT EXISTS ucomments_pid ON ucomments(pid, at)`);
     // STORY's own Stories feed (Community > Stories): one shared public group everyone posts their stories to.
@@ -91,10 +93,19 @@ export class Hub {
   one(q, ...a) { const r = this.sql.exec(q, ...a).toArray(); return r[0] || null; }
   phoneHash(p) { return sha('story-phone-v1|' + (this.env.PHONE_SALT || '') + '|' + p); }
   async userByToken(t) { return t ? this.one('SELECT * FROM users WHERE token = ?', await sha('tok|' + t)) : null; }
-  privacy(u) { try { return Object.assign({ messages: 'everyone', calls: 'everyone', callPeople: [], status: 'followers' }, JSON.parse(u.privacy || '{}')); } catch (e) { return { messages: 'everyone', calls: 'everyone', callPeople: [], status: 'followers' }; } }
+  privacy(u) { try { return Object.assign({ messages: 'everyone', calls: 'everyone', callPeople: [], status: 'followers', profile: 'public' }, JSON.parse(u.privacy || '{}')); } catch (e) { return { messages: 'everyone', calls: 'everyone', callPeople: [], status: 'followers', profile: 'public' }; } }
+  // Profile privacy (owner): Public = everyone can see your profile and find it in search. Private = only people
+  // you follow, people you've messaged and people in a group / community with you can see it; no one can find it.
+  isPrivate(u) { return this.privacy(u).profile === 'private'; }
+  canSeeProfile(viewer, owner) {
+    if (!viewer || viewer.id === owner.id || !this.isPrivate(owner)) return true;
+    return this.follows(owner.id, viewer.id)
+      || !!this.one('SELECT 1 AS x FROM contacts WHERE uid = ? AND cid = ?', owner.id, viewer.id)
+      || !!this.one('SELECT 1 AS x FROM gmembers a JOIN gmembers b ON a.gid = b.gid WHERE a.uid = ? AND b.uid = ? LIMIT 1', owner.id, viewer.id);
+  }
   canCall(from, to) { const p = this.privacy(to); return p.calls === 'everyone' || (p.calls === 'people' && (p.callPeople || []).includes(from.id)); }
   canMsg(from, to) { const p = this.privacy(to); return p.messages !== 'none' && p.messages !== 'nobody'; }
-  pubView(u, me) { return { id: u.id, name: u.name || '', username: u.username || '', pub: u.pub, canCall: me ? this.canCall(me, u) : true, canMsg: me ? this.canMsg(me, u) : true, canPay: !!this.one('SELECT uid FROM paybank WHERE uid = ?', u.id), photo: this.mediaUrl(u.photo), about: u.about || '', official: !!u.official }; }
+  pubView(u, me) { const see = this.canSeeProfile(me, u); return { id: u.id, name: u.name || '', username: u.username || '', pub: u.pub, canCall: me ? this.canCall(me, u) : true, canMsg: me ? this.canMsg(me, u) : true, canPay: !!this.one('SELECT uid FROM paybank WHERE uid = ?', u.id), photo: see ? this.mediaUrl(u.photo) : '', about: see ? u.about || '' : '', official: !!u.official, locked: !see }; }
 
   async fetch(req) {
     const url = new URL(req.url), path = url.pathname;
@@ -226,7 +237,7 @@ export class Hub {
     }
     if (b.privacy !== undefined) {
       const p = b.privacy || {};
-      const clean = { messages: ['everyone', 'requests', 'nobody'].includes(p.messages) ? p.messages : 'everyone', calls: ['everyone', 'people', 'nobody'].includes(p.calls) ? p.calls : p.calls === 'none' ? 'nobody' : 'everyone', callPeople: (Array.isArray(p.callPeople) ? p.callPeople : []).map(String).slice(0, 500), status: ['everyone', 'followers', 'nobody'].includes(p.status) ? p.status : 'followers' };
+      const clean = { messages: ['everyone', 'requests', 'nobody'].includes(p.messages) ? p.messages : 'everyone', calls: ['everyone', 'people', 'nobody'].includes(p.calls) ? p.calls : p.calls === 'none' ? 'nobody' : 'everyone', callPeople: (Array.isArray(p.callPeople) ? p.callPeople : []).map(String).slice(0, 500), status: ['everyone', 'followers', 'nobody'].includes(p.status) ? p.status : 'followers', profile: p.profile === 'private' ? 'private' : 'public' };
       sets.push('privacy = ?'); vals.push(JSON.stringify(clean));
     }
     if (b.about !== undefined) { sets.push('about = ?'); vals.push(String(b.about || '').slice(0, 150) || null); }
@@ -248,8 +259,8 @@ export class Hub {
     const like = '%' + un.replace(/[%_\\]/g, m => '\\' + m) + '%', start = un.replace(/[%_\\]/g, m => '\\' + m) + '%';
     const rows = this.sql.exec(
       `SELECT * FROM users WHERE id != ? AND (username LIKE ? ESCAPE '\\' OR (? = 0 AND lower(name) LIKE ? ESCAPE '\\'))
-       ORDER BY (username = ?) DESC, (username LIKE ? ESCAPE '\\') DESC, (lower(name) LIKE ? ESCAPE '\\') DESC, name LIMIT 20`,
-      me.id, like, t.startsWith('@') ? 1 : 0, like, un, start, start).toArray();
+       ORDER BY (username = ?) DESC, (username LIKE ? ESCAPE '\\') DESC, (lower(name) LIKE ? ESCAPE '\\') DESC, name LIMIT 80`,
+      me.id, like, t.startsWith('@') ? 1 : 0, like, un, start, start).toArray().filter(u => !this.isPrivate(u)).slice(0, 20);  // a private profile is never found
     return json({ people: rows.map(u => Object.assign(this.pubView(u, me), { isFollowing: this.follows(me.id, u.id) })) });
   }
 
@@ -286,6 +297,7 @@ export class Hub {
   follows(a, b) { return !!this.one('SELECT 1 AS x FROM follows WHERE uid = ? AND fid = ?', a, b); }
   canSeeStatus(viewer, owner) {
     if (viewer.id === owner.id) return true;
+    if (!this.canSeeProfile(viewer, owner)) return false;
     const s = this.privacy(owner).status;
     return s === 'everyone' || (s === 'followers' && this.follows(viewer.id, owner.id));
   }
@@ -303,8 +315,10 @@ export class Hub {
   }
   personView(u, me) {
     const n = q => this.one(q, u.id).n;
-    return Object.assign(this.pubView(u, me), {
-      bio: u.bio || '',
+    const v = this.pubView(u, me);
+    if (v.locked) return Object.assign(v, { private: true, isFollowing: this.follows(me.id, u.id), me: false });
+    return Object.assign(v, {
+      private: this.isPrivate(u), bio: u.bio || '',
       followers: n('SELECT COUNT(*) AS n FROM follows WHERE fid = ?'), following: n('SELECT COUNT(*) AS n FROM follows WHERE uid = ?'),
       posts: n("SELECT COUNT(*) AS n FROM uposts WHERE uid = ? AND kind = 'post'"),
       isFollowing: u.id !== me.id && this.follows(me.id, u.id), followsYou: u.id !== me.id && this.follows(u.id, me.id), me: u.id === me.id });
@@ -323,6 +337,7 @@ export class Hub {
   profile(me, id) {
     const u = this.one('SELECT * FROM users WHERE id = ?', id);
     if (!u) return json({ error: 'notfound' }, 404);
+    if (!this.canSeeProfile(me, u)) return json(this.personView(u, me));  // private: only who it is
     this.dropOldStatuses();
     const posts = this.sql.exec("SELECT * FROM uposts WHERE uid = ? AND kind = 'post' ORDER BY at DESC LIMIT 90", u.id).toArray().map(p => this.postView(p));
     return json(Object.assign(this.personView(u, me), { postList: posts, statuses: this.statusesOf(u, me) }));
@@ -334,7 +349,7 @@ export class Hub {
     const statuses = people.map(u => ({ user: lite(u), items: this.statusesOf(u, me) })).filter(s => s.items.length)
       .sort((a, b) => (b.user.id === me.id) - (a.user.id === me.id) || b.items[b.items.length - 1].at - a.items[a.items.length - 1].at);
     const profiles = this.sql.exec(`SELECT u.*, (SELECT COUNT(*) FROM follows f WHERE f.fid = u.id) AS fc FROM users u
-       WHERE u.id != ? AND (u.name IS NOT NULL OR u.username IS NOT NULL) ORDER BY (u.official = 1) DESC, fc DESC, u.created DESC LIMIT 60`, me.id).toArray().map(lite);
+       WHERE u.id != ? AND (u.name IS NOT NULL OR u.username IS NOT NULL) ORDER BY (u.official = 1) DESC, fc DESC, u.created DESC LIMIT 300`, me.id).toArray().filter(u => this.canSeeProfile(me, u)).slice(0, 60).map(lite);
     return json({ me: this.personView(me, me), statuses, profiles });
   }
   uposts(me, op, b) {
@@ -757,6 +772,7 @@ export class Hub {
         if (!to) return ws.send(JSON.stringify({ t: 'fail', id: m.id, error: 'notfound' }));
         if (!this.canMsg(me, to)) return ws.send(JSON.stringify({ t: 'fail', id: m.id, error: 'blocked' }));
         if (String(m.box || '').length > 64000) return ws.send(JSON.stringify({ t: 'fail', id: m.id, error: 'big' }));
+        this.sql.exec('INSERT OR IGNORE INTO contacts (uid, cid, at) VALUES (?, ?, ?)', uid, to.id, now);
         this.deliver(to.id, { t: 'msg', from: uid, id: String(m.id).slice(0, 40), box: String(m.box), iv: String(m.iv || ''), at: now, name: me.name || '', username: me.username || '' });
         ws.send(JSON.stringify({ t: 'sent', id: m.id, at: now }));
         return; }
