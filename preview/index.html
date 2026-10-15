@@ -3364,8 +3364,13 @@
   .lit-staged span{ display:inline-flex; align-items:center; gap:6px; padding:5px 10px; border:1px solid var(--line); border-radius:14px; font-size:11px; color:var(--text); max-width:200px; }
   .lit-staged span em{ font-style:normal; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .lit-staged button{ border:none; background:transparent; color:var(--muted); font-size:14px; padding:0; cursor:pointer; }
-  .lit-del-in, #story-profile .lit-del-in{ width:100%; box-sizing:border-box; margin:4px 0 10px; padding:12px 14px; border-radius:12px; border:1px solid #333333; background:transparent; color:#ffffff; font:inherit; font-size:15px; letter-spacing:1px; outline:none; }
-  .lit-sheet button.lit-del-go[disabled], #story-profile .lit-sheet button.lit-del-go[disabled]{ opacity:0.4; }
+  .lit-sheet button.lit-del-r, #story-profile .lit-sheet button.lit-del-r{ display:flex; align-items:center; justify-content:space-between; }
+  .lit-sheet button.lit-del-r::after, #story-profile .lit-sheet button.lit-del-r::after{ content:''; width:16px; height:16px; border-radius:50%; border:2px solid #8b8b92; box-sizing:border-box; }
+  .lit-sheet button.lit-del-r.on::after, #story-profile .lit-sheet button.lit-del-r.on::after{ border-color:#ffffff; background:radial-gradient(circle, #ffffff 0 3.5px, transparent 4px); }
+  .lit-sheet button.lit-del-next[disabled], #story-profile .lit-sheet button.lit-del-next[disabled]{ opacity:0.4; }
+  .lit-del-note, #story-profile .lit-del-note{ width:100%; box-sizing:border-box; margin:8px 0 4px; min-height:70px; padding:10px 12px; border-radius:12px; border:1px solid #333333; background:transparent; color:#ffffff; font:inherit; font-size:14px; resize:none; outline:none; }
+  .lit-del-list, #story-profile .lit-del-list{ margin:0 4px 10px; padding-left:18px; font-size:13px; line-height:1.6; color:#ffffff; }
+  #story-profile .cm-link{ display:block; margin-top:8px; padding:7px 12px; border-radius:14px; border:1px solid currentColor; background:transparent; color:inherit; font:inherit; font-size:12px; font-weight:700; }
   .community-post-files{ display:flex; flex-direction:column; gap:6px; margin-top:6px; }
   .community-comment-input-row .lit-att{ width:34px; height:34px; margin-right:6px; }
   .community-report-btn{ margin-left:auto; }
@@ -7666,33 +7671,81 @@ async function repAct(id, a, sure){
 // with sign-up the next time you use Messages / Profile.
 const ACCOUNT_DELETED_KEY = 'story-account-deleted';
 let delBusy = false;
+// Owner's steps: why you're leaving -> you'll lose everything -> the phone's PIN / biometrics -> Lockedintool sends a
+// message (Messages > Lockedintool) with a link and a code -> on the link's page: the code, Confirm, then Delete account.
+const DEL_REASONS = [['not-using', 'I don’t use it any more'], ['notifications', 'Too many notifications'], ['privacy', 'Privacy concerns'], ['new-account', 'I made another account'], ['not-working', 'Something isn’t working'], ['other', 'Something else']];
+let delFlow = null;
 function delAccountSheet(){
   document.querySelectorAll('.lit-del-bg').forEach(x=>x.remove());
   const bg = document.createElement('div'); bg.className = 'lit-sheet-bg lit-del-bg';
-  bg.innerHTML = '<div class="lit-sheet"><div class="lit-sheet-t">Delete account</div>' +
-    '<div class="lit-sheet-d">This can’t be undone. It removes from Lockedintool: your profile (name, @username, picture, bio, About), your followers and who you follow, your posts, statuses, comments and hearts, your chats on this phone and messages waiting on the server, your community and your place in groups (groups you lead are handed on), and your plan - payments can’t be refunded.</div>' +
-    '<div class="lit-sheet-d">Notes, Money, Wallet cards and trading accounts are only on this phone and aren’t part of your account. Payment records are kept as the law requires.</div>' +
-    '<div class="lit-sheet-d">Type DELETE to confirm.</div>' +
-    '<input class="lit-del-in" type="text" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="DELETE">' +
-    '<button class="danger lit-del-go" disabled>Delete my account</button><button class="cancel">Cancel</button></div>';
-  const inp = bg.querySelector('.lit-del-in'), go = bg.querySelector('.lit-del-go');
-  inp.addEventListener('input', ()=>{ go.disabled = inp.value.trim() !== 'DELETE'; });
-  bg.querySelector('.lit-sheet').addEventListener('click', e=>e.stopPropagation());
-  bg.addEventListener('click', ()=>{ if(!delBusy) bg.remove(); });
-  bg.querySelector('.cancel').addEventListener('click', ()=>{ if(!delBusy) bg.remove(); });
-  go.addEventListener('click', async ()=>{
-    if(delBusy || inp.value.trim() !== 'DELETE') return;
-    delBusy = true; go.disabled = true; go.textContent = 'Deleting…';
-    try{
-      if(msgAccount()) await msgApi('/v1/account/delete', { confirm:'DELETE' });
-      delAccountForget();
-      try{ localStorage.setItem(ACCOUNT_DELETED_KEY, String(Date.now())); }catch(e){}
-      inp.blur(); bg.remove(); showToast('Your account is deleted');
-      if(typeof renderDevice === 'function' && document.getElementById('content-area')) renderDevice();
-    }catch(e){ showToast('Couldn’t delete - check your connection and try again'); go.textContent = 'Delete my account'; go.disabled = false; }
-    delBusy = false;
-  });
+  bg.innerHTML = '<div class="lit-sheet"></div>';
+  const box = bg.querySelector('.lit-sheet');
+  delFlow = { bg, box, reason: null, note: '' };
+  box.addEventListener('click', e=>e.stopPropagation());
+  bg.addEventListener('click', ()=>{ if(!delBusy) delClose(); });
   (document.getElementById('story-profile') || document.body).appendChild(bg);
+  delStep1();
+}
+function delClose(){ if(delFlow && delFlow.bg) delFlow.bg.remove(); delFlow = null; }
+function delButtons(list){
+  return list.map(([cls, label, k])=>'<button class="' + cls + '" data-del="' + k + '">' + escText(label) + '</button>').join('');
+}
+function delOn(box, map){ box.querySelectorAll('[data-del]').forEach(b=>b.addEventListener('click', e=>{ e.stopPropagation(); const f = map[b.getAttribute('data-del')]; if(f) f(b); })); }
+function delStep1(){
+  const f = delFlow; if(!f) return;
+  f.box.innerHTML = '<div class="lit-sheet-t">Why are you deleting your account?</div><div class="lit-sheet-d">Tell us why - it helps Lockedintool get better.</div>' +
+    DEL_REASONS.map(([k, l])=>'<button class="lit-del-r' + (f.reason === k ? ' on' : '') + '" data-del="r:' + k + '">' + escText(l) + '</button>').join('') +
+    '<textarea class="lit-del-note" maxlength="300" placeholder="Tell us more (optional)"' + (f.reason === 'other' ? '' : ' hidden') + '>' + escText(f.note) + '</textarea>' +
+    delButtons([['lit-del-next', 'Next', 'next'], ['cancel', 'Cancel', 'cancel']]);
+  const next = f.box.querySelector('.lit-del-next'); next.disabled = !f.reason;
+  const map = { next: ()=>{ f.note = (f.box.querySelector('.lit-del-note') || {}).value || ''; if(f.reason) delStep2(); }, cancel: delClose };
+  DEL_REASONS.forEach(([k])=>{ map['r:' + k] = ()=>{ f.note = (f.box.querySelector('.lit-del-note') || {}).value || ''; f.reason = k; delStep1(); }; });
+  delOn(f.box, map);
+}
+function delStep2(){
+  const f = delFlow; if(!f) return;
+  f.box.innerHTML = '<div class="lit-sheet-t">You’re going to lose everything</div>' +
+    '<div class="lit-sheet-d">Deleting your account can’t be undone. You lose:</div><ul class="lit-del-list"><li>Your profile, name and @username</li><li>Your followers and who you follow</li><li>Your posts, statuses, comments and hearts</li><li>Your chats and messages</li><li>Your community and your place in groups</li><li>Your plan - payments can’t be refunded</li></ul>' +
+    '<div class="lit-sheet-d">Notes, Money, Wallet cards and trading accounts are only on this phone and aren’t part of your account.</div>' +
+    delButtons([['danger', 'Continue', 'go'], ['cancel', 'Cancel', 'cancel']]);
+  delOn(f.box, { go: delStep3, cancel: delClose });
+}
+// The phone's own fingerprint / face / PIN check.
+function delStep3(){
+  const f = delFlow; if(!f) return;
+  if(!NATIVE || !window.StoryNative.confirmIdentity){ delStep4(false); return; }
+  f.box.innerHTML = '<div class="lit-sheet-t">Confirm it’s you</div><div class="lit-sheet-d">Use your fingerprint, face or PIN.</div>' + delButtons([['cancel', 'Cancel', 'cancel']]);
+  delOn(f.box, { cancel: delClose });
+  window.StoryNative.confirmIdentity('Delete your Lockedintool account');
+}
+window.storyIdentity = function(result){
+  if(!delFlow) return;
+  if(result === 'ok') delStep4(false);
+  else if(result === 'nolock') delStep4(true);
+  else { showToast('Not confirmed - your account stays'); delClose(); }
+};
+// Lockedintool sends the message with the link and the code.
+async function delStep4(noLock){
+  const f = delFlow; if(!f) return;
+  f.box.innerHTML = '<div class="lit-sheet-t">Sending…</div>';
+  delBusy = true;
+  try{
+    await msgApi('/v1/account/delete-start', { reason: f.reason, note: f.note });
+    f.box.innerHTML = '<div class="lit-sheet-t">Check your messages</div>' +
+      '<div class="lit-sheet-d">' + (noLock ? 'Your phone has no screen lock, so the code is how we know it’s you. ' : '') +
+      'Lockedintool sent a message to your account (Messages > Lockedintool) with a link and a code. Tap the link, enter the code, press Confirm, then Delete account.</div>' +
+      '<div class="lit-sheet-d">The link and code work for 30 minutes. Until you press Delete account there, nothing is deleted.</div>' +
+      delButtons([['cancel', 'Done', 'done']]);
+    delOn(f.box, { done: delClose });
+  }catch(e){ showToast('Couldn’t send - check your connection and try again'); delClose(); }
+  delBusy = false;
+}
+// The account was deleted (on the link's page) or banned: this phone forgets it and starts again.
+function litAccountGone(){
+  delAccountForget();
+  try{ localStorage.setItem(ACCOUNT_DELETED_KEY, String(Date.now())); }catch(e){}
+  if(MSG_ENGINE){ try{ if(msgWs) msgWs.close(); }catch(e){} try{ indexedDB.deleteDatabase('story-keys'); }catch(e){} showToast('Your account is deleted'); setTimeout(()=>location.reload(), 600); }
+  else if(typeof renderDevice === 'function' && document.getElementById('content-area')) renderDevice();
 }
 function delAccountForget(){
   ['story-msg-account', 'story-msg-peers', MSG_KEY, MSG_OUTBOX, 'story-profile', 'story-profile-stats', PF_LOCKS_KEY, 'story-posts', 'story-highlights', 'story-upost-queue',
@@ -7799,7 +7852,7 @@ const LEGAL = {
     ['How long we keep it', [
       'On your phone: until you delete it or remove the app. On our server: your account until you delete it (Settings > Privacy > Delete account - it’s removed at once); delivered messages are removed; reports are kept while they’re reviewed; payment records as long as the law requires (usually 5 years).' ]],
     ['Your rights', [
-      'You can delete your account yourself at any time: Settings > Privacy > Delete account. It removes your profile, followers, posts, statuses, comments, chats and your place in groups from our server straight away. You can also ask to see, correct or delete the information we hold about you by writing to lockedintool@gmail.com. You can also complain to South Africa’s Information Regulator (inforegulator.org.za).' ]],
+      'You can delete your account yourself at any time: Settings > Privacy > Delete account. You give a reason, confirm with your phone’s fingerprint, face or PIN, and Lockedintool sends a link and a code to your Messages; entering the code on that page and pressing Delete account removes your profile, followers, posts, statuses, comments, chats and your place in groups from our server straight away. Why people leave is kept without any name on it. You can also ask to see, correct or delete the information we hold about you by writing to lockedintool@gmail.com. You can also complain to South Africa’s Information Regulator (inforegulator.org.za).' ]],
     ['Children', [
       'Lockedintool is for people 18 and older because it includes trading and payments.' ]],
     ['Changes', [
@@ -8542,6 +8595,7 @@ window.storyProfileOnly = function(){
     else if(k === 'fcs-send') fcsSend();
     else if(k === 'fcs-del') fcsCall('uncomment', { cid: b.getAttribute('data-id') });
     else if(k === 'open-post') upShowPost(b.getAttribute('data-id'));
+    else if(k === 'open-link'){ const u = b.getAttribute('data-url'); if(!/^https:\/\//.test(u) && !/^http:\/\/127\.0\.0\.1/.test(u)) return; if(NATIVE && window.StoryNative.openUrl) window.StoryNative.openUrl(u); else window.open(u, '_blank'); }
     else if(k === 'chat-attach'){ const id = msgView.chat; if(id) litAttach(files=>litSendToChat(id, files, ()=>{ renderChat(true); renderMsgList(); })); }
     else if(k === 'post-close') upClosePost();
     else if(k === 'up-message') upMessage(UP.person);
@@ -9637,7 +9691,7 @@ function renderChat(toEnd){
       const me = m.from === 'me';
       const st = i === lastMine && MSG_STATUS[m.status] ? ' · <b class="msg-' + m.status + '">' + MSG_STATUS[m.status] + '</b>' : '';
       const who = c.kind === 'group' && !me && m.who ? escText(m.who) + ' · ' : '';
-      return '<div class="cm' + (me ? ' me' : '') + '"><div class="cm-b">' + (m.file ? litFileHTML(m.file, m.local) : '') + escText(m.text || '').replace(/\n?\[post:([A-Za-z0-9_-]{4,40})\]/g, (x, id)=>'<button class="cm-post" data-pf="open-post" data-id="' + id + '">Open post</button>') + '</div><div class="cm-t">' + who + msgTime(m.at) + st + '</div></div>';
+      return '<div class="cm' + (me ? ' me' : '') + '"><div class="cm-b">' + (m.file ? litFileHTML(m.file, m.local) : '') + (c.kind === 'system' ? escText(m.text || '').replace(/https?:\/\/[^\s<]+/g, u=>'<button class="cm-link" data-pf="open-link" data-url="' + u + '">Open the link</button>') : escText(m.text || '')).replace(/\n?\[post:([A-Za-z0-9_-]{4,40})\]/g, (x, id)=>'<button class="cm-post" data-pf="open-post" data-id="' + id + '">Open post</button>') + '</div><div class="cm-t">' + who + msgTime(m.at) + st + '</div></div>';
     }).join('') +
     (typing ? '<div class="cm cm-typing"><div class="cm-b"><i></i><i></i><i></i></div>' + (c.kind === 'group' && c.typing.who ? '<div class="cm-t">' + escText(c.typing.who) + '</div>' : '') + '</div>' : '');
   litHydrate(list);
@@ -9679,7 +9733,7 @@ async function msgApi(path, body){
   const a = msgAccount();
   const r = await fetch(MSG_API + path, { method: body ? 'POST' : 'GET', headers: Object.assign({ 'content-type':'application/json' }, a && a.token ? { authorization:'Bearer ' + a.token } : {}), body: body ? JSON.stringify(body) : undefined });
   const j = await r.json().catch(()=>({}));
-  if(r.status === 401 && a){ msgSignedOut(); }
+  if(r.status === 401 && a){ if(j.error === 'deleted'){ litAccountGone(); throw Object.assign(new Error('deleted'), { code:'deleted' }); } msgSignedOut(); }
   if(!r.ok) throw Object.assign(new Error(j.error || 'server'), { code: j.error || 'server', info: j });
   return j;
 }
@@ -9744,7 +9798,7 @@ function msgConnect(){
   msgWs = ws;
   ws.onopen = ()=>{ msgWsOpen = true; msgWsTry = 0; clearInterval(msgPing); msgPing = setInterval(()=>{ try{ ws.send('{"t":"ping"}'); }catch(e){} }, 25000); msgFlush(); msgSyncProfile(); msgSyncGroups(); upFlush(); upReminder(); upLoad(); actRefreshSoon(); };
   ws.onmessage = e=>{ let m; try{ m = JSON.parse(e.data); }catch(err){ return; } msgOnServer(m).catch(()=>{}); };
-  ws.onclose = ()=>{ msgWsOpen = false; clearInterval(msgPing); if(msgWs === ws){ msgWs = null; msgRetry(); } };
+  ws.onclose = e=>{ msgWsOpen = false; clearInterval(msgPing); if(e && e.code === 4001){ msgWs = null; litAccountGone(); return; } if(msgWs === ws){ msgWs = null; msgRetry(); } };
   ws.onerror = ()=>{ try{ ws.close(); }catch(e){} };
 }
 function msgRetry(){ clearTimeout(msgWsTimer); if(!msgAccount()) return; msgWsTimer = setTimeout(msgConnect, Math.min(30000, 1000 * Math.pow(2, msgWsTry++))); }
