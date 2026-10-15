@@ -2452,17 +2452,6 @@
   #story-profile .up-v-cbar input{ flex:1; min-width:0; border:1px solid rgba(255,255,255,0.35); border-radius:20px; background:transparent; color:#fff; padding:10px 14px; font-size:14px; font-family:inherit; outline:none; -webkit-user-select:text; user-select:text; }
   #story-profile .up-v-cbar button{ width:42px; height:42px; border-radius:50%; border:none; background:#fff; color:#000; display:flex; align-items:center; justify-content:center; padding:0; }
   /* Sign-up: name + @username before Profile / Messages / Updates / Create. */
-  #story-profile .su-title{ font-size:24px; font-weight:800; letter-spacing:-0.3px; margin-top:6px; }
-  #story-profile .su-sub{ font-size:14px; color:var(--pf-muted); line-height:1.45; margin:8px 0 22px; }
-  #story-profile .su-label{ display:block; font-size:11px; font-weight:800; letter-spacing:1.2px; text-transform:uppercase; color:var(--pf-muted); margin:14px 0 6px; }
-  #story-profile .su-box{ display:flex; align-items:center; gap:2px; border:1px solid var(--pf-fg); border-radius:12px; padding:0 14px; }
-  #story-profile .su-at{ font-size:16px; color:var(--pf-muted); }
-  #story-profile .su-box input{ flex:1; min-width:0; border:none; outline:none; background:transparent; color:var(--pf-fg); font-size:16px; font-family:inherit; padding:13px 0; -webkit-user-select:text; user-select:text; }
-  #story-profile .su-box input::placeholder{ color:var(--pf-muted); }
-  #story-profile .su-msg{ min-height:20px; font-size:13px; margin-top:10px; color:#ff4d4f; }
-  #story-profile .su-go{ width:100%; margin-top:12px; padding:14px 0; border-radius:12px; border:none; background:var(--pf-fg); color:var(--pf-bg); font-size:15px; font-weight:800; font-family:inherit; }
-  #story-profile .su-go:disabled{ opacity:0.35; }
-  #story-profile .su-note{ font-size:12px; color:var(--pf-muted); text-align:center; line-height:1.4; margin-top:14px; }
   /* Create > Profile > ✓: Status or Post pops up right beside ✓ (where it comes from). */
   #story-profile .cr-pick{ position:absolute; right:72px; top:calc(var(--pf-top, 24px) + 12px); display:flex; flex-direction:column; gap:8px; z-index:3; }
   #story-profile .cr-pick button{ min-width:108px; padding:12px 18px; border-radius:23px; border:1.5px solid #fff; background:rgba(0,0,0,0.6); color:#fff; font-size:14px; font-weight:700; font-family:inherit; }
@@ -3373,6 +3362,25 @@
   #story-profile .cm-link{ display:block; margin-top:8px; padding:7px 12px; border-radius:14px; border:1px solid currentColor; background:transparent; color:inherit; font:inherit; font-size:12px; font-weight:700; }
   .community-post-files{ display:flex; flex-direction:column; gap:6px; margin-top:6px; }
   .community-comment-input-row .lit-att{ width:34px; height:34px; margin-right:6px; }
+  /* Accounts (owner): Create your account / Log in - first thing, for everyone. */
+  .lit-auth{ position:fixed; inset:0; z-index:999995; background:#000000; color:#ffffff; overflow-y:auto; scrollbar-width:none; font-family:inherit; }
+  .lit-auth::-webkit-scrollbar{ display:none; }
+  .lit-auth-in{ max-width:420px; margin:0 auto; padding:calc(var(--pf-top, 24px) + 40px) 22px 80px; box-sizing:border-box; }
+  .lit-auth img{ display:block; width:84px; height:84px; border-radius:20px; background:#ffffff; margin:0 0 22px; }
+  .lit-auth h1{ font-size:24px; font-weight:800; margin:0 0 6px; }
+  .lit-auth p{ font-size:13px; line-height:1.5; color:#8b8b92; margin:0 0 18px; }
+  .lit-auth label{ display:block; font-size:12px; font-weight:700; color:#8b8b92; margin:14px 0 6px; }
+  .lit-auth input{ width:100%; box-sizing:border-box; padding:13px 14px; border-radius:12px; border:1px solid #333333; background:#000000; color:#ffffff; font:inherit; font-size:15px; outline:none; }
+  .lit-auth input:focus{ border-color:#ffffff; }
+  .lit-auth .lit-auth-at{ position:relative; }
+  .lit-auth .lit-auth-at span{ position:absolute; left:14px; top:50%; transform:translateY(-50%); color:#8b8b92; font-size:15px; }
+  .lit-auth .lit-auth-at input{ padding-left:30px; }
+  .lit-auth button{ display:block; width:100%; margin-top:20px; padding:14px; border-radius:12px; border:none; background:#ffffff; color:#000000; font:inherit; font-size:15px; font-weight:800; cursor:pointer; }
+  .lit-auth button[disabled]{ opacity:0.45; }
+  .lit-auth button.lit-auth-alt{ background:transparent; color:#ffffff; border:1px solid #333333; margin-top:12px; }
+  .lit-auth button.lit-auth-link{ background:transparent; color:#8b8b92; padding:8px; margin-top:14px; font-weight:600; font-size:13px; }
+  .lit-auth .lit-auth-msg{ min-height:18px; margin-top:12px; font-size:13px; color:#ff6b60; }
+  .lit-auth .lit-auth-note{ margin-top:16px; font-size:12px; line-height:1.5; color:#8b8b92; }
   .community-report-btn{ margin-left:auto; }
   .community-comment-report{ border:none; background:transparent; color:var(--muted); font:inherit; font-size:10px; padding:0 0 0 6px; cursor:pointer; }
   /* Community (owner): Your Community | Publics community, side by side like Layouts' Dashboard | Pages. */
@@ -7802,6 +7810,10 @@ function privacySettingsHTML(){
         <div class="set2-text"><div class="set2-name">Blocked people</div><div class="set2-sub">${(n=>n ? n + (n === 1 ? ' person' : ' people') : 'No one')(Object.keys(litBlocked()).length)}</div></div>
         <span class="chev-right">›</span>
       </div>
+      <div class="set2-row set2-link" data-action="privacy-logout">
+        <div class="set2-text"><div class="set2-name">Log out</div><div class="set2-sub">${litSignedIn() ? 'Signed in as @' + escText(profileData().username || '') : 'Not signed in'}</div></div>
+        <span class="chev-right">›</span>
+      </div>
       <div class="set2-row set2-link" data-action="privacy-delete-account">
         <div class="set2-text"><div class="set2-name" style="color:#ff3b30;">Delete account</div><div class="set2-sub">Remove your Lockedintool account and everything on it</div></div>
         <span class="chev-right">›</span>
@@ -7831,7 +7843,7 @@ const LEGAL = {
       'Call history: calls made with Lockedintool, and contact names if you allow contacts.',
       'Removing Lockedintool from your phone removes all of this.' ]],
     ['Kept on our server', [
-      'Your account: a random ID, the public half of your encryption key, your name, @username, profile picture, bio and About (so people can find you and see who you are - a private profile can’t be found and only shows to people you follow, message or share a group with) and your privacy choices (who can see your profile, who can message and call you and who can see your status).',
+      'Your account: your @username and a key made from your password on your phone (only a scrambled copy is kept - your password itself never leaves your phone), a locked backup of your chats and your message key (locked with your password, so only you can open it - we can’t), a random ID, the public half of your encryption key, your name, @username, profile picture, bio and About (so people can find you and see who you are - a private profile can’t be found and only shows to people you follow, message or share a group with) and your privacy choices (who can see your profile, who can message and call you and who can see your status).',
       'Updates: who you follow and who follows you, the posts you share (their title, text, pictures and videos - shown in the feed and on your profile to everyone who can see your profile), your statuses (deleted after 24 hours with their hearts and comments; only seen by who your status setting allows), and the hearts and comments you leave on posts and statuses. Delete a post any time from its ⋮.',
       'Messages and calls: locked messages waiting for a phone that is offline (deleted once delivered), and whether a message was delivered, seen or read. Calls go straight from phone to phone; our server only helps them connect.',
       'Community: groups you create or join, and what you post, like or comment in public groups - public groups are visible to everyone. Private group messages and Your Community’s chat are end-to-end encrypted.',
@@ -8375,17 +8387,6 @@ window.storyProfileOnly = function(){
       <div class="pf-calls-list"></div>
       <div class="pf-msgs-empty pf-calls-empty"><div class="pf-msgs-empty-t">No call history yet</div></div>
     </div>
-    <div class="pf-scroll pf-signup" hidden>
-      <div class="su-title">Create your profile</div>
-      <div class="su-sub">Choose the name and @username people will know you by on Lockedintool.</div>
-      <label class="su-label">Name</label>
-      <div class="su-box"><input type="text" class="su-name" maxlength="30" placeholder="Your name" autocomplete="off" autocapitalize="words" enterkeyhint="next"></div>
-      <label class="su-label">Username</label>
-      <div class="su-box"><span class="su-at">@</span><input type="text" class="su-user" maxlength="30" placeholder="username" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="done"></div>
-      <div class="su-msg"></div>
-      <button class="su-go" data-pf="su-go" disabled>Continue</button>
-      <div class="su-note">You can change your name once every 60 days and your @username once every 100 days.</div>
-    </div>
     <div class="pf-scroll pf-updates" hidden>
       <div class="pf-msgs-top">
         <label class="pf-msgs-search"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="search" placeholder="Search anyone on Lockedintool" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="search"></label>
@@ -8574,7 +8575,6 @@ window.storyProfileOnly = function(){
     }
     else if(k === 'cr-post') crPost();
     else if(k === 'cr-as') crPostAs(b.getAttribute('data-k'));
-    else if(k === 'su-go') suGo();
     else if(k === 'up-st-me'){
       const mine = ((UP.data || {}).statuses || []).find(s=>s.user.id === (msgAccount() || {}).id);
       if(mine) upView(mine.user, mine.items, 0, true);
@@ -8692,14 +8692,6 @@ window.storyProfileOnly = function(){
   ['pointerup', 'pointercancel', 'pointerleave'].forEach(t=>el.querySelector('.pf-msgs-list').addEventListener(t, ()=>clearTimeout(holdT)));
   el.querySelector('.pf-msgs-list').addEventListener('click', e=>{ if(held){ e.stopPropagation(); held = false; } }, true);
   el.querySelector('.pf-msgs').addEventListener('click', e=>{ if(msgView.menuFor && !e.target.closest('.pf-msgs-menu') && !e.target.closest('.msg-row')){ msgView.menuFor = null; renderMsgList(); } });
-  const suName = el.querySelector('.su-name'), suUser = el.querySelector('.su-user');
-  for(const box of [suName, suUser]){
-    box.addEventListener('input', suCheck);
-    box.addEventListener('pointerdown', profileTypingOn); box.addEventListener('focus', profileTypingOn);
-    box.addEventListener('blur', ()=>{ if(NATIVE && window.StoryNative.setTyping) try{ window.StoryNative.setTyping(false); }catch(err){} });
-  }
-  suName.addEventListener('keydown', e=>{ if(e.key === 'Enter'){ e.preventDefault(); suUser.focus(); } });
-  suUser.addEventListener('keydown', e=>{ if(e.key === 'Enter'){ e.preventDefault(); suGo(); } });
   const upCBox = el.querySelector('.up-v-cbar input');
   upCBox.addEventListener('pointerdown', profileTypingOn); upCBox.addEventListener('focus', profileTypingOn);
   upCBox.addEventListener('blur', ()=>{ if(NATIVE && window.StoryNative.setTyping) try{ window.StoryNative.setTyping(false); }catch(err){} });
@@ -8765,7 +8757,6 @@ window.storyProfileReset = function(){
   el.querySelector('.cr-pick').hidden = true;
   el.querySelector('.pf-menu').hidden = true; el.querySelector('.pf-privacy').hidden = true; el.querySelector('.pf-reports').hidden = true;
   el.querySelector('.up-compose').hidden = true; upClosePost(); fcsClose();
-  el.querySelector('.pf-signup').hidden = true;
   const ms = el.querySelector('.pf-msgs .pf-msgs-search input'); if(ms){ ms.value = ''; } msgView.q = ''; msgView.menuFor = null;
   if(crRecording && NATIVE && window.StoryNative.createVideo) window.StoryNative.createVideo(false);
   if(crHas && NATIVE && window.StoryNative.createDiscard) window.StoryNative.createDiscard();
@@ -8779,7 +8770,8 @@ window.storyS3Page = function(which){
   window.storyProfileReset();
   // Sign-up (owner): a new profile starts empty - before Profile, Messages, Updates or Create you choose your name
   // and @username. (Call history works without it.)
-  if(which !== 'calls' && !suDone()){ el.querySelector('.pf-home').hidden = true; suOpen(which); return; }
+  if(which !== 'calls' && !litSignedIn()){ el.querySelector('.pf-home').hidden = true; litAuthOpen(); return; }
+  litAuthClose();
   if(which === 'create'){ el.querySelector('.pf-home').hidden = true; crShow(); return; }
   if(which === 'calls'){ el.querySelector('.pf-home').hidden = true; el.querySelector('.pf-calls').hidden = false; el.querySelector('.pf-calls').scrollTop = 0; renderCalls(); return; }
   if(which === 'updates'){ el.querySelector('.pf-home').hidden = true; el.querySelector('.pf-updates').hidden = false; el.querySelector('.pf-updates').scrollTop = 0; upRender(); upLoad(); upFlush(); return; }
@@ -8788,47 +8780,6 @@ window.storyS3Page = function(which){
   el.querySelector('.pf-msgs').hidden = !msgs;
   if(msgs){ el.querySelector('.pf-msgs').scrollTop = 0; renderMsgList(); }
 };
-// ---- Sign-up: name + @username, checked by Lockedintool's server (format, taken, "Lockedintool" reserved). ----
-let suNext = 'profile', suBusy = false;
-function suDone(){ const p = profileData(); return !!(p.name && p.username); }
-function suOpen(next){
-  const el = upEl(); if(!el) return;
-  suNext = next || 'profile';
-  const f = el.querySelector('.pf-signup'), p = profileData();
-  f.hidden = false; f.scrollTop = 0;
-  f.querySelector('.su-name').value = p.name || ''; f.querySelector('.su-user').value = p.username || '';
-  suCheck(); if(!msgAccount()) msgEnsureAccount();
-}
-function suCheck(){
-  const el = upEl(); if(!el) return false;
-  const f = el.querySelector('.pf-signup'), n = f.querySelector('.su-name'), u = f.querySelector('.su-user');
-  const low = u.value.toLowerCase().replace(/\s+/g, ''); if(low !== u.value) u.value = low;
-  const name = n.value.trim(), un = u.value.trim();
-  const brand = s=>s.toLowerCase().replace(/[^a-z0-9]/g, '').includes('lockedintool');
-  const problem = !name ? '' : brand(name) ? 'Only Lockedintool’s own profile can use that name.' : !un ? '' : usernameProblem(un) || (brand(un) ? 'Only Lockedintool’s own profile can use that name.' : '');
-  const msg = f.querySelector('.su-msg'); msg.textContent = problem; msg.classList.add('bad');
-  f.querySelector('.su-go').disabled = !!problem || !name || !un || suBusy;
-  return !problem && !!name && !!un;
-}
-async function suGo(){
-  const el = upEl(); if(!el || suBusy || !suCheck()) return;
-  const f = el.querySelector('.pf-signup'), name = f.querySelector('.su-name').value.trim(), username = f.querySelector('.su-user').value.trim();
-  const msg = f.querySelector('.su-msg');
-  if(!msgAccount()){ msg.textContent = 'Connecting to Lockedintool… try again in a moment.'; msgEnsureAccount(); return; }
-  suBusy = true; f.querySelector('.su-go').disabled = true; f.querySelector('.su-go').textContent = 'Checking…';
-  try{
-    const r = await msgApi('/v1/me', { name, username });
-    profileLocksSave(r);
-    saveProfileData({ name: r.name || name, username: r.username || username });
-    const ae = document.activeElement; if(ae && ae.blur) ae.blur();
-    suBusy = false; f.querySelector('.su-go').textContent = 'Continue';
-    window.storyS3Page(suNext);
-  }catch(e){
-    suBusy = false; f.querySelector('.su-go').textContent = 'Continue';
-    msg.textContent = e.code === 'username-taken' ? '@' + username + ' is taken - try another.' : e.code === 'reserved' ? 'Only Lockedintool’s own profile can use that name.' : e.code === 'username' ? usernameProblem(username) || 'That @username can’t be used.' : 'No connection right now - try again.';
-    f.querySelector('.su-go').disabled = false;
-  }
-}
 // ---- Create (Station 3's +): the real camera shows through this window (the app runs it underneath). ----
 // Shutter: tap = picture, hold = video (Video box: tap to start, tap to stop - videos only). After you make
 // something you see it (a video plays) and ✓ posts it: Video / Profile -> your profile's posts; Highlight -> asks
@@ -9544,7 +9495,7 @@ function msgChats(){
   if(!msgChatsCache){ try{ msgChatsCache = JSON.parse(localStorage.getItem(MSG_KEY) || '[]') || []; }catch(e){ msgChatsCache = []; } }
   return msgChatsCache;
 }
-function saveMsgChats(){ try{ localStorage.setItem(MSG_KEY, JSON.stringify(msgChatsCache || [])); }catch(e){} if(typeof actRefreshSoon === 'function') actRefreshSoon(); }
+function saveMsgChats(){ try{ localStorage.setItem(MSG_KEY, JSON.stringify(msgChatsCache || [])); }catch(e){} if(typeof actRefreshSoon === 'function') actRefreshSoon(); if(typeof litBackupSoon === 'function') litBackupSoon(); }
 // Community groups you're part of show in your chats too (owner) - public group chats, from 'story-community-chats'.
 function mergeCommunityChats(){
   let groups = []; try{ groups = JSON.parse(localStorage.getItem('story-community-chats') || '[]') || []; }catch(e){}
@@ -9806,15 +9757,16 @@ function msgConnect(){
   msgWs = ws;
   ws.onopen = ()=>{ msgWsOpen = true; msgWsTry = 0; clearInterval(msgPing); msgPing = setInterval(()=>{ try{ ws.send('{"t":"ping"}'); }catch(e){} }, 25000); msgFlush(); msgSyncProfile(); msgSyncGroups(); upFlush(); upReminder(); upLoad(); actRefreshSoon(); };
   ws.onmessage = e=>{ let m; try{ m = JSON.parse(e.data); }catch(err){ return; } msgOnServer(m).catch(()=>{}); };
-  ws.onclose = e=>{ msgWsOpen = false; clearInterval(msgPing); if(e && (e.code === 4001 || e.code === 4003)){ msgWs = null; litAccountGone(e.code === 4003 ? 'banned' : 'deleted'); return; } if(msgWs === ws){ msgWs = null; msgRetry(); } };
+  ws.onclose = e=>{ msgWsOpen = false; clearInterval(msgPing); if(e && (e.code === 4001 || e.code === 4003)){ msgWs = null; litAccountGone(e.code === 4003 ? 'banned' : 'deleted'); return; }
+    if(e && e.code === 4002){ msgWs = null; showToast('You logged in on another phone'); litSignedOut(); return; } if(msgWs === ws){ msgWs = null; msgRetry(); } };
   ws.onerror = ()=>{ try{ ws.close(); }catch(e){} };
 }
 function msgRetry(){ clearTimeout(msgWsTimer); if(!msgAccount()) return; msgWsTimer = setTimeout(msgConnect, Math.min(30000, 1000 * Math.pow(2, msgWsTry++))); }
 function msgSend(o){ if(msgWs && msgWsOpen){ try{ msgWs.send(JSON.stringify(o)); return true; }catch(e){} } return false; }
 window.addEventListener('online', ()=>{ msgWsTry = 0; msgConnect(); });
 function msgSignedOut(){
-  setMsgAccount(null); try{ if(msgWs) msgWs.close(); }catch(e){} msgWs = null; msgWsOpen = false;
-  renderMsgList(); msgEnsureAccount();
+  if(msgAccount()){ litSignedOut(); return; }
+  try{ if(msgWs) msgWs.close(); }catch(e){} msgWs = null; msgWsOpen = false; renderMsgList();
 }
 function chatFor(id, info){
   const list = msgChats(); let c = list.find(x=>x.id === id);
@@ -10050,6 +10002,7 @@ function profileChangeProblem(k, v){
 // key goes to the server, which hands back your id + sign-in key. People find you by your @username. ----
 let msgJoining = false, msgJoinTry = 0;
 async function msgEnsureAccount(){
+  return;   // accounts are only made by Create your account (owner) - nothing is made silently any more
   if(!MSG_ENGINE || msgAccount() || msgJoining) return;
   msgJoining = true;
   try{
@@ -15543,6 +15496,7 @@ function attachHandlers(){
         case 'pay-recv-remove': msgApi('/v1/pay/bank', { remove:true }).then(()=>{ if(state.pay.info) state.pay.info.bank = null; showToast('Removed'); payShow(); }).catch(()=>showToast('Couldn\u2019t remove - try again')); break;
         case 'privacy-blocked': litBlockedSheet(); return;
         case 'privacy-delete-account': delAccountSheet(); return;
+        case 'privacy-logout': if(litSignedIn()) litLogoutSheet(); else litAuthGate(); return;
         case 'community-report-group': litReport('group', el.getAttribute('data-groupid')); return;
         case 'community-report-post': litReport('gpost', el.getAttribute('data-postid')); return;
         case 'community-report-comment': litReport('gcomment', el.getAttribute('data-cid')); return;
@@ -16555,6 +16509,214 @@ function litSendToChat(chatId, files, after){
     });
   }
 }
+// ---- Accounts (owner): Create your account / Log in first thing, for everyone; Log out (not deleting); and your chats
+// backed up LOCKED with your password so logging in on any phone brings them back. The password never leaves the
+// phone: two keys are worked out from it (PBKDF2) - one signs you in (only its hash is on the server), one locks the
+// backup and your message key (the server can't open either). ----
+const LIT_ITER = 210000;
+function litRand(n){ return B64.to(crypto.getRandomValues(new Uint8Array(n))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
+async function litPwBase(pw){ return crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveBits', 'deriveKey']); }
+async function litAuthKey(pw, salt){ const bits = await crypto.subtle.deriveBits({ name:'PBKDF2', hash:'SHA-256', salt: new TextEncoder().encode('lit-auth|' + salt), iterations: LIT_ITER }, await litPwBase(pw), 256); return B64.to(bits); }
+async function litBackupKey(pw, salt){ return crypto.subtle.deriveKey({ name:'PBKDF2', hash:'SHA-256', salt: new TextEncoder().encode('lit-backup|' + salt), iterations: LIT_ITER }, await litPwBase(pw), { name:'AES-GCM', length:256 }, false, ['encrypt', 'decrypt']); }
+async function litKeyGet(name){ const db = await keysDb(); return new Promise(res=>{ const q = db.transaction('k').objectStore('k').get(name); q.onsuccess = ()=>res(q.result || null); q.onerror = ()=>res(null); }); }
+async function litKeyPut(name, v){ const db = await keysDb(); return new Promise(res=>{ const t = db.transaction('k', 'readwrite'); t.objectStore('k').put(v, name); t.oncomplete = ()=>res(); t.onerror = ()=>res(); }); }
+async function litSeal(key, obj){ const iv = crypto.getRandomValues(new Uint8Array(12)); const box = await crypto.subtle.encrypt({ name:'AES-GCM', iv }, key, new TextEncoder().encode(JSON.stringify(obj))); return { box: B64.to(box), iv: B64.to(iv) }; }
+async function litOpen(key, sealed){ const out = await crypto.subtle.decrypt({ name:'AES-GCM', iv: B64.from(sealed.iv) }, key, B64.from(sealed.box)); return JSON.parse(new TextDecoder().decode(out)); }
+// A fresh message key whose private half can be backed up (locked) once, then kept on the phone unreadable.
+async function litNewKeys(bk){
+  const pair = await crypto.subtle.generateKey({ name:'ECDH', namedCurve:'P-256' }, true, ['deriveBits']);
+  const pub = B64.to(await crypto.subtle.exportKey('raw', pair.publicKey));
+  const jwk = await crypto.subtle.exportKey('jwk', pair.privateKey);
+  const priv = await crypto.subtle.importKey('jwk', jwk, { name:'ECDH', namedCurve:'P-256' }, false, ['deriveBits']);
+  return { pub, priv, keybox: await litSeal(bk, jwk) };
+}
+async function litKeysFromBox(bk, keybox){
+  const jwk = await litOpen(bk, keybox);
+  const priv = await crypto.subtle.importKey('jwk', jwk, { name:'ECDH', namedCurve:'P-256' }, false, ['deriveBits']);
+  const pubKey = await crypto.subtle.importKey('jwk', { kty:jwk.kty, crv:jwk.crv, x:jwk.x, y:jwk.y, ext:true }, { name:'ECDH', namedCurve:'P-256' }, true, []);
+  return { priv, pub: B64.to(await crypto.subtle.exportKey('raw', pubKey)) };
+}
+function litSignedIn(){ const a = msgAccount(); return !!(a && a.token && a.pw); }
+// ---- The locked backup: chats, people's keys, call history, privacy, blocks, community choices ----
+const LIT_BACKUP_KEYS = ['story-messages', 'story-msg-peers', 'story-calls', 'story-privacy', 'story-blocked', 'story-community', 'story-community-chats', 'story-community-always-mine', 'story-status-seen', 'story-profile-locks'];
+let litBackupT = 0, litBackupAt = 0, litBackupBusy = false;
+function litBackupSoon(){
+  if(!MSG_ENGINE || !litSignedIn()) return;
+  clearTimeout(litBackupT);
+  litBackupT = setTimeout(()=>litBackupNow(), Math.max(20000, 5 * 60000 - (Date.now() - litBackupAt)));   // at most every 5 minutes, only after something changed
+}
+async function litBackupNow(){
+  if(litBackupBusy || !litSignedIn()) return false;
+  litBackupBusy = true; clearTimeout(litBackupT);
+  try{
+    const bk = await litKeyGet('bk'); if(!bk) return false;
+    const data = {}; LIT_BACKUP_KEYS.forEach(k=>{ try{ const v = localStorage.getItem(k); if(v != null) data[k] = v; }catch(e){} });
+    let bytes = new TextEncoder().encode(JSON.stringify({ v:1, at: Date.now(), data })), z = false;
+    if(typeof CompressionStream === 'function'){ bytes = new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer()); z = true; }
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const box = new Uint8Array(await crypto.subtle.encrypt({ name:'AES-GCM', iv }, bk, bytes));
+    const media = await upPutMedia({ bytes: box, mime:'application/octet-stream' });
+    await msgApi('/v1/backup/set', { media, iv: B64.to(iv), z });
+    litBackupAt = Date.now(); return true;
+  }catch(e){ return false; }
+  finally{ litBackupBusy = false; }
+}
+async function litBackupRestore(bk, backup){
+  if(!backup || !backup.media) return;
+  const r = await fetch(MSG_API + '/v1/media/' + backup.media); if(!r.ok) return;
+  let bytes = new Uint8Array(await crypto.subtle.decrypt({ name:'AES-GCM', iv: B64.from(backup.iv) }, bk, await r.arrayBuffer()));
+  if(backup.z) bytes = new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer());
+  const j = JSON.parse(new TextDecoder().decode(bytes));
+  for(const k of LIT_BACKUP_KEYS) if(j.data && j.data[k] != null) try{ localStorage.setItem(k, j.data[k]); }catch(e){}
+}
+// ---- The screens ----
+let litAuthMode = 'welcome', litAuthBusy = false, litAuthTemp = null;
+function litAuthOpen(mode){
+  if(document.documentElement.classList.contains('story-widget')) return;
+  const a = msgAccount();
+  litAuthMode = mode || (a && a.token && !a.pw ? 'setpw' : litAuthMode === 'login' || litAuthMode === 'signup' ? litAuthMode : 'welcome');
+  let el = document.querySelector('.lit-auth');
+  if(!el){ el = document.createElement('div'); el.className = 'lit-auth'; (document.getElementById('story-profile') || document.body).appendChild(el);
+    const typing = on=>{ if(NATIVE && window.StoryNative.setTyping) try{ window.StoryNative.setTyping(on); }catch(err){} };
+    el.addEventListener('pointerdown', e=>{ if(e.target.closest('input')) typing(true); });
+    el.addEventListener('focusin', e=>{ if(e.target.closest('input')) typing(true); });
+    el.addEventListener('focusout', ()=>setTimeout(()=>{ const ae = document.activeElement; if(!(ae && ae.closest && ae.closest('.lit-auth input'))) typing(false); }, 60));
+    el.addEventListener('click', e=>{ const b = e.target.closest('[data-auth]'); if(b) litAuthAct(b.getAttribute('data-auth')); });
+    el.addEventListener('input', e=>{ const u = e.target.closest('.lit-auth-user'); if(u){ const low = u.value.toLowerCase().replace(/\s+/g, '').replace(/^@/, ''); if(low !== u.value) u.value = low; } litAuthCheck(); });
+    el.addEventListener('keydown', e=>{ if(e.key === 'Enter'){ e.preventDefault(); const go = el.querySelector('.lit-auth-go'); if(go && !go.disabled) go.click(); } });
+  }
+  const logo = '<img alt="" src="icon-192.png">';
+  const p = profileData();
+  if(litAuthMode === 'welcome') el.innerHTML = '<div class="lit-auth-in">' + logo + '<h1>Welcome</h1><p>Create your account, or log in to the one you have.</p>' +
+    '<button data-auth="to-signup">Create your account</button><button class="lit-auth-alt" data-auth="to-login">Log in</button></div>';
+  else if(litAuthMode === 'login') el.innerHTML = '<div class="lit-auth-in">' + logo + '<h1>Log in</h1><p>Your @username and password.</p>' +
+    '<label>Username</label><div class="lit-auth-at"><span>@</span><input class="lit-auth-user" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="30"></div>' +
+    '<label>Password</label><input class="lit-auth-pw" type="password" autocomplete="current-password" maxlength="128">' +
+    '<div class="lit-auth-msg"></div><button class="lit-auth-go" data-auth="login" disabled>Log in</button><button class="lit-auth-link" data-auth="to-signup">Create an account instead</button></div>';
+  else el.innerHTML = '<div class="lit-auth-in">' + logo + '<h1>' + (litAuthMode === 'setpw' ? 'Protect your account' : 'Create your account') + '</h1>' +
+    '<p>' + (litAuthMode === 'setpw' ? 'Choose a password. You’ll use it with your @username to log in on any phone.' : 'Choose the name and @username people will know you by, and a password to log in with.') + '</p>' +
+    '<label>Name</label><input class="lit-auth-name" autocomplete="name" autocapitalize="words" maxlength="30" value="' + escText(p.name || '') + '">' +
+    '<label>Username</label><div class="lit-auth-at"><span>@</span><input class="lit-auth-user" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="30" value="' + escText(p.username || '') + '"' + (litAuthMode === 'setpw' && p.username ? ' readonly' : '') + '></div>' +
+    '<label>Password</label><input class="lit-auth-pw" type="password" autocomplete="new-password" maxlength="128" placeholder="At least 8 characters">' +
+    '<label>Confirm password</label><input class="lit-auth-pw2" type="password" autocomplete="new-password" maxlength="128">' +
+    '<div class="lit-auth-msg"></div><button class="lit-auth-go" data-auth="signup" disabled>' + (litAuthMode === 'setpw' ? 'Save' : 'Create account') + '</button>' +
+    (litAuthMode === 'setpw' ? '' : '<button class="lit-auth-link" data-auth="to-login">I already have an account</button>') +
+    '<div class="lit-auth-note">Your password locks your chat backup - nobody, not even Lockedintool, can see it or reset it. Keep it safe.</div></div>';
+  el.hidden = false; litAuthCheck();
+}
+function litAuthClose(){ const el = document.querySelector('.lit-auth'); if(el) el.remove(); litAuthTemp = null; }
+function litAuthCheck(){
+  const el = document.querySelector('.lit-auth'); if(!el) return;
+  const go = el.querySelector('.lit-auth-go'), msg = el.querySelector('.lit-auth-msg'); if(!go) return;
+  const v = c=>((el.querySelector(c) || {}).value || '');
+  let problem = '', ok;
+  if(litAuthMode === 'login') ok = v('.lit-auth-user').length >= 3 && v('.lit-auth-pw').length >= 1;
+  else {
+    const name = v('.lit-auth-name').trim(), un = v('.lit-auth-user').trim(), pw = v('.lit-auth-pw'), pw2 = v('.lit-auth-pw2');
+    const brand = x=>x.toLowerCase().replace(/[^a-z0-9]/g, '').includes('lockedintool');
+    if(name && brand(name)) problem = 'Only Lockedintool’s own profile can use that name.';
+    else if(un && (usernameProblem(un) || brand(un))) problem = brand(un) ? 'Only Lockedintool’s own profile can use that name.' : usernameProblem(un);
+    else if(pw && pw.length < 8) problem = 'The password needs at least 8 characters.';
+    else if(pw2 && pw !== pw2) problem = 'The passwords don’t match.';
+    ok = !problem && name && un && pw.length >= 8 && pw === pw2;
+  }
+  if(msg && !litAuthBusy) msg.textContent = problem;
+  go.disabled = !ok || litAuthBusy;
+}
+function litAuthSay(t){ const m = document.querySelector('.lit-auth .lit-auth-msg'); if(m) m.textContent = t; }
+function litAuthBusySet(on, label){ litAuthBusy = on; const go = document.querySelector('.lit-auth .lit-auth-go'); if(go){ if(label) go.textContent = label; go.disabled = on; } if(!on) litAuthCheck(); }
+async function litAuthAct(k){
+  if(k === 'to-signup' || k === 'to-login'){ litAuthMode = k === 'to-login' ? 'login' : 'signup'; litAuthOpen(litAuthMode); return; }
+  if(litAuthBusy) return;
+  const el = document.querySelector('.lit-auth'); if(!el) return;
+  const v = c=>((el.querySelector(c) || {}).value || '');
+  document.activeElement && document.activeElement.blur && document.activeElement.blur();
+  if(k === 'login'){
+    const username = v('.lit-auth-user').trim(), pw = v('.lit-auth-pw');
+    litAuthBusySet(true, 'Logging in…'); litAuthSay('');
+    try{
+      const salt = (await (await fetch(MSG_API + '/v1/login/salt?u=' + encodeURIComponent(username))).json()).salt;
+      const auth = await litAuthKey(pw, salt);
+      const r = await fetch(MSG_API + '/v1/login', { method:'POST', headers:{ 'content-type':'application/json' }, body: JSON.stringify({ username, auth }) });
+      const j = await r.json().catch(()=>({}));
+      if(!r.ok){ litAuthBusySet(false, 'Log in'); litAuthSay(j.error === 'locked' ? 'Too many tries - wait 15 minutes and try again.' : j.error === 'wrong' ? 'That @username or password isn’t right.' : 'No connection to Lockedintool right now.'); return; }
+      const bk = await litBackupKey(pw, j.bksalt);
+      if(j.keybox){ const keys = await litKeysFromBox(bk, j.keybox); await keysPut({ priv: keys.priv, pub: keys.pub }); }
+      await litKeyPut('bk', bk);
+      try{ await litBackupRestore(bk, j.backup); }catch(e){ showToast('Couldn’t bring back your chats this time'); }
+      // Your profile comes back from the server (bio and About too), so nothing on it is lost.
+      let prof = {}; try{ const pr = await fetch(MSG_API + '/v1/profile?id=' + encodeURIComponent(j.id), { headers:{ authorization:'Bearer ' + j.token } }); if(pr.ok) prof = await pr.json(); }catch(e){}
+      saveProfileData({ name: j.name || '', username: j.username || username, bio: prof.bio || '', about: prof.about || '' });
+      setMsgAccount({ id: j.id, token: j.token, pw: true });
+      try{ localStorage.removeItem('story-signed-out'); }catch(e){}
+      litAuthDone('Welcome back');
+    }catch(e){ litAuthBusySet(false, 'Log in'); litAuthSay('Couldn’t log in - check your connection and try again.'); }
+    return;
+  }
+  if(k === 'signup'){
+    const name = v('.lit-auth-name').trim(), username = v('.lit-auth-user').trim(), pw = v('.lit-auth-pw');
+    const setpw = litAuthMode === 'setpw';
+    litAuthBusySet(true, setpw ? 'Saving…' : 'Creating…'); litAuthSay('');
+    try{
+      const pwsalt = litRand(18), bksalt = litRand(18);
+      const [auth, bk] = await Promise.all([litAuthKey(pw, pwsalt), litBackupKey(pw, bksalt)]);
+      const keys = await litNewKeys(bk);
+      // The account: an existing one (setting its password) or a new one (made once - kept if the @username is taken).
+      let acct = setpw ? msgAccount() : litAuthTemp;
+      if(!acct){ const r = await fetch(MSG_API + '/v1/register', { method:'POST', headers:{ 'content-type':'application/json' }, body: JSON.stringify({ pub: keys.pub }) }); const j = await r.json(); if(!r.ok) throw Object.assign(new Error(j.error || 'register'), { code: j.error }); acct = litAuthTemp = { id: j.id, token: j.token }; }
+      const call = async (path, body)=>{ const r = await fetch(MSG_API + path, { method:'POST', headers:{ 'content-type':'application/json', authorization:'Bearer ' + acct.token }, body: JSON.stringify(body) }); const j = await r.json().catch(()=>({})); if(!r.ok) throw Object.assign(new Error(j.error || 'server'), { code: j.error }); return j; };
+      const me = await call('/v1/me', { name, username, pub: keys.pub });
+      await call('/v1/auth/set', { auth, pwsalt, bksalt, keybox: keys.keybox });
+      await keysPut({ priv: keys.priv, pub: keys.pub }); await litKeyPut('bk', bk);
+      profileLocksSave(me); saveProfileData({ name: me.name || name, username: me.username || username });
+      setMsgAccount({ id: acct.id, token: acct.token, pw: true });
+      try{ localStorage.removeItem('story-signed-out'); }catch(e){}
+      litAuthDone(setpw ? 'Your account is protected' : 'Welcome to Lockedintool');
+    }catch(e){
+      litAuthBusySet(false, setpw ? 'Save' : 'Create account');
+      litAuthSay(e.code === 'username-taken' ? '@' + username + ' is taken - try another.' : e.code === 'reserved' ? 'Only Lockedintool’s own profile can use that name.' : e.code === 'username' ? (usernameProblem(username) || 'That @username can’t be used.') : e.code === 'too-many' ? 'Too many new accounts from here - try again later.' : 'Couldn’t finish - check your connection and try again.');
+    }
+  }
+}
+function litAuthDone(msg){
+  litAuthBusy = false; litAuthClose(); showToast(msg);
+  if(MSG_ENGINE){ setTimeout(()=>location.reload(), 300); }
+  else if(typeof renderDevice === 'function' && document.getElementById('content-area')) renderDevice();
+}
+// Log out (owner: not deleting): your chats are backed up (locked) first, then this phone forgets the account - your
+// Pages, notes and money stay on the phone - and Lockedintool opens on Log in / Create your account.
+function litLogoutSheet(){
+  const a = msgAccount(), p = profileData();
+  litSheet({ title:'Log out?', text: 'Your chats are backed up, locked with your password - log in with @' + (p.username || '') + ' and your password to get them back, on this phone or another. Your Pages, notes and money stay on this phone.',
+    items:[{ label:'Log out', danger:true, fn: async ()=>{
+      showToast('Logging out…');
+      try{ localStorage.setItem('story-logout-now', String(Date.now())); }catch(e){}   // Profile's window (the connection) backs up and signs out
+      if(MSG_ENGINE) await litLogoutHere();
+      else setTimeout(()=>{ if(msgAccount()) litLogoutHere(); }, 15000);   // no connection window answered: sign out from here
+    } }] });
+}
+async function litLogoutHere(){
+  if(litSignedIn()){ try{ await litBackupNow(); }catch(e){} try{ await msgApi('/v1/logout', {}); }catch(e){} }
+  litSignedOut();
+}
+// Signed out (logged out here, or logged in on another phone): the account leaves this phone; the Pages stay.
+function litSignedOut(){
+  delAccountForget();
+  try{ localStorage.setItem('story-signed-out', String(Date.now())); }catch(e){}
+  if(MSG_ENGINE){ try{ if(msgWs) msgWs.close(); }catch(e){} try{ indexedDB.deleteDatabase('story-keys'); }catch(e){} setTimeout(()=>location.reload(), 400); }
+  else litAuthGate();
+}
+window.addEventListener('storage', e=>{
+  if(e.key === 'story-logout-now' && e.newValue && MSG_ENGINE) litLogoutHere();
+  if(e.key === 'story-signed-out' && e.newValue){ if(MSG_ENGINE){ try{ if(msgWs) msgWs.close(); }catch(err){} setTimeout(()=>location.reload(), 300); } else litAuthGate(); }
+  if(e.key === MSG_ACCOUNT_KEY && !MSG_ENGINE){ if(litSignedIn()) litAuthClose(); else litAuthGate(); }
+});
+// First thing, for everyone (owner): the Pages open on Create your account / Log in until you're signed in.
+function litAuthGate(){
+  const pagesWindow = !/[?&](s3|widget)=/.test(location.search) && !document.documentElement.classList.contains('story-widget');
+  if(pagesWindow && !litSignedIn()) litAuthOpen();
+}
+setTimeout(litAuthGate, 0);
 const CM_ALWAYS_KEY = 'story-community-always-mine';
 function cmAlwaysMine(){ try{ return localStorage.getItem(CM_ALWAYS_KEY) === '1'; }catch(e){ return false; } }
 function cmPrivate(){ return typeof profilePrivacy === 'function' && profilePrivacy() === 'private'; }
