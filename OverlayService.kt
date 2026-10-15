@@ -158,6 +158,7 @@ class OverlayService : Service(), StoryBridge.Host {
         pickLayer()
         addBubble()
         addBar()
+        ui.postDelayed(topLayerCheck, 15_000)   // still no accessibility layer by then: say so (Station 3 can't stay on top)
         ui.post { warmUp() }  // build both panes now so Station 3 and Pages open instantly
         ui.postDelayed(updateLoop, 15_000)  // then look for a new STORY version in the background
         Updater.schedule(this)              // and keep checking every 15 minutes even if STORY is off
@@ -252,12 +253,28 @@ class OverlayService : Service(), StoryBridge.Host {
         p.web.loadUrl(remoteBase() + "?" + (if (p.lock) "s3=1&dial=1&lock=1&" else if (p.gap) "s3=1&profile=1&gap=1&" else if (p.profile) "s3=1&profile=1&" else if (p.dial) "s3=1&dial=1&" else if (p.small) "s3=1&" else "") + "v=" + System.currentTimeMillis())
     }
 
+    private var relayerPending = false
+    private val topLayerCheck = Runnable { topLayerWarn() }
+    /** Without Lockedintool system actions (the accessibility switch) Station 3 sits in the normal layer, where the
+     *  keyboard and some screens cover it - say so once, with a tap straight to the switch. */
+    private fun topLayerWarn() {
+        val nm = getSystemService(NotificationManager::class.java) ?: return
+        if (StoryAccessibilityService.instance != null) { runCatching { nm.cancel(7) }; return }
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) return
+        if (nm.getNotificationChannel("story_alerts") == null) nm.createNotificationChannel(NotificationChannel("story_alerts", "Alerts", NotificationManager.IMPORTANCE_DEFAULT))
+        val open = android.app.PendingIntent.getActivity(this, 7, Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), android.app.PendingIntent.FLAG_IMMUTABLE)
+        val n = android.app.Notification.Builder(this, "story_alerts").setSmallIcon(android.R.drawable.stat_sys_warning)
+            .setContentTitle("Station 3 can't stay on top").setContentText("Turn Lockedintool system actions back on - tap here")
+            .setContentIntent(open).setAutoCancel(true).build()
+        runCatching { nm.notify(7, n) }
+    }
     private fun rebuildLayer() {
         screensSeen = null
         val s3WasOpen = s3Pane?.shown == true
         tearDownPanes()
         pickLayer(); addBubble(); warmUp()
         if (s3WasOpen) showPanel(station3Only = true)
+        ui.removeCallbacks(topLayerCheck); ui.postDelayed(topLayerCheck, if (layerType == WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY) 0L else 15000L)
     }
     private fun tearDownPanes() {
         removePanelNow()
@@ -1049,6 +1066,12 @@ class OverlayService : Service(), StoryBridge.Host {
         val where = QuickAccess.where(this)
         var on = QuickAccess.station3On(this) && when (where) { "pages" -> pagesUp; "apps" -> !pagesUp; else -> true }
         if (aodShowing() && !QuickAccess.s3Aod(this)) on = false
+        // Station 3 must stay on top everywhere (owner): it can only sit above the keyboard and every app's screen in
+        // the accessibility layer. If that layer came back (the system re-connected Lockedintool system actions) while
+        // Station 3 was still in the normal layer, move everything up at once.
+        if (StoryAccessibilityService.instance != null && layerType != WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY && !relayerPending) {
+            relayerPending = true; ui.post { relayerPending = false; rebuildLayer() }
+        }
         if (!on && s3Pane?.shown == true) closeStation3Now()
         bubble?.visibility = if (on) View.VISIBLE else View.INVISIBLE
         bubbleLp?.let { lp ->

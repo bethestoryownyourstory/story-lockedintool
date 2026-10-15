@@ -470,7 +470,7 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
 
     /** Station 3's + (Create & post): Create opens in the same window, the real camera underneath it. */
     @JavascriptInterface
-    fun toggleCreate() { if (station3) host.toggleCreate() }
+    fun toggleCreate() { if (station3 || profile) host.toggleCreate() }
 
     /** Station 3's call history button: Call history in the same window; its list (every call made from STORY). */
     @JavascriptInterface
@@ -478,7 +478,7 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
 
     /** Station 3's Updates button: Updates (statuses, profiles, search) in the same window. */
     @JavascriptInterface
-    fun toggleUpdates() { if (station3) host.toggleUpdates() }
+    fun toggleUpdates() { if (station3 || profile) host.toggleUpdates() }
 
     /** Station 3's Rows / Page Styles buttons (on the Pages): do it on the Pages. */
     @JavascriptInterface
