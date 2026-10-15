@@ -7220,7 +7220,8 @@ const STORY_OWNER = /\/preview\//.test(location.pathname);
 function subState(){ try{ return JSON.parse(localStorage.getItem(SUB_KEY) || 'null'); }catch(e){ return null; } }
 function subSave(v){ try{ localStorage.setItem(SUB_KEY, JSON.stringify(Object.assign({}, v, { checked:Date.now() }))); }catch(e){} }
 function subActive(){ const s = subState(); return !!(s && s.plan && s.until > Date.now()); }
-function subLocked(){ const s = subState(); return !!(s && s.connected) && !subActive() && !STORY_OWNER; }
+// The paywall only shows once the owner switches it on (server secret SUB_ENFORCE=1, with live Stitch keys - owner).
+function subLocked(){ const s = subState(); return !!(s && s.connected && s.enforced) && !subActive() && !STORY_OWNER; }
 function subPremium(){ const s = subState(); return STORY_OWNER || !(s && s.connected) || (subActive() && s.plan === 'premium'); }
 function subRefresh(force){
   if(!msgAccount() || IN_STATION3_WINDOW) return;
