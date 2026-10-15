@@ -2305,6 +2305,20 @@
   #story-profile .pf-pv-d{ margin-top:3px; font-size:12px; line-height:1.4; color:var(--pf-muted); }
   #story-profile .pf-pv-dot{ flex:none; width:20px; height:20px; margin-top:1px; border-radius:50%; border:2px solid var(--pf-muted); box-sizing:border-box; }
   #story-profile .pf-pv-opt.on .pf-pv-dot{ border-color:var(--pf-fg); background:radial-gradient(circle, var(--pf-fg) 0 4.5px, transparent 5px); }
+  #story-profile .up-p-more{ margin-left:auto; flex:none; }
+  #story-profile .pf-menu button.pf-menu-danger{ color:#ff3b30; }
+  #story-profile .pf-del-list{ margin:4px 2px 14px; padding-left:18px; font-size:13px; line-height:1.55; color:var(--pf-fg); }
+  #story-profile .pf-del-in{ width:100%; box-sizing:border-box; padding:12px 14px; border-radius:12px; border:1px solid var(--pf-hair); background:transparent; color:var(--pf-fg); font:inherit; font-size:15px; outline:none; letter-spacing:1px; }
+  #story-profile .pf-del-go{ width:100%; margin-top:12px; padding:13px; border-radius:12px; border:none; background:#ff3b30; color:#fff; font:inherit; font-size:14px; font-weight:800; }
+  #story-profile .pf-del-go[disabled]{ opacity:0.4; }
+  #story-profile .pf-rep{ border-top:1px solid var(--pf-hair); padding:12px 2px; font-size:13px; }
+  #story-profile .pf-rep-k{ font-weight:800; }
+  #story-profile .pf-rep-m{ color:var(--pf-muted); font-size:12px; margin-top:2px; line-height:1.4; word-break:break-word; }
+  #story-profile .pf-rep-look{ margin-top:6px; padding:8px 10px; border:1px solid var(--pf-hair); border-radius:10px; white-space:pre-wrap; word-break:break-word; }
+  #story-profile .pf-rep-look img{ display:block; max-width:100%; max-height:220px; border-radius:8px; margin-top:6px; }
+  #story-profile .pf-rep-btns{ display:flex; gap:8px; margin-top:8px; }
+  #story-profile .pf-rep-btns button{ flex:1; padding:9px 0; border-radius:10px; border:1px solid var(--pf-fg); background:transparent; color:var(--pf-fg); font:inherit; font-size:12px; font-weight:700; }
+  #story-profile .pf-rep-btns button.danger{ border-color:#ff3b30; color:#ff3b30; }
   #story-profile .up-p-locked{ display:flex; flex-direction:column; align-items:center; gap:8px; padding:28px 0 8px; color:var(--pf-muted); font-size:14px; text-align:center; }
   #story-profile .up-p-locked b{ color:var(--pf-fg); font-size:15px; }
   #story-profile .pf-stats{ display:flex; margin:22px 0 18px; }
@@ -3267,6 +3281,20 @@
   /* Stacked layout: Trending groups (top) -> Community groups (middle, the main focus, sized
      up) -> Stories (bottom), each a full-width section rather than the old two-column split. */
   .community-stack{ display:flex; flex-direction:column; gap:22px; }
+  /* Block / Report / Blocked people sheet (owner): one sheet for every window (Profile's and the Pages). Kept above the
+     bottom 40px (Station 3's band). */
+  .lit-sheet-bg, #story-profile .lit-sheet-bg{ position:fixed; inset:0; z-index:999990; background:rgba(0,0,0,0.6); display:flex; align-items:flex-end; justify-content:center; }
+  .lit-sheet, #story-profile .lit-sheet{ width:100%; max-width:520px; max-height:80%; overflow-y:auto; box-sizing:border-box; background:#000000; color:#ffffff; border:1px solid #333333; border-bottom:none;
+    border-radius:18px 18px 0 0; padding:14px 16px 56px; font-family:inherit; scrollbar-width:none; }
+  .lit-sheet::-webkit-scrollbar, #story-profile .lit-sheet::-webkit-scrollbar{ display:none; }
+  .lit-sheet-t, #story-profile .lit-sheet-t{ font-size:15px; font-weight:800; margin:2px 4px 4px; }
+  .lit-sheet-d, #story-profile .lit-sheet-d{ font-size:12px; color:#8b8b92; line-height:1.45; margin:0 4px 10px; }
+  .lit-sheet button, #story-profile .lit-sheet button{ display:block; width:100%; text-align:left; padding:13px 4px; border:none; border-top:1px solid #222222; background:transparent; color:#ffffff; font:inherit; font-size:14px; font-weight:600; cursor:pointer; }
+  .lit-sheet button:active, #story-profile .lit-sheet button:active{ opacity:0.6; }
+  .lit-sheet button.danger, #story-profile .lit-sheet button.danger{ color:#ff3b30; }
+  .lit-sheet button.cancel, #story-profile .lit-sheet button.cancel{ color:#8b8b92; text-align:center; }
+  .community-report-btn{ margin-left:auto; }
+  .community-comment-report{ border:none; background:transparent; color:var(--muted); font:inherit; font-size:10px; padding:0 0 0 6px; cursor:pointer; }
   /* Community (owner): Your Community | Publics community, side by side like Layouts' Dashboard | Pages. */
   .cm-tabs{ margin-top:6px; }
   .cm-tabs .layouts-tab{ min-width:0; padding:9px 8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -7536,6 +7564,51 @@ function pvRender(){
   const v = profilePrivacy();
   el.querySelectorAll('.pf-pv-opt').forEach(o=>o.classList.toggle('on', o.getAttribute('data-v') === v));
 }
+// Reports (owner): only Lockedintool's official profile sees them - remove the content, ban the account, or dismiss.
+const REP_REASON = Object.fromEntries(LIT_REASONS_FOR_REPORTS());
+function LIT_REASONS_FOR_REPORTS(){ return [['spam', 'Spam'], ['scam', 'Scam or fraud'], ['abuse', 'Bullying or harassment'], ['hate', 'Hate speech'], ['violence', 'Violence or threats'], ['nudity', 'Nudity or sexual content'], ['other', 'Something else']]; }
+function repRender(list){
+  const box = document.querySelector('#story-profile .pf-rep-list'); if(!box) return;
+  if(!list){ box.innerHTML = '<div class="pf-ed-note">Loading…</div>'; return; }
+  if(!list.length){ box.innerHTML = '<div class="pf-ed-note">No reports to look at.</div>'; return; }
+  const removable = { status:1, post:1, comment:1, gpost:1, gcomment:1, group:1 };
+  box.innerHTML = list.map(r=>'<div class="pf-rep"><div class="pf-rep-k">' + escText((k=>k.charAt(0).toUpperCase() + k.slice(1))(r.kind === 'gpost' ? 'group post' : r.kind === 'gcomment' ? 'group comment' : r.kind)) + ' · ' + escText(REP_REASON[r.reason] || r.reason) + '</div>' +
+    '<div class="pf-rep-m">By ' + escText(r.by) + ' · about ' + escText(r.ownerName) + ' · ' + escText(msgTime(r.at)) + '</div>' +
+    '<div class="pf-rep-look">' + escText(r.look) + (r.media ? '<img alt="" src="' + escText(r.media) + '">' : '') + '</div>' +
+    (r.text ? '<div class="pf-rep-m">Their messages:\n' + escText(r.text) + '</div>' : '') +
+    '<div class="pf-rep-btns">' + (removable[r.kind] && !r.gone ? '<button data-pf="rep-act" data-a="remove" data-id="' + escText(r.id) + '">Remove it</button>' : '') +
+    '<button class="danger" data-pf="rep-act" data-a="ban" data-id="' + escText(r.id) + '">Ban account</button><button data-pf="rep-act" data-a="dismiss" data-id="' + escText(r.id) + '">Dismiss</button></div></div>').join('');
+}
+async function repLoad(){ repRender(null); try{ repRender((await msgApi('/v1/reports')).reports || []); }catch(e){ const box = document.querySelector('#story-profile .pf-rep-list'); if(box) box.innerHTML = '<div class="pf-ed-note">' + (e.code === 'official' ? 'Only Lockedintool’s official profile sees reports.' : 'No connection right now') + '</div>'; } }
+async function repAct(id, a, sure){
+  if(a === 'ban' && !sure){ litSheet({ title:'Ban this account?', text:'It is deleted with everything it posted. This can’t be undone.', items:[{ label:'Ban account', danger:true, fn: ()=>repAct(id, a, true) }] }); return; }
+  try{ repRender((await msgApi('/v1/reports/act', { id, action:a })).reports || []); showToast(a === 'remove' ? 'Removed' : a === 'ban' ? 'Account banned' : 'Dismissed'); }
+  catch(e){ showToast('No connection right now'); }
+}
+// Delete account (owner; POPIA): the server deletes everything it keeps about you, then this phone forgets your
+// account, chats and profile. A new, empty account is made the next time you use Messages / Profile (sign-up again).
+document.addEventListener('input', e=>{ const i = e.target.closest && e.target.closest('#story-profile .pf-del-in'); if(i) i.parentNode.querySelector('.pf-del-go').disabled = i.value.trim() !== 'DELETE'; });
+let delBusy = false;
+async function delAccount(){
+  const el = document.getElementById('story-profile'); if(!el || delBusy) return;
+  const d = el.querySelector('.pf-delete'), inp = d.querySelector('.pf-del-in'), go = d.querySelector('.pf-del-go');
+  if(inp.value.trim() !== 'DELETE') return;
+  delBusy = true; go.disabled = true; go.textContent = 'Deleting…';
+  try{
+    if(msgAccount()) await msgApi('/v1/account/delete', { confirm:'DELETE' });
+    try{ if(msgWs) msgWs.close(); }catch(e){}
+    ['story-msg-account', 'story-msg-peers', MSG_KEY, MSG_OUTBOX, 'story-profile', 'story-profile-stats', PF_LOCKS_KEY, 'story-posts', 'story-highlights', 'story-upost-queue',
+     'story-status-seen', 'story-status-remind', 'story-activity', 'story-calls', 'story-privacy', 'story-blocked', 'story-community', 'story-community-chats', 'story-community-always-mine', 'story-sub']
+      .forEach(k=>{ try{ localStorage.removeItem(k); }catch(e){} });
+    msgChatsCache = null;
+    try{ indexedDB.deleteDatabase('story-keys'); }catch(e){}
+    if(NATIVE && window.StoryNative.removeProfilePhoto) try{ window.StoryNative.removeProfilePhoto(); }catch(e){}
+    if(NATIVE && window.StoryNative.setActivityDot) try{ window.StoryNative.setActivityDot(false); }catch(e){}
+    inp.blur(); d.hidden = true; showToast('Your account is deleted');
+    setTimeout(()=>location.reload(), 600);
+  }catch(e){ showToast('Couldn’t delete - check your connection and try again'); go.textContent = 'Delete my account'; go.disabled = false; }
+  delBusy = false;
+}
 function setStoryPrivacy(p){ try{ localStorage.setItem('story-privacy', JSON.stringify(p)); }catch(e){} try{ const q = JSON.parse(localStorage.getItem('story-msg-outbox') || '[]') || []; q.push({ at: Date.now(), type:'privacy', privacy: p }); localStorage.setItem('story-msg-outbox', JSON.stringify(q.slice(-500))); }catch(e){} }
 function privacySettingsHTML(){
   const p = storyPrivacy(), calls = p.calls || 'everyone', picked = p.callPeople || [], status = p.status || 'followers';
@@ -7563,6 +7636,10 @@ function privacySettingsHTML(){
           <button class="theme-opt${status === 'followers' ? ' on' : ''}" data-action="privacy-status" data-value="followers">Followers</button>
           <button class="theme-opt${status === 'nobody' ? ' on' : ''}" data-action="privacy-status" data-value="nobody">No one</button>
         </div>
+      </div>
+      <div class="set2-row set2-link" data-action="privacy-blocked">
+        <div class="set2-text"><div class="set2-name">Blocked people</div><div class="set2-sub">${(n=>n ? n + (n === 1 ? ' person' : ' people') : 'No one')(Object.keys(litBlocked()).length)}</div></div>
+        <span class="chev-right">›</span>
       </div>
     </div>`;
 }
@@ -7616,9 +7693,9 @@ const LEGAL = {
     ['Keeping it safe', [
       'Encryption keys are made on your phone and the private key never leaves it. Broker keys sit in the app’s private storage. Connections to our server are encrypted.' ]],
     ['How long we keep it', [
-      'On your phone: until you delete it or remove the app. On our server: your account until you ask us to delete it; delivered messages are removed; payment records as long as the law requires (usually 5 years).' ]],
+      'On your phone: until you delete it or remove the app. On our server: your account until you delete it (Profile > ⋮ > Delete account - it’s removed at once); delivered messages are removed; reports are kept while they’re reviewed; payment records as long as the law requires (usually 5 years).' ]],
     ['Your rights', [
-      'You can ask to see, correct or delete the information we hold about you by writing to lockedintool@gmail.com. You can also complain to South Africa’s Information Regulator (inforegulator.org.za).' ]],
+      'You can delete your account yourself at any time: Profile > ⋮ > Delete account. It removes your profile, followers, posts, statuses, comments, chats and your place in groups from our server straight away. You can also ask to see, correct or delete the information we hold about you by writing to lockedintool@gmail.com. You can also complain to South Africa’s Information Regulator (inforegulator.org.za).' ]],
     ['Children', [
       'Lockedintool is for people 18 and older because it includes trading and payments.' ]],
     ['Changes', [
@@ -7646,6 +7723,7 @@ const LEGAL = {
     ['Messages, groups and calls', [
       'You own what you post. You let us carry and show it so the app can work (for example, posts in public groups are visible to everyone).',
       'Not allowed: sexual or adult content, harassment, threats, illegal content, scams, malware or anything meant to harm a device or a person. We may remove content and warn, suspend or close accounts that break these rules.',
+      'You can block anyone (they can’t message or call you, see your profile or statuses, or find you - and aren’t told) and report profiles, chats, statuses, posts, comments and groups. Lockedintool reviews every report; the person reported isn’t told who reported them. Reporting a chat sends us the last messages that person sent you, so we can see what happened - nothing else from your chats is ever readable by us.',
       'The dial pad places normal phone calls through your mobile network; your network’s charges apply. For emergencies, use your phone’s own dialer if anything doesn’t work.' ]],
     ['Other services', [
       'Your brokers, TradingView, Stitch, your bank and other apps you open from Lockedintool have their own terms, which apply when you use them.' ]],
@@ -8055,7 +8133,7 @@ window.storyProfileOnly = function(){
         <div class="pf-names"><div class="pf-name">${escText(p.name)}</div><div class="pf-user">@${escText(p.username)}</div></div>
         <div class="pf-head-btns">
           <button class="pf-more" data-pf="menu" aria-label="More">⋮</button>
-          <div class="pf-menu" hidden><button data-pf="menu-privacy">Profile privacy<small></small></button></div>
+          <div class="pf-menu" hidden><button data-pf="menu-privacy">Profile privacy<small></small></button><button data-pf="menu-reports" hidden>Reports<small>Review what people reported</small></button><button class="pf-menu-danger" data-pf="menu-delete">Delete account</button></div>
           <button class="pf-more pf-edit-btn" data-pf="edit" aria-label="Edit profile"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
         </div>
       </div>
@@ -8085,6 +8163,26 @@ window.storyProfileOnly = function(){
       <div class="pf-ed-note">Choose who can see your profile.</div>
       <button class="pf-pv-opt" data-pf="pv-set" data-v="public"><span class="pf-pv-txt"><div class="pf-pv-t">Public</div><div class="pf-pv-d">Everyone can see your profile, and anyone can find it in search.</div></span><span class="pf-pv-dot"></span></button>
       <button class="pf-pv-opt" data-pf="pv-set" data-v="private"><span class="pf-pv-txt"><div class="pf-pv-t">Private</div><div class="pf-pv-d">Only people you follow, people you’ve messaged and people in your groups and communities can see your profile. No one can find it in search.</div></span><span class="pf-pv-dot"></span></button>
+    </div>
+    <div class="pf-scroll pf-reports" hidden>
+      <div class="pf-ed-head"><button class="pf-ed-back" data-pf="rep-back" aria-label="Back">‹</button><div class="pf-ed-title">Reports</div></div>
+      <div class="pf-rep-list"></div>
+    </div>
+    <div class="pf-scroll pf-delete" hidden>
+      <div class="pf-ed-head"><button class="pf-ed-back" data-pf="del-back" aria-label="Back">‹</button><div class="pf-ed-title">Delete account</div></div>
+      <div class="pf-ed-note">This can’t be undone. Deleting your account removes from Lockedintool:</div>
+      <ul class="pf-del-list">
+        <li>Your profile: name, @username, picture, bio and About</li>
+        <li>Your followers and who you follow</li>
+        <li>Your posts, statuses, comments and hearts</li>
+        <li>Your messages and chats on this phone, and any waiting on the server</li>
+        <li>Your community and your place in groups (groups you lead are handed on)</li>
+        <li>Your plan - payments can’t be refunded</li>
+      </ul>
+      <div class="pf-ed-note">Notes, Money, Wallet cards and trading accounts are only on this phone and aren’t part of your account - remove Lockedintool to remove them. Payment records are kept as the law requires.</div>
+      <div class="pf-ed-note">Type DELETE to confirm.</div>
+      <input class="pf-del-in" type="text" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="DELETE" enterkeyhint="done">
+      <button class="pf-del-go" data-pf="del-go" disabled>Delete my account</button>
     </div>
     <div class="pf-scroll pf-field" hidden>
       <div class="pf-ed-head"><button class="pf-ed-back" data-pf="field-back" aria-label="Back">‹</button><div class="pf-ed-title">Name</div><button class="pf-field-save" data-pf="field-save">Save</button></div>
@@ -8149,7 +8247,7 @@ window.storyProfileOnly = function(){
       <div class="pf-msgs-empty up-empty" hidden><div class="pf-msgs-empty-t"></div></div>
     </div>
     <div class="pf-scroll pf-person" hidden>
-      <div class="pf-ed-head"><button class="pf-ed-back" data-pf="up-person-back" aria-label="Back">‹</button><div class="pf-ed-title"></div></div>
+      <div class="pf-ed-head"><button class="pf-ed-back" data-pf="up-person-back" aria-label="Back">‹</button><div class="pf-ed-title"></div><button class="pf-more up-p-more" data-pf="up-p-more" aria-label="More" hidden>⋮</button></div>
       <div class="up-p-body"></div>
     </div>
     <div class="up-viewer" hidden>
@@ -8157,6 +8255,7 @@ window.storyProfileOnly = function(){
       <button class="up-v-tap up-v-prev" data-pf="upv-prev" aria-label="Back"></button>
       <button class="up-v-tap up-v-next" data-pf="upv-next" aria-label="Next"></button>
       <div class="up-v-top"><div class="up-v-bars"></div><div class="up-v-head"><div class="up-v-who"></div>
+        <button class="up-v-btn" data-pf="upv-more" aria-label="More" hidden>⋮</button>
         <button class="up-v-btn" data-pf="upv-delete" aria-label="Delete" hidden><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>
         <button class="up-v-btn" data-pf="upv-close" aria-label="Close">×</button></div></div>
       <div class="up-v-bottom" hidden>
@@ -8232,7 +8331,7 @@ window.storyProfileOnly = function(){
   el.addEventListener('click', e=>{
     const b = e.target.closest('[data-pf]');
     const pfMenu = el.querySelector('.pf-menu');
-    if(pfMenu && !pfMenu.hidden && !(b && (b.getAttribute('data-pf') === 'menu' || b.getAttribute('data-pf') === 'menu-privacy'))) pfMenu.hidden = true;
+    if(pfMenu && !pfMenu.hidden && !(b && /^menu/.test(b.getAttribute('data-pf')))) pfMenu.hidden = true;
     if(!b) return;
     const k = b.getAttribute('data-pf');
     const main = el.querySelector('.pf-home'), ed = el.querySelector('.pf-editor'), viewer = el.querySelector('.pf-viewer');
@@ -8243,7 +8342,19 @@ window.storyProfileOnly = function(){
       viewer.querySelector('img').src = src; viewer.hidden = false;
     }
     else if(k === 'viewer-close') viewer.hidden = true;
-    else if(k === 'menu'){ const m = el.querySelector('.pf-menu'); m.querySelector('small').textContent = profilePrivacy() === 'private' ? 'Private' : 'Public'; m.hidden = !m.hidden; }
+    else if(k === 'menu'){ const m = el.querySelector('.pf-menu'); m.querySelector('[data-pf="menu-reports"]').hidden = !profileLocks().official; m.querySelector('small').textContent = profilePrivacy() === 'private' ? 'Private' : 'Public'; m.hidden = !m.hidden; }
+    else if(k === 'menu-reports'){ el.querySelector('.pf-menu').hidden = true; main.hidden = true; const r = el.querySelector('.pf-reports'); r.hidden = false; r.scrollTop = 0; repLoad(); }
+    else if(k === 'rep-back'){ el.querySelector('.pf-reports').hidden = true; main.hidden = false; }
+    else if(k === 'rep-act') repAct(b.getAttribute('data-id'), b.getAttribute('data-a'));
+    else if(k === 'menu-delete'){ el.querySelector('.pf-menu').hidden = true; main.hidden = true; const d = el.querySelector('.pf-delete'); d.hidden = false; d.scrollTop = 0; d.querySelector('.pf-del-in').value = ''; d.querySelector('.pf-del-go').disabled = true; }
+    else if(k === 'del-back'){ const d = el.querySelector('.pf-delete'); d.querySelector('.pf-del-in').blur(); d.hidden = true; main.hidden = false; }
+    else if(k === 'del-go') delAccount();
+    else if(k === 'up-p-more'){ const p = UP.person; if(p) litPersonSheet(p, { after: ()=>upOpenPerson(p.id) }); }
+    else if(k === 'upv-more'){ const v = UP.view; if(!v) return; const it = v.items[v.i]; upPause();
+      litSheet({ title: upName(v.user), onClose: ()=>{ if(UP.view === v) upShowItem(); }, items: [
+        { label: v.status ? 'Report status' : 'Report post', fn: ()=>litReport(v.status ? 'status' : 'post', it.id, { onClose: ()=>{ if(UP.view === v) upShowItem(); } }) },
+        { label: 'Block ' + litName(v.user), danger:true, fn: ()=>{ if(UP.view === v) upShowItem(); litBlock(v.user, true, ()=>{ upCloseView(); upLoad(); }); } }] }); }
+    else if(k === 'upv-creport') litReport('comment', b.getAttribute('data-id'));
     else if(k === 'menu-privacy'){ el.querySelector('.pf-menu').hidden = true; main.hidden = true; const pv = el.querySelector('.pf-privacy'); pv.hidden = false; pv.scrollTop = 0; pvRender(); }
     else if(k === 'pv-back'){ el.querySelector('.pf-privacy').hidden = true; main.hidden = false; }
     else if(k === 'pv-set'){ const p = storyPrivacy(); p.profile = b.getAttribute('data-v') === 'private' ? 'private' : 'public'; setStoryPrivacy(p); pvRender(); msgFlush(); }
@@ -8346,7 +8457,10 @@ window.storyProfileOnly = function(){
     else if(k === 'call-flip') callFlip();
     else if(k === 'chat-info'){ const c = msgChats().find(x=>x.id === msgView.chat); const sh = document.querySelector('#story-profile .pf-chat-sheet');
       if(c && sh && /^grp/.test(c.id)) groupSheetOpen(sh.hidden);
-      else if(c && sh && c.groupType === 'private' && (c.leaders || []).includes('me')){ sh.hidden = !sh.hidden; renderChat(); } }
+      else if(c && sh && c.groupType === 'private' && (c.leaders || []).includes('me')){ sh.hidden = !sh.hidden; renderChat(); }
+      // Someone's chat: Block / Report (the report carries the last messages they sent you).
+      else if(c && !/^grp/.test(c.id) && c.kind !== 'system') litPersonSheet({ id:c.id, name:c.name, username:c.username }, { chat:true,
+        text: (c.messages || []).filter(m=>m.from === 'them').slice(-5).map(m=>m.text).join('\n') }); }
     else if(k === 'grp-add') groupAdd(b.getAttribute('data-id'));
     else if(k === 'grp-leave') groupLeave();
     else if(k === 'grp-close') groupSheetOpen(false);
@@ -8453,7 +8567,8 @@ window.storyProfileReset = function(){
   el.querySelector('.pf-updates').hidden = true; el.querySelector('.pf-person').hidden = true; UP.person = null;
   el.querySelector('.pf-updates .pf-msgs-search input').value = ''; UP.q = ''; UP.found = null;
   el.querySelector('.cr-pick').hidden = true;
-  el.querySelector('.pf-menu').hidden = true; el.querySelector('.pf-privacy').hidden = true;
+  el.querySelector('.pf-menu').hidden = true; el.querySelector('.pf-privacy').hidden = true; el.querySelector('.pf-reports').hidden = true;
+  const pfDel = el.querySelector('.pf-delete'); pfDel.hidden = true; pfDel.querySelector('.pf-del-in').value = '';
   el.querySelector('.pf-signup').hidden = true;
   const ms = el.querySelector('.pf-msgs .pf-msgs-search input'); if(ms){ ms.value = ''; } msgView.q = ''; msgView.menuFor = null;
   if(crRecording && NATIVE && window.StoryNative.createVideo) window.StoryNative.createVideo(false);
@@ -8767,6 +8882,7 @@ function upRenderPerson(){
   const meId = (msgAccount() || {}).id, isMe = p.id === meId, seen = upSeen();
   const st = p.statuses || [];
   pv.querySelector('.pf-ed-title').textContent = p.username ? '@' + p.username : upName(p);
+  pv.querySelector('.up-p-more').hidden = isMe;
   const posts = p.postList || [];
   if(p.locked){
     // A private profile you're not allowed to see: only who it is (and Follow / Message as their settings allow).
@@ -8806,6 +8922,7 @@ function upShowItem(){
   box.querySelector('.up-v-bars').innerHTML = v.status ? v.items.map((x, i)=>'<span class="up-v-bar' + (i < v.i ? ' done' : '') + '"><i' + (i === v.i ? ' class="run"' : '') + '></i></span>').join('') : '';
   box.querySelector('.up-v-who').innerHTML = upPic(v.user) + '<span class="up-v-name">' + escText(upName(v.user)) + '</span><span class="up-v-time">' + upAgo(it.at) + '</span>';
   box.querySelector('[data-pf="upv-delete"]').hidden = v.user.id !== meId;
+  box.querySelector('[data-pf="upv-more"]').hidden = v.user.id === meId;
   // Statuses (owner): heart it, comment under it, or message the person.
   box.querySelector('.up-v-bottom').hidden = !v.status;
   if(v.status) upVActs();
@@ -8846,7 +8963,8 @@ function upPause(){
 function upCommentsHTML(list){
   if(!list.length) return '<div class="up-v-cempty">No comments yet</div>';
   return list.map(c=>'<div class="up-v-c">' + upPic(c.user) + '<div class="up-v-cmid"><div class="up-v-cwho">' + escText(upName(c.user)) + ' <span>' + upAgo(c.at) + '</span></div><div class="up-v-ctext">' + escText(c.text) + '</div></div>' +
-    (c.canDelete ? '<button class="up-v-cdel" data-pf="upv-uncomment" data-id="' + escText(c.id) + '" aria-label="Delete comment">×</button>' : '') + '</div>').join('');
+    (c.canDelete ? '<button class="up-v-cdel" data-pf="upv-uncomment" data-id="' + escText(c.id) + '" aria-label="Delete comment">×</button>' : '') +
+    (!c.mine ? '<button class="up-v-cdel" data-pf="upv-creport" data-id="' + escText(c.id) + '" aria-label="Report comment"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg></button>' : '') + '</div>').join('');
 }
 async function upComments(op, extra){
   const el = upEl(), v = UP.view; if(!el || !v) return;
@@ -9347,7 +9465,7 @@ async function msgOnServer(m){
   }
   if(m.t === 'typing'){ window.storyMsgTyping(m.chat, m.who || ''); return; }
   if(m.t === 'fail'){
-    for(const c of msgChats()){ const x = (c.messages || []).find(y=>y.id === m.id); if(x){ x.status = 'failed'; saveMsgChats(); renderChat(); showToast(m.error === 'blocked' ? 'They don’t take messages from you' : 'Couldn’t send'); break; } }
+    for(const c of msgChats()){ const x = (c.messages || []).find(y=>y.id === m.id); if(x){ x.status = 'failed'; saveMsgChats(); renderChat(); showToast(m.error === 'blocked' ? (litBlocked()[c.id] ? 'You blocked them - unblock in Settings > Privacy' : 'They don’t take messages from you') : 'Couldn’t send'); break; } }
     return;
   }
   if(m.t === 'release'){ if(NATIVE && window.StoryNative.releaseNow) try{ window.StoryNative.releaseNow(); }catch(e){} return; }   // a new version is live: get it now
@@ -15009,6 +15127,10 @@ function attachHandlers(){
         case 'pay-recv-edit': { const m = state.pay.info && state.pay.info.bank; Object.assign(state.pay.recv, { editing:true, name: m ? m.name : '', bank: m ? m.bank : '', acct:'', msg:'' }); break; }
         case 'pay-recv-cancel': state.pay.recv.editing = false; state.pay.recv.msg = ''; break;
         case 'pay-recv-remove': msgApi('/v1/pay/bank', { remove:true }).then(()=>{ if(state.pay.info) state.pay.info.bank = null; showToast('Removed'); payShow(); }).catch(()=>showToast('Couldn\u2019t remove - try again')); break;
+        case 'privacy-blocked': litBlockedSheet(); return;
+        case 'community-report-group': litReport('group', el.getAttribute('data-groupid')); return;
+        case 'community-report-post': litReport('gpost', el.getAttribute('data-postid')); return;
+        case 'community-report-comment': litReport('gcomment', el.getAttribute('data-cid')); return;
         case 'cm-pick': state.communityMode = el.getAttribute('data-value') === 'public' && !cmPrivate() ? 'public' : 'mine'; break;
         case 'cm-back': if(!cmPrivate()) state.communityMode = null; break;
         case 'cm-always': try{ localStorage.setItem(CM_ALWAYS_KEY, cmAlwaysMine() ? '0' : '1'); }catch(e){} break;
@@ -15511,7 +15633,7 @@ function communityFromServer(v, old){
 }
 function communityPostsFromServer(list){
   return (list || []).map(p=>({ id: p.id, authorName: p.author, timestamp: msgTime(p.at), type: p.image ? 'drawing' : 'note', textContent: p.image ? '' : p.text, caption: p.image ? (p.text || '') : '', imageDataUrl: p.image || null,
-    likes: p.likes, likedByMe: !!p.liked, shares: +p.shares || 0, comments: (p.comments || []).map(c=>({ author: c.author, text: c.text })), commentCount: (p.comments || []).length }));
+    likes: p.likes, likedByMe: !!p.liked, shares: +p.shares || 0, mine: !!p.mine, server: true, comments: (p.comments || []).map(c=>({ id: c.id, mine: !!c.mine, author: c.author, text: c.text })), commentCount: (p.comments || []).length }));
 }
 function upsertCommunityGroup(v){
   if(!v || v.type !== 'public') return null;   // private groups never show in Community (owner)
@@ -15788,6 +15910,64 @@ YOU 🫵 NEXT !!
 // to always open Your Community; the corner button goes back to the choose screen. A PRIVATE account has only Your
 // Community. Your Community = ONE community you make (private group with team:true on the server, locked like a
 // private group, only you add people) shown as one big chat. ----
+// ---- Block / Report (owner) - one sheet for every window. Blocking cuts messages, calls, your profile, statuses,
+// follows and search between you (the server enforces it; they aren't told). Reports go to Lockedintool's official
+// profile, who reviews them (Profile > ⋮ > Reports). ----
+function litSheet(o){
+  document.querySelectorAll('.lit-sheet-bg').forEach(x=>x.remove());
+  const bg = document.createElement('div'); bg.className = 'lit-sheet-bg';
+  const box = document.createElement('div'); box.className = 'lit-sheet';
+  box.innerHTML = (o.title ? '<div class="lit-sheet-t">' + escText(o.title) + '</div>' : '') + (o.text ? '<div class="lit-sheet-d">' + escText(o.text) + '</div>' : '');
+  let closed = false;
+  const close = ()=>{ if(closed) return; closed = true; bg.remove(); if(o.onClose) o.onClose(); };
+  (o.items || []).forEach(it=>{ const b = document.createElement('button'); b.textContent = it.label; if(it.danger) b.className = 'danger';
+    b.addEventListener('click', e=>{ e.stopPropagation(); if(it.keep){ it.fn(b); return; } closed = true; bg.remove(); it.fn(); }); box.appendChild(b); });
+  const c = document.createElement('button'); c.className = 'cancel'; c.textContent = 'Cancel'; c.addEventListener('click', e=>{ e.stopPropagation(); close(); }); box.appendChild(c);
+  box.addEventListener('click', e=>e.stopPropagation()); bg.addEventListener('click', close);
+  // Profile's window shows nothing outside #story-profile, so the sheet goes inside it there.
+  bg.appendChild(box); (document.getElementById('story-profile') || document.body).appendChild(bg);
+  return close;
+}
+const LIT_REASONS = [['spam', 'Spam'], ['scam', 'Scam or fraud'], ['abuse', 'Bullying or harassment'], ['hate', 'Hate speech'], ['violence', 'Violence or threats'], ['nudity', 'Nudity or sexual content'], ['other', 'Something else']];
+function litReport(kind, id, opts){
+  opts = opts || {};
+  const what = { profile:'profile', chat:'chat', status:'status', post:'post', comment:'comment', gpost:'post', gcomment:'comment', group:'group' }[kind] || 'this';
+  litSheet({ title: 'Report ' + what, text: 'Why are you reporting it? Lockedintool reviews every report and doesn’t tell them who reported it.' + (kind === 'chat' ? ' The last messages they sent you go with the report, so Lockedintool can see what happened.' : ''),
+    onClose: opts.onClose,
+    items: LIT_REASONS.map(([k, label])=>({ label, fn: ()=>{
+      msgApi('/v1/report', { kind, id, reason:k, text: opts.text || '' })
+        .then(()=>showToast('Thanks - Lockedintool will look at it'))
+        .catch(e=>showToast(e.code === 'slow' ? 'Too many reports - try again later' : e.code === 'notfound' ? 'It’s already gone' : 'No connection to Lockedintool right now'))
+        .finally(()=>{ if(opts.onClose) opts.onClose(); }); } })) });
+}
+function litBlocked(){ try{ return JSON.parse(localStorage.getItem('story-blocked') || '{}') || {}; }catch(e){ return {}; } }
+function litSetBlocked(id, u){ const b = litBlocked(); if(u) b[id] = { name: u.name || '', username: u.username || '' }; else delete b[id]; try{ localStorage.setItem('story-blocked', JSON.stringify(b)); }catch(e){} }
+function litName(u){ return (u && (u.name || (u.username ? '@' + u.username : ''))) || 'them'; }
+function litBlock(u, on, after){
+  if(!u || !u.id) return;
+  const go = ()=>msgApi('/v1/block', { id: u.id, on })
+    .then(()=>{ litSetBlocked(u.id, on ? u : null); showToast(on ? 'Blocked' : 'Unblocked'); if(after) after(); })
+    .catch(()=>showToast('No connection to Lockedintool right now'));
+  if(!on){ go(); return; }
+  litSheet({ title: 'Block ' + litName(u) + '?', text: 'They won’t be able to message or call you, see your profile or statuses, or find you - and you won’t see theirs. They aren’t told. You can unblock them in Settings > Privacy.',
+    items: [{ label:'Block', danger:true, fn: go }] });
+}
+// A person: Block / Unblock and Report (chat reports carry their last messages).
+function litPersonSheet(u, opts){
+  opts = opts || {};
+  const isB = !!litBlocked()[u.id];
+  litSheet({ title: litName(u), onClose: opts.onClose, items: [
+    { label: isB ? 'Unblock' : 'Block', danger: !isB, fn: ()=>{ litBlock(u, !isB, opts.after); if(opts.onClose && !isB) {} } },
+    { label: opts.chat ? 'Report chat' : 'Report profile', fn: ()=>litReport(opts.chat ? 'chat' : 'profile', u.id, { text: opts.text || '', onClose: opts.onClose }) }] });
+}
+function litBlockedSheet(){
+  msgApi('/v1/blocks').then(r=>{
+    const list = r.people || [];
+    const b = {}; list.forEach(p=>{ b[p.id] = { name:p.name, username:p.username }; }); try{ localStorage.setItem('story-blocked', JSON.stringify(b)); }catch(e){}
+    litSheet({ title:'Blocked people', text: list.length ? 'Tap someone to unblock them.' : 'You haven’t blocked anyone.',
+      items: list.map(p=>({ label: 'Unblock ' + litName(p), keep:true, fn: btn=>{ btn.disabled = true; litBlock(p, false, ()=>{ btn.textContent = litName(p) + ' - unblocked'; }); } })) });
+  }).catch(()=>showToast('No connection to Lockedintool right now'));
+}
 const CM_ALWAYS_KEY = 'story-community-always-mine';
 function cmAlwaysMine(){ try{ return localStorage.getItem(CM_ALWAYS_KEY) === '1'; }catch(e){ return false; } }
 function cmPrivate(){ return typeof profilePrivacy === 'function' && profilePrivacy() === 'private'; }
@@ -15957,6 +16137,7 @@ function communityGroupScreen(){
         ${g.banned ? `<span class="community-group-badge warn">Banned</span>` : ''}
         ${g.id !== 'g-stories' ? communityGroupJoinActionHTML(g) : ''}
         ${g.id !== 'g-stories' ? `<button class="community-join-btn" data-action="community-share-group" data-groupid="${g.id}">Share</button>` : ''}
+        ${g.id !== 'g-stories' && g.server && !isLeader ? `<button class="community-join-btn" data-action="community-report-group" data-groupid="${escText(g.id)}">Report</button>` : ''}
         ${(isMember || isLeader) && g.id !== 'g-stories' && !g.liveCall ? `<button class="community-join-btn community-call-btn" data-action="community-group-call" data-groupid="${g.id}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/></svg> Call</button>` : ''}
       </div>
     </div>
@@ -16151,10 +16332,11 @@ function communityPostCardHTML(p, groupId){
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
           <span>${formatCount(p.shares||0)}</span>
         </button>
+        ${p.server && !p.mine ? `<button class="community-action-btn community-report-btn" data-action="community-report-post" data-postid="${escText(p.id)}" title="Report" aria-label="Report"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg></button>` : ''}
       </div>
       ${commentsOpen ? `
       <div class="community-comments">
-        ${p.comments.map(c=>`<div class="community-comment"><span class="community-comment-author">${escText(c.author)}</span> <span class="community-comment-text">${escText(c.text)}</span></div>`).join('')}
+        ${p.comments.map(c=>`<div class="community-comment"><span class="community-comment-author">${escText(c.author)}</span> <span class="community-comment-text">${escText(c.text)}</span>${c.id && !c.mine ? `<button class="community-comment-report" data-action="community-report-comment" data-cid="${escText(c.id)}">Report</button>` : ''}</div>`).join('')}
         <div class="community-comment-input-row">
           <input id="community-comment-input-${p.id}" class="community-comment-input" placeholder="Add a comment…" maxlength="200">
           <button class="community-comment-send" data-action="community-comment-submit" data-postid="${p.id}">Post</button>

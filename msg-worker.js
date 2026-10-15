@@ -85,6 +85,11 @@ export class Hub {
     this.sql.exec(`CREATE TABLE IF NOT EXISTS ulikes (pid TEXT, uid TEXT, at INTEGER, PRIMARY KEY (pid, uid))`);
     // Who you've messaged (Profile privacy: a private profile shows to people its owner has messaged).
     this.sql.exec(`CREATE TABLE IF NOT EXISTS contacts (uid TEXT, cid TEXT, at INTEGER, PRIMARY KEY (uid, cid))`);
+    // Block (owner): either side blocking cuts messages, calls, profiles, statuses, follows and search between the two.
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS blocks (uid TEXT, bid TEXT, at INTEGER, PRIMARY KEY (uid, bid))`);
+    // Reports (owner): anyone can report a profile / status / post / comment / group post / public group / chat;
+    // the official profile reviews them (remove the content, ban the account, or dismiss).
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS reports (id TEXT PRIMARY KEY, uid TEXT, kind TEXT, target TEXT, owner TEXT, reason TEXT, text TEXT, at INTEGER, status TEXT)`);
     this.sql.exec(`CREATE TABLE IF NOT EXISTS ucomments (id TEXT PRIMARY KEY, pid TEXT, uid TEXT, text TEXT, at INTEGER)`);
     this.sql.exec(`CREATE INDEX IF NOT EXISTS ucomments_pid ON ucomments(pid, at)`);
     // STORY's own Stories feed (Community > Stories): one shared public group everyone posts their stories to.
@@ -99,13 +104,16 @@ export class Hub {
   // you follow, people you've messaged and people in a group / community with you can see it; no one can find it.
   isPrivate(u) { return this.privacy(u).profile === 'private'; }
   canSeeProfile(viewer, owner) {
-    if (!viewer || viewer.id === owner.id || !this.isPrivate(owner)) return true;
+    if (!viewer || viewer.id === owner.id) return true;
+    if (this.blocked(viewer.id, owner.id)) return false;
+    if (!this.isPrivate(owner)) return true;
     return this.follows(owner.id, viewer.id)
       || !!this.one('SELECT 1 AS x FROM contacts WHERE uid = ? AND cid = ?', owner.id, viewer.id)
       || !!this.one('SELECT 1 AS x FROM gmembers a JOIN gmembers b ON a.gid = b.gid WHERE a.uid = ? AND b.uid = ? LIMIT 1', owner.id, viewer.id);
   }
-  canCall(from, to) { const p = this.privacy(to); return p.calls === 'everyone' || (p.calls === 'people' && (p.callPeople || []).includes(from.id)); }
-  canMsg(from, to) { const p = this.privacy(to); return p.messages !== 'none' && p.messages !== 'nobody'; }
+  blocked(a, b) { return !!(a && b && a !== b && this.one('SELECT 1 AS x FROM blocks WHERE (uid = ? AND bid = ?) OR (uid = ? AND bid = ?) LIMIT 1', a, b, b, a)); }
+  canCall(from, to) { if (this.blocked(from.id, to.id)) return false; const p = this.privacy(to); return p.calls === 'everyone' || (p.calls === 'people' && (p.callPeople || []).includes(from.id)); }
+  canMsg(from, to) { if (this.blocked(from.id, to.id)) return false; const p = this.privacy(to); return p.messages !== 'none' && p.messages !== 'nobody'; }
   pubView(u, me) { const see = this.canSeeProfile(me, u); return { id: u.id, name: u.name || '', username: u.username || '', pub: u.pub, canCall: me ? this.canCall(me, u) : true, canMsg: me ? this.canMsg(me, u) : true, canPay: !!this.one('SELECT uid FROM paybank WHERE uid = ?', u.id), photo: see ? this.mediaUrl(u.photo) : '', about: see ? u.about || '' : '', official: !!u.official, locked: !see }; }
 
   async fetch(req) {
@@ -142,6 +150,12 @@ export class Hub {
       if (path === '/v1/follow') return this.follow(me, body);
       if (path === '/v1/profile') return this.profile(me, url.searchParams.get('id') || me.id);
       if (path === '/v1/updates') return this.updates(me);
+      if (path === '/v1/block') return this.block(me, body);
+      if (path === '/v1/blocks') return this.blocksOf(me);
+      if (path === '/v1/report') return this.report(me, body);
+      if (path === '/v1/reports') return this.reportsList(me);
+      if (path === '/v1/reports/act') return this.reportAct(me, body);
+      if (path === '/v1/account/delete') { if (body.confirm !== 'DELETE') return json({ error: 'confirm' }, 400); this.deleteUser(me.id); return json({ ok: true }); }
       if (path.startsWith('/v1/uposts/')) return this.uposts(me, path.slice(11), body);
       if (path === '/v1/user') { const u = this.one('SELECT * FROM users WHERE id = ?', url.searchParams.get('id') || ''); return u ? json(this.pubView(u, me)) : json({ error: 'notfound' }, 404); }
       return json({ error: 'notfound' }, 404);
@@ -261,7 +275,7 @@ export class Hub {
     const rows = this.sql.exec(
       `SELECT * FROM users WHERE id != ? AND (username LIKE ? ESCAPE '\\' OR (? = 0 AND lower(name) LIKE ? ESCAPE '\\'))
        ORDER BY (username = ?) DESC, (username LIKE ? ESCAPE '\\') DESC, (lower(name) LIKE ? ESCAPE '\\') DESC, name LIMIT 80`,
-      me.id, like, t.startsWith('@') ? 1 : 0, like, un, start, start).toArray().filter(u => !this.isPrivate(u)).slice(0, 20);  // a private profile is never found
+      me.id, like, t.startsWith('@') ? 1 : 0, like, un, start, start).toArray().filter(u => !this.isPrivate(u) && !this.blocked(me.id, u.id)).slice(0, 20);  // a private profile is never found
     return json({ people: rows.map(u => Object.assign(this.pubView(u, me), { isFollowing: this.follows(me.id, u.id) })) });
   }
 
@@ -330,7 +344,7 @@ export class Hub {
   }
   follow(me, b) {
     const u = this.one('SELECT * FROM users WHERE id = ?', String(b.id || ''));
-    if (!u || u.id === me.id) return json({ error: 'notfound' }, 404);
+    if (!u || u.id === me.id || this.blocked(me.id, u.id)) return json({ error: 'notfound' }, 404);
     if (b.on === false) this.sql.exec('DELETE FROM follows WHERE uid = ? AND fid = ?', me.id, u.id);
     else this.sql.exec('INSERT OR IGNORE INTO follows (uid, fid, at) VALUES (?, ?, ?)', me.id, u.id, Date.now());
     return json(this.personView(u, me));
@@ -379,7 +393,7 @@ export class Hub {
       }
       if (op === 'uncomment') this.sql.exec('DELETE FROM ucomments WHERE id = ? AND pid = ? AND (uid = ? OR ? = ?)', String(b.cid || ''), p.id, me.id, p.uid, me.id);
       const list = this.sql.exec('SELECT c.*, u.name, u.username, u.photo FROM ucomments c LEFT JOIN users u ON u.id = c.uid WHERE c.pid = ? ORDER BY c.at LIMIT 300', p.id).toArray()
-        .map(c => ({ id: c.id, text: c.text, at: c.at, mine: c.uid === me.id, canDelete: c.uid === me.id || p.uid === me.id, user: { id: c.uid, name: c.name || '', username: c.username || '', photo: this.mediaUrl(c.photo) } }));
+        .filter(c => !this.blocked(me.id, c.uid)).map(c => ({ id: c.id, text: c.text, at: c.at, mine: c.uid === me.id, canDelete: c.uid === me.id || p.uid === me.id, user: { id: c.uid, name: c.name || '', username: c.username || '', photo: this.mediaUrl(c.photo) } }));
       return json(Object.assign(this.postView(p, me), { list }));
     }
     if (op === 'delete') {
@@ -391,6 +405,101 @@ export class Hub {
       return json({ ok: true });
     }
     return json({ error: 'notfound' }, 404);
+  }
+
+  // ---- Block, report, delete account (owner) ----
+  block(me, b) {
+    const u = this.one('SELECT id FROM users WHERE id = ?', String(b.id || ''));
+    if (!u || u.id === me.id) return json({ error: 'notfound' }, 404);
+    if (b.on === false) this.sql.exec('DELETE FROM blocks WHERE uid = ? AND bid = ?', me.id, u.id);
+    else {
+      this.sql.exec('INSERT OR IGNORE INTO blocks (uid, bid, at) VALUES (?, ?, ?)', me.id, u.id, Date.now());
+      this.sql.exec('DELETE FROM follows WHERE (uid = ? AND fid = ?) OR (uid = ? AND fid = ?)', me.id, u.id, u.id, me.id);
+    }
+    return json({ ok: true, blocked: b.on !== false });
+  }
+  blocksOf(me) {
+    const rows = this.sql.exec('SELECT b.bid, b.at, u.name, u.username FROM blocks b LEFT JOIN users u ON u.id = b.bid WHERE b.uid = ? ORDER BY b.at DESC', me.id).toArray();
+    return json({ people: rows.map(r => ({ id: r.bid, name: r.name || '', username: r.username || '', at: r.at })) });
+  }
+  // What a report points at: who it belongs to and a short look at it (the official profile sees this).
+  reportTarget(kind, id) {
+    if (kind === 'profile' || kind === 'chat') { const u = this.one('SELECT * FROM users WHERE id = ?', id); return u ? { owner: u.id, look: (u.name || '') + (u.username ? ' @' + u.username : '') + (u.bio ? ' - ' + u.bio : '') } : null; }
+    if (kind === 'status' || kind === 'post') { const p = this.one('SELECT * FROM uposts WHERE id = ?', id); return p ? { owner: p.uid, look: p.kind + ' (' + p.type + ')', media: this.mediaUrl(p.media) } : null; }
+    if (kind === 'comment') { const c = this.one('SELECT * FROM ucomments WHERE id = ?', id); return c ? { owner: c.uid, look: c.text } : null; }
+    if (kind === 'gpost') { const p = this.one('SELECT * FROM gposts WHERE id = ?', id); return p ? { owner: p.uid, look: p.text || '(picture)' } : null; }
+    if (kind === 'gcomment') { const c = this.one('SELECT * FROM gcomments WHERE id = ?', id); return c ? { owner: c.uid, look: c.text } : null; }
+    if (kind === 'group') { const g = this.one("SELECT * FROM groups WHERE id = ? AND type = 'public'", id); return g ? { owner: g.creator, look: g.name + (g.about ? ' - ' + g.about : '') } : null; }
+    return null;
+  }
+  report(me, b) {
+    const kind = String(b.kind || ''), id = String(b.id || '').slice(0, 60);
+    const t = this.reportTarget(kind, id);
+    if (!t) return json({ error: 'notfound' }, 404);
+    const recent = this.one('SELECT COUNT(*) AS n FROM reports WHERE uid = ? AND at > ?', me.id, Date.now() - 3600000).n;
+    if (recent >= 20) return json({ error: 'slow' }, 429);
+    const reason = ['spam', 'abuse', 'nudity', 'violence', 'scam', 'hate', 'other'].includes(b.reason) ? b.reason : 'other';
+    this.sql.exec('INSERT INTO reports (id, uid, kind, target, owner, reason, text, at, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'r' + rand(9), me.id, kind, id, t.owner, reason, String(b.text || '').slice(0, 2000), Date.now(), 'open');
+    return json({ ok: true });
+  }
+  reportsList(me) {
+    if (!me.official) return json({ error: 'official' }, 403);
+    const who = id => { const u = this.one('SELECT name, username FROM users WHERE id = ?', id); return u ? (u.name || '') + (u.username ? ' @' + u.username : '') : '(deleted)'; };
+    const rows = this.sql.exec("SELECT * FROM reports WHERE status = 'open' ORDER BY at DESC LIMIT 200").toArray();
+    return json({ reports: rows.map(r => { const t = this.reportTarget(r.kind, r.target) || {}; return { id: r.id, kind: r.kind, reason: r.reason, text: r.text || '', at: r.at, by: who(r.uid), owner: r.owner, ownerName: who(r.owner), look: t.look || '(already gone)', media: t.media || '', gone: !t.owner }; }) });
+  }
+  reportAct(me, b) {
+    if (!me.official) return json({ error: 'official' }, 403);
+    const r = this.one('SELECT * FROM reports WHERE id = ?', String(b.id || ''));
+    if (!r) return json({ error: 'notfound' }, 404);
+    const act = b.action;
+    if (act === 'remove') this.removeContent(r.kind, r.target);
+    if (act === 'ban' && r.owner) { const o = this.one('SELECT official FROM users WHERE id = ?', r.owner); if (o && !o.official) this.deleteUser(r.owner); }
+    // Everything else about the same thing is done too.
+    this.sql.exec("UPDATE reports SET status = ? WHERE kind = ? AND target = ? AND status = 'open'", act === 'dismiss' ? 'dismissed' : 'done', r.kind, r.target);
+    if (act === 'ban') this.sql.exec("UPDATE reports SET status = 'done' WHERE owner = ? AND status = 'open'", r.owner);
+    return this.reportsList(me);
+  }
+  removeContent(kind, id) {
+    if (kind === 'status' || kind === 'post') {
+      const p = this.one('SELECT * FROM uposts WHERE id = ?', id); if (!p) return;
+      this.sql.exec('DELETE FROM media WHERE id = ? OR id = ?', p.media, p.thumb || ''); this.sql.exec('DELETE FROM uposts WHERE id = ?', p.id);
+      this.sql.exec('DELETE FROM ulikes WHERE pid = ?', p.id); this.sql.exec('DELETE FROM ucomments WHERE pid = ?', p.id);
+    }
+    if (kind === 'comment') this.sql.exec('DELETE FROM ucomments WHERE id = ?', id);
+    if (kind === 'gpost') { this.sql.exec('DELETE FROM gcomments WHERE pid = ?', id); this.sql.exec('DELETE FROM glikes WHERE pid = ?', id); this.sql.exec('DELETE FROM gposts WHERE id = ?', id); }
+    if (kind === 'gcomment') this.sql.exec('DELETE FROM gcomments WHERE id = ?', id);
+    if (kind === 'group') {
+      const g = this.one("SELECT * FROM groups WHERE id = ? AND type = 'public'", id); if (!g) return;
+      const ids = this.memberIds(g.id);
+      for (const p of this.sql.exec('SELECT id FROM gposts WHERE gid = ?', g.id).toArray()) { this.sql.exec('DELETE FROM gcomments WHERE pid = ?', p.id); this.sql.exec('DELETE FROM glikes WHERE pid = ?', p.id); }
+      this.sql.exec('DELETE FROM gposts WHERE gid = ?', g.id); this.sql.exec('DELETE FROM gmembers WHERE gid = ?', g.id); this.sql.exec('DELETE FROM groups WHERE id = ?', g.id);
+      for (const uid of ids) this.deliver(uid, { t: 'group', g: { id: g.id, gone: true } });
+    }
+  }
+  // Delete account (owner; POPIA): everything Lockedintool's server keeps about you goes. Payment records stay, as
+  // the law requires (they never hold your card or bank login).
+  deleteUser(uid) {
+    for (const m of this.sql.exec('SELECT gid FROM gmembers WHERE uid = ?', uid).toArray()) {
+      this.sql.exec('DELETE FROM gmembers WHERE gid = ? AND uid = ?', m.gid, uid);
+      const left = this.memberIds(m.gid);
+      if (!left.length) { for (const p of this.sql.exec('SELECT id FROM gposts WHERE gid = ?', m.gid).toArray()) { this.sql.exec('DELETE FROM gcomments WHERE pid = ?', p.id); this.sql.exec('DELETE FROM glikes WHERE pid = ?', p.id); } this.sql.exec('DELETE FROM gposts WHERE gid = ?', m.gid); this.sql.exec("DELETE FROM groups WHERE id = ? AND type != 'stories'", m.gid); continue; }
+      if (!this.one("SELECT uid FROM gmembers WHERE gid = ? AND role = 'leader'", m.gid)) {
+        const next = this.one('SELECT uid FROM gmembers WHERE gid = ? ORDER BY joined LIMIT 1', m.gid);
+        this.sql.exec("UPDATE gmembers SET role = 'leader' WHERE gid = ? AND uid = ?", m.gid, next.uid);
+      }
+      this.groupTell(m.gid);
+    }
+    for (const p of this.sql.exec('SELECT id FROM uposts WHERE uid = ?', uid).toArray()) { this.sql.exec('DELETE FROM ulikes WHERE pid = ?', p.id); this.sql.exec('DELETE FROM ucomments WHERE pid = ?', p.id); }
+    for (const p of this.sql.exec('SELECT id FROM gposts WHERE uid = ?', uid).toArray()) { this.sql.exec('DELETE FROM gcomments WHERE pid = ?', p.id); this.sql.exec('DELETE FROM glikes WHERE pid = ?', p.id); }
+    this.sql.exec('UPDATE gposts SET likes = likes - 1 WHERE id IN (SELECT pid FROM glikes WHERE uid = ?)', uid);
+    const del = [['uposts', 'uid'], ['media', 'uid'], ['ulikes', 'uid'], ['ucomments', 'uid'], ['gposts', 'uid'], ['glikes', 'uid'], ['gcomments', 'uid'],
+      ['follows', 'uid'], ['follows', 'fid'], ['contacts', 'uid'], ['contacts', 'cid'], ['blocks', 'uid'], ['blocks', 'bid'], ['queue', 'uid'],
+      ['paybank', 'uid'], ['subs', 'uid'], ['reports', 'uid']];
+    for (const [t, c] of del) this.sql.exec(`DELETE FROM ${t} WHERE ${c} = ?`, uid);
+    this.sql.exec('DELETE FROM users WHERE id = ?', uid);
+    for (const ws of this.ctx.getWebSockets(uid)) { try { ws.close(4001, 'deleted'); } catch (e) {} }
   }
 
   // ---- Groups ----
@@ -525,10 +634,10 @@ export class Hub {
   }
   postsOf(gid, me) {
     const who = uid => { const u = this.one('SELECT name, username FROM users WHERE id = ?', uid); return u ? (u.name || (u.username ? '@' + u.username : 'Someone')) : 'Someone'; };
-    return this.sql.exec('SELECT * FROM gposts WHERE gid = ? ORDER BY at DESC LIMIT 100', gid).toArray().map(p => ({
+    return this.sql.exec('SELECT * FROM gposts WHERE gid = ? ORDER BY at DESC LIMIT 100', gid).toArray().filter(p => !this.blocked(me.id, p.uid)).map(p => ({
       id: p.id, author: p.uid === me.id ? 'You' : who(p.uid), mine: p.uid === me.id, text: p.text, image: p.image || '', at: p.at, likes: p.likes, shares: p.shares || 0,
       liked: !!this.one('SELECT pid FROM glikes WHERE pid = ? AND uid = ?', p.id, me.id),
-      comments: this.sql.exec('SELECT * FROM gcomments WHERE pid = ? ORDER BY at LIMIT 200', p.id).toArray().map(c => ({ author: c.uid === me.id ? 'You' : who(c.uid), text: c.text, at: c.at }))
+      comments: this.sql.exec('SELECT * FROM gcomments WHERE pid = ? ORDER BY at LIMIT 200', p.id).toArray().filter(c => !this.blocked(me.id, c.uid)).map(c => ({ id: c.id, author: c.uid === me.id ? 'You' : who(c.uid), mine: c.uid === me.id, text: c.text, at: c.at }))
     }));
   }
 
@@ -785,7 +894,7 @@ export class Hub {
         ws.send(JSON.stringify({ t: 'sent', id: m.id, at: now }));
         return; }
       case 'seen': case 'read':
-        if (to) this.deliver(to.id, { t: 'status', chat: uid, status: m.t, at: now });
+        if (to && !this.blocked(uid, to.id)) this.deliver(to.id, { t: 'status', chat: uid, status: m.t, at: now });
         return;
       case 'typing':
         if (m.group) {
@@ -793,7 +902,7 @@ export class Hub {
           if (g && this.member(g.id, uid)) for (const id of this.memberIds(g.id)) if (id !== uid) this.sendTo(id, { t: 'typing', chat: g.id, who: me.name || (me.username ? '@' + me.username : ''), at: now });
           return;
         }
-        if (to) this.sendTo(to.id, { t: 'typing', chat: uid, at: now });
+        if (to && !this.blocked(uid, to.id)) this.sendTo(to.id, { t: 'typing', chat: uid, at: now });
         return;
       case 'gmsg': {
         // A group message: private groups send a locked box for each member; public groups send the text itself.
