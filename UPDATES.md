@@ -17,3 +17,4 @@ commits, pushed as a new update) - nothing else changes.
 | 9 | 2026-10-15 | Block / Report sheets show no name as a title (just the actions); Block asks "Block this account?" | 44a46a8 |
 | 10 | 2026-10-15 | Updates: Create post box (title, text, Pictures / Videos - up to 20) and a feed of everything posted on Lockedintool (heart, comments, share to a chat, tap name -> profile); Profiles list after the first few posts | 399b027 |
 | 11 | 2026-10-15 | Send pictures, videos, documents and audio in chats, groups, Your Community and group posts (end-to-end locked in private chats); automatic warnings to accounts that get reported; reports never show who reported; Delete account moved to Settings > Privacy | 582fd20 |
+| 12 | 2026-10-15 | Delete account in steps: why you're leaving, you'll lose everything, your phone's fingerprint / face / PIN, then Lockedintool messages you a link + code; enter the code on that page, Confirm, then Delete account | bda53f1 |
