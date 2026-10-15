@@ -2361,6 +2361,53 @@
   #story-profile .up-follow-lg{ flex:1; padding:11px 0; font-size:14px; }
   #story-profile .up-p-btns .up-follow-lg[data-pf="up-message"]{ background:transparent; color:var(--pf-fg); }
   #story-profile .up-p-note{ text-align:center; color:var(--pf-muted); font-size:14px; padding:30px 0; }
+  /* Updates: the Create post box (looks like the bio box), the composer, and the feed (owner). */
+  #story-profile .up-cp-box{ display:block; width:100%; text-align:left; margin:16px 0 6px; border:1px solid var(--pf-hair); border-radius:14px; padding:14px 16px; min-height:56px;
+    box-sizing:border-box; background:transparent; color:var(--pf-muted); font:inherit; font-size:14px; }
+  #story-profile .up-cp-box:active{ opacity:0.6; }
+  #story-profile .up-cp-title{ width:100%; box-sizing:border-box; border:none; border-bottom:1px solid var(--pf-hair); background:transparent; color:var(--pf-fg); font:inherit; font-size:17px; font-weight:800; padding:10px 2px; outline:none; }
+  #story-profile .up-cp-text{ width:100%; box-sizing:border-box; border:1px solid var(--pf-hair); border-radius:14px; background:transparent; color:var(--pf-fg); font:inherit; font-size:14px; line-height:1.5; padding:12px 14px; margin-top:12px; min-height:140px; resize:none; outline:none; }
+  #story-profile .up-cp-boxes{ display:flex; gap:10px; margin-top:12px; }
+  #story-profile .up-cp-boxes button{ flex:1; display:flex; align-items:center; justify-content:center; gap:8px; padding:14px 0; border-radius:14px; border:1px solid var(--pf-fg); background:transparent; color:var(--pf-fg); font:inherit; font-size:14px; font-weight:700; }
+  #story-profile .up-cp-boxes button:active{ opacity:0.6; }
+  #story-profile .up-cp-picked{ display:flex; gap:8px; overflow-x:auto; margin-top:12px; scrollbar-width:none; }
+  #story-profile .up-cp-picked::-webkit-scrollbar{ display:none; }
+  #story-profile .up-cp-pick{ position:relative; flex:none; width:76px; height:76px; border-radius:10px; overflow:hidden; background:var(--pf-hair); }
+  #story-profile .up-cp-pick img{ width:100%; height:100%; object-fit:cover; display:block; }
+  #story-profile .up-cp-pick button{ position:absolute; top:3px; right:3px; width:22px; height:22px; border-radius:50%; border:none; background:rgba(0,0,0,0.7); color:#fff; font-size:14px; line-height:22px; padding:0; }
+  #story-profile .up-cp-pick i{ position:absolute; left:5px; bottom:4px; color:#fff; font-style:normal; font-size:11px; text-shadow:0 0 3px #000; }
+  #story-profile .up-cp-n{ font-size:12px; color:var(--pf-muted); margin-top:6px; }
+  #story-profile .pf-photo.on{ outline:3px solid #0a84ff; outline-offset:-3px; }
+  #story-profile .up-fp{ border-top:1px solid var(--pf-hair); padding:14px 0 10px; }
+  #story-profile .up-fp-head{ display:flex; align-items:center; gap:10px; }
+  #story-profile .up-fp-head .msg-pic{ width:40px; height:40px; }
+  #story-profile .up-fp-who{ min-width:0; flex:1; display:flex; flex-direction:column; }
+  #story-profile .up-fp-who b{ font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #story-profile .up-fp-who span{ font-size:12px; color:var(--pf-muted); }
+  #story-profile .up-fp-title{ font-size:16px; font-weight:800; margin-top:10px; word-break:break-word; }
+  #story-profile .up-fp-text{ font-size:14px; line-height:1.5; margin-top:6px; white-space:pre-wrap; word-break:break-word; }
+  #story-profile .up-fp-media{ position:relative; margin-top:10px; }
+  #story-profile .up-fp-strip{ display:flex; overflow-x:auto; scroll-snap-type:x mandatory; border-radius:12px; scrollbar-width:none; background:var(--pf-hair); }
+  #story-profile .up-fp-strip::-webkit-scrollbar{ display:none; }
+  #story-profile .up-fp-strip > *{ flex:none; width:100%; aspect-ratio:4 / 5; object-fit:cover; scroll-snap-align:center; display:block; background:#000; }
+  #story-profile .up-fp-count{ position:absolute; top:8px; right:8px; padding:3px 8px; border-radius:10px; background:rgba(0,0,0,0.6); color:#fff; font-size:11px; font-weight:700; }
+  #story-profile .up-fp-acts{ display:flex; align-items:center; gap:18px; margin-top:8px; }
+  #story-profile .up-fp-acts button{ display:flex; align-items:center; gap:6px; border:none; background:transparent; color:var(--pf-fg); font:inherit; font-size:13px; padding:4px 0; }
+  #story-profile .up-fp-acts button.on svg{ fill:#ff3b30; stroke:#ff3b30; }
+  #story-profile .up-fp-acts .up-fp-more{ margin-left:auto; color:var(--pf-muted); }
+  #story-profile .up-feed-note{ text-align:center; color:var(--pf-muted); font-size:13px; padding:14px 0; }
+  #story-profile .up-fcs{ position:fixed; left:0; right:0; bottom:0; max-height:70%; z-index:40; display:flex; flex-direction:column; background:var(--pf-bg); border-top:1px solid var(--pf-hair); border-radius:18px 18px 0 0; padding:12px 16px calc(12px + var(--pf-ime, 0px)); box-sizing:border-box; }
+  #story-profile .up-fcs-head{ display:flex; align-items:center; justify-content:space-between; font-weight:800; font-size:15px; padding-bottom:8px; }
+  #story-profile .up-fcs-head button{ border:none; background:transparent; color:var(--pf-fg); font-size:22px; }
+  #story-profile .up-fcs-list{ flex:1; min-height:60px; overflow-y:auto; scrollbar-width:none; }
+  #story-profile .up-fcs-list::-webkit-scrollbar{ display:none; }
+  #story-profile .up-fcs-bar{ display:flex; gap:8px; padding-top:8px; border-top:1px solid var(--pf-hair); }
+  #story-profile .up-fcs-bar input{ flex:1; min-width:0; border:1px solid var(--pf-hair); border-radius:20px; padding:10px 14px; background:transparent; color:var(--pf-fg); font:inherit; font-size:14px; outline:none; }
+  #story-profile .up-fcs-bar button{ border:none; background:transparent; color:var(--pf-fg); font:inherit; font-weight:800; font-size:14px; }
+  #story-profile .up-postview{ position:fixed; inset:0; z-index:35; background:var(--pf-bg); overflow-y:auto; padding:calc(var(--pf-top, 24px) + 16px) 20px 60px; box-sizing:border-box; scrollbar-width:none; }
+  #story-profile .up-postview::-webkit-scrollbar{ display:none; }
+  #story-profile .up-cell-t{ display:flex; align-items:center; justify-content:center; padding:8px; color:var(--pf-fg); font:inherit; font-size:11px; font-weight:700; line-height:1.3; text-align:center; overflow:hidden; }
+  #story-profile .cm-post{ display:block; margin-top:8px; padding:7px 12px; border-radius:14px; border:1px solid currentColor; background:transparent; color:inherit; font:inherit; font-size:12px; font-weight:700; }
   #story-profile .up-grid{ display:grid; grid-template-columns:repeat(3, 1fr); gap:3px; padding-bottom:20px; }
   #story-profile .up-cell{ position:relative; aspect-ratio:3 / 4; border:none; padding:0; background:var(--pf-hair); overflow:hidden; }
   #story-profile .up-cell img{ width:100%; height:100%; object-fit:cover; display:block; }
@@ -7667,7 +7714,7 @@ const LEGAL = {
       'Removing Lockedintool from your phone removes all of this.' ]],
     ['Kept on our server', [
       'Your account: a random ID, the public half of your encryption key, your name, @username, profile picture, bio and About (so people can find you and see who you are - a private profile can’t be found and only shows to people you follow, message or share a group with) and your privacy choices (who can see your profile, who can message and call you and who can see your status).',
-      'Updates: who you follow and who follows you, the posts you share to your profile (anyone on Lockedintool can see them) and your statuses (deleted after 24 hours with their hearts and comments; only seen by who your status setting allows), and the hearts and comments you leave on statuses.',
+      'Updates: who you follow and who follows you, the posts you share (their title, text, pictures and videos - shown in the feed and on your profile to everyone who can see your profile), your statuses (deleted after 24 hours with their hearts and comments; only seen by who your status setting allows), and the hearts and comments you leave on posts and statuses. Delete a post any time from its ⋮.',
       'Messages and calls: locked messages waiting for a phone that is offline (deleted once delivered), and whether a message was delivered, seen or read. Calls go straight from phone to phone; our server only helps them connect.',
       'Community: groups you create or join, and what you post, like or comment in public groups - public groups are visible to everyone. Private group messages and Your Community’s chat are end-to-end encrypted.',
       'Payments: your plan, its price, status and dates, and the payment reference from our payment partner. If you add a bank account to receive money, it is kept to pay you - anyone viewing it sees only the last 3 digits, and people sending you money never see it.',
@@ -8242,9 +8289,30 @@ window.storyProfileOnly = function(){
         <label class="pf-msgs-search"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="search" placeholder="Search anyone on Lockedintool" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="search"></label>
       </div>
       <div class="up-status-row"></div>
+      <button class="up-cp-box" data-pf="up-compose">What’s on your mind?</button>
+      <div class="up-feed"></div>
       <div class="up-h">Profiles</div>
       <div class="up-list"></div>
       <div class="pf-msgs-empty up-empty" hidden><div class="pf-msgs-empty-t"></div></div>
+      <div class="up-feed2"></div>
+      <div class="up-feed-note" hidden></div>
+    </div>
+    <div class="pf-scroll up-compose" hidden>
+      <div class="pf-ed-head"><button class="pf-ed-back" data-pf="cp-back" aria-label="Back">‹</button><div class="pf-ed-title">Create post</div><button class="pf-field-save" data-pf="cp-post">Post</button></div>
+      <input class="up-cp-title" type="text" maxlength="100" placeholder="Title" autocomplete="off" enterkeyhint="next">
+      <textarea class="up-cp-text" maxlength="2000" placeholder="What do you want to say?"></textarea>
+      <div class="up-cp-boxes">
+        <button data-pf="cp-pics"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 17-5-5-9 8"/></svg>Pictures</button>
+        <button data-pf="cp-vids"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="m16 10 6-3v10l-6-3"/></svg>Videos</button>
+      </div>
+      <div class="up-cp-picked"></div>
+      <div class="up-cp-n"></div>
+    </div>
+    <div class="up-postview" hidden></div>
+    <div class="up-fcs" hidden>
+      <div class="up-fcs-head"><span>Comments</span><button data-pf="fcs-close" aria-label="Close">×</button></div>
+      <div class="up-fcs-list"></div>
+      <div class="up-fcs-bar"><input type="text" maxlength="500" placeholder="Add a comment" autocomplete="off" enterkeyhint="send"><button data-pf="fcs-send">Post</button></div>
     </div>
     <div class="pf-scroll pf-person" hidden>
       <div class="pf-ed-head"><button class="pf-ed-back" data-pf="up-person-back" aria-label="Back">‹</button><div class="pf-ed-title"></div><button class="pf-more up-p-more" data-pf="up-p-more" aria-label="More" hidden>⋮</button></div>
@@ -8361,7 +8429,15 @@ window.storyProfileOnly = function(){
     else if(k === 'edit'){ main.hidden = true; ed.hidden = false; ed.scrollTop = 0; }
     else if(k === 'edit-back'){ ed.hidden = true; main.hidden = false; }
     else if(k === 'photo-change') pickProfilePhoto();
-    else if(k === 'photos-back'){ el.querySelector('.pf-photos').hidden = true; if(pfGridFor === 'create') crShow(); else ed.hidden = false; }
+    else if(k === 'photos-back'){ el.querySelector('.pf-photos').hidden = true; if(pfGridFor === 'create') crShow(); else if(pfGridFor === 'post'){ el.querySelector('.up-compose').hidden = false; cpRender(); } else ed.hidden = false; }
+    else if(k === 'photos-pick' && pfGridFor === 'post'){
+      // Create post: tap to choose / un-choose (up to 20); back = done.
+      const id = b.getAttribute('data-id'), v = b.getAttribute('data-v') === '1', i = CP.items.findIndex(m=>m.id === id);
+      if(i >= 0){ CP.items.splice(i, 1); b.classList.remove('on'); }
+      else if(CP.items.length >= 20){ showToast('Up to 20 pictures and videos in a post'); return; }
+      else { CP.items.push({ id, v }); b.classList.add('on'); }
+      el.querySelector('.pf-photos .pf-ed-title').textContent = CP.items.length + ' chosen';
+    }
     else if(k === 'photos-more') window.StoryNative.requestPhotoAccess();
     else if(k === 'photos-pick' && pfGridFor === 'create'){
       // Create's +: that picture / video becomes what you made (you see it, then ✓ to post it).
@@ -8409,7 +8485,25 @@ window.storyProfileOnly = function(){
     else if(k === 'up-follow'){ e.stopPropagation(); upFollow(b.getAttribute('data-id'), b); }
     else if(k === 'up-person-back') upClosePerson();
     else if(k === 'up-p-status'){ const p = UP.person; if(p && (p.statuses || []).length) upView(p, p.statuses, 0, true); }
-    else if(k === 'up-post'){ const p = UP.person; if(p) upView(p, p.postList || [], +b.getAttribute('data-i'), false); }
+    else if(k === 'up-post'){ const p = UP.person; if(!p) return; const x = (p.postList || [])[+b.getAttribute('data-i')]; if(!x) return;
+      const single = (p.postList || []).filter(y=>!y.title && !y.text && (y.items || []).length === 1);
+      if(single.includes(x)) upView(p, single, single.indexOf(x), false);
+      else upShowPost(Object.assign({ user: { id:p.id, name:p.name, username:p.username, photo:p.photo } }, x)); }
+    else if(k === 'up-compose') cpOpen();
+    else if(k === 'cp-back') cpClose();
+    else if(k === 'cp-post') cpPost();
+    else if(k === 'cp-pics') cpPick('pic');
+    else if(k === 'cp-vids') cpPick('vid');
+    else if(k === 'cp-rm'){ CP.items.splice(+b.getAttribute('data-i'), 1); cpRender(); }
+    else if(k === 'fp-heart') fpHeart(b.getAttribute('data-id'));
+    else if(k === 'fp-comments') fcsOpen(b.getAttribute('data-id'));
+    else if(k === 'fp-share') fpShare(b.getAttribute('data-id'));
+    else if(k === 'fp-more') fpMore(b.getAttribute('data-id'));
+    else if(k === 'fcs-close') fcsClose();
+    else if(k === 'fcs-send') fcsSend();
+    else if(k === 'fcs-del') fcsCall('uncomment', { cid: b.getAttribute('data-id') });
+    else if(k === 'open-post') upShowPost(b.getAttribute('data-id'));
+    else if(k === 'post-close') upClosePost();
     else if(k === 'up-message') upMessage(UP.person);
     else if(k === 'upv-heart') upHeart();
     else if(k === 'upv-comments') upComments('comments');
@@ -8568,6 +8662,7 @@ window.storyProfileReset = function(){
   el.querySelector('.pf-updates .pf-msgs-search input').value = ''; UP.q = ''; UP.found = null;
   el.querySelector('.cr-pick').hidden = true;
   el.querySelector('.pf-menu').hidden = true; el.querySelector('.pf-privacy').hidden = true; el.querySelector('.pf-reports').hidden = true;
+  el.querySelector('.up-compose').hidden = true; upClosePost(); fcsClose();
   const pfDel = el.querySelector('.pf-delete'); pfDel.hidden = true; pfDel.querySelector('.pf-del-in').value = '';
   el.querySelector('.pf-signup').hidden = true;
   const ms = el.querySelector('.pf-msgs .pf-msgs-search input'); if(ms){ ms.value = ''; } msgView.q = ''; msgView.menuFor = null;
@@ -8786,7 +8881,7 @@ function upEl(){ const el = document.getElementById('story-profile'); return el 
 async function upLoad(){
   const el = upEl(); if(!el || UP.loading) return;
   if(!msgAccount()){ msgEnsureAccount(); upRender(); return; }
-  UP.loading = true; upRender();
+  UP.loading = true; upRender(); feedLoad(true);
   try{
     UP.data = await msgApi('/v1/updates'); actRefreshSoon();
     const me = UP.data.me; if(me) upSaveStats(me);
@@ -8834,6 +8929,186 @@ function upRender(){
   empty.querySelector('.pf-msgs-empty-t').textContent = !msgAccount() ? 'Connecting to Lockedintool…'
     : searching ? (UP.found === null ? 'Searching…' : 'No one on Lockedintool by that name yet.')
     : UP.loading && !d ? 'Loading…' : d && d.error ? 'No connection right now' : 'No other profiles yet.';
+  feedRender();
+}
+// ---- The feed (owner): everything posted on Lockedintool, newest first. The Profiles list shows after the first few
+// posts ("after a couple of scrolls into the feed"); more posts load as you scroll (no loop - only on scroll). ----
+const FEED = { posts:[], next:0, more:true, loading:false, error:false, loaded:false };
+const FEED_BEFORE_PROFILES = 4;
+async function feedLoad(reset){
+  if(FEED.loading || !msgAccount()) return;
+  if(reset){ FEED.next = 0; FEED.more = true; }
+  if(!FEED.more) return;
+  FEED.loading = true; feedNote();
+  try{
+    const r = await msgApi('/v1/feed' + (FEED.next ? '?before=' + FEED.next : ''));
+    const got = r.posts || [];
+    FEED.posts = reset ? got : FEED.posts.concat(got.filter(p=>!FEED.posts.some(x=>x.id === p.id)));
+    FEED.next = r.next || FEED.next; FEED.more = !!r.more; FEED.error = false; FEED.loaded = true;
+  }catch(e){ FEED.error = true; }
+  FEED.loading = false; feedRender();
+}
+function fpAgo(at){ return Date.now() - at < 86400000 ? upAgo(at) : msgTime(at); }
+const FP_HEART = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.5s-7.5-4.6-9.3-9.2C1.4 7.9 3.6 4.5 7 4.5c2.1 0 3.6 1.2 5 3 1.4-1.8 2.9-3 5-3 3.4 0 5.6 3.4 4.3 6.8-1.8 4.6-9.3 9.2-9.3 9.2z"/></svg>';
+const FP_COMMENT = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-8.5 8.5 8.5 8.5 0 0 1-4.3-1.2L3 20l1.2-5.2A8.4 8.4 0 0 1 3 11.5 8.5 8.5 0 0 1 11.5 3a8.4 8.4 0 0 1 9.5 8.5Z"/></svg>';
+const FP_SHARE = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>';
+function fpHTML(p){
+  const u = p.user || {}, items = p.items || [];
+  const media = items.length ? '<div class="up-fp-media"><div class="up-fp-strip">' + items.map(i=>i.type === 'video'
+      ? '<video playsinline controls preload="none"' + (i.thumb ? ' poster="' + escText(i.thumb) + '"' : '') + ' src="' + escText(i.url) + '"></video>'
+      : '<img alt="" loading="lazy" decoding="async" src="' + escText(i.url) + '">').join('') + '</div>' +
+    (items.length > 1 ? '<span class="up-fp-count">1/' + items.length + '</span>' : '') + '</div>' : '';
+  return '<div class="up-fp" data-post="' + escText(p.id) + '">' +
+    '<div class="up-fp-head" data-pf="up-person" data-id="' + escText(u.id || '') + '">' + upPic(u) + '<span class="up-fp-who"><b>' + escText(upName(u)) + '</b><span>' +
+      (u.name && u.username ? '@' + escText(u.username) + ' · ' : '') + escText(fpAgo(p.at)) + '</span></span></div>' +
+    (p.title ? '<div class="up-fp-title">' + escText(p.title) + '</div>' : '') +
+    (p.text ? '<div class="up-fp-text">' + escText(p.text) + '</div>' : '') + media +
+    '<div class="up-fp-acts"><button class="' + (p.hearted ? 'on' : '') + '" data-pf="fp-heart" data-id="' + escText(p.id) + '" aria-label="Heart">' + FP_HEART + '<span>' + fmtCount(p.hearts || 0) + '</span></button>' +
+      '<button data-pf="fp-comments" data-id="' + escText(p.id) + '" aria-label="Comments">' + FP_COMMENT + '<span>' + fmtCount(p.comments || 0) + '</span></button>' +
+      '<button data-pf="fp-share" data-id="' + escText(p.id) + '" aria-label="Share">' + FP_SHARE + '</button>' +
+      '<button class="up-fp-more" data-pf="fp-more" data-id="' + escText(p.id) + '" aria-label="More">⋮</button></div></div>';
+}
+function feedNote(){
+  const el = upEl(); if(!el) return; const n = el.querySelector('.pf-updates .up-feed-note'); if(!n) return;
+  const searching = UP.q.trim().replace(/^@/, '').length >= 2;
+  n.hidden = searching || (!FEED.loading && FEED.loaded && FEED.posts.length > 0 && FEED.more);
+  n.textContent = FEED.loading ? 'Loading…' : FEED.error ? 'No connection right now' : !FEED.posts.length ? (FEED.loaded ? 'No posts yet - be the first to post.' : '') : 'You’re all caught up';
+}
+function feedRender(){
+  const el = upEl(); if(!el) return;
+  const box = el.querySelector('.pf-updates'); if(!box || box.hidden) return;
+  const searching = UP.q.trim().replace(/^@/, '').length >= 2;
+  box.querySelector('.up-cp-box').hidden = searching;
+  const a = box.querySelector('.up-feed'), b = box.querySelector('.up-feed2');
+  const first = searching ? [] : FEED.posts.slice(0, FEED_BEFORE_PROFILES), rest = searching ? [] : FEED.posts.slice(FEED_BEFORE_PROFILES);
+  const key1 = first.map(p=>p.id).join(), key2 = rest.map(p=>p.id).join();
+  if(a.dataset.k !== key1){ a.innerHTML = first.map(fpHTML).join(''); a.dataset.k = key1; }   // only redrawn when the posts change (videos keep playing)
+  if(b.dataset.k !== key2){ b.innerHTML = rest.map(fpHTML).join(''); b.dataset.k = key2; }
+  feedNote();
+}
+function fpFind(id){
+  return FEED.posts.find(p=>p.id === id) || (UP.postView && UP.postView.id === id ? UP.postView : null) ||
+    ((UP.person && UP.person.postList) || []).find(p=>p.id === id) || null;
+}
+function fpEach(id, f){ [FEED.posts, (UP.person && UP.person.postList) || [], UP.postView ? [UP.postView] : []].forEach(l=>l.forEach(p=>{ if(p.id === id) f(p); })); }
+function fpActsUpdate(id){
+  const p = fpFind(id); if(!p) return;
+  document.querySelectorAll('#story-profile [data-post="' + id + '"]').forEach(card=>{
+    const h = card.querySelector('[data-pf="fp-heart"]'); if(h){ h.classList.toggle('on', !!p.hearted); h.querySelector('span').textContent = fmtCount(p.hearts || 0); }
+    const c = card.querySelector('[data-pf="fp-comments"] span'); if(c) c.textContent = fmtCount(p.comments || 0);
+  });
+}
+async function fpHeart(id){
+  const p = fpFind(id); if(!p) return;
+  const on = !p.hearted;
+  fpEach(id, x=>{ x.hearted = on; x.hearts = Math.max(0, (x.hearts || 0) + (on ? 1 : -1)); }); fpActsUpdate(id);
+  try{ const r = await msgApi('/v1/uposts/heart', { id, on }); fpEach(id, x=>Object.assign(x, { hearts:r.hearts, hearted:r.hearted, comments:r.comments })); }
+  catch(e){ fpEach(id, x=>{ x.hearted = !on; x.hearts = Math.max(0, (x.hearts || 0) + (on ? -1 : 1)); }); showToast('No connection right now'); }
+  fpActsUpdate(id);
+}
+// Swiping a post's pictures updates its "2/5"; scrolling near the end of Updates loads more posts (only on scroll).
+document.addEventListener('scroll', e=>{
+  const t = e.target; if(!t || !t.classList) return;
+  if(t.classList.contains('up-fp-strip')){ const c = t.parentNode.querySelector('.up-fp-count'); if(c) c.textContent = (Math.round(t.scrollLeft / Math.max(1, t.clientWidth)) + 1) + '/' + t.children.length; return; }
+  if(t.classList.contains('pf-updates') && FEED.more && !FEED.loading && t.scrollHeight - t.scrollTop - t.clientHeight < 900) feedLoad(false);
+}, true);
+// Comments on a post: a sheet over the bottom, the box riding the keyboard.
+const FCS = { id:null, list:[] };
+function fcsHTML(list){
+  if(!list.length) return '<div class="up-v-cempty">No comments yet</div>';
+  return list.map(c=>'<div class="up-v-c">' + upPic(c.user) + '<div class="up-v-cmid"><div class="up-v-cwho">' + escText(upName(c.user)) + ' <span>' + fpAgo(c.at) + '</span></div><div class="up-v-ctext">' + escText(c.text) + '</div></div>' +
+    (c.canDelete ? '<button class="up-v-cdel" data-pf="fcs-del" data-id="' + escText(c.id) + '" aria-label="Delete comment">×</button>' : '') +
+    (!c.mine ? '<button class="up-v-cdel" data-pf="upv-creport" data-id="' + escText(c.id) + '" aria-label="Report comment"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg></button>' : '') + '</div>').join('');
+}
+async function fcsCall(op, extra){
+  const el = upEl(); if(!el || !FCS.id) return;
+  const id = FCS.id, sheet = el.querySelector('.up-fcs');
+  try{
+    const r = await msgApi('/v1/uposts/' + op, Object.assign({ id }, extra || {}));
+    if(FCS.id !== id) return;
+    FCS.list = r.list || []; sheet.querySelector('.up-fcs-list').innerHTML = fcsHTML(FCS.list);
+    fpEach(id, x=>Object.assign(x, { hearts:r.hearts, hearted:r.hearted, comments:r.comments })); fpActsUpdate(id);
+    if(op === 'comment'){ const l = sheet.querySelector('.up-fcs-list'); l.scrollTop = l.scrollHeight; }
+  }catch(e){ sheet.querySelector('.up-fcs-list').innerHTML = '<div class="up-v-cempty">' + (e.code === 'notfound' ? 'This post is gone' : 'No connection right now') + '</div>'; }
+}
+function fcsOpen(id){
+  const el = upEl(); if(!el) return;
+  FCS.id = id; FCS.list = [];
+  const sheet = el.querySelector('.up-fcs'); sheet.hidden = false; sheet.querySelector('.up-fcs-list').innerHTML = '<div class="up-v-cempty">Loading…</div>';
+  fcsCall('comments');
+}
+function fcsClose(){ const el = upEl(); if(!el) return; const sh = el.querySelector('.up-fcs'); const i = sh.querySelector('input'); if(document.activeElement === i) i.blur(); sh.hidden = true; FCS.id = null; }
+function fcsSend(){
+  const el = upEl(); if(!el || !FCS.id) return; const i = el.querySelector('.up-fcs input'), text = i.value.trim(); if(!text) return;
+  i.value = ''; fcsCall('comment', { text });
+}
+document.addEventListener('keydown', e=>{ if(e.key === 'Enter' && e.target.closest && e.target.closest('#story-profile .up-fcs input')){ e.preventDefault(); fcsSend(); } });
+// Share a post: send it to one of your chats; it shows there with "Open post".
+function fpShare(id){
+  const p = fpFind(id); if(!p) return;
+  const chats = msgChats().filter(c=>c.kind !== 'system' && !c.request && (c.name || c.username))
+    .sort((a, b)=>(((b.messages || []).slice(-1)[0] || {}).at || 0) - (((a.messages || []).slice(-1)[0] || {}).at || 0)).slice(0, 30);
+  if(!chats.length){ showToast('Start a chat in Messages first'); return; }
+  const u = p.user || {}, about = p.title || (p.text || '').slice(0, 80);
+  litSheet({ title:'Send to', items: chats.map(c=>({ label: c.name || '@' + c.username, fn: ()=>{
+    const text = 'Shared a post by ' + upName(u) + (about ? ': ' + about : '') + '\n[post:' + p.id + ']';
+    const m = { id: 'm' + Date.now() + Math.random().toString(36).slice(2, 6), from:'me', text, at: Date.now(), status:'sending' };
+    (c.messages = c.messages || []).push(m); saveMsgChats(); msgOut({ type:'send', chatId: c.id, id: m.id, text }); renderMsgList();
+    showToast('Sent to ' + (c.name || '@' + c.username));
+  } })) });
+}
+function fpMore(id){
+  const p = fpFind(id); if(!p) return;
+  const mine = (p.user || {}).id === (msgAccount() || {}).id;
+  if(mine) litSheet({ items:[{ label:'Delete post', danger:true, fn: ()=>msgApi('/v1/uposts/delete', { id }).then(()=>{
+      FEED.posts = FEED.posts.filter(x=>x.id !== id); if(UP.person && UP.person.postList) UP.person.postList = UP.person.postList.filter(x=>x.id !== id);
+      if(UP.postView && UP.postView.id === id) upClosePost(); feedRender(); if(UP.person) upRenderPerson(); showToast('Deleted');
+    }).catch(()=>showToast('No connection right now')) }] });
+  else litSheet({ items:[{ label:'Report post', fn: ()=>litReport('post', id) }, { label:'Block', danger:true, fn: ()=>litBlock(p.user, true, ()=>{ upClosePost(); feedLoad(true); }) }] });
+}
+// One post on its own (opened from a chat's "Open post", or a profile's posts).
+async function upShowPost(p){
+  const el = upEl(); if(!el) return;
+  const pv = el.querySelector('.up-postview'); pv.hidden = false; pv.scrollTop = 0;
+  const head = '<div class="pf-ed-head"><button class="pf-ed-back" data-pf="post-close" aria-label="Back">‹</button><div class="pf-ed-title">Post</div></div>';
+  if(typeof p === 'string'){
+    UP.postView = null; pv.innerHTML = head + '<div class="up-feed-note">Loading…</div>';
+    try{ UP.postView = await msgApi('/v1/uposts/get', { id: p }); }catch(e){ pv.innerHTML = head + '<div class="up-feed-note">' + (e.code === 'notfound' ? 'This post isn’t available' : 'No connection right now') + '</div>'; return; }
+  } else UP.postView = p;
+  if(!pv.hidden) pv.innerHTML = head + fpHTML(UP.postView);
+}
+function upClosePost(){ const el = upEl(); if(!el) return; const pv = el.querySelector('.up-postview'); pv.querySelectorAll('video').forEach(v=>{ try{ v.pause(); }catch(e){} }); pv.hidden = true; pv.innerHTML = ''; UP.postView = null; }
+// ---- Create post (owner): a title on top, what you want to say, and Pictures / Videos boxes - up to 20 of them,
+// or just pictures / just text. It goes into the upload queue (kept trying until it's on the server). ----
+const CP = { items:[], filter:'pic' };
+function cpOpen(){
+  const el = upEl(); if(!el) return;
+  el.querySelector('.pf-updates').hidden = true; const c = el.querySelector('.up-compose'); c.hidden = false; c.scrollTop = 0; cpRender();
+}
+function cpClose(){
+  const el = upEl(); if(!el) return; const c = el.querySelector('.up-compose');
+  c.querySelectorAll('input, textarea').forEach(i=>{ if(document.activeElement === i) i.blur(); });
+  c.hidden = true; el.querySelector('.pf-updates').hidden = false; upRender();
+}
+function cpRender(){
+  const el = upEl(); if(!el) return; const c = el.querySelector('.up-compose');
+  c.querySelector('.up-cp-picked').innerHTML = CP.items.map((m, i)=>'<div class="up-cp-pick"><img alt="" src="' + PF_PHOTO_BASE + (m.v ? 'thumbv/' : 'thumb/') + m.id + '">' + (m.v ? '<i>▶</i>' : '') + '<button data-pf="cp-rm" data-i="' + i + '" aria-label="Remove">×</button></div>').join('');
+  c.querySelector('.up-cp-n').textContent = CP.items.length ? CP.items.length + ' / 20' : '';
+}
+function cpPick(filter){
+  if(!NATIVE || !window.StoryNative.mediaAccess){ showToast('Adding pictures and videos works in the app'); return; }
+  CP.filter = filter; pfGridFor = 'post';
+  const access = window.StoryNative.mediaAccess();
+  if(access === 'none') window.StoryNative.requestPhotoAccess(); else openPhotoGrid(access);
+}
+function cpPost(){
+  const el = upEl(); if(!el) return; const c = el.querySelector('.up-compose');
+  const title = c.querySelector('.up-cp-title').value.trim(), text = c.querySelector('.up-cp-text').value.trim();
+  if(!title && !text && !CP.items.length){ showToast('Write something or add pictures or videos'); return; }
+  if(!msgAccount()){ showToast('Connecting to Lockedintool… try again in a moment'); return; }
+  const q = upQueue(); q.push({ kind:'feed', title, text, items: CP.items.map(m=>({ id:m.id, v:m.v ? 1 : 0 })), done:[], at: Date.now() }); upQueueSave(q);
+  c.querySelector('.up-cp-title').value = ''; c.querySelector('.up-cp-text').value = ''; CP.items = [];
+  cpClose(); showToast('Posting…'); upFlush();
 }
 function upSearch(q){
   UP.q = q; clearTimeout(UP.findT);
@@ -8903,7 +9178,9 @@ function upRenderPerson(){
     (isMe ? '' : '<div class="up-p-btns"><button class="up-follow up-follow-lg' + (p.isFollowing ? ' on' : '') + '" data-pf="up-follow" data-id="' + escText(p.id) + '">' + (p.isFollowing ? 'Following' : 'Follow') + '</button>' +
       (p.canMsg === false ? '' : '<button class="up-follow up-follow-lg" data-pf="up-message">Message</button>') + '</div>') +
     (p.loading ? '<div class="up-p-note">Loading…</div>' : p.error ? '<div class="up-p-note">No connection right now</div>'
-      : posts.length ? '<div class="up-grid">' + posts.map((x, i)=>'<button class="up-cell" data-pf="up-post" data-i="' + i + '"><img alt="" loading="lazy" src="' + escText(x.type === 'video' ? (x.thumb || '') : x.url) + '">' + (x.type === 'video' ? '<span class="up-cell-v">▶</span>' : '') + '</button>').join('') + '</div>'
+      : posts.length ? '<div class="up-grid">' + posts.map((x, i)=>!(x.items || [{}]).length || x.type === 'text'
+        ? '<button class="up-cell up-cell-t" data-pf="up-post" data-i="' + i + '">' + escText((x.title || x.text || '').slice(0, 90)) + '</button>'
+        : '<button class="up-cell" data-pf="up-post" data-i="' + i + '"><img alt="" loading="lazy" src="' + escText(x.type === 'video' ? (x.thumb || '') : x.url) + '">' + (x.type === 'video' ? '<span class="up-cell-v">▶</span>' : (x.items || []).length > 1 ? '<span class="up-cell-v">⧉</span>' : '') + '</button>').join('') + '</div>'
       : '<div class="up-p-note">No posts yet</div>');
 }
 // Viewing statuses / posts: full screen in this window; a status shows 5 s (a video until it ends) then the next one.
@@ -9100,6 +9377,25 @@ async function upFlush(){
     while(q.length){
       const job = q[0];
       if(job.kind === 'status' && Date.now() - job.at > 86400000){ q.shift(); upQueueSave(q); continue; }   // a status is only for 24 hours
+      if(job.kind === 'feed'){
+        // A post from Create post: each picture / video goes up (remembered as it goes, so a retry doesn't repeat it).
+        try{
+          job.done = job.done || [];
+          for(let i = job.done.length; i < job.items.length; i++){
+            const m = job.items[i];
+            const media = await upPutMedia(await upBytes(PF_PHOTO_BASE + (m.v ? 'mediav/' : 'media/') + m.id, m.v ? 0 : 1440));
+            let thumb = ''; if(m.v){ try{ thumb = await upPutMedia(await upBytes(PF_PHOTO_BASE + 'thumbv/' + m.id, 720)); }catch(e){} }
+            job.done.push({ type: m.v ? 'video' : 'photo', media, thumb });
+            const qq = upQueue(); if(qq[0] && qq[0].at === job.at){ qq[0].done = job.done; upQueueSave(qq); }
+          }
+          await msgApi('/v1/uposts/create', { kind:'post', title: job.title, text: job.text, items: job.done });
+          showToast('Your post is up'); feedLoad(true);
+        }catch(e){
+          if(e.code === 'big' || e.message === 'file'){ showToast(e.code === 'big' ? 'A video is too big to share (40 MB max)' : 'A picture or video is gone from the phone'); }
+          else break;
+        }
+        q = upQueue(); q.shift(); upQueueSave(q); continue;
+      }
       try{
         const media = await upPutMedia(await upBytes(PF_PHOTO_BASE + 'post/' + job.localId, job.type === 'video' ? 0 : 1440));
         let thumb = '';
@@ -9223,7 +9519,7 @@ function renderMsgList(){
     const typing = !q && c.typing && Date.now() - (c.typing.at || 0) < 6000;
     const lastHtml = typing
       ? '<span class="msg-typing">' + (c.kind === 'group' && c.typing.who ? escText(c.typing.who) + ' is typing' : 'typing') + '<i></i><i></i><i></i></span>'
-      : (last.from === 'me' ? 'You: ' : '') + escText(last.text || '');
+      : (last.from === 'me' ? 'You: ' : '') + escText((last.text || '').replace(/\n?\[post:[A-Za-z0-9_-]+\]/g, ''));
     return '<button class="msg-row" data-pf="msg-open" data-id="' + escText(c.id) + '">' +
       '<span class="msg-pic">' + pic + '</span>' +
       '<span class="msg-mid"><span class="msg-who">' + (c.groupType === 'private' ? '<i class="msg-lock"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></i>' : '') + escText(who) + '</span><span class="msg-last">' + lastHtml + '</span></span>' +
@@ -9302,7 +9598,7 @@ function renderChat(toEnd){
       const me = m.from === 'me';
       const st = i === lastMine && MSG_STATUS[m.status] ? ' · <b class="msg-' + m.status + '">' + MSG_STATUS[m.status] + '</b>' : '';
       const who = c.kind === 'group' && !me && m.who ? escText(m.who) + ' · ' : '';
-      return '<div class="cm' + (me ? ' me' : '') + '"><div class="cm-b">' + escText(m.text || '') + '</div><div class="cm-t">' + who + msgTime(m.at) + st + '</div></div>';
+      return '<div class="cm' + (me ? ' me' : '') + '"><div class="cm-b">' + escText(m.text || '').replace(/\n?\[post:([A-Za-z0-9_-]{4,40})\]/g, (x, id)=>'<button class="cm-post" data-pf="open-post" data-id="' + id + '">Open post</button>') + '</div><div class="cm-t">' + who + msgTime(m.at) + st + '</div></div>';
     }).join('') +
     (typing ? '<div class="cm cm-typing"><div class="cm-b"><i></i><i></i><i></i></div>' + (c.kind === 'group' && c.typing.who ? '<div class="cm-t">' + escText(c.typing.who) + '</div>' : '') + '</div>' : '');
   if(atEnd) list.scrollTop = list.scrollHeight;
@@ -9903,10 +10199,15 @@ function openPhotoGrid(access){
   if(pfGridFor === 'create'){
     try{ pfPhotoIds = JSON.parse(window.StoryNative.listMedia() || '[]'); }catch(e){ pfPhotoIds = []; }
     if(crMode === 'video') pfPhotoIds = pfPhotoIds.filter(m=>m.v);  // Video: only videos
+  } else if(pfGridFor === 'post'){
+    try{ pfPhotoIds = JSON.parse(window.StoryNative.listMedia() || '[]'); }catch(e){ pfPhotoIds = []; }
+    pfPhotoIds = pfPhotoIds.filter(m=>CP.filter === 'vid' ? m.v : !m.v);
+    el.querySelector('.up-compose').hidden = true;
   } else {
     try{ pfPhotoIds = JSON.parse(window.StoryNative.listPhotos() || '[]').map(id=>({ id, v:0 })); }catch(e){ pfPhotoIds = []; }
   }
-  panel.querySelector('.pf-ed-title').textContent = pfGridFor === 'create' ? (crMode === 'video' ? 'Choose a video' : 'Choose a picture or video') : 'Choose a picture';
+  panel.querySelector('.pf-ed-title').textContent = pfGridFor === 'post' ? (CP.items.length ? CP.items.length + ' chosen' : CP.filter === 'vid' ? 'Choose videos' : 'Choose pictures')
+    : pfGridFor === 'create' ? (crMode === 'video' ? 'Choose a video' : 'Choose a picture or video') : 'Choose a picture';
   el.classList.remove('pf-creating'); el.querySelector('.pf-create').hidden = true;
   grid.innerHTML = access === 'partial' ? '<button class="pf-photo-more" data-pf="photos-more">+<span>More pictures</span></button>' : '';
   pfPhotoShown = 0; morePhotos();
@@ -9918,12 +10219,13 @@ function morePhotos(){
   const grid = el.querySelector('.pf-photo-grid');
   const next = pfPhotoIds.slice(pfPhotoShown, pfPhotoShown + 90);
   pfPhotoShown += next.length;
-  grid.insertAdjacentHTML('beforeend', next.map(m=>'<button class="pf-photo" data-pf="photos-pick" data-id="' + m.id + '" data-v="' + (m.v ? 1 : 0) + '"><img alt="" loading="lazy" decoding="async" src="' + PF_PHOTO_BASE + (m.v ? 'thumbv/' : 'thumb/') + m.id + '">' + (m.v ? '<span class="pf-photo-v">▶</span>' : '') + '</button>').join(''));
+  const chosen = pfGridFor === 'post' ? new Set(CP.items.map(x=>String(x.id))) : null;
+  grid.insertAdjacentHTML('beforeend', next.map(m=>'<button class="pf-photo' + (chosen && chosen.has(String(m.id)) ? ' on' : '') + '" data-pf="photos-pick" data-id="' + m.id + '" data-v="' + (m.v ? 1 : 0) + '"><img alt="" loading="lazy" decoding="async" src="' + PF_PHOTO_BASE + (m.v ? 'thumbv/' : 'thumb/') + m.id + '">' + (m.v ? '<span class="pf-photo-v">▶</span>' : '') + '</button>').join(''));
 }
 window.storyPhotoAccessDone = function(access){
-  if(pfGridFor === 'create' && window.StoryNative.mediaAccess) access = window.StoryNative.mediaAccess();  // pictures AND videos
+  if((pfGridFor === 'create' || pfGridFor === 'post') && window.StoryNative.mediaAccess) access = window.StoryNative.mediaAccess();  // pictures AND videos
   if(access !== 'none') openPhotoGrid(access);
-  else if(pfGridFor === 'create') showToast('Lockedintool isn’t allowed to see your pictures');
+  else if(pfGridFor === 'create' || pfGridFor === 'post') showToast('Lockedintool isn’t allowed to see your pictures');
   else window.StoryNative.pickProfilePhoto();  // not allowed: the phone's own picker instead
 };
 function pickProfilePhoto(){
