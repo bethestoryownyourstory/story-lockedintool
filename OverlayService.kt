@@ -77,7 +77,8 @@ class OverlayService : Service(), StoryBridge.Host {
     // Always On Display: when the screen goes off, STORY's dim always-on screen comes up instead
     // (if switched on). Pressing power while it's up turns the screen truly off.
     private val screenOff = object : android.content.BroadcastReceiver() {
-        override fun onReceive(c: Context, i: Intent) { screenOffAt = System.currentTimeMillis(); ui.post { hideLiveWidgets() }; lockDialAway = false; lockDialPeek = false; lockDialBackAt = 0L; onScreenOff(); ui.post { syncLockDial() } }
+        override fun onReceive(c: Context, i: Intent) { screenOffAt = System.currentTimeMillis(); ui.post { hideLiveWidgets() }; lockDialAway = false; lockDialPeek = false; lockDialBackAt = 0L; onScreenOff(); ui.post { syncLockDial() }
+            if (!callActive) Updater.installWaiting(applicationContext) }   // updates install while nobody's using the phone (owner)
     }
     // Screen on: the lock screen may be showing -> the lock screen dial pad (Settings > QUICK ACCESS).
     private val screenOn = object : android.content.BroadcastReceiver() {
@@ -1606,6 +1607,7 @@ class OverlayService : Service(), StoryBridge.Host {
     private var callOpenedProfile = false
     // A call is on (never reload Profile's window then - that would cut the call).
     private var callActive = false
+    fun inCall() = callActive
     private var callAsking = false
     private var ringtone: android.media.Ringtone? = null
     private var callWake: android.os.PowerManager.WakeLock? = null

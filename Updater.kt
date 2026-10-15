@@ -54,16 +54,8 @@ object Updater {
         val e = ctx.getSharedPreferences("story", Context.MODE_PRIVATE).edit()
         if (pct == null) e.remove("upd_progress") else e.putInt("upd_progress", pct)
         e.apply()
-        val nm = ctx.getSystemService(NotificationManager::class.java)
-        if (pct == null) { nm.cancel(PROGRESS_NOTIFICATION); return }
-        nm.createNotificationChannel(NotificationChannel("story_progress", "Lockedintool update progress", NotificationManager.IMPORTANCE_LOW))
-        val n = Notification.Builder(ctx, "story_progress")
-            .setSmallIcon(android.R.drawable.stat_sys_download)
-            .setContentTitle(if (pct >= 0) "Updating Lockedintool…" else "Installing Lockedintool update…")
-            .setContentText(if (pct >= 0) "Downloading $pct%" else "Almost done")
-            .setProgress(100, maxOf(pct, 0), pct < 0)
-            .setOngoing(true).setOnlyAlertOnce(true).build()
-        runCatching { nm.notify(PROGRESS_NOTIFICATION, n) }
+        // Updates are seamless (owner): no "Updating..." notification - only the setup screen's bar shows progress.
+        runCatching { ctx.getSystemService(NotificationManager::class.java).cancel(PROGRESS_NOTIFICATION) }
     }
     /** The download is done and handed to Android's installer (or it failed): the loading bar goes away. */
     fun doneProgress(ctx: Context) = setProgress(ctx, null)
@@ -108,13 +100,32 @@ object Updater {
             if (!force && latest == offered && System.currentTimeMillis() - offeredAt < 10 * 60_000) return
             offered = latest; offeredAt = System.currentTimeMillis()
             val apk = download(base, ctx, latest)
+            doneProgress(ctx)
+            // Seamless (owner): installing restarts Lockedintool for a moment, so it waits for the screen to go off
+            // (nobody using the phone, no call) - OverlayService's screen-off calls installWaiting.
+            val pm = ctx.getSystemService(android.os.PowerManager::class.java)
+            if (pm.isInteractive || OverlayService.instance?.inCall() == true) {
+                ctx.getSharedPreferences("story", Context.MODE_PRIVATE).edit().putLong("upd_waiting", latest).apply()
+                setStatus(ctx, "Build $latest is ready - it installs by itself when the screen is off")
+                return
+            }
             setStatus(ctx, "Installing build $latest…")
-            setProgress(ctx, -1)
             install(ctx, apk)
         } catch (e: Throwable) {
             doneProgress(ctx)
             setStatus(ctx, "Couldn't check for updates (no internet?)")
         } finally { busy = false }
+    }
+
+    /** The screen just went off: a downloaded update that was waiting installs now, out of sight. */
+    fun installWaiting(ctx: Context) {
+        val p = ctx.getSharedPreferences("story", Context.MODE_PRIVATE)
+        val v = p.getLong("upd_waiting", 0); if (v <= 0) return
+        val apk = apkFile(ctx)
+        val mine = runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).longVersionCode }.getOrDefault(0)
+        if (v <= mine || !apk.exists()) { p.edit().remove("upd_waiting").apply(); return }
+        p.edit().remove("upd_waiting").apply()
+        Thread { runCatching { setStatus(ctx, "Installing build $v…"); install(ctx, apk) }.onFailure { setStatus(ctx, "Update will try again") } }.start()
     }
 
     /** Not agreed to automatic updates yet: the update waits, and STORY shows the agreement. */
@@ -235,30 +246,21 @@ class InstallResultReceiver : BroadcastReceiver() {
                 val id = i.getIntExtra(PackageInstaller.EXTRA_SESSION_ID, -1)
                 if (id >= 0) runCatching { c.packageManager.packageInstaller.abandonSession(id) }
                 Updater.doneProgress(c)
-                Updater.setStatus(c, "Waiting for you to tap Update")
-                showUpdateNotification(c)
-                if (!Updater.installWithSystemInstaller(c)) {
-                    // Plan B failed too: fall back to Android's own prompt.
-                    OverlayService.instance?.pauseForInstall()
-                    confirm ?: return
-                    runCatching { c.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-                }
+                // Seamless (owner): no installer screens popping up - it quietly tries again on the next check.
+                Updater.setStatus(c, "This phone needs one tap to allow updates - open Lockedintool's setup screen")
             }
             PackageInstaller.STATUS_SUCCESS -> { Updater.doneProgress(c); Updater.setStatus(c, "Updated") }
             PackageInstaller.STATUS_FAILURE_ABORTED -> {
                 Updater.doneProgress(c)
                 val why = i.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)
                 OverlayService.instance?.resumeNow()
-                // The one-time prompt didn't go through (some phones cancel it): use Android's installer.
-                Updater.setStatus(c, "Quiet update stopped${if (why != null) " ($why)" else ""} - opening Android's installer")
-                if (!Updater.installWithSystemInstaller(c)) Updater.setStatus(c, "Update cancelled - it will try again")
+                Updater.setStatus(c, "Quiet update stopped${if (why != null) " ($why)" else ""} - it will try again")
             }
             else -> {
                 Updater.doneProgress(c)
                 val why = i.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: "error $status"
-                Updater.setStatus(c, "Quiet update failed ($why) - opening Android's installer")
+                Updater.setStatus(c, "Quiet update failed ($why) - it will try again")
                 OverlayService.instance?.resumeNow()
-                if (!Updater.installWithSystemInstaller(c)) Updater.setStatus(c, "Update failed: $why")
             }
         }
     }
