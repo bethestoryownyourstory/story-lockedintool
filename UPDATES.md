@@ -14,3 +14,4 @@ commits, pushed as a new update) - nothing else changes.
 | 6 | 2026-10-15 | Community: Your Community (your own end-to-end encrypted team chat - you name it and add people) and Publics community (Community as before); public accounts choose (or always open theirs), private accounts only have their own | 1ef8789 |
 | 7 | 2026-10-15 | Community: the switch under the two choices says "Always start tab in your community" (not your community's name) | 34c8af5 |
 | 8 | 2026-10-15 | Block, report and delete account: block anyone (Settings > Privacy > Blocked people to undo), report profiles, chats, statuses, posts, comments and groups; the official profile reviews reports (Profile ⋮ > Reports); Profile ⋮ > Delete account; Privacy Policy + Terms updated | 55613f3 |
+| 9 | 2026-10-15 | Block / Report sheets show no name as a title (just the actions); Block asks "Block this account?" | 44a46a8 |
