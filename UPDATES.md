@@ -1,0 +1,9 @@
+# Lockedintool - live updates
+
+Every update goes live for everyone at once (fully live). Each one gets a number here, and the owner is told
+"Update #N is live: ..." when it's out. "Delete update #N" = take out exactly that update (git revert of its
+commits, pushed as a new update) - nothing else changes.
+
+| # | Date | What changed | Commits |
+|---|------|--------------|---------|
+| 1 | 2026-10-15 | Paywall off until the owner switches it on (SUB_ENFORCE); the owner's setup-screen button is now "Undo last update"; every update goes live for everyone (fully live); no "I agree to updates" screen | cddf3b5, e6355ed, 23ab451 |
