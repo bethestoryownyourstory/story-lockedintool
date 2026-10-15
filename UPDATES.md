@@ -10,3 +10,4 @@ commits, pushed as a new update) - nothing else changes.
 | 2 | 2026-10-15 | Updates are seamless: no "Updating..." notification, app updates install only while the screen is off (never during a call), Android's installer never pops up by itself | 83c1aa2 |
 | 3 | 2026-10-15 | Everything fast: as soon as an update is live, the server tells every phone and they get it at once (no waiting for their next check) | 34c1cd8 |
 | 4 | 2026-10-15 | Download page for new users at /get/: logo, Download for Android (the live app) and the install steps | 723486e |
+| 5 | 2026-10-15 | Profile privacy (Profile's ⋮ menu): Public / Private - private profiles can't be found in search and only show to people you follow, message or share a group with. Also: nothing goes live until the owner taps Publish live update; the download page waits for launch | 2fe2de7, ecaaefe |
