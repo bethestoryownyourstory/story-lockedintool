@@ -162,7 +162,7 @@ export class Hub {
         // Payments: can the server really sign in to Stitch? (just a sign-in - no payment is made)
         let pay = this.expressReady() ? 'keys' : 'no-keys';
         if (url.searchParams.get('pay') === '1' && this.expressReady()) { try { await this.expressToken(); pay = 'ok'; } catch (e) { pay = String(e.message || e).slice(0, 160); } }
-        return json({ ok: true, sms: !!(this.env.TWILIO_VERIFY_SID || this.env.TWILIO_FROM), mail: this.mailReady(), resetSms: this.smsLinkReady(), pay, subs: this.subReady(), transfers: this.payReady() });
+        return json({ ok: true, sms: !!(this.env.TWILIO_VERIFY_SID || this.env.TWILIO_FROM), mail: this.mailReady(), resetSms: this.smsLinkReady(), plans: this.subPlans(), pay, subs: this.subReady(), transfers: this.payReady() });
       }
       if (path === '/v1/pay/return') return new Response('<!doctype html><meta name=viewport content="width=device-width,initial-scale=1"><body style="margin:0;background:#000;color:#fff;font:600 18px system-ui;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center;padding:24px;box-sizing:border-box">Done - go back to Lockedintool to see your payment.</body>', { headers: { 'content-type': 'text/html; charset=utf-8' } });
       if (path === '/v1/delete') return this.deletePage(req, url);
@@ -1029,12 +1029,12 @@ export class Hub {
     pair[1].send(JSON.stringify({ t: 'hello', id: me.id }));
     return new Response(null, { status: 101, webSocket: pair[0] });
   }
-  // ---- LOCKED IN TOOL subscription (owner: Basic $1 / Premium $5 a month; no plan = STORY doesn't open). Paid through
+  // ---- LOCKED IN TOOL subscription (owner: Basic $5 / Premium $15 a month - raised from $1 / $5 so each user's costs are covered; no plan = STORY doesn't open). Paid through
   //      Stitch EXPRESS (the owner's Stitch account - STITCH_CLIENT_ID / STITCH_CLIENT_SECRET): a payment link (card,
   //      Capitec, Apple / Google Pay...) into LOCKED IN TOOL's Express balance, withdrawn to the owner's verified bank.
   //      Each payment = 30 days. Prices in rand (Express is rand only): SUB_BASIC_ZAR / SUB_PREMIUM_ZAR. ----
   subPlans() {
-    return { basic: { usd: 1, zar: Number(this.env.SUB_BASIC_ZAR || 19) }, premium: { usd: 5, zar: Number(this.env.SUB_PREMIUM_ZAR || 95) } };
+    return { basic: { usd: 5, zar: Number(this.env.SUB_BASIC_ZAR || 95) }, premium: { usd: 15, zar: Number(this.env.SUB_PREMIUM_ZAR || 285) } };
   }
   subReady() { return this.expressReady(); }
   subView(me) {

@@ -10,7 +10,7 @@ name: Deploy STORY message server
 #     sends: password-reset links, codes to check a private email, Delete account confirmations.
 #   STITCH_CLIENT_ID, STITCH_CLIENT_SECRET - Stitch EXPRESS (subscriptions: payment links into LOCKED IN TOOL's balance);
 #   STITCH_ENT_CLIENT_ID, STITCH_ENT_CLIENT_SECRET - a payout partner (Stitch Enterprise) for sending money to other people;
-#   SUB_BASIC_ZAR / SUB_PREMIUM_ZAR (optional) - the monthly prices in rand ($1 / $5).
+#   SUB_BASIC_ZAR / SUB_PREMIUM_ZAR (optional) - the monthly prices in rand ($5 / $15; default R95 / R285).
 #   SUB_ENFORCE (optional) - set to 1 to switch the paywall on (no plan = only the Subscription page). Leave it unset
 #                until the LIVE Stitch keys are in.
 #   STITCH_REDIRECT (optional) - the page Stitch returns to after you approve a payment (default: this server's /v1/pay/return).
