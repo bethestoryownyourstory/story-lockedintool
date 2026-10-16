@@ -1036,7 +1036,8 @@
   .acct-title{ font:inherit; letter-spacing:inherit; color:inherit; text-transform:inherit; background:transparent; border:1px solid var(--line); border-radius:999px; padding:3px 10px; margin:0; cursor:pointer; display:inline-flex; align-items:center; gap:6px; max-width:100%; overflow:hidden; white-space:nowrap; }
   .acct-title-caret{ font-size:10px; opacity:0.7; }
   .acct-title:active{ opacity:0.6; }
-  .tv-card{ height:190px; padding:0; position:relative; overflow:hidden; }
+  /* Owner: no timeframe row of our own (TradingView has its timeframes) - the chart takes its space (190 + 34). */
+  .tv-card{ height:224px; padding:0; position:relative; overflow:hidden; }
   .tv-slot{ position:absolute; inset:0; }
   .tv-host{ width:100%; height:100%; touch-action:none; }
   .tv-widget{ position:absolute; inset:0; width:100%; height:100%; border:0; display:block; background:#000000; }
@@ -6297,7 +6298,8 @@ function tradeRender(){
 }
 async function tradeDo(label, fn){
   const acc = activeTradeAccount();
-  if(!acc){ state.addAccountOpen = true; renderDevice(); return; }
+  // No account yet: first find your broker (owner: never a TradeLocker login out of nowhere).
+  if(!acc){ state.accountSwitcherOpen = false; state.brokerPanelOpen = true; state.brokerQuery = ''; renderDevice(); showToast('Search your broker and log in first'); return; }
   try{ await fn(acc); showToast(label); }catch(e){ showToast(tradeErrText(e)); }
   tradeRefreshNow(true);
 }
@@ -6774,10 +6776,6 @@ function tradingScreen(){
       </div>
       <button class="tv-sltp-btn${state.draftSLTP ? ' on' : ''}" data-action="draft-sltp" title="Set stop loss / take profit for your next trade">SL/TP</button>
       <button class="chart-fs-btn" data-action="chart-fullscreen" title="Full screen">⤢</button>
-    </div>
-    <div class="tabs-row">
-      ${tfFavs().map(r=>`<div class="tab${state.chartRes===r?' active':''}" data-chartres="${r}">${r}</div>`).join('')}
-      <div class="tab tf-more${tfFavs().includes(state.chartRes) ? '' : ' active'}" data-action="tf-open">${tfFavs().includes(state.chartRes) ? '' : escText(state.chartRes) + ' '}⌄</div>
     </div>
     <div class="live-pl-zone" style="background:${positions.length ? `linear-gradient(180deg, transparent 0%, rgba(${zoneColor},0.09) 26%, rgba(${zoneColor},0.07) 48%, rgba(${zoneColor},0.04) 78%, transparent 100%)` : 'transparent'};">
     <div class="section-title"><button class="acct-title" data-action="broker-panel-open">${acc ? escText(acc.name) + (acc.env === 'demo' ? (acc.platform === 'alpaca' ? ' · PAPER' : ' · DEMO') : '') : `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Search broker`}<span class="acct-title-caret">⌄</span></button></div>
