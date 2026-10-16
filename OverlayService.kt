@@ -1065,7 +1065,7 @@ class OverlayService : Service(), StoryBridge.Host {
     fun foregroundChanged(pkg: String) { widgetLiveEvent(pkg != homePkg()); ui.post { if (appPagePkg != null && pkg != appPagePkg && pkg != packageName) { appPagePkg = null; removeAppEdge() }; systemEnforce(pkg) } }
 
     // ---- Lockedintool as your system (SystemMode.kt): no other app, nor the phone's home screen / recent apps - they're
-    //      sent away and the Pages come back (as they were, no page change). Calls, emergency, the lock screen and what
+    //      sent away and you land on the Dashboard - your home. Calls, emergency, the lock screen and what
     //      Lockedintool itself opens still work. ----
     private var systemToastAt = 0L
     private fun systemEnforce(pkg: String) {
@@ -1082,7 +1082,9 @@ class OverlayService : Service(), StoryBridge.Host {
     private fun systemShowPages() {
         val p = pagesPane ?: return
         hideLiveWidgets()
-        if (!p.shown) { warmUp(); setShown(p, true) }
+        // The Dashboard is your home (owner: the Dashboard acts as your apps): coming back always lands on it. Pages
+        // already up (e.g. back from Lockedintool's own picture picker) stay where they are.
+        if (!p.shown) { warmUp(); p.web.evaluateJavascript("window.storyShow&&window.storyShow('dashboard',false)", null); setShown(p, true) }
         updateBubble(); addBar()
     }
     /** The Pages went away while nothing allowed is in front (the phone's home screen showing): they come back. */
