@@ -5472,7 +5472,7 @@ function moneyAllEditTemplate(){
   return `
     <div class="modal-overlay" data-action="money-all-close">
       <div class="confirm-sheet" onclick="event.stopPropagation()">
-        <div class="confirm-title">Accounts in Net worth</div>
+        <div class="confirm-title">Combined accounts under net worth</div>
         <div class="note" style="margin:0 0 10px;">Only the accounts you tick count.</div>
         ${list.length ? `<div class="row-card" style="margin:0;">${list.map(a=>`<div class="row" data-moneyacct="${escText(a.key)}" style="cursor:pointer;"><div class="row-left"><div class="row-icon">${a.icon}</div><div class="row-name">${escText(a.name)}</div></div><span class="qa-radio${moneyAllHas(a.key) ? ' on' : ''}"></span></div>`).join('')}</div>`
           : `<div class="note">No accounts yet - they show here as your bank’s messages and your trading accounts come in.</div>`}
