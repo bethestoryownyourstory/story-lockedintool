@@ -34,15 +34,14 @@ class MainActivity : Activity() {
         fun title(t: String, size: Float = 22f) = TextView(this).apply { text = t; setTextColor(StoryTheme.swap(this@MainActivity, Color.WHITE)); textSize = size; setPadding(0, 0, 0, pad / 2) }
         fun btn(t: String, f: () -> Unit) = Button(this).apply { text = t; isAllCaps = false; setOnClickListener { f() } }
         col.addView(title("Lockedintool", 32f))
-        // Only use widgets (owner): the app shows just its one switch - on / off. (The owner keeps their own buttons.)
+        // Only use widgets (owner): opening the app shows ONLY the widgets button - Turn off. Turning it off brings
+        // the whole system straight back (the Pages open on the Dashboard).
         if (WidgetMode.on(this)) {
-            col.addView(title("Only use widgets is on: Lockedintool is only your home screen widgets.", 15f))
-            col.addView(btn("Only use widgets: ON  -  tap to turn off") { WidgetMode.set(this, false); recreate() })
-            if (Release.isOwner(this)) {
-                col.addView(title("Owner - Test channel", 15f).apply { setTextColor(Color.parseColor("#FFE8B23D")); setPadding(0, pad, 0, pad / 2) })
-                col.addView(btn("Publish live update") { askPin("Publish live update", "Everything you see on this phone now goes to everyone.") { pin -> publish(pin, "publish") } })
-                col.addView(btn("Undo last update") { askPin("Undo last update", "Everyone goes back to the screens from before the last update.") { pin -> publish(pin, "undo") } })
-            }
+            col.addView(title("Only use widgets", 15f))
+            col.addView(btn("Turn off") {
+                WidgetMode.set(this, false)
+                if (OverlayService.instance != null) { OverlayService.instance?.openPages("dashboard"); finish() } else recreate()
+            })
             setContentView(ScrollView(this).apply { setBackgroundColor(StoryTheme.swap(this@MainActivity, Color.BLACK)); addView(col) })
             return
         }

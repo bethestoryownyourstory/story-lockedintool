@@ -1111,6 +1111,8 @@ class OverlayService : Service(), StoryBridge.Host {
         if (WidgetMode.on(this)) {
             listOfNotNull(dialPane, s3Pane, profilePane, pagesPane).filter { it.shown && !(it === profilePane && callActive) }.forEach { hideOne(it) }
             closeStation3Now()
+            // The system closes and you're on your phone's own home screen and apps (owner).
+            StoryAccessibilityService.instance?.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME)
         }
         addBar(); updateBubble(); syncLockDial()
     } }
