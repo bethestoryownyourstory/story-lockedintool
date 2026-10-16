@@ -32,7 +32,7 @@
     if(window.StoryNative !== live) Object.defineProperty(window, 'StoryNative', { value:live, configurable:true });
     return;
   }
-  const READ = new Set(['getApps','appVersion','getTheme','getProfilePhoto','photoAccess','secretGet','moneyList','moneyAccess','notifList','getCalls','mediaAccess','getQuickAccess','listPhotos']);
+  const READ = new Set(['getApps','appVersion','getTheme','getProfilePhoto','photoAccess','secretGet','moneyList','moneyAccess','notifList','getCalls','mediaAccess','getQuickAccess','listPhotos','widgetsOnlyState','systemModeState']);
   const safe = new Proxy({}, { get(t, k){
     if(k === 'http') return (id, method, url, h, body)=> String(method).toUpperCase() === 'DELETE' ? undefined : real.http(id, method, url, h, body);
     if(READ.has(k)) return (...a)=>real[k](...a);
@@ -7548,6 +7548,7 @@ function sysModeAsk(){
   if(!m.app){ showToast('Lockedintool as your system works in the Lockedintool app'); return; }
   if(!litSignedIn()){ showToast('Log in to your account first'); return; }
   if(!m.ready){ showToast('Turn on Lockedintool system actions first (on the setup screen)'); return; }
+  if(wgOn()){ showToast('Turn off Only use widgets first (in the Lockedintool app)'); return; }
   litSheet({ title:'Make Lockedintool your only system?', text:'Your phone will only use Lockedintool - no other app will open, not even the phone’s home screen or app list. Phone calls and emergency calls still work. The only way to turn it off is to log out or delete your account.',
     items:[{ label:'Make it my system', fn: ()=>{ try{ window.StoryNative.systemModeSet(true, ''); }catch(e){} setTimeout(()=>{ syncAppPages(); if(sysModeState().on){ showToast('Lockedintool is your system now'); } else showToast('Couldn’t turn it on - check Lockedintool system actions'); renderDevice(); }, 150); } }] });
 }
@@ -7732,6 +7733,27 @@ function quickAccessSettingsHTML(){
       ${opt('separate', 'Station 3 dial pad separate')}
       ${opt('dialonly', 'Dial pad only')}
     </div>`;
+}
+// Only use widgets (owner): Lockedintool is only its home screen widgets - the Pages, Station 3, the bottom line and
+// everything else disappear, and no pages can be made. Turned off (or on) only in the Lockedintool app, which then shows
+// just that one switch (WidgetMode.kt).
+function wgOn(){ try{ return !!(window.StoryNative && window.StoryNative.widgetsOnlyState && window.StoryNative.widgetsOnlyState() === 'on'); }catch(e){ return false; } }
+function widgetsOnlySettingsHTML(){
+  return `
+    <div class="section-title">WIDGETS</div>
+    <div class="set2-card">
+      <div class="set2-row">
+        <div class="set2-text"><div class="set2-name">Only use widgets</div><div class="set2-sub">You can only use Lockedintool's widgets on your home screen - everything else disappears: the Pages, Station 3 and the bottom line. You can't make pages. Turn it off in the Lockedintool app.</div></div>
+        <button class="toggle-switch${wgOn() ? ' on' : ''}" data-action="widgets-only"><span class="toggle-knob"></span></button>
+      </div>
+    </div>`;
+}
+function widgetsOnlyAsk(){
+  if(!(NATIVE && window.StoryNative.widgetsOnlySet)){ showToast('Only use widgets works in the Lockedintool app'); return; }
+  if(wgOn()){ showToast('Turn it off in the Lockedintool app'); return; }
+  if(sysOn()){ showToast('Lockedintool is your only system - log out to change it'); return; }
+  litSheet({ title:'Only use widgets?', text:'Everything but Lockedintool’s widgets on your home screen disappears - the Pages, Station 3 and the bottom line. You can’t make pages. To turn it off, open the Lockedintool app and tap its switch.',
+    items:[{ label:'Only use widgets', fn: ()=>{ let ok = false; try{ ok = window.StoryNative.widgetsOnlySet(true); }catch(e){} if(!ok) showToast('Couldn’t turn it on'); else showToast('Only widgets now'); } }] });
 }
 function saveQuickAccess(patch){
   const q = Object.assign(quickAccess(), patch);
@@ -8091,6 +8113,7 @@ function settingsHubScreen(){
       </div>
     </div>
     ${quickAccessSettingsHTML()}
+    ${widgetsOnlySettingsHTML()}
     ${privacySettingsHTML()}
     <div class="section-title">CATEGORIES</div>
     <div class="set2-card">
@@ -10694,7 +10717,7 @@ function appMenuTemplate(){
       <div class="confirm-sheet" onclick="event.stopPropagation()">
         <div class="confirm-title app-menu-title"><span class="app-menu-icon">${appIconHTML(a)}</span>${escText(a.name)}</div>
         <div class="confirm-btn-row">
-          ${a.section !== 'STORY' ? `<button class="btn-wide" style="margin-top:0;" data-action="app-turn-into-page">${a.pkg && appPagesStored().some(x=>x.pkg === a.pkg) ? 'Remove page' : 'Create into a page'}</button>` : ''}
+          ${a.section !== 'STORY' && !wgOn() ? `<button class="btn-wide" style="margin-top:0;" data-action="app-turn-into-page">${a.pkg && appPagesStored().some(x=>x.pkg === a.pkg) ? 'Remove page' : 'Create into a page'}</button>` : ''}
           <button class="btn-wide" style="margin-top:0;color:var(--red);" data-action="app-delete">Delete App</button>
         </div>
       </div>
@@ -15668,6 +15691,7 @@ function attachHandlers(){
         case 'send-open': state.current = 'send-money'; state.pay.info = null; state.pay.loading = false; break;
         case 'receive-open': state.current = 'receive-money'; state.pay.info = null; state.pay.loading = false; break;
         case 'sub-buy': subBuy(el.getAttribute('data-plan')); break;
+        case 'widgets-only': widgetsOnlyAsk(); break;
         case 'sub-opt': state.sub.optView = el.getAttribute('data-v'); renderDevice(); break;
         case 'sub-opt-back': state.sub.optView = null; renderDevice(); break;
         case 'sub-opt-ok': subOptConfirm(); break;
