@@ -1331,6 +1331,28 @@
   #story-profile .cv-in .cv-btn{ width:68px; height:68px; }
   #story-profile .cv-decline{ background:#e5484d !important; border-color:#e5484d !important; color:#fff !important; }
   #story-profile .cv-accept{ background:#2ea44f; border-color:#2ea44f; color:#fff; }
+  /* Group calls: everyone in the call as tiles (video, or their picture), up to 8. */
+  #story-profile .pf-gcallview{ justify-content:flex-start; gap:18px; padding-top:40px; }
+  #story-profile .pf-gcallview .cv-top{ margin-top:6px; }
+  #story-profile .pf-gcallview .cv-btns.cv-live, #story-profile .pf-gcallview .cv-btns.cv-in{ margin-top:auto; }
+  #story-profile .gc-grid{ width:100%; flex:1; min-height:0; display:grid; grid-template-columns:1fr 1fr; grid-auto-rows:minmax(0, 1fr); gap:8px; }
+  #story-profile .gc-grid:empty{ display:none; }
+  #story-profile .gc-grid[data-n="1"]{ grid-template-columns:1fr; }
+  #story-profile .gc-tile{ position:relative; border:1px solid var(--pf-hair); border-radius:16px; overflow:hidden; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; min-height:0; }
+  #story-profile .pf-gcallview .gc-tile video{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; opacity:0; }
+  #story-profile .gc-tile.gc-vid video{ opacity:1; }
+  #story-profile .gc-tile[data-id="me"] video{ transform:scaleX(-1); }
+  #story-profile .gc-tile .msg-pic{ width:56px; height:56px; }
+  #story-profile .gc-tile.gc-vid .msg-pic{ visibility:hidden; }
+  #story-profile .gc-tile b{ position:relative; font-size:13px; font-weight:700; max-width:90%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #story-profile .gc-tile.gc-vid b{ position:absolute; left:8px; bottom:8px; color:#fff; text-shadow:0 1px 4px rgba(0,0,0,0.8); }
+  #story-profile .gc-tile i{ position:relative; font-style:normal; font-size:11px; color:var(--pf-muted); }
+  #story-profile .gc-ask{ opacity:0.75; border-style:dashed; }
+  #story-profile .gc-admit{ position:relative; padding:6px 14px; border-radius:14px; border:0; background:#2ea44f; color:#fff; font:inherit; font-size:12px; font-weight:800; }
+  #story-profile .pf-chat-live{ display:flex; align-items:center; gap:8px; width:100%; margin:4px 0 10px; padding:10px 12px; border:1px solid rgba(34,197,94,0.55); border-radius:14px; background:transparent; color:var(--pf-fg); font:inherit; font-size:13px; text-align:left; }
+  #story-profile .pf-chat-live i{ width:9px; height:9px; border-radius:50%; background:#22c55e; flex:none; }
+  #story-profile .pf-chat-live span{ flex:1; }
+  #story-profile .pf-chat-live b{ color:#22c55e; }
   #story-profile .pf-chat-sheet{ margin:6px 12px; padding:10px; border:1px solid rgba(255,255,255,0.2); border-radius:14px; display:flex; flex-direction:column; gap:6px; }
   #story-profile .pf-chat-sheet[hidden]{ display:none; }
   #story-profile .pf-chat-sheet-t{ font-weight:700; font-size:13px; }
@@ -8051,7 +8073,7 @@ function litAccountGone(why){
 }
 function delAccountForget(){
   ['story-msg-account', 'story-msg-peers', MSG_KEY, MSG_OUTBOX, 'story-profile', 'story-profile-stats', PF_LOCKS_KEY, 'story-posts', 'story-highlights', 'story-upost-queue',
-   'story-status-seen', 'story-status-remind', 'story-activity', 'story-calls', 'story-privacy', 'story-blocked', 'story-community', 'story-community-chats', 'story-community-always-mine', 'story-sub', 'story-photo-up', 'story-recovery', 'story-auth-locked']
+   'story-status-seen', 'story-status-remind', 'story-activity', 'story-calls', 'story-privacy', 'story-blocked', 'story-community', 'story-community-chats', 'story-community-always-mine', 'story-sub', 'story-photo-up', 'story-recovery', 'story-auth-locked', 'story-glive']
     .forEach(k=>{ try{ localStorage.removeItem(k); }catch(e){} });
   msgChatsCache = null;
   if(NATIVE && window.StoryNative.removeProfilePhoto) try{ window.StoryNative.removeProfilePhoto(); }catch(e){}
@@ -8250,7 +8272,6 @@ function informationScreen(){
       ['Your broker logins', 'Kept in Lockedintool\u2019s private storage on your phone - never your password.'],
     ])}
     ${block('COMING NEXT', [
-      ['Group calls', 'Calls with your whole group.'],
       ['Your bank inside Lockedintool', 'Log in to your bank for your full history and live balance.'],
       ['Subscription', 'One subscription that covers everything Lockedintool connects for you.'],
     ])}
@@ -8961,7 +8982,7 @@ window.storyProfileOnly = function(){
     else if(k === 'chat-send') sendChatMessage();
     else if(k === 'chat-call' || k === 'chat-video'){
       const c = msgChats().find(x=>x.id === msgView.chat);
-      if(c && c.kind === 'group') showToast('Group calls — coming soon');   // group calls come with the group server
+      if(c && c.kind === 'group') gcallGo(c.id, k === 'chat-video');
       else if(c) callStart(c.id, k === 'chat-video');
     }
     else if(k === 'msg-start') msgStart(b.getAttribute('data-id'));
@@ -8972,6 +8993,13 @@ window.storyProfileOnly = function(){
     else if(k === 'call-speaker') callToggle('speaker');
     else if(k === 'call-cam') callToggle('cam');
     else if(k === 'call-flip') callFlip();
+    else if(k === 'gcall-accept') gcallAccept();
+    else if(k === 'gcall-decline') gcallDecline();
+    else if(k === 'gcall-end') gcallEnd('You left the call');
+    else if(k === 'gcall-mute' || k === 'gcall-speaker' || k === 'gcall-cam') gcallToggle(k.slice(6));
+    else if(k === 'gcall-flip') gcallFlip();
+    else if(k === 'gcall-admit') gcallSend({ kind:'admit', id:b.getAttribute('data-id') });
+    else if(k === 'gcall-join'){ const c = msgChats().find(x=>x.id === msgView.chat); if(c) gcallGo(c.id, false, true); }
     else if(k === 'chat-info'){ const c = msgChats().find(x=>x.id === msgView.chat); const sh = document.querySelector('#story-profile .pf-chat-sheet');
       if(c && sh && /^grp/.test(c.id)) groupSheetOpen(sh.hidden);
       else if(c && sh && c.groupType === 'private' && (c.leaders || []).includes('me')){ sh.hidden = !sh.hidden; renderChat(); }
@@ -10053,7 +10081,9 @@ function renderChat(toEnd){
   const atEnd = toEnd || list.scrollTop + list.clientHeight >= list.scrollHeight - 40;
   const typing = c.typing && Date.now() - (c.typing.at || 0) < 6000;
   // A public group's chat is public (anyone can join), so it never claims to be end-to-end encrypted.
-  list.innerHTML = (c.kind === 'system' ? '<div class="pf-chat-e2e">Messages from Lockedintool</div>' : c.kind === 'group' && c.groupType !== 'private' ? '<div class="pf-chat-e2e">Public group - anyone can join</div>' : '<div class="pf-chat-e2e"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>End-to-end encrypted</div>') +
+  const glive = c.kind === 'group' && MSG_ENGINE ? gliveAll()[c.id] : null;
+  const liveBar = glive && !(gcall.gid === c.id && gcall.state !== 'idle' && gcall.state !== 'incoming') ? '<button class="pf-chat-live" data-pf="gcall-join"><i></i><span>Live call happening · ' + glive.count + ' in the call</span><b>Join</b></button>' : '';
+  list.innerHTML = liveBar + (c.kind === 'system' ? '<div class="pf-chat-e2e">Messages from Lockedintool</div>' : c.kind === 'group' && c.groupType !== 'private' ? '<div class="pf-chat-e2e">Public group - anyone can join</div>' : '<div class="pf-chat-e2e"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>End-to-end encrypted</div>') +
     ms.map((m, i)=>{
       const me = m.from === 'me';
       const st = i === lastMine && MSG_STATUS[m.status] ? ' · <b class="msg-' + m.status + '">' + MSG_STATUS[m.status] + '</b>' : '';
@@ -10244,6 +10274,8 @@ async function msgOnServer(m){
   }
   if(m.t === 'signedout'){ msgSignedOut(); return; }
   if(m.t === 'call'){ callOnSignal(m); return; }
+  if(m.t === 'gcall'){ gcallOnMsg(m).catch(()=>{}); return; }
+  if(m.t === 'glive'){ gliveSet(m.group, m.live); return; }
 }
 // ---- Groups in Messages: every group you're in (public from Community, private made here) is a chat, kept up to date
 // by the server (t:'group'). Private group messages are locked for each member; public group chat is public. ----
@@ -10509,7 +10541,7 @@ function callPc(){
   return pc;
 }
 async function callStart(peerId, video){
-  if(call.state !== 'idle'){ showToast('You’re already on a call'); return; }
+  if(gcallBusy()){ showToast('You’re already on a call'); return; }
   if(!msgAccount()){ showToast('No connection to Lockedintool right now'); msgEnsureAccount(); return; }
   const c = msgChats().find(x=>x.id === peerId) || {};
   if(c.canCall === false){ showToast('They don’t take calls from you'); return; }
@@ -10527,7 +10559,7 @@ async function callStart(peerId, video){
 }
 async function callOnSignal(m){
   if(m.kind === 'offer'){
-    if(call.state !== 'idle'){ msgSend({ t:'call', to:m.from, kind:'busy', callId:m.callId }); callSave({ peer:m.from, name:m.name, username:m.username, video:m.video, dir:'missed', start:m.at || Date.now() }); return; }
+    if(gcallBusy()){ msgSend({ t:'call', to:m.from, kind:'busy', callId:m.callId }); callSave({ peer:m.from, name:m.name, username:m.username, video:m.video, dir:'missed', start:m.at || Date.now() }); return; }
     chatFor(m.from, { name:m.name, username:m.username, incoming:true }); saveMsgChats();
     Object.assign(call, { state:'incoming', id:m.callId, peer:m.from, name:m.name || '', username:m.username || '', video:!!m.video, dir:'in', offer:m.sdp, pendingIce:[], start:Date.now(), answeredAt:0, muted:false, speaker:!!m.video, camOff:false, remote:null, local:null, endText:'' });
     msgSend({ t:'call', to:m.from, kind:'ringing', callId:m.callId });
@@ -10598,6 +10630,201 @@ async function callFlip(){
 }
 // The app tells the page Android's answer to the microphone / camera question.
 window.storyCallAccess = function(ok){ if(!ok) showToast('Lockedintool needs the microphone for calls'); };
+// ---- Group calls (owner's rules): phone to phone, each phone linked to every other (up to 8 people). Public groups:
+// members start a call, anyone can join, a leader's call rings every member. Private groups: members only; its leaders
+// choose "Everyone can join" or "Ask to join" - then you listen to the whole call until a leader lets you in. A live
+// call shows a green icon on the group (story-glive, told by the server - never made up). Runs in Profile's window. ----
+const GLIVE_KEY = 'story-glive', GCALL_REQ = 'story-gcall-req';
+const gcall = { state:'idle', gid:'', id:'', name:'', video:false, role:'in', leader:false, callJoin:'open', parts:{}, local:null, muted:false, speaker:false, camOff:false, facing:'user', start:0, joinedAt:0, ringT:0, timer:0, from:'', endText:'' };
+function gliveAll(){ try{ return JSON.parse(localStorage.getItem(GLIVE_KEY) || '{}') || {}; }catch(e){ return {}; } }
+function gliveSet(gid, live){
+  const a = gliveAll(); if(live) a[gid] = live; else delete a[gid];
+  try{ localStorage.setItem(GLIVE_KEY, JSON.stringify(a)); }catch(e){}
+  if(typeof window.storyGroupLive === 'function') window.storyGroupLive(gid, live || null);
+  renderChat(); renderMsgList();
+}
+function gcallBusy(){ return call.state !== 'idle' || gcall.state !== 'idle'; }
+function gcallView(){
+  const el = document.getElementById('story-profile'); if(!el) return null;
+  let v = el.querySelector('.pf-gcallview');
+  if(!v){
+    const src = callView(); if(!src) return null;
+    v = document.createElement('div'); v.className = 'pf-callview pf-gcallview'; v.hidden = true;
+    v.innerHTML = '<div class="cv-top"><div class="cv-name"></div><div class="cv-state"></div></div><div class="gc-grid"></div>' +
+      src.querySelector('.cv-in').outerHTML.replace(/call-accept/g, 'gcall-accept').replace(/call-decline/g, 'gcall-decline') +
+      src.querySelector('.cv-live').outerHTML.replace(/"call-(mute|speaker|cam|flip|end)"/g, '"gcall-$1"');
+    el.appendChild(v);
+  }
+  return v;
+}
+function gcallTileHTML(id, p){
+  const me = id === 'me', ask = p.role === 'ask';
+  return '<div class="gc-tile' + (ask ? ' gc-ask' : '') + '" data-id="' + escText(id) + '"><video playsinline autoplay' + (me ? ' muted' : '') + '></video>' +
+    '<span class="msg-pic">' + PF_PHOTO_PLACEHOLDER + '</span><b>' + escText(me ? 'You' : (p.name || (p.username ? '@' + p.username : 'Someone'))) + '</b>' +
+    (ask ? '<i>' + (me ? 'Listening' : 'Wants to join') + '</i>' + (!me && gcall.leader ? '<button class="gc-admit" data-pf="gcall-admit" data-id="' + escText(id) + '">Let in</button>' : '') : '') + '</div>';
+}
+function gcallRender(){
+  const v = gcallView(); if(!v) return;
+  const on = gcall.state !== 'idle';
+  v.hidden = !on; if(!on){ v.querySelector('.gc-grid').innerHTML = ''; return; }
+  v.querySelector('.cv-name').textContent = gcall.name || 'Group call';
+  const secs = gcall.joinedAt ? Math.floor((Date.now() - gcall.joinedAt) / 1000) : 0;
+  const n = Object.keys(gcall.parts).length + 1;
+  v.querySelector('.cv-state').textContent = gcall.state === 'incoming' ? (gcall.from ? gcall.from + ' is calling · ' : '') + (gcall.video ? 'Group video call' : 'Group call') :
+    gcall.state === 'joining' ? 'Joining...' : gcall.state === 'ended' ? gcall.endText || 'Call ended' :
+    gcall.role === 'ask' ? 'Listening - a leader will let you in' : callLen(secs) + ' · ' + n + (n === 1 ? ' person' : ' people');
+  const grid = v.querySelector('.gc-grid');
+  if(gcall.state === 'live' || gcall.state === 'joining'){
+    const want = ['me'].concat(Object.keys(gcall.parts));
+    grid.querySelectorAll('.gc-tile').forEach(t=>{ if(!want.includes(t.getAttribute('data-id'))) t.remove(); });
+    want.forEach(id=>{
+      const p = id === 'me' ? { role:gcall.role } : gcall.parts[id];
+      let t = grid.querySelector('.gc-tile[data-id="' + CSS.escape(id) + '"]');
+      const sig = (p.role || '') + '|' + gcall.leader + '|' + (p.name || '');
+      if(!t || t.getAttribute('data-sig') !== sig){
+        const tmp = document.createElement('div'); tmp.innerHTML = gcallTileHTML(id, p); const nt = tmp.firstChild; nt.setAttribute('data-sig', sig);
+        if(t) t.replaceWith(nt); else grid.appendChild(nt); t = nt;
+      }
+      const vid = t.querySelector('video'), stream = id === 'me' ? gcall.local : p.stream;
+      if(vid.srcObject !== (stream || null)) vid.srcObject = stream || null;
+      // Someone still waiting to be let in can be heard by no one (owner: they only listen).
+      if(id !== 'me') vid.muted = p.role === 'ask';
+      const hasVid = !!(stream && stream.getVideoTracks().some(x=>x.enabled && x.readyState === 'live')) && !(id === 'me' && gcall.camOff) && gcall.video;
+      t.classList.toggle('gc-vid', hasVid);
+    });
+    grid.setAttribute('data-n', String(Math.min(want.length, 8)));
+  } else grid.innerHTML = '';
+  v.querySelector('.cv-in').hidden = gcall.state !== 'incoming';
+  v.querySelector('.cv-live').hidden = gcall.state === 'incoming' || gcall.state === 'ended';
+  v.querySelectorAll('.cv-vid').forEach(b=>b.hidden = !gcall.video);
+  v.querySelector('[data-pf="gcall-mute"]').classList.toggle('on', gcall.muted);
+  v.querySelector('[data-pf="gcall-speaker"]').classList.toggle('on', gcall.speaker);
+  v.querySelector('[data-pf="gcall-cam"]').classList.toggle('on', gcall.camOff);
+}
+function gcallSend(o){ msgSend(Object.assign({ t:'gcall', group:gcall.gid }, o)); }
+// Your microphone / camera only go out once you're really in the call (not while you only listen).
+function gcallApplyTracks(){
+  if(!gcall.local) return;
+  const talk = gcall.role === 'in';
+  gcall.local.getAudioTracks().forEach(t=>t.enabled = talk && !gcall.muted);
+  gcall.local.getVideoTracks().forEach(t=>t.enabled = talk && !gcall.camOff);
+}
+function gcallPc(id){
+  const p = gcall.parts[id]; if(!p) return null;
+  if(p.pc) return p.pc;
+  const pc = new RTCPeerConnection({ iceServers: CALL_ICE });
+  p.pc = pc; p.pendingIce = [];
+  if(gcall.local) gcall.local.getTracks().forEach(t=>pc.addTrack(t, gcall.local));
+  pc.onicecandidate = e=>{ if(e.candidate) gcallSend({ kind:'signal', to:id, cand:e.candidate.toJSON() }); };
+  pc.ontrack = e=>{ p.stream = e.streams[0] || new MediaStream([e.track]); e.track.onunmute = ()=>gcallRender(); gcallRender(); };
+  pc.onconnectionstatechange = ()=>{
+    if(pc.connectionState === 'connected' && gcall.state === 'joining') gcallLive();
+    if(pc.connectionState === 'failed'){ try{ pc.restartIce(); }catch(e){} }
+  };
+  return pc;
+}
+function gcallLive(){
+  if(gcall.state === 'live') return;
+  gcall.state = 'live'; gcall.joinedAt = gcall.joinedAt || Date.now();
+  callNative('callAudio', true, gcall.speaker || gcall.video);
+  clearInterval(gcall.timer); gcall.timer = setInterval(gcallRender, 1000); gcallRender();
+}
+async function gcallOffer(id){
+  const pc = gcallPc(id); if(!pc) return;
+  await pc.setLocalDescription(await pc.createOffer());
+  gcallSend({ kind:'signal', to:id, sdp:pc.localDescription.sdp, sdpType:'offer' });
+}
+function gcallReset(o){
+  Object.assign(gcall, { parts:{}, local:null, muted:false, speaker:false, camOff:false, facing:'user', start:Date.now(), joinedAt:0, role:'in', leader:false, endText:'', from:'' }, o);
+}
+// Start a call in a group, or join the one that's live.
+async function gcallGo(gid, video, join, gname){
+  if(gcallBusy()){ if(gcall.gid === gid && gcall.state !== 'idle') return; showToast('You’re already on a call'); return; }
+  if(!msgAccount() || !msgWsOpen){ showToast('No connection to Lockedintool right now'); msgConnect(); return; }
+  const c = msgChats().find(x=>x.id === gid) || {}, live = gliveAll()[gid];
+  const vid = live ? !!live.video : !!video;
+  gcallReset({ state:'joining', gid, id:'', name:c.name || gname || '', video:vid });
+  callNative('callUi', true); gcallRender();
+  try{ gcall.local = await callMedia(vid); }
+  catch(e){ gcallEnd(e && e.code === 'asking' ? 'Allow the microphone, then try again' : 'Couldn’t start the call'); return; }
+  gcallApplyTracks();
+  gcallSend({ kind: join || live ? 'join' : 'start', video:vid });
+}
+async function gcallOnMsg(m){
+  if(m.kind === 'ring'){
+    if(gcallBusy()) return;   // already on a call (the server never rings people who blocked each other)
+    chatFor(m.group, { name:m.gname });
+    gcallReset({ state:'incoming', gid:m.group, id:m.callId, name:m.gname || 'Group call', video:!!m.video, from:m.name || (m.username ? '@' + m.username : '') });
+    callNative('callUi', true); callNative('callRing', true, gcall.name, !!m.video); gcallRender();
+    clearTimeout(gcall.ringT); gcall.ringT = setTimeout(()=>{ if(gcall.state === 'incoming') gcallEnd('Missed group call', 'missed'); }, 45000);
+    return;
+  }
+  if(m.kind === 'over' && gcall.gid === m.group && gcall.state === 'incoming') return gcallEnd('The call ended', 'missed');
+  if(m.group !== gcall.gid || gcall.state === 'idle' || gcall.state === 'incoming') return;
+  if(m.kind === 'error'){ return gcallEnd(m.error === 'full' ? 'The call is full (8 people)' : m.error === 'over' ? 'The call already ended' : m.error === 'private-account' ? 'Private accounts can’t join public group calls' : m.error === 'member' ? 'Only members can start a call here' : m.error === 'notfound' ? 'This group isn’t on Lockedintool’s server' : 'Couldn’t join the call'); }
+  if(m.kind === 'joined'){
+    Object.assign(gcall, { id:m.callId, role:m.role, leader:!!m.leader, callJoin:m.callJoin, name:m.name || gcall.name, video:!!m.video });
+    gcallApplyTracks();
+    (m.parts || []).forEach(p=>{ gcall.parts[p.id] = { id:p.id, name:p.name, username:p.username, role:p.role }; });
+    if(!(m.parts || []).length) gcallLive();   // you started it - the call is live while you wait for people
+    for(const p of (m.parts || [])) gcallOffer(p.id).catch(()=>{});
+    gcallRender(); return;
+  }
+  if(m.kind === 'peer'){ gcall.parts[m.id] = Object.assign(gcall.parts[m.id] || {}, { id:m.id, name:m.name, username:m.username, role:m.role }); gcallRender(); return; }
+  if(m.kind === 'gone'){ const p = gcall.parts[m.id]; if(p){ try{ p.pc && p.pc.close(); }catch(e){} delete gcall.parts[m.id]; } gcallRender(); return; }
+  if(m.kind === 'role'){
+    if(m.id === (msgAccount() || {}).id){ gcall.role = m.role; gcallApplyTracks(); if(m.role === 'in') showToast('You’re in the call'); }
+    else if(gcall.parts[m.id]) gcall.parts[m.id].role = m.role;
+    gcallRender(); return;
+  }
+  if(m.kind === 'signal'){
+    let p = gcall.parts[m.from]; if(!p) p = gcall.parts[m.from] = { id:m.from, role:'in' };
+    const pc = gcallPc(m.from);
+    if(m.sdp){
+      await pc.setRemoteDescription({ type:m.sdpType, sdp:m.sdp });
+      for(const c of (p.pendingIce || []).splice(0)) await pc.addIceCandidate(c).catch(()=>{});
+      if(m.sdpType === 'offer'){ await pc.setLocalDescription(await pc.createAnswer()); gcallSend({ kind:'signal', to:m.from, sdp:pc.localDescription.sdp, sdpType:'answer' }); }
+    } else if(m.cand){ if(pc.remoteDescription) await pc.addIceCandidate(m.cand).catch(()=>{}); else (p.pendingIce = p.pendingIce || []).push(m.cand); }
+  }
+}
+function gcallAccept(){ if(gcall.state !== 'incoming') return; callNative('callRing', false); clearTimeout(gcall.ringT); const g = gcall.gid, v = gcall.video; gcall.state = 'idle'; gcallGo(g, v, true); }
+function gcallDecline(){ if(gcall.state !== 'incoming') return; gcallEnd('Declined', 'missed'); }
+function gcallEnd(text, dir){
+  if(gcall.state === 'idle') return;
+  const wasIn = gcall.state === 'live' || gcall.state === 'joining';
+  if(wasIn) gcallSend({ kind:'leave' });
+  clearTimeout(gcall.ringT); clearInterval(gcall.timer);
+  callNative('callRing', false); callNative('callAudio', false, false);
+  const answered = !!gcall.joinedAt;
+  callSave({ peer:gcall.gid, name:gcall.name, video:gcall.video, dir: dir || (gcall.state === 'incoming' ? 'missed' : answered ? (gcall.from ? 'in' : 'out') : 'out'), start:gcall.start, end: answered ? Date.now() : 0, duration: answered ? (Date.now() - gcall.joinedAt) / 1000 : 0 });
+  Object.values(gcall.parts).forEach(p=>{ try{ p.pc && p.pc.close(); }catch(e){} });
+  try{ gcall.local && gcall.local.getTracks().forEach(t=>t.stop()); }catch(e){}
+  gcall.parts = {}; gcall.local = null;
+  gcall.state = 'ended'; gcall.endText = text || 'You left the call'; gcallRender();
+  setTimeout(()=>{ if(gcall.state === 'ended'){ gcall.state = 'idle'; gcallRender(); if(call.state === 'idle') callNative('callUi', false); } }, 1600);
+}
+function gcallToggle(k){
+  if(k === 'mute') gcall.muted = !gcall.muted;
+  if(k === 'speaker'){ gcall.speaker = !gcall.speaker; callNative('callAudio', true, gcall.speaker); }
+  if(k === 'cam') gcall.camOff = !gcall.camOff;
+  gcallApplyTracks(); gcallRender();
+}
+async function gcallFlip(){
+  if(!gcall.video || !gcall.local) return;
+  gcall.facing = gcall.facing === 'user' ? 'environment' : 'user';
+  try{
+    const s = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:gcall.facing } });
+    const nt = s.getVideoTracks()[0]; nt.enabled = gcall.role === 'in' && !gcall.camOff;
+    for(const p of Object.values(gcall.parts)){ const snd = p.pc && p.pc.getSenders().find(x=>x.track && x.track.kind === 'video'); if(snd) await snd.replaceTrack(nt); }
+    gcall.local.getVideoTracks().forEach(t=>{ gcall.local.removeTrack(t); t.stop(); }); gcall.local.addTrack(nt);
+    gcallRender();
+  }catch(e){}
+}
+// The Pages window (Community) asks Profile's window to start / join a group's call.
+window.addEventListener('storage', e=>{
+  if(e.key === GCALL_REQ && MSG_ENGINE && e.newValue){ try{ const r = JSON.parse(e.newValue); if(r && Date.now() - r.at < 15000) gcallGo(r.gid, r.video, r.join, r.name); }catch(err){} }
+  if(e.key === GLIVE_KEY && !MSG_ENGINE && typeof window.storyGroupLive === 'function'){ const a = gliveAll(), b = (()=>{ try{ return JSON.parse(e.oldValue || '{}') || {}; }catch(x){ return {}; } })(); new Set(Object.keys(a).concat(Object.keys(b))).forEach(id=>window.storyGroupLive(id, a[id] || null)); }
+});
 if(MSG_ENGINE){
   setTimeout(()=>{ msgEnsureAccount(); msgConnect(); msgFlush(); }, 400);
   document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState === 'visible') msgConnect(); });
@@ -16159,8 +16386,13 @@ function attachHandlers(){
           break;
         }
         // Group calls need STORY's call server (the same server Messages waits on) - until then they say so.
-        case 'community-group-call': showToast('Group calls — coming soon'); break;
-        case 'community-join-call': showToast('Joining calls — coming soon'); break;
+        case 'community-group-call': case 'community-join-call': {
+          // The call itself runs in Profile's window (where the connection lives); the Pages ask it to start / join.
+          const gid = el.getAttribute('data-groupid'), g = findCommunityGroupById(gid);
+          if(!NATIVE){ showToast('Group calls work in the Lockedintool app'); break; }
+          if(!litSignedIn()){ showToast('Log in to Lockedintool first'); break; }
+          try{ localStorage.setItem(GCALL_REQ, JSON.stringify({ gid, name: g ? g.name : '', video:false, join: action === 'community-join-call', at: Date.now() })); }catch(e){}
+          break; }
         case 'community-open-group': {
           const id = el.getAttribute('data-groupid');
           state.communityActiveGroupId = id;
@@ -16446,6 +16678,7 @@ function communityFromServer(v, old){
     // The page counts members with members.length and checks members.includes('You').
     members: (v.member ? ['You'] : []).concat(Array(Math.max(0, n - (v.member ? 1 : 0))).fill('')),
     pendingRequests: [], liveDataKind: null, banned: false, warned: false, posts: (old && old.posts) || [],
+    liveCall: v.live || null,   // a live group call (server): the green icon and Join call
     // Trending uses these real numbers (owner: everything real).
     trendingStats: { joined: n, shares: +v.shares || 0, likes: +v.likes || 0, comments: +v.comments || 0 },
   });

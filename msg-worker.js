@@ -34,6 +34,7 @@ const BRAND = 'lockedintool';
 const brandIn = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '').includes(BRAND);
 const LIT_ITER = 210000;   // the app's password key rounds (index.html LIT_ITER) - the reset page uses the same
 const NAME_WAIT = 60 * 86400000, USERNAME_WAIT = 100 * 86400000;   // owner: name once every 60 days, @username once every 100
+const GCALL_MAX = 8;   // group calls: every phone links to every other phone, so a call holds up to 8 people
 const USERNAME = /^(?!.*\.\.)(?!\.)(?!.*\.$)[a-z0-9_.]{3,30}$/;
 // South African banks Stitch pays into (its BankBeneficiaryBankId names) - shown by their own names.
 const PAY_BANKS = { absa: 'Absa', african_bank: 'African Bank', capitec: 'Capitec', discovery_bank: 'Discovery Bank', fnb: 'FNB', investec: 'Investec', nedbank: 'Nedbank', standard_bank: 'Standard Bank', tymebank: 'TymeBank' };
@@ -56,6 +57,10 @@ export class Hub {
     this.sql.exec(`CREATE INDEX IF NOT EXISTS queue_uid ON queue(uid)`);
     this.sql.exec(`CREATE TABLE IF NOT EXISTS groups (id TEXT PRIMARY KEY, name TEXT, about TEXT, type TEXT, image TEXT, category TEXT, country TEXT, creator TEXT, calljoin TEXT, created INTEGER)`);
     this.sql.exec(`CREATE TABLE IF NOT EXISTS gmembers (gid TEXT, uid TEXT, role TEXT, joined INTEGER, PRIMARY KEY (gid, uid))`);
+    // Group calls (phone to phone, every phone linked to every other): the live call of a group and who is in it.
+    // role 'in' = talking, 'ask' = listening until a leader lets them in (private groups set to "Ask to join").
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS gcalls (gid TEXT PRIMARY KEY, id TEXT, video INTEGER, starter TEXT, started INTEGER)`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS gcparts (gid TEXT, uid TEXT, role TEXT, at INTEGER, PRIMARY KEY (gid, uid))`);
     this.sql.exec(`CREATE INDEX IF NOT EXISTS gmembers_uid ON gmembers(uid)`);
     this.sql.exec(`CREATE TABLE IF NOT EXISTS gposts (id TEXT PRIMARY KEY, gid TEXT, uid TEXT, text TEXT, image TEXT, at INTEGER, likes INTEGER DEFAULT 0, shares INTEGER DEFAULT 0)`);
     this.sql.exec(`CREATE INDEX IF NOT EXISTS gposts_gid ON gposts(gid, at)`);
@@ -834,6 +839,7 @@ export class Hub {
   // Delete account (owner; POPIA): everything Lockedintool's server keeps about you goes. Payment records stay, as
   // the law requires (they never hold your card or bank login).
   deleteUser(uid, why = 'deleted') {
+    for (const r of this.sql.exec('SELECT gid FROM gcparts WHERE uid = ?', uid).toArray()) this.gcallLeave(r.gid, uid);
     this.sql.exec('DELETE FROM rcodes WHERE uid = ?', uid); this.sql.exec('DELETE FROM resets WHERE uid = ?', uid);
     for (const m of this.sql.exec('SELECT gid FROM gmembers WHERE uid = ?', uid).toArray()) {
       this.sql.exec('DELETE FROM gmembers WHERE gid = ? AND uid = ?', m.gid, uid);
@@ -866,6 +872,7 @@ export class Hub {
     const mine = me ? this.member(g.id, me.id) : null;
     const v = { id: g.id, name: g.name, about: g.about || '', type: g.type, image: g.image || '', category: g.category || 'Community', country: g.country || 'Global',
       creator: g.creator, callJoin: g.calljoin || 'open', created: g.created, count, team: !!g.team, member: !!mine, leader: !!mine && mine.role === 'leader',
+      live: this.gcallLive(g.id),
       // Real numbers for Trending: members, times the group was shared, likes and comments on its posts.
       shares: g.shares || 0,
       likes: this.one('SELECT COALESCE(SUM(likes), 0) AS n FROM gposts WHERE gid = ?', g.id).n,
@@ -932,6 +939,7 @@ export class Hub {
     }
     if (!mine) return json({ error: 'member' }, 403);
     if (op === 'leave') {
+      if (g.type === 'private') this.gcallLeave(g.id, me.id);   // a private group's call is members only
       this.sql.exec('DELETE FROM gmembers WHERE gid = ? AND uid = ?', g.id, me.id);
       const left = this.memberIds(g.id);
       if (!left.length) { this.sql.exec('DELETE FROM groups WHERE id = ?', g.id); this.sql.exec('DELETE FROM gposts WHERE gid = ?', g.id); }
@@ -1028,6 +1036,8 @@ export class Hub {
     const rows = this.sql.exec('SELECT seq, body FROM queue WHERE uid = ? ORDER BY seq LIMIT 500', me.id).toArray();
     for (const r of rows) pair[1].send(JSON.stringify(Object.assign(JSON.parse(r.body), { seq: r.seq })));
     pair[1].send(JSON.stringify({ t: 'hello', id: me.id }));
+    // Live group calls in your groups (the green icon / "Join call").
+    for (const r of this.sql.exec('SELECT c.gid FROM gcalls c JOIN gmembers m ON m.gid = c.gid WHERE m.uid = ?', me.id).toArray()) pair[1].send(JSON.stringify({ t: 'glive', group: r.gid, live: this.gcallLive(r.gid) }));
     return new Response(null, { status: 101, webSocket: pair[0] });
   }
   // ---- LOCKED IN TOOL subscription (owner: Basic $5 / Premium $15 a month - raised from $1 / $5 so each user's costs are covered; no plan = STORY doesn't open). Paid through
@@ -1274,6 +1284,7 @@ export class Hub {
         }
         ws.send(JSON.stringify({ t: 'sent', id: m.id, at: now }));
         return; }
+      case 'gcall': return this.gcallMsg(ws, me, m, now);
       case 'call': {
         // Call set-up only: offer / answer / ice / ring / end / decline / busy.
         if (!to) return ws.send(JSON.stringify({ t: 'call', kind: 'unavailable', callId: m.callId, from: m.to }));
@@ -1285,6 +1296,83 @@ export class Hub {
         return; }
     }
   }
-  webSocketClose(ws) { try { ws.close(); } catch (e) {} }
+  // ---- Group calls (owner's rules): public groups - members start, anyone can join, a leader's call rings every member;
+  // private groups - members only; leaders choose "Everyone can join" or "Ask to join" (others listen until let in).
+  // Phone to phone: each new phone links to every phone already in the call, so up to GCALL_MAX people. ----
+  gcallLive(gid) {
+    const c = this.one('SELECT * FROM gcalls WHERE gid = ?', gid); if (!c) return null;
+    const n = this.one('SELECT COUNT(*) AS n FROM gcparts WHERE gid = ?', gid).n;
+    return n ? { id: c.id, count: n, video: !!c.video, started: c.started } : null;
+  }
+  gcallParts(gid) {
+    return this.sql.exec('SELECT p.uid, p.role, u.name, u.username FROM gcparts p JOIN users u ON u.id = p.uid WHERE p.gid = ? ORDER BY p.at', gid).toArray()
+      .map(r => ({ id: r.uid, role: r.role, name: r.name || '', username: r.username || '' }));
+  }
+  gcallTellLive(gid) {
+    const live = this.gcallLive(gid), seen = new Set();
+    for (const id of this.memberIds(gid).concat(this.gcallParts(gid).map(p => p.id))) { if (seen.has(id)) continue; seen.add(id); this.sendTo(id, { t: 'glive', group: gid, live }); }
+  }
+  gcallLeave(gid, uid) {
+    if (!this.one('SELECT 1 AS x FROM gcparts WHERE gid = ? AND uid = ?', gid, uid)) return;
+    this.sql.exec('DELETE FROM gcparts WHERE gid = ? AND uid = ?', gid, uid);
+    const left = this.gcallParts(gid);
+    for (const p of left) this.sendTo(p.id, { t: 'gcall', kind: 'gone', group: gid, id: uid });
+    if (!left.length) {
+      this.sql.exec('DELETE FROM gcalls WHERE gid = ?', gid);
+      for (const id of this.memberIds(gid)) this.sendTo(id, { t: 'gcall', kind: 'over', group: gid });
+    }
+    this.gcallTellLive(gid);
+  }
+  gcallMsg(ws, me, m, now) {
+    const uid = me.id, gid = String(m.group || '');
+    const g = this.one('SELECT * FROM groups WHERE id = ?', gid);
+    const say = o => ws.send(JSON.stringify(Object.assign({ t: 'gcall', group: gid }, o)));
+    if (!g || g.type === 'stories') return say({ kind: 'error', error: 'notfound' });
+    const mine = this.member(gid, uid), leader = !!mine && mine.role === 'leader';
+    const part = this.one('SELECT role FROM gcparts WHERE gid = ? AND uid = ?', gid, uid);
+    if (m.kind === 'start' || m.kind === 'join') {
+      if (g.type === 'private' && !mine) return say({ kind: 'error', error: 'member' });
+      if (g.type === 'public' && this.isPrivate(me)) return say({ kind: 'error', error: 'private-account' });
+      let c = this.one('SELECT * FROM gcalls WHERE gid = ?', gid);
+      if (c && !this.one('SELECT 1 AS x FROM gcparts WHERE gid = ?', gid)) { this.sql.exec('DELETE FROM gcalls WHERE gid = ?', gid); c = null; }
+      if (!c && m.kind === 'join') return say({ kind: 'error', error: 'over' });
+      if (!c && !mine) return say({ kind: 'error', error: 'member' });   // only members (and the creator) start a call
+      const fresh = !c;
+      if (fresh) { this.sql.exec('INSERT OR REPLACE INTO gcalls (gid, id, video, starter, started) VALUES (?, ?, ?, ?, ?)', gid, 'gc' + now + rand(4), m.video ? 1 : 0, uid, now); c = this.one('SELECT * FROM gcalls WHERE gid = ?', gid); }
+      if (!part && this.one('SELECT COUNT(*) AS n FROM gcparts WHERE gid = ?', gid).n >= GCALL_MAX) return say({ kind: 'error', error: 'full' });
+      const role = part ? part.role : (g.type === 'private' && (g.calljoin || 'open') === 'ask' && !leader && !fresh ? 'ask' : 'in');
+      const others = this.gcallParts(gid).filter(p => p.id !== uid);
+      this.sql.exec('INSERT OR REPLACE INTO gcparts (gid, uid, role, at) VALUES (?, ?, ?, ?)', gid, uid, role, now);
+      say({ kind: 'joined', callId: c.id, video: !!c.video, role, leader, name: g.name, callJoin: g.calljoin || 'open', parts: others });
+      for (const p of others) this.sendTo(p.id, { t: 'gcall', kind: 'peer', group: gid, id: uid, role, name: me.name || '', username: me.username || '' });
+      // A leader's call rings every member (owner); anyone else's call shows as live in the group.
+      if (fresh && leader) for (const id of this.memberIds(gid)) if (id !== uid && !this.blocked(uid, id)) this.sendTo(id, { t: 'gcall', kind: 'ring', group: gid, callId: c.id, video: !!c.video, gname: g.name, gtype: g.type, from: uid, name: me.name || '', username: me.username || '', at: now });
+      this.gcallTellLive(gid);
+      return;
+    }
+    if (!part) return;
+    if (m.kind === 'signal') {
+      const to = String(m.to || '');
+      if (!this.one('SELECT 1 AS x FROM gcparts WHERE gid = ? AND uid = ?', gid, to)) return;
+      this.sendTo(to, { t: 'gcall', kind: 'signal', group: gid, from: uid, sdp: m.sdp, sdpType: m.sdpType, cand: m.cand });
+      return;
+    }
+    if (m.kind === 'leave') return this.gcallLeave(gid, uid);
+    if (m.kind === 'admit') {
+      if (!leader) return;
+      const id = String(m.id || '');
+      if (!this.one("SELECT 1 AS x FROM gcparts WHERE gid = ? AND uid = ? AND role = 'ask'", gid, id)) return;
+      this.sql.exec("UPDATE gcparts SET role = 'in' WHERE gid = ? AND uid = ?", gid, id);
+      for (const p of this.gcallParts(gid)) this.sendTo(p.id, { t: 'gcall', kind: 'role', group: gid, id, role: 'in' });
+    }
+  }
+  webSocketClose(ws) {
+    // The phone's last connection closed: it leaves any group call it was in.
+    try {
+      const uid = (ws.deserializeAttachment() || {}).uid;
+      if (uid && !this.ctx.getWebSockets(uid).some(x => x !== ws && x.readyState === 1)) for (const r of this.sql.exec('SELECT gid FROM gcparts WHERE uid = ?', uid).toArray()) this.gcallLeave(r.gid, uid);
+    } catch (e) {}
+    try { ws.close(); } catch (e) {}
+  }
   webSocketError(ws) { try { ws.close(); } catch (e) {} }
 }
