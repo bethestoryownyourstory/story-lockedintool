@@ -23,3 +23,4 @@ commits, pushed as a new update) - nothing else changes.
 | 15 | 2026-10-15 | Tap Your status (or its +) in Updates to make a status straight away; Station 3 goes back above the keyboard / every screen as soon as Lockedintool system actions is on, and a notification says if it's switched off | d5f00be |
 | 16 | 2026-10-15 | Setup screen shows where Station 3 is right now (on top of everything / not on top / hidden by Quick Access) | 3c0bb4f |
 | 17 | 2026-10-16 | Your official profile (@officiallockedintoolprofile) can keep the name Lockedintool - Protect your account no longer says only Lockedintool's own profile can use it | 1598181, c811619 |
+| 18 | 2026-10-16 | Forgot password? on Log in: a reset link by email / text message -> new password, confirm, Apply change (your chats come back); Save login info switch (off = log in every time you close Lockedintool); private email / phone number in Edit profile (never shown to anyone) | 36f3888 |
