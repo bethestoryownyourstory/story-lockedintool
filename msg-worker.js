@@ -258,7 +258,9 @@ export class Hub {
   saveMe(me, b) {
     const sets = [], vals = [], now = Date.now();
     const no = (error, extra) => json(Object.assign({ error }, this.meView(me), extra || {}), 409);
-    let official = !!me.official;
+    // The account that already holds an official @username is the official profile, even if its flag was never set.
+    let official = !!me.official || OFFICIAL_USERNAMES.includes(me.username || '');
+    if (official && !me.official) sets.push('official = 1');
     if (b.username !== undefined) {
       const un = String(b.username || '').toLowerCase();
       if (un !== (me.username || '')) {
