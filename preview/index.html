@@ -1370,7 +1370,15 @@
   .sub-tag{ font-size:15px; font-weight:800; margin:10px 0 8px; }
   .sub-text{ font-size:13.5px; line-height:1.5; color:var(--text); }
   .sub-list{ margin:10px 0 14px; padding-left:20px; font-size:13.5px; line-height:1.7; }
-  .sub-system{ margin-top:18px; }
+  .sub-opts{ display:flex; gap:10px; margin:2px 0 10px; }
+  .sub-opt{ position:relative; flex:1; padding:12px 8px; border-radius:14px; border:1px solid #2a2a2a; background:#000000; color:#ffffff; font:inherit; font-size:14px; font-weight:800; cursor:pointer; }
+  .sub-opt.on{ background:#ffffff; color:#000000; border-color:#ffffff; }
+  .sub-opt-tip{ display:none; position:absolute; left:0; right:0; top:calc(100% + 8px); z-index:5; padding:10px 12px; border-radius:12px; border:1px solid #2a2a2a; background:#000000; color:#ffffff; font-size:12.5px; font-weight:500; line-height:1.45; text-align:left; box-shadow:0 8px 24px rgba(0,0,0,0.5); }
+  .sub-opt-tip b{ display:block; font-size:13px; margin-bottom:3px; }
+  @media (hover:hover){ .sub-opt:hover .sub-opt-tip{ display:block; } }
+  .sub-opt-acts{ display:flex; justify-content:center; gap:18px; margin:18px 0 8px; }
+  .sub-opt-acts button{ width:56px; height:56px; border-radius:50%; border:1px solid #2a2a2a; background:#000000; color:#ffffff; font:inherit; font-size:20px; display:flex; align-items:center; justify-content:center; cursor:pointer; }
+  .sub-opt-acts .sub-opt-ok{ background:#ffffff; color:#000000; border-color:#ffffff; }
   .sub-zar{ font-size:11px; color:var(--muted); text-align:center; margin-top:8px; }
   /* 3D Circle's pages keep their own top (name + buttons); the back button and page dots stay out of a preview. */
   .preview-top .dash-back, .preview-top .page-dots{ visibility:hidden !important; }
@@ -7428,7 +7436,7 @@ function subRefresh(force){
   if(!msgAccount() || IN_STATION3_WINDOW) return;
   const s = subState();
   if(!force && s && Date.now() - (s.checked || 0) < 3 * 3600000) return;
-  msgApi('/v1/sub/info').then(i=>{ const was = subLocked(); subSave(i); if(was !== subLocked() || state.current === 'subscription') renderDevice(); }).catch(()=>{});
+  msgApi('/v1/sub/info').then(i=>{ const was = subLocked(); subSave(i); subApplyMode(); if(was !== subLocked() || state.current === 'subscription') renderDevice(); }).catch(()=>{});
 }
 setTimeout(()=>subRefresh(false), 4000);
 const SUB_PLANS = [
@@ -7448,16 +7456,19 @@ function subscriptionScreen(){
   const until = s.until ? new Date(s.until).toLocaleDateString('en-ZA', { day:'numeric', month:'short', year:'numeric' }) : '';
   const w = state.sub.waiting;
   const status = STORY_OWNER ? 'Owner - you have everything' + (active ? ' (plan: ' + (s.plan === 'premium' ? 'Premium' : 'Basic') + ' until ' + until + ')' : '') + '. You can still pay a plan, e.g. to test payments.'
-    : active ? 'Your plan: ' + (s.plan === 'premium' ? 'Premium' : 'Basic') + ' · paid until ' + until
+    : active ? 'Your plan: ' + (s.plan === 'premium' ? 'Premium' : 'Basic') + ' · ' + subOptName(s.mode) + ' · paid until ' + until
     : s.connected ? 'Choose a plan to use LOCKED IN TOOL.' : 'Subscriptions open once LOCKED IN TOOL’s payments are set up.';
+  if(state.sub.optView) return subOptionScreen(locked);
+  const mode = subMode();
   return `
     <div class="page-shell sub-page">
     ${topBar('Subscription', false, '', 'dashboard', '', locked)}
     <div class="sub-head">LOCKED IN TOOL</div>
+    <div class="sub-opts">${SUB_OPTIONS.map(o=>`<button class="sub-opt${mode === o.key ? ' on' : ''}" data-action="sub-opt" data-v="${o.key}">${o.name}<span class="sub-opt-tip"><b>${o.name}</b>${o.short}</span></button>`).join('')}</div>
     <div class="sub-status">${escText(status)}</div>
     ${w ? `<div class="row-card pay-wait">
       <div class="pay-wait-amt">${escText(w.name)}</div>
-      <div class="pay-wait-who">$${w.usd}/month · R${Number(w.zar).toFixed(2)}</div>
+      <div class="pay-wait-who">${subOptName(w.mode)} · $${w.usd}/month · R${Number(w.zar).toFixed(2)}</div>
       <div class="pay-wait-status">${w.status === 'paid' ? 'Paid - your plan is on.' : w.status === 'pending' ? 'Approve it in your bank’s page that opened. This updates by itself.' : w.status === 'cancelled' ? 'Cancelled in your bank' : 'Not approved in time - nothing was paid'}</div>
       ${w.status === 'pending' ? `<button class="btn-wide" data-action="sub-reopen">Open my bank’s page again</button>
       <button class="btn-wide" data-action="sub-cancel"${state.sub.busy ? ' disabled' : ''}>Cancel - nothing is paid</button>` : `<button class="btn-wide btn-primary" data-action="sub-done">Done</button>`}
@@ -7473,7 +7484,6 @@ function subscriptionScreen(){
         <div class="sub-zar">Paid in rand: R${Number(pr.zar || 0).toFixed(2)} a month, approved in your own bank</div>`}
       </div>`; }).join('')}
     ${state.sub.msg ? `<div class="note pay-msg">${escText(state.sub.msg)}</div>` : ''}
-    ${sysModeCardHTML()}
     <div class="note" style="margin:12px 0 4px;">Both plans are designed to help you stay organized, focused, and consistent.</div>
     <div class="sub-norefund">No refunds - payments can’t be refunded once made.</div>
     <div class="legal-links">By choosing a plan you agree to the <button data-action="legal-open" data-v="legal-terms" data-from="subscription">Terms of Service</button> and <button data-action="legal-open" data-v="legal-privacy" data-from="subscription">Privacy Policy</button>.</div>
@@ -7482,23 +7492,55 @@ function subscriptionScreen(){
 // ---- Lockedintool as your system (owner, a section in the plans): your phone only uses Lockedintool - no other app at
 // all (calls and emergency still work). Off ONLY by logging out or deleting your account (SystemMode.kt). ----
 function sysModeState(){ try{ const v = (NATIVE && window.StoryNative.systemModeState) ? String(window.StoryNative.systemModeState()).split('|') : ['off', 'none']; return { on: v[0] === 'on', ready: v[1] === 'ready', app: v[1] !== 'none' }; }catch(e){ return { on:false, ready:false, app:false }; } }
-function sysModeCardHTML(){
-  const m = sysModeState();
-  return `<div class="sub-card sub-system">
-        <div class="sub-top"><div class="sub-name">Lockedintool as your system</div>${m.on ? '<div class="sub-price">On</div>' : ''}</div>
-        <div class="sub-tag">Your phone only uses Lockedintool.</div>
-        <div class="sub-text">Lockedintool becomes your phone’s system: the Dashboard is your home. No other app opens - not even the phone’s own home screen, app list or recent apps.</div>
-        <ul class="sub-list"><li>Everything you do is in Lockedintool</li><li>Phone calls and emergency calls always still work</li><li>The lock screen and the phone’s own panel work as always</li><li>Turns off only when you log out or delete your account</li></ul>
-        ${m.on ? `<div class="sub-zar">It’s on. To turn it off, log out (Settings &gt; Privacy &gt; Log out) or delete your account.</div>`
-          : `<button class="btn-wide btn-primary" data-action="sys-mode-on">Make Lockedintool my system</button>`}
-      </div>`;
+// The two options (owner): buttons at the top of the Subscription page - the cursor over one shows what it is; on a
+// phone, tapping shows it with a ✓ at the bottom to choose it. Then you pick a plan: the purchase is made under that
+// option and plan (server payments.mode / subs.mode). 'only' turns Lockedintool as your system on once the plan is paid.
+const SUB_OPTIONS = [
+  { key:'second', name:'Second system', short:'Lockedintool works with your phone - your apps stay as they are.',
+    text:'Lockedintool works alongside your phone, like a second system. Your phone’s home screen and all your apps stay exactly as they are, and Lockedintool is always there on top of them - the Pages, Station 3 and everything in it.',
+    list:['Your apps and home screen stay as they are', 'Lockedintool always there, over everything', 'Switch between Lockedintool and your apps any time'] },
+  { key:'only', name:'Only system', short:'Your phone only uses Lockedintool - the Dashboard is your apps.',
+    text:'Lockedintool becomes your phone’s only system. The Dashboard acts as your apps - you only stay inside Lockedintool. No other app opens, not even the phone’s own home screen, app list or recent apps.',
+    list:['Everything you do is in Lockedintool', 'Phone calls and emergency calls always still work', 'The lock screen and the phone’s own panel work as always', 'Turns off only when you log out or delete your account'] }
+];
+function subOptName(k){ const o = SUB_OPTIONS.find(x=>x.key === k); return o ? o.name : SUB_OPTIONS[0].name; }
+function subMode(){ if(sysModeState().on) return 'only'; return state.sub.mode || ((subState() || {}).mode) || 'second'; }
+function subOptionScreen(locked){
+  const o = SUB_OPTIONS.find(x=>x.key === state.sub.optView) || SUB_OPTIONS[0];
+  return `
+    <div class="page-shell sub-page">
+    ${topBar('Subscription', false, '', 'dashboard', '', locked)}
+    <div class="sub-head">LOCKED IN TOOL</div>
+    <div class="sub-card sub-opt-card">
+      <div class="sub-top"><div class="sub-name">${o.name}</div></div>
+      <div class="sub-tag">${o.short}</div>
+      <div class="sub-text">${o.text}</div>
+      <ul class="sub-list">${o.list.map(x=>`<li>${x}</li>`).join('')}</ul>
+    </div>
+    <div class="sub-opt-acts">
+      <button class="sub-opt-x" data-action="sub-opt-back" aria-label="Back">✕</button>
+      <button class="sub-opt-ok" data-action="sub-opt-ok" aria-label="Choose ${o.name}"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>
+    </div>
+    </div>`;
 }
+function subOptConfirm(){
+  const k = state.sub.optView; state.sub.optView = null;
+  if(k === 'second' && sysModeState().on){ showToast('Lockedintool is your only system - log out or delete your account to change it'); renderDevice(); return; }
+  state.sub.mode = k; renderDevice();
+  if(k !== 'only') return;
+  // Owner (full access) or a plan you already have: it can go on now. Otherwise it goes on with the plan you pay.
+  const s = subState() || {};
+  if(STORY_OWNER || s.active) sysModeAsk();
+  else showToast('Only system - now choose your plan');
+}
+// A plan paid under "Only system" turns it on (here, and whenever Lockedintool sees that plan).
+function subApplyMode(){ const s = subState() || {}; if(s.active && s.mode === 'only' && litSignedIn() && !sysModeState().on && sysModeState().ready){ try{ window.StoryNative.systemModeSet(true, ''); }catch(e){} } }
 function sysModeAsk(){
   const m = sysModeState();
   if(!m.app){ showToast('Lockedintool as your system works in the Lockedintool app'); return; }
   if(!litSignedIn()){ showToast('Log in to your account first'); return; }
   if(!m.ready){ showToast('Turn on Lockedintool system actions first (on the setup screen)'); return; }
-  litSheet({ title:'Make Lockedintool your system?', text:'Your phone will only use Lockedintool - no other app will open, not even the phone’s home screen or app list. Phone calls and emergency calls still work. The only way to turn it off is to log out or delete your account.',
+  litSheet({ title:'Make Lockedintool your only system?', text:'Your phone will only use Lockedintool - no other app will open, not even the phone’s home screen or app list. Phone calls and emergency calls still work. The only way to turn it off is to log out or delete your account.',
     items:[{ label:'Make it my system', fn: ()=>{ try{ window.StoryNative.systemModeSet(true, ''); }catch(e){} setTimeout(()=>{ if(sysModeState().on){ showToast('Lockedintool is your system now'); } else showToast('Couldn’t turn it on - check Lockedintool system actions'); renderDevice(); }, 150); } }] });
 }
 function sysModeOff(){ try{ if(NATIVE && window.StoryNative.systemModeSet) window.StoryNative.systemModeSet(false, 'LOGGED-OUT'); }catch(e){} }
@@ -7510,7 +7552,7 @@ function subPoll(){
   if(document.visibilityState === 'hidden' || state.current !== 'subscription'){ subPollT = setTimeout(subPoll, 4000); return; }
   msgApi('/v1/sub/status?id=' + encodeURIComponent(w.id)).then(r=>{
     if(state.sub.waiting !== w) return;
-    if(r.status !== 'pending'){ w.status = r.status; subSave(r); if(r.status === 'paid') showToast(w.name + ' is on - thank you'); renderDevice(); }
+    if(r.status !== 'pending'){ w.status = r.status; subSave(r); if(r.status === 'paid'){ showToast(w.name + ' is on - thank you'); subApplyMode(); } renderDevice(); }
     else subPollT = setTimeout(subPoll, 3000);
   }).catch(()=>{ subPollT = setTimeout(subPoll, 5000); });
 }
@@ -7520,9 +7562,10 @@ function subBuy(plan){
   if(!msgAccount()){ showToast('Your Lockedintool account is being set up - try again in a moment'); return; }
   const p = SUB_PLANS.find(x=>x.key === plan), pr = (s.plans || {})[plan] || {};
   state.sub.busy = true; state.sub.msg = '';
-  msgApi('/v1/sub/buy', { plan }).then(r=>{
+  const mode = subMode();
+  msgApi('/v1/sub/buy', { plan, mode }).then(r=>{
     state.sub.busy = false;
-    state.sub.waiting = { id:r.id, url:r.url, plan, name:p.name, usd:pr.usd, zar:pr.zar, status:'pending', started:Date.now() };
+    state.sub.waiting = { id:r.id, url:r.url, plan, mode, name:p.name, usd:pr.usd, zar:pr.zar, status:'pending', started:Date.now() };
     payOpenBank(r.url); renderDevice(); subPollT = setTimeout(subPoll, 4000);
   }).catch(e=>{ state.sub.busy = false; state.sub.msg = e.code === 'not-connected' ? 'Subscriptions open once LOCKED IN TOOL’s payments are set up.' : 'Couldn’t start the payment - try again.'; renderDevice(); });
 }
@@ -15615,7 +15658,9 @@ function attachHandlers(){
         case 'send-open': state.current = 'send-money'; state.pay.info = null; state.pay.loading = false; break;
         case 'receive-open': state.current = 'receive-money'; state.pay.info = null; state.pay.loading = false; break;
         case 'sub-buy': subBuy(el.getAttribute('data-plan')); break;
-        case 'sys-mode-on': sysModeAsk(); break;
+        case 'sub-opt': state.sub.optView = el.getAttribute('data-v'); renderDevice(); break;
+        case 'sub-opt-back': state.sub.optView = null; renderDevice(); break;
+        case 'sub-opt-ok': subOptConfirm(); break;
         case 'sub-reopen': if(state.sub.waiting) payOpenBank(state.sub.waiting.url); break;
         case 'sub-done': state.sub.waiting = null; break;
         case 'sub-cancel': subCancel(); break;
