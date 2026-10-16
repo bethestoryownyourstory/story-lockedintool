@@ -5010,15 +5010,52 @@ function mediaOutputTemplate(){
 // them (MoneyLog.kt) and keeps them on this phone; StoryNative.moneyList() hands them over, newest first:
 // { id, ts, pkg, app, amt (+ in / - out), cur, bal?, who?, card?, text }. Nothing is ever made up - no payments yet
 // means empty / 0.
-const MONEY_SYM = { ZAR:'R', USD:'$', EUR:'€', GBP:'£', NGN:'₦', INR:'₹', KES:'KSh ' };
+const MONEY_SYM = { ZAR:'R', USD:'$', EUR:'€', GBP:'£', NGN:'₦', INR:'₹', KES:'KSh ', JPY:'¥', CNY:'¥', AUD:'A$', CAD:'C$', GHS:'GH₵', BWP:'P ', NAD:'N$', AED:'AED ', CHF:'CHF ' };
+// ---- Account currency (owner; Profile > Edit profile): every amount in Money / Wallet shows in the currency you pick,
+// even money that came in another currency (converted at the day's exchange rate). '' = automatic (each payment's own
+// currency, as before). Rates: ExchangeRate-API's free daily rates, fetched at most once a day (no loop). ----
+const ACCOUNT_CUR_KEY = 'story-currency', FX_KEY = 'story-fx';
+const ACCOUNT_CURRENCIES = [['ZAR','South African rand'],['USD','US dollar'],['EUR','Euro'],['GBP','British pound'],['NGN','Nigerian naira'],['KES','Kenyan shilling'],['GHS','Ghanaian cedi'],['BWP','Botswana pula'],['NAD','Namibian dollar'],['ZMW','Zambian kwacha'],['EGP','Egyptian pound'],['MAD','Moroccan dirham'],['AED','UAE dirham'],['SAR','Saudi riyal'],['INR','Indian rupee'],['CNY','Chinese yuan'],['JPY','Japanese yen'],['AUD','Australian dollar'],['CAD','Canadian dollar'],['CHF','Swiss franc'],['BRL','Brazilian real']];
+function accountCur(){ try{ const c = localStorage.getItem(ACCOUNT_CUR_KEY) || ''; return /^[A-Z]{3}$/.test(c) ? c : ''; }catch(e){ return ''; } }
+function fxRates(){ try{ return JSON.parse(localStorage.getItem(FX_KEY) || 'null'); }catch(e){ return null; } }
+let fxBusy = false;
+function fxEnsure(){
+  const fx = fxRates();
+  if(fxBusy || (fx && fx.rates && Date.now() - fx.at < 24 * 3600000)) return;
+  fxBusy = true;
+  httpRaw('GET', 'https://open.er-api.com/v6/latest/USD', {}, '').then(r=>{
+    fxBusy = false;
+    let j = null; try{ j = JSON.parse(r.body || ''); }catch(e){}
+    if(!(j && j.rates && j.rates.USD)) return;
+    try{ localStorage.setItem(FX_KEY, JSON.stringify({ at: Date.now(), rates: j.rates })); }catch(e){}
+    moneyCache = null;
+    if(typeof MONEY_PAGES !== 'undefined' && MONEY_PAGES.includes(state.current)) renderDevice();
+  }).catch(()=>{ fxBusy = false; });
+}
+// An amount in another currency -> the account currency (null = no rate for it yet).
+function fxConvert(amt, from, to){
+  if(!to || !from || from === to) return amt;
+  const fx = fxRates(); const r = fx && fx.rates;
+  if(!r || !r[from] || !r[to]) return null;
+  return amt / r[from] * r[to];
+}
+function fxTx(t, to){
+  const a = fxConvert(t.amt, t.cur, to); if(a == null) return t;
+  const b = t.bal == null ? t.bal : fxConvert(t.bal, t.cur, to);
+  return Object.assign({}, t, { amt: a, bal: b, cur: to, origAmt: t.amt, origCur: t.cur });
+}
 let moneyCache = null;
 function moneyTx(){
   if(moneyCache) return moneyCache;
   let list = [];
   try{ list = JSON.parse((NATIVE && window.StoryNative.moneyList) ? window.StoryNative.moneyList() : (localStorage.getItem('story-money-test') || '[]')) || []; }catch(e){}
-  moneyCache = list.filter(t=>t && isFinite(t.amt) && t.amt && t.ts).sort((a, b)=>b.ts - a.ts);
+  list = list.filter(t=>t && isFinite(t.amt) && t.amt && t.ts).sort((a, b)=>b.ts - a.ts);
+  const to = accountCur();
+  if(to){ if(list.some(t=>t.cur !== to)) fxEnsure(); list = list.map(t=>t.cur === to ? t : fxTx(t, to)); }
+  moneyCache = list;
   return moneyCache;
 }
+window.addEventListener('storage', e=>{ if(e.key === ACCOUNT_CUR_KEY || e.key === FX_KEY){ moneyCache = null; if(MONEY_PAGES.includes(state.current)) renderDevice(); } });
 const MONEY_PAGES = ['money', 'money-summary', 'wallet', 'wallet-overview', 'tx-history'];
 // The app says when a new payment came in: the money pages update straight away.
 window.storyMoneyNew = function(){
@@ -5031,6 +5068,7 @@ function moneyView(){ const c = activeCard(); return c ? moneyTx().filter(t=>car
 function moneyAccessOk(){ try{ return !NATIVE || !window.StoryNative.moneyAccess || !!window.StoryNative.moneyAccess(); }catch(e){ return true; } }
 // The currency most of your payments are in (before any payment: the phone's region).
 function moneyMainCur(){
+  if(accountCur()) return accountCur();   // the account currency you picked (owner)
   const n = {}; (moneyView().length ? moneyView() : moneyTx()).forEach(t=>{ n[t.cur] = (n[t.cur] || 0) + 1; });
   const best = Object.keys(n).sort((a, b)=>n[b] - n[a])[0];
   if(best) return best;
@@ -5094,7 +5132,9 @@ function moneyBalances(forCard){
 const TRADE_LAST_KEY = 'story-trade-last';
 function tradeAssets(){
   let last = {}; try{ last = JSON.parse(localStorage.getItem(TRADE_LAST_KEY) || '{}') || {}; }catch(e){}
-  return tradeAccounts().map(a=>{ const l = last[a.id]; return l && l.eq != null ? { name:a.name, bal:+l.eq, cur:a.currency || 'USD', ts:l.ts, icon:'📈' } : null; }).filter(Boolean);
+  const to = accountCur();
+  return tradeAccounts().map(a=>{ const l = last[a.id]; if(!(l && l.eq != null)) return null; const cur = a.currency || 'USD', v = to ? fxConvert(+l.eq, cur, to) : null;
+    return { name:a.name, bal: v == null ? +l.eq : v, cur: v == null ? cur : to, ts:l.ts, icon:'📈' }; }).filter(Boolean);
 }
 function moneyAssets(){ return activeCard() ? moneyBalances(true) : moneyBalances().concat(tradeAssets()); }
 function netWorth(cur){ return moneyAssets().filter(a=>a.cur === cur).reduce((s, a)=>s + a.bal, 0); }
@@ -7979,6 +8019,7 @@ const LEGAL = {
       'Cloudflare (runs our servers) and GitHub (delivers app updates).',
       'Twilio, to send text messages (codes and password reset links) to the phone number you add.',
       'Resend, to send emails (codes, password reset links and Delete account confirmations) to the email you add.',
+      'ExchangeRate-API, for the day’s exchange rates when you pick an account currency - only the rates are fetched; nothing about you is sent.',
       'Card scanning runs on your phone (Google ML Kit) and works offline - the pictures are not sent anywhere.',
       'We share information with authorities only when the law requires it.' ]],
     ['Permissions Lockedintool asks for', [
@@ -8351,6 +8392,7 @@ window.storyProfileText = function(){
   el.querySelector('[data-pf="ed-username"] .pf-ed-val').textContent = p.username ? '@' + p.username : '';
   el.querySelector('[data-pf="ed-bio"] .pf-ed-val').textContent = p.bio;
   el.querySelector('[data-pf="ed-about"] .pf-ed-val').textContent = p.about;
+  const cv = el.querySelector('[data-pf="ed-currency"] .pf-ed-val'); if(cv) cv.textContent = accountCur() || 'Automatic';
   // Bio: the word "BIO" shows only while it's empty; once there's text, only the text shows.
   el.querySelector('.pf-bio-l').hidden = !!p.bio;
   el.querySelector('.pf-bio-t').innerHTML = p.bio ? escText(p.bio) : '<span style="color:var(--pf-muted)">Nothing here yet.</span>';
@@ -8460,11 +8502,18 @@ window.storyProfileOnly = function(){
       <div class="pf-ed-row" data-pf="ed-username"><span>Username</span><span class="pf-ed-val">@${escText(p.username)}</span></div>
       <div class="pf-ed-row" data-pf="ed-bio"><span>Bio</span><span class="pf-ed-val">${p.bio ? escText(p.bio) : 'Nothing here yet.'}</span></div>
       <div class="pf-ed-row" data-pf="ed-about"><span>About</span><span class="pf-ed-val">${escText(p.about)}</span></div>
+      <div class="pf-ed-row" data-pf="ed-currency"><span>Account currency</span><span class="pf-ed-val"></span></div>
       <div class="pf-ed-note">About shows in Updates, to people who don’t follow you yet: who you are or what you do.</div>
       <div class="pf-ed-sub">Private details</div>
       <div class="pf-ed-row" data-pf="ed-remail"><span>Email</span><span class="pf-ed-val"></span></div>
       <div class="pf-ed-row" data-pf="ed-rphone"><span>Phone number</span><span class="pf-ed-val"></span></div>
       <div class="pf-ed-note">Only Lockedintool sees these - they never show to anyone. They’re used if you forget your password or want to delete your account.</div>
+    </div>
+    <div class="pf-scroll pf-currency" hidden>
+      <div class="pf-ed-head"><button class="pf-ed-back" data-pf="cur-back" aria-label="Back">‹</button><div class="pf-ed-title">Account currency</div></div>
+      <div class="pf-ed-note">Every amount in Money and Wallet shows in this currency - even money that came in another currency is shown in it, at the day’s exchange rate.</div>
+      <div class="pf-cur-list"></div>
+      <div class="pf-ed-note">Exchange rates by ExchangeRate-API, updated once a day.</div>
     </div>
     <div class="pf-scroll pf-private" hidden>
       <div class="pf-ed-head"><button class="pf-ed-back" data-pf="pr-back" aria-label="Back">‹</button><div class="pf-ed-title">Email</div></div>
@@ -8760,6 +8809,9 @@ window.storyProfileOnly = function(){
     else if(k === 'upv-close') upCloseView();
     else if(k === 'upv-delete') upDeleteShown();
     else if(k === 'ed-about') openProfileField('about');
+    else if(k === 'ed-currency'){ ed.hidden = true; const pg = el.querySelector('.pf-currency'); pg.hidden = false; pg.scrollTop = 0; curRender(); }
+    else if(k === 'cur-back'){ el.querySelector('.pf-currency').hidden = true; ed.hidden = false; }
+    else if(k === 'cur-set'){ const v = b.getAttribute('data-v') || ''; try{ if(v) localStorage.setItem(ACCOUNT_CUR_KEY, v); else localStorage.removeItem(ACCOUNT_CUR_KEY); }catch(err){} moneyCache = null; if(v) fxEnsure(); curRender(); const cv = el.querySelector('[data-pf="ed-currency"] .pf-ed-val'); if(cv) cv.textContent = v || 'Automatic'; showToast(v ? 'Money shows in ' + v : 'Money shows each payment’s own currency'); }
     else if(k === 'cr-hl-pick') crAddToHighlight(b.getAttribute('data-id'));
     else if(k === 'cr-hl-new'){
       const inp = el.querySelector('.cr-sheet-new input'), name = inp.value.trim();
@@ -8891,6 +8943,12 @@ window.storyProfilePhotoChanged = function(){
 // reset a forgotten password (and a copy of the Delete account link). Lockedintool sends a code there to check it's yours. ----
 const PR_KEY = 'story-recovery';
 const PR = { kind:'email', step:'view', value:'' };
+function curRender(){
+  const box = document.querySelector('#story-profile .pf-cur-list'); if(!box) return;
+  const cur = accountCur();
+  box.innerHTML = [['', 'Automatic', 'Each payment in its own currency']].concat(ACCOUNT_CURRENCIES.map(([c, n])=>[c, c, n])).map(([v, t, d])=>
+    '<button class="pf-pv-opt' + (cur === v ? ' on' : '') + '" data-pf="cur-set" data-v="' + v + '"><span class="pf-pv-txt"><div class="pf-pv-t">' + escText(t) + '</div><div class="pf-pv-d">' + escText(d) + '</div></span><span class="pf-pv-dot"></span></button>').join('');
+}
 function prData(){ try{ return JSON.parse(localStorage.getItem(PR_KEY) || '{}') || {}; }catch(e){ return {}; } }
 function prSave(d){ try{ localStorage.setItem(PR_KEY, JSON.stringify({ email: d.email || '', phone: d.phone || '', emailReady: !!d.emailReady, smsReady: !!d.smsReady })); }catch(e){} }
 function prFill(){
@@ -8952,7 +9010,7 @@ function pfResetView(){
   el.querySelector('.pf-updates').hidden = true; el.querySelector('.pf-person').hidden = true; UP.person = null;
   el.querySelector('.pf-updates .pf-msgs-search input').value = ''; UP.q = ''; UP.found = null;
   el.querySelector('.cr-pick').hidden = true;
-  el.querySelector('.pf-menu').hidden = true; el.querySelector('.pf-privacy').hidden = true; el.querySelector('.pf-reports').hidden = true; el.querySelector('.pf-private').hidden = true;
+  el.querySelector('.pf-menu').hidden = true; el.querySelector('.pf-privacy').hidden = true; el.querySelector('.pf-reports').hidden = true; el.querySelector('.pf-private').hidden = true; el.querySelector('.pf-currency').hidden = true;
   el.querySelector('.up-compose').hidden = true; upClosePost(); fcsClose();
   const ms = el.querySelector('.pf-msgs .pf-msgs-search input'); if(ms){ ms.value = ''; } msgView.q = ''; msgView.menuFor = null;
   if(crRecording && NATIVE && window.StoryNative.createVideo) window.StoryNative.createVideo(false);
@@ -16754,7 +16812,7 @@ async function litKeysFromBox(bk, keybox){
 }
 function litSignedIn(){ const a = msgAccount(); return !!(a && a.token && a.pw); }
 // ---- The locked backup: chats, people's keys, call history, privacy, blocks, community choices ----
-const LIT_BACKUP_KEYS = ['story-messages', 'story-msg-peers', 'story-calls', 'story-privacy', 'story-blocked', 'story-community', 'story-community-chats', 'story-community-always-mine', 'story-status-seen', 'story-profile-locks'];
+const LIT_BACKUP_KEYS = ['story-currency', 'story-messages', 'story-msg-peers', 'story-calls', 'story-privacy', 'story-blocked', 'story-community', 'story-community-chats', 'story-community-always-mine', 'story-status-seen', 'story-profile-locks'];
 let litBackupT = 0, litBackupAt = 0, litBackupBusy = false;
 function litBackupSoon(){
   if(!MSG_ENGINE || !litSignedIn()) return;
