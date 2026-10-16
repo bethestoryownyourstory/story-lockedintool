@@ -1505,6 +1505,16 @@
     background:linear-gradient(115deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.02) 22%, rgba(255,255,255,0) 45%);
   }
   .membership .ico{ font-size:15px; display:block; margin-bottom:4px; }
+  .membership-grid{ flex-wrap:wrap; }
+  .membership-grid .membership{ flex:1 1 calc(25% - 8px); min-width:64px; cursor:pointer; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .memb-ico{ font-weight:800; }
+  .memb-num{ font-size:22px; font-weight:800; letter-spacing:0.06em; text-align:center; margin:6px 0 10px; word-break:break-all; }
+  .memb-code{ background:#ffffff; border-radius:10px; padding:10px; }
+  .memb-barcode{ display:block; width:100%; height:70px; }
+  .pay-star.on{ color:#f5c518; }
+  .pay-star-wide{ margin-top:8px; }
+  /* A sheet open over Wallet: the Transfer Money bar steps away so it never covers the sheet's buttons. */
+  .phone-screen:has(.modal-overlay) .wallet-float-dock, #device-wrap:has(.modal-overlay) .wallet-float-dock{ visibility:hidden; }
   .settings-option{
     position:relative; overflow:hidden;
     display:flex; align-items:center; justify-content:space-between;
@@ -2207,6 +2217,12 @@
   #story-profile .pf-create{ position:fixed; inset:0; color:#fff; }
   #story-profile .cr-shot{ position:absolute; inset:0; background:#000; }
   #story-profile .cr-shot img, #story-profile .cr-shot video{ width:100%; height:100%; object-fit:contain; display:block; }
+  #story-profile .cr-music-name{ max-width:120px; padding:4px 8px; border-radius:10px; background:rgba(0,0,0,0.45); color:#fff; font-size:11px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #story-profile .cr-music-name[hidden]{ display:none; }
+  #story-profile .cr-btn.on{ background:#ffffff; color:#000000; }
+  #story-profile .up-fp-music{ display:flex; align-items:center; gap:6px; margin:8px 0 0; padding:6px 10px; border:1px solid var(--pf-hair); border-radius:14px; background:transparent; color:var(--pf-fg); font:inherit; font-size:12.5px; max-width:100%; }
+  #story-profile .up-fp-music span{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #story-profile .up-fp-music.on{ background:var(--pf-fg); color:var(--pf-bg); }
   #story-profile .cr-btn{ width:46px; height:46px; border-radius:50%; border:none; background:rgba(0,0,0,0.35); color:#fff; display:flex; align-items:center; justify-content:center; padding:0; }
   #story-profile .cr-btn:active{ opacity:0.6; }
   #story-profile .cr-btn.dim{ opacity:0.45; }
@@ -5481,6 +5497,7 @@ function moneyScreen(){
     ${state.calOpen ? calPopupTemplate() : ''}
     ${state.moneyAllEdit ? moneyAllEditTemplate() : ''}
     ${state.moneyTransferOpen ? moneyTransferPopupTemplate() : ''}
+    ${state.favoritesOpen ? favoritesPopupTemplate() : ''}
   `;
 }
 
@@ -5863,9 +5880,9 @@ const PLATFORMS = {
   mt5:        { hidden:true, label:'MT5', group:'Forex & CFDs', sym:'EURUSD', env:true, fields:[['login','MT5 LOGIN (ACCOUNT NUMBER)','e.g. 48213390','numeric'],['password','PASSWORD','Your MT5 password','password'],['server','BROKER SERVER','Your broker’s MT5 server (from your broker)']], note:'Lockedintool connects your MT5 account through MetaApi (the only way an app can reach MT5). Your password is only used to connect - it can take up to a minute the first time.' },
   mt4:        { hidden:true, label:'MT4', group:'Forex & CFDs', sym:'EURUSD', env:true, fields:[['login','MT4 LOGIN (ACCOUNT NUMBER)','e.g. 48213390','numeric'],['password','PASSWORD','Your MT4 password','password'],['server','BROKER SERVER','Your broker’s MT4 server (from your broker)']], note:'Lockedintool connects your MT4 account through MetaApi. Your password is only used to connect - it can take up to a minute the first time.' },
   tradelocker:{ label:'TradeLocker', group:'Forex & CFDs', sym:'EURUSD', env:true, fields:[['email','TRADELOCKER EMAIL','you@email.com','email'],['password','PASSWORD','Your TradeLocker password','password'],['server','BROKER SERVER','Your broker’s server name (from your broker)'],['accNo','ACCOUNT NUMBER','Its number in TradeLocker, e.g. 1234567','numeric']], note:'Lockedintool signs in to your broker directly. Your password is not kept - only a sign-in key, on this phone.' },
-  ctrader:    { label:'cTrader', group:'Forex & CFDs', soon:'cTrader connects once Lockedintool’s cTrader app is registered with Spotware' },
-  dxtrade:    { label:'DXtrade', group:'Forex & CFDs', soon:'DXtrade is being connected' },
-  matchtrader:{ label:'Match-Trader', group:'Forex & CFDs', soon:'Match-Trader is being connected' },
+  ctrader:    { label:'cTrader', group:'Forex & CFDs', hidden:true, soon:'cTrader connects once Lockedintool’s cTrader app is registered with Spotware' },
+  dxtrade:    { label:'DXtrade', group:'Forex & CFDs', hidden:true, soon:'DXtrade is being connected' },
+  matchtrader:{ label:'Match-Trader', group:'Forex & CFDs', hidden:true, soon:'Match-Trader is being connected' },
   deriv:      { label:'Deriv', group:'Forex & CFDs', sym:'R_100', fields:[['token','DERIV API TOKEN','From Deriv: Account settings > API token (Read + Trade)','password']], note:'Make a token in your Deriv account with Read and Trade on. Buy / Sell open Multiplier trades (up / down) with your lot as the stake; closing sells them.' },
   binance:    { label:'Binance', group:'Crypto', sym:'BTCUSDT', fields:[['key','API KEY','From Binance: API Management','text'],['secret','SECRET KEY','Shown once when you create the key','password']], note:'Make an API key in your Binance account with Spot trading on (never withdrawals). The key stays on this phone.' },
   bybit:      { label:'Bybit', group:'Crypto', sym:'BTCUSDT', fields:[['key','API KEY','From Bybit: API','text'],['secret','API SECRET','','password']], note:'Make an API key in Bybit with Trade on (never withdrawals). Lockedintool trades USDT perpetuals. The key stays on this phone.' },
@@ -5873,9 +5890,9 @@ const PLATFORMS = {
   kraken:     { label:'Kraken', group:'Crypto', sym:'XBTUSD', fields:[['key','API KEY','From Kraken: Security > API','text'],['secret','PRIVATE KEY','','password']], note:'Make an API key in Kraken with Query funds and Create & modify orders (never withdrawals). The key stays on this phone.' },
   luno:       { label:'Luno', group:'Crypto', sym:'XBTZAR', fields:[['key','API KEY ID','From Luno: Security > API keys','text'],['secret','API KEY SECRET','','password']], note:'Make an API key in Luno with Trade permission (never send). The key stays on this phone.' },
   valr:       { label:'VALR', group:'Crypto', sym:'BTCZAR', fields:[['key','API KEY','From VALR: Account > API keys','text'],['secret','API SECRET','','password']], note:'Make an API key in VALR with View and Trade (never withdraw). The key stays on this phone.' },
-  coinbase:   { label:'Coinbase', group:'Crypto', soon:'Coinbase is being connected' },
+  coinbase:   { label:'Coinbase', group:'Crypto', hidden:true, soon:'Coinbase is being connected' },
   alpaca:     { label:'Alpaca', group:'Stocks', sym:'AAPL', env:true, fields:[['key','API KEY ID','From Alpaca: Your API keys','text'],['secret','SECRET KEY','','password']], note:'US stocks and ETFs. Make API keys in Alpaca (Real or Paper). Lot = number of shares. The keys stay on this phone.' },
-  ibkr:       { label:'Interactive Brokers', group:'Stocks', soon:'Interactive Brokers needs their approval for apps - being connected' },
+  ibkr:       { label:'Interactive Brokers', group:'Stocks', hidden:true, soon:'Interactive Brokers needs their approval for apps - being connected' },
 };
 // Search broker: ONLY real, regulated brokers (owner: STORY is a big company - everything legit). In = at least one
 // top-tier or onshore licence (FCA, ASIC, CySEC, BaFin, FINMA, MAS, Central Bank of Ireland, NFA/CFTC, SEC/FINRA, DFSA,
@@ -7304,7 +7321,7 @@ function walletScreen(){
                   <path class="ttp-check" d="M41.5 23.5l3 3 6.5-7.5" stroke-width="2.4" stroke-linejoin="round"></path>
                 </g>
               </g>
-            </svg></button><button class="btn btn-row-action" style="background:transparent;border:1px solid rgba(255,255,255,0.4);color:var(--text);">Wallet<svg class="row-action-ico" viewBox="0 0 70 46" fill="none" stroke="currentColor" stroke-linecap="round">
+            </svg></button><button class="btn btn-row-action" data-nav="wallet-overview" style="background:transparent;border:1px solid rgba(255,255,255,0.4);color:var(--text);">Wallet<svg class="row-action-ico" viewBox="0 0 70 46" fill="none" stroke="currentColor" stroke-linecap="round">
               <rect x="10" y="8" width="50" height="30" rx="7" stroke-width="2.2"></rect>
               <path d="M10 18.5h50" stroke-width="2.2"></path>
               <circle cx="51" cy="18.5" r="3" fill="currentColor" stroke="none"></circle>
@@ -7316,7 +7333,8 @@ function walletScreen(){
     </div>
     <div class="section-title">MEMBERSHIPS</div>
     <div class="membership-grid">
-      <div class="membership membership-add"><span class="ico">＋</span>Add</div>
+      ${membList().map(m=>`<div class="membership" data-action="memb-open" data-id="${escText(m.id)}"><span class="ico memb-ico">${escText((m.name || '?').trim().charAt(0).toUpperCase())}</span>${escText(m.name)}</div>`).join('')}
+      <div class="membership membership-add" data-action="memb-add"><span class="ico">＋</span>Add</div>
     </div>
     <div class="section-title">SUBSCRIPTIONS</div>
     <div class="row-card">
@@ -7330,6 +7348,8 @@ function walletScreen(){
     </div>
 
     ${state.addCardOpen ? addCardTemplate() : ''}
+    ${state.membSheet ? membSheetTemplate() : ''}
+    ${state.favoritesOpen ? favoritesPopupTemplate() : ''}
     ${state.cardSheetId ? cardSheetTemplate() : ''}
     ${state.moneyAllEdit ? moneyAllEditTemplate() : ''}
   `;
@@ -7348,15 +7368,15 @@ function walletFloatBar(skipLabel){
 }
 
 function favoritesPopupTemplate(){
-  const favContacts = state.contacts.filter(c=>state.favorites.includes(c.id));
+  const favs = payFavs();
   return `
     <div class="modal-overlay" data-action="favorites-bg">
       <div class="confirm-sheet" onclick="event.stopPropagation()">
         <div class="confirm-title">Favorites</div>
-        <div class="confirm-sub">Quick access to your starred contacts.</div>
-        ${favContacts.map(c=>`
-          <div class="row" data-sendto-fav="${c.id}" style="cursor:pointer;">
-            <div class="row-left"><div class="row-icon">${c.avatar}</div><div class="row-name">${c.name}</div></div>
+        <div class="confirm-sub">${favs.length ? 'Tap one to send them money.' : 'Tap the ☆ beside someone in Send Money to keep them here.'}</div>
+        ${favs.map((f, i)=>`
+          <div class="row" data-sendto-fav="${i}" style="cursor:pointer;">
+            <div class="row-left"><div class="row-icon">${f.kind === 'bank' ? PAY_BANK_ICON : PAY_PERSON}</div><div><div class="row-name">${escText(f.name || '@' + f.username)}</div><div class="row-sub">${f.kind === 'bank' ? escText((payBanks()[f.bank] || f.bank) + ' ••' + String(f.acct).slice(-3)) : (f.username ? '@' + escText(f.username) : 'On Lockedintool')}</div></div></div>
           </div>
         `).join('')}
         <button class="btn-wide" style="margin-top:10px;" data-action="favorites-close">Close</button>
@@ -7394,8 +7414,9 @@ function walletOverviewScreen(){
       <button class="btn" style="background:#b6f27a;color:#0a2a05;" data-action="receive-open">↙ Receive</button>
     </div>
     <div class="section-title">RECENTS</div>
-    <div style="display:flex;gap:12px;overflow-x:auto;padding-bottom:4px;">
-      <div style="text-align:center;flex-shrink:0;">
+    <div class="pay-recents" style="display:flex;gap:12px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none;">
+      ${payRecents().map(u=>`<div style="text-align:center;flex-shrink:0;cursor:pointer;" data-action="pay-recent" data-id="${escText(u.uid)}"><div class="avatar-circle">${escText((u.who || '?').replace(/^@/, '').charAt(0).toUpperCase())}</div><div class="row-sub" style="margin-top:4px;max-width:64px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escText(u.who)}</div></div>`).join('')}
+      <div style="text-align:center;flex-shrink:0;cursor:pointer;" data-action="send-open">
         <div class="avatar-circle avatar-add">+</div>
         <div class="row-sub" style="margin-top:4px;">Add</div>
       </div>
@@ -7462,6 +7483,75 @@ function payPick(id){
 }
 const PAY_PERSON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>';
 const PAY_BANK_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 10l9-6 9 6"/><path d="M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20h18"/></svg>';
+// Favorites (owner: nothing made up): the Lockedintool profiles and bank accounts YOU starred in Send Money.
+const PAY_FAVS_KEY = 'story-pay-favs';
+function payFavs(){ try{ return JSON.parse(localStorage.getItem(PAY_FAVS_KEY) || '[]') || []; }catch(e){ return []; } }
+function payFavKey(f){ return f.kind === 'bank' ? 'b:' + f.bank + ':' + String(f.acct || '').replace(/\s+/g, '') : 'u:' + (f.id || f.uid || ''); }
+function payIsFav(t){ if(!t) return false; const k = payFavKey(t.kind ? t : { kind:'story', id:t.id }); return payFavs().some(f=>payFavKey(f) === k); }
+function payFavToggle(){
+  const p = state.pay;
+  let t;
+  if(p.mode === 'story'){ if(!p.to) return; t = { kind:'story', id:p.to.id, name:p.to.name || '', username:p.to.username || '' }; }
+  else { const acct = p.acct.replace(/\s+/g, ''); if(p.name.trim().length < 2 || !p.bank || !/^\d{6,16}$/.test(acct)){ showToast('Fill in their name, bank and account number first'); return; } t = { kind:'bank', name:p.name.trim(), bank:p.bank, acct }; }
+  const k = payFavKey(t), l = payFavs(), had = l.some(f=>payFavKey(f) === k);
+  const out = had ? l.filter(f=>payFavKey(f) !== k) : [t].concat(l);
+  try{ localStorage.setItem(PAY_FAVS_KEY, JSON.stringify(out.slice(0, 50))); }catch(e){}
+  showToast(had ? 'Removed from Favorites' : 'Added to Favorites');
+}
+// Send money to a favorite / recent person: Send Money opens with them already chosen.
+function paySendTo(f){
+  const p = state.pay; state.current = 'send-money'; p.info = null; p.loading = false; p.msg = ''; p.found = []; p.q = '';
+  if(f.kind === 'bank'){ p.mode = 'bank'; p.name = f.name || ''; p.bank = f.bank || ''; p.acct = f.acct || ''; p.to = null; }
+  else { p.mode = 'story'; p.to = { id: f.id || f.uid, name: f.name || '', username: f.username || '', canPay: true }; }
+}
+// Wallet's RECENTS: the Lockedintool profiles you last sent money to or got money from (real transfers only).
+function payRecents(){
+  const h = state.pay.history;
+  if(h === null && !state.pay.histAsked && msgAccount()){ state.pay.histAsked = true; msgApi('/v1/pay/history').then(r=>{ state.pay.history = r.payments || []; if(state.current === 'wallet-overview') renderDevice(); }).catch(()=>{}); }
+  const seen = new Set(), out = [];
+  (h || []).forEach(t=>{ if(t.uid && !seen.has(t.uid)){ seen.add(t.uid); out.push({ uid:t.uid, who:t.who || '', username:t.username || '' }); } });
+  return out.slice(0, 12);
+}
+// ---- Memberships (owner: real, no made-up cards): your loyalty / membership cards - the name and number you type,
+// kept only on this phone (story-memberships). Tap one to show its number big with a barcode to scan at the till. ----
+const MEMB_KEY = 'story-memberships';
+function membList(){ try{ return JSON.parse(localStorage.getItem(MEMB_KEY) || '[]') || []; }catch(e){ return []; } }
+function membSave(l){ try{ localStorage.setItem(MEMB_KEY, JSON.stringify(l.slice(0, 40))); }catch(e){} }
+// Code 128 (set B) barcode as SVG - what tills scan.
+const C128 = ['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
+function code128Svg(text){
+  const t = String(text).replace(/[^\x20-\x7e]/g, ''); if(!t) return '';
+  const codes = [104].concat([...t].map(c=>c.charCodeAt(0) - 32));
+  let sum = 104; codes.slice(1).forEach((c, i)=>{ sum += c * (i + 1); });
+  codes.push(sum % 103, 106);
+  let x = 10, bars = '';
+  codes.forEach(c=>{ const pat = C128[c]; for(let i = 0; i < pat.length; i++){ const w = +pat[i]; if(i % 2 === 0) bars += '<rect x="' + x + '" y="0" width="' + w + '" height="60"/>'; x += w; } });
+  return '<svg class="memb-barcode" viewBox="0 0 ' + (x + 10) + ' 60" preserveAspectRatio="none" data-keep-color><rect x="0" y="0" width="' + (x + 10) + '" height="60" fill="#ffffff"/><g fill="#000000">' + bars + '</g></svg>';
+}
+function membSheetTemplate(){
+  const m = state.membSheet;
+  if(m === 'add') return `
+    <div class="modal-overlay" data-action="memb-close">
+      <div class="confirm-sheet" onclick="event.stopPropagation()">
+        <div class="confirm-title">Add a membership</div>
+        <div class="confirm-sub">A loyalty or membership card - its name and number. Kept only on this phone.</div>
+        <input class="field-input" id="memb-name" type="text" autocomplete="off" maxlength="30" placeholder="Name (e.g. Clicks ClubCard)">
+        <input class="field-input" id="memb-num" type="text" autocomplete="off" maxlength="40" placeholder="Card / member number">
+        <div class="confirm-btn-row" style="margin-top:10px;"><button class="btn-wide" style="margin-top:0;" data-action="memb-close">Cancel</button><button class="btn-wide btn-primary" style="margin-top:0;" data-action="memb-save">Add</button></div>
+      </div>
+    </div>`;
+  const c = membList().find(x=>x.id === m); if(!c) return '';
+  return `
+    <div class="modal-overlay" data-action="memb-close">
+      <div class="confirm-sheet" onclick="event.stopPropagation()">
+        <div class="confirm-title">${escText(c.name)}</div>
+        <div class="memb-num">${escText(c.number)}</div>
+        <div class="memb-code">${code128Svg(c.number)}</div>
+        <div class="confirm-sub">Show this at the till to be scanned.</div>
+        <div class="confirm-btn-row" style="margin-top:10px;"><button class="btn-wide" style="margin-top:0;" data-action="memb-remove" data-id="${escText(c.id)}">Remove</button><button class="btn-wide btn-primary" style="margin-top:0;" data-action="memb-close">Done</button></div>
+      </div>
+    </div>`;
+}
 function payHistoryHTML(){
   const h = state.pay.history;
   if(!h || !h.length) return '';
@@ -7487,11 +7577,12 @@ function sendMoneyScreen(){
     </div>`;
   const ready = !!msgAccount();
   const who = p.mode === 'story'
-    ? (p.to ? `<div class="row-card"><div class="row"><div class="row-left"><div class="row-icon">${PAY_PERSON}</div><div><div class="row-name">${escText(p.to.name || '@' + p.to.username)}</div><div class="row-sub">${p.to.name && p.to.username ? '@' + escText(p.to.username) : 'On Lockedintool'}</div></div></div><button class="order-corner-btn" data-action="pay-unpick" title="Change">✕</button></div></div>`
+    ? (p.to ? `<div class="row-card"><div class="row"><div class="row-left"><div class="row-icon">${PAY_PERSON}</div><div><div class="row-name">${escText(p.to.name || '@' + p.to.username)}</div><div class="row-sub">${p.to.name && p.to.username ? '@' + escText(p.to.username) : 'On Lockedintool'}</div></div></div><button class="order-corner-btn pay-star${payIsFav(p.to) ? ' on' : ''}" data-action="pay-fav" title="Favorite">${payIsFav(p.to) ? '★' : '☆'}</button><button class="order-corner-btn" data-action="pay-unpick" title="Change">✕</button></div></div>`
       : `<input class="field-input" data-pay-input="q" type="text" autocomplete="off" placeholder="Search @username or name" value="${escText(p.q)}"><div id="pay-found">${payFoundHTML()}</div>`)
     : `<input class="field-input" data-pay-input="name" type="text" autocomplete="off" placeholder="Their name (as on the account)" value="${escText(p.name)}">
        ${payBankChips(p.bank, 'pay-bank')}
-       <input class="field-input" data-pay-input="acct" type="text" inputmode="numeric" autocomplete="off" placeholder="Account number" value="${escText(p.acct)}">`;
+       <input class="field-input" data-pay-input="acct" type="text" inputmode="numeric" autocomplete="off" placeholder="Account number" value="${escText(p.acct)}">
+       <button class="btn-wide pay-star-wide" data-action="pay-fav">${payIsFav({ kind:'bank', bank:p.bank, acct:p.acct }) ? '★ In your Favorites' : '☆ Add to Favorites'}</button>`;
   const toName = p.mode === 'story' ? (p.to ? (p.to.name || '@' + p.to.username) : '') : p.name.trim();
   const amt = parseFloat(String(p.amount).replace(',', '.'));
   return `
@@ -8249,7 +8340,7 @@ const LEGAL = {
       'Your brokers, TradingView, Stitch, your bank and other apps you open from Lockedintool have their own terms, which apply when you use them.' ]],
     ['The app', [
       'Lockedintool, its name, logo and design belong to Lockedintool. Don’t copy, resell or reverse-engineer the app or misuse our servers.',
-      'We work to keep Lockedintool running, but it is provided as it is and may sometimes be unavailable, change or have mistakes. Features marked "coming soon" are not available yet.' ]],
+      'We work to keep Lockedintool running, but it is provided as it is and may sometimes be unavailable, change or have mistakes. ' ]],
     ['Responsibility', [
       'As far as the law allows, Lockedintool is not liable for indirect losses or lost profits, and our total liability to you is limited to what you paid us in the last 3 months. Nothing here removes your rights under South Africa’s Consumer Protection Act.' ]],
     ['Ending', [
@@ -8490,10 +8581,6 @@ window.storyAppsChanged = function(){
 // Anything that isn't built yet tells you so when tapped ("... — coming soon"), everywhere in STORY.
 const COMING_SOON = [
   ['[data-dash]:not([data-dash="camera"]):not([data-dash="gallery"])', el=>el.textContent.trim()],
-  ['.avatar-add:not([data-action="add-card"] .avatar-add)', ()=>'Add'],
-  ['.btn-row-action:not([data-action])', el=>el.textContent.trim()],
-  ['[data-action="favorites-open"]', ()=>'Favorites'],
-  ['.membership-add', ()=>'Memberships'],
   ['[data-action="notes-unavailable"]', el=>el.textContent.trim()],
   ['.app-row:not([data-native-pkg]):not([data-nav]):not([data-app-launchpopup]):not([data-app-locked]):not([data-app-toast])', el=>(el.querySelector('.row-name')||el).textContent.trim()],
 ];
@@ -8895,6 +8982,7 @@ window.storyProfileOnly = function(){
       <button class="cr-btn cr-del" data-pf="cr-delete" aria-label="Delete" hidden><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>
       <div class="cr-side">
         <button class="cr-btn" data-pf="cr-post" aria-label="Post"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>
+        <div class="cr-music-name" hidden></div>
         <button class="cr-btn" data-pf="cr-music" aria-label="Music"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg></button>
         <button class="cr-btn" data-pf="cr-flip" aria-label="Switch camera"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 0 0-14.3-4.9L4 8"/><path d="M4 3v5h5"/><path d="M4 13a8 8 0 0 0 14.3 4.9L20 16"/><path d="M20 21v-5h-5"/></svg></button>
       </div>
@@ -8998,7 +9086,7 @@ window.storyProfileOnly = function(){
       if(crRecording) return;
       crMode = crMode === m ? null : m; crRender();  // tap a chosen box again: back to the normal camera
     }
-    else if(k === 'cr-music') showToast('Music — coming soon');
+    else if(k === 'cr-music') crMusicPick();
     else if(k === 'cr-flip'){ if(!crRecording && !crHas && NATIVE && window.StoryNative.createSwitchCamera) window.StoryNative.createSwitchCamera(); }
     else if(k === 'cr-delete'){ window.StoryNative.createDiscard(); crClear(); }
     else if(k === 'cr-add'){
@@ -9031,6 +9119,11 @@ window.storyProfileOnly = function(){
     else if(k === 'cp-vids') cpPick('vid');
     else if(k === 'cp-rm'){ CP.items.splice(+b.getAttribute('data-i'), 1); cpRender(); }
     else if(k === 'fp-heart') fpHeart(b.getAttribute('data-id'));
+    else if(k === 'fp-music'){
+      const url = b.getAttribute('data-url'), on = upMusicAudio && upMusicAudio.__url === url;
+      document.querySelectorAll('#story-profile .up-fp-music.on').forEach(x=>x.classList.remove('on'));
+      upMusic(on ? '' : url); if(!on) b.classList.add('on');
+    }
     else if(k === 'fp-comments') fcsOpen(b.getAttribute('data-id'));
     else if(k === 'fp-share') fpShare(b.getAttribute('data-id'));
     else if(k === 'fp-more') fpMore(b.getAttribute('data-id'));
@@ -9122,7 +9215,7 @@ window.storyProfileOnly = function(){
       if(c){ c.archived = !c.archived; saveMsgChats(); }
       msgView.menuFor = null; renderMsgList();
     }
-    else showToast('Profile menu — coming soon');
+    else {}
   });
   const shutter = el.querySelector('.cr-shutter');
   shutter.addEventListener('pointerdown', e=>{ e.preventDefault(); crShutterDown(); });
@@ -9335,8 +9428,31 @@ function crRender(){
   cr.querySelector('[data-pf="cr-post"]').classList.toggle('dim', !crHas);
   cr.querySelector('.cr-del').hidden = !crHas;
 }
+// ---- Music (owner): a song from your phone with what you post (status / post) - it plays with it for everyone. ----
+let crMusic = null, crMusicAudio = null;
+function crMusicShow(){
+  const el = document.getElementById('story-profile'); if(!el) return;
+  const n = el.querySelector('.cr-music-name'), b = el.querySelector('[data-pf="cr-music"]');
+  if(n){ n.hidden = !crMusic; n.textContent = crMusic ? '♪ ' + crMusic.name : ''; }
+  if(b) b.classList.toggle('on', !!crMusic);
+}
+function crMusicStop(){ if(crMusicAudio){ try{ crMusicAudio.pause(); }catch(e){} crMusicAudio = null; } }
+function crMusicPick(){
+  if(crMusic){ crMusic = null; crMusicStop(); crMusicShow(); showToast('Music removed'); return; }
+  if(!(NATIVE && window.StoryNative.chatPick)){ showToast('Music works in the Lockedintool app'); return; }
+  litPickKind = 'audio';
+  litPickCb = files=>{
+    const f = files && files[0]; if(!f || !f.file) return;
+    crMusic = { file: f.file, name: (f.name || 'Song').replace(/\.[a-z0-9]{2,4}$/i, ''), mime: f.mime || 'audio/mpeg' };
+    crMusicShow(); crMusicStop();
+    try{ crMusicAudio = new Audio(PF_PHOTO_BASE + 'chatfile/' + f.file); crMusicAudio.loop = true; crMusicAudio.play().catch(()=>{}); }catch(e){}
+    showToast('Music: ' + crMusic.name);
+  };
+  window.StoryNative.chatPick('audio');
+}
 function crClear(){
   const el = document.getElementById('story-profile'); if(!el) return;
+  crMusic = null; crMusicStop(); crMusicShow();
   const vid = el.querySelector('.cr-shot video'); try{ vid.pause(); }catch(e){} vid.removeAttribute('src'); try{ vid.load(); }catch(e){}
   el.querySelector('.cr-shot img').removeAttribute('src');
   crHas = ''; crRender();
@@ -9551,6 +9667,7 @@ function fpHTML(p){
       (u.name && u.username ? '@' + escText(u.username) + ' · ' : '') + escText(fpAgo(p.at)) + '</span></span></div>' +
     (p.title ? '<div class="up-fp-title">' + escText(p.title) + '</div>' : '') +
     (p.text ? '<div class="up-fp-text">' + escText(p.text) + '</div>' : '') + media +
+    (p.music ? '<button class="up-fp-music" data-pf="fp-music" data-url="' + escText(p.music.url) + '">♪ <span>' + escText(p.music.name || 'Song') + '</span></button>' : '') +
     '<div class="up-fp-acts"><button class="' + (p.hearted ? 'on' : '') + '" data-pf="fp-heart" data-id="' + escText(p.id) + '" aria-label="Heart">' + FP_HEART + '<span>' + fmtCount(p.hearts || 0) + '</span></button>' +
       '<button data-pf="fp-comments" data-id="' + escText(p.id) + '" aria-label="Comments">' + FP_COMMENT + '<span>' + fmtCount(p.comments || 0) + '</span></button>' +
       '<button data-pf="fp-share" data-id="' + escText(p.id) + '" aria-label="Share">' + FP_SHARE + '</button>' +
@@ -9778,10 +9895,18 @@ function upView(user, items, start, isStatus){
   el.querySelector('.up-viewer').hidden = false;
   upShowItem();
 }
+let upMusicAudio = null;
+function upMusic(url){
+  if(upMusicAudio && upMusicAudio.__url === url) return;
+  if(upMusicAudio){ try{ upMusicAudio.pause(); }catch(e){} upMusicAudio = null; }
+  if(!url) return;
+  try{ upMusicAudio = new Audio(url); upMusicAudio.__url = url; upMusicAudio.loop = true; upMusicAudio.play().catch(()=>{}); }catch(e){}
+}
 function upShowItem(){
   const el = upEl(); const v = UP.view; if(!el || !v) return;
   clearTimeout(UP.viewT);
   const it = v.items[v.i], box = el.querySelector('.up-viewer');
+  upMusic(it.music ? it.music.url : '');
   const meId = (msgAccount() || {}).id;
   if(v.status) upMarkSeen(it.id);
   box.querySelector('.up-v-bars').innerHTML = v.status ? v.items.map((x, i)=>'<span class="up-v-bar' + (i < v.i ? ' done' : '') + '"><i' + (i === v.i ? ' class="run"' : '') + '></i></span>').join('') : '';
@@ -9888,7 +10013,7 @@ function upNext(){ const v = UP.view; if(!v) return; if(v.i < v.items.length - 1
 function upPrev(){ const v = UP.view; if(!v) return; if(v.i > 0){ v.i--; upShowItem(); } else upShowItem(); }
 function upCloseView(){
   const el = upEl(); if(!el) return;
-  clearTimeout(UP.viewT); UP.view = null;
+  clearTimeout(UP.viewT); UP.view = null; upMusic('');
   const box = el.querySelector('.up-viewer'), vid = box.querySelector('video');
   const sh = box.querySelector('.up-v-sheet'), ci = sh.querySelector('input'); if(document.activeElement === ci) ci.blur(); sh.hidden = true;
   try{ vid.pause(); }catch(e){} vid.removeAttribute('src'); try{ vid.load(); }catch(e){}
@@ -9967,7 +10092,7 @@ async function upPutMedia(f){
 function upQueue(){ try{ return JSON.parse(localStorage.getItem(UP_QUEUE) || '[]') || []; }catch(e){ return []; } }
 function upQueueSave(q){ try{ localStorage.setItem(UP_QUEUE, JSON.stringify(q)); }catch(e){} }
 // Create's ✓: a post or a status goes into the queue and up to the server (kept trying until it's there).
-function upAddToServer(localId, type, kind){ const q = upQueue(); q.push({ localId, type, kind, at: Date.now() }); upQueueSave(q); upFlush(); }
+function upAddToServer(localId, type, kind){ const q = upQueue(); q.push({ localId, type, kind, at: Date.now(), music: crMusic ? Object.assign({}, crMusic) : null }); upQueueSave(q); upFlush(); }
 let upFlushing = false;
 async function upFlush(){
   if(upFlushing || !MSG_ENGINE || !msgAccount()) return;
@@ -10000,7 +10125,9 @@ async function upFlush(){
         const media = await upPutMedia(await upBytes(PF_PHOTO_BASE + 'post/' + job.localId, job.type === 'video' ? 0 : 1440));
         let thumb = '';
         if(job.type === 'video'){ try{ thumb = await upPutMedia(await upBytes(PF_PHOTO_BASE + 'postthumb/' + job.localId, 720)); }catch(e){} }
-        await msgApi('/v1/uposts/create', { kind: job.kind, type: job.type, media, thumb });
+        let music = null;
+        if(job.music){ try{ const r = await fetch(PF_PHOTO_BASE + 'chatfile/' + job.music.file); if(r.ok) music = { media: await upPutMedia({ bytes: new Uint8Array(await r.arrayBuffer()), mime: job.music.mime }), name: job.music.name }; }catch(e){ if(e.code === 'big') showToast('That song is too big to share (40 MB max)'); } }
+        await msgApi('/v1/uposts/create', { kind: job.kind, type: job.type, media, thumb, music });
         if(job.kind === 'status') showToast('Your status is up');
       }catch(e){
         if(e.code === 'big' || e.message === 'file'){ showToast(e.code === 'big' ? 'That video is too big to share (40 MB max)' : 'That file is gone'); }
@@ -14847,8 +14974,9 @@ function attachHandlers(){
 
   document.querySelectorAll('[data-sendto-fav]').forEach(el=>{
     el.addEventListener('click', ()=>{
-      state.favoritesOpen = false;
-      state.current = 'send-money';
+      const f = payFavs()[+el.getAttribute('data-sendto-fav')]; if(!f) return;
+      state.favoritesOpen = false; state.moneyTransferOpen = false;
+      paySendTo(f);
       renderDevice();
     });
   });
@@ -15716,7 +15844,7 @@ function attachHandlers(){
             state.station3DialInput = '';
             if(!document.body.classList.contains('s3-lock')) state.station3DialpadOpen = false;
           } else if(state.station3DialInput.trim()){
-            showToast('Calling — coming soon');
+            showToast('Calls work in the Lockedintool app');
             state.station3DialInput = '';
             state.station3DialpadOpen = false;
           }
@@ -15725,13 +15853,13 @@ function attachHandlers(){
         case 'station3-new-contact':
           // The phone's own new-contact screen with the number you typed (STORY comes straight back after).
           if(NATIVE && window.StoryNative.newContact){ window.StoryNative.newContact(state.station3DialInput.trim()); }
-          else showToast('Create new contact — coming soon');
+          else showToast('New contacts work in the Lockedintool app');
           break;
-        case 'station3-create-post': if(NATIVE && window.StoryNative.toggleCreate){ window.StoryNative.toggleCreate(); } else { showToast('Create & post — coming soon'); } break;
-        case 'station3-updates': if(NATIVE && window.StoryNative.toggleUpdates){ window.StoryNative.toggleUpdates(); } else { showToast('Updates — coming soon'); } break;
-        case 'station3-call-history': if(NATIVE && window.StoryNative.toggleCalls){ window.StoryNative.toggleCalls(); } else { showToast('Call history — coming soon'); } break;
-        case 'station3-messages': if(NATIVE && window.StoryNative.toggleMessages){ window.StoryNative.toggleMessages(); } else { showToast('Messages — coming soon'); } break;
-        case 'station3-profile': if(NATIVE && window.StoryNative.toggleProfile){ window.StoryNative.toggleProfile(); } else { showToast('Profile — coming soon'); } break;
+        case 'station3-create-post': if(NATIVE && window.StoryNative.toggleCreate){ window.StoryNative.toggleCreate(); } else { showToast('Create & post works in the Lockedintool app'); } break;
+        case 'station3-updates': if(NATIVE && window.StoryNative.toggleUpdates){ window.StoryNative.toggleUpdates(); } else { showToast('Updates works in the Lockedintool app'); } break;
+        case 'station3-call-history': if(NATIVE && window.StoryNative.toggleCalls){ window.StoryNative.toggleCalls(); } else { showToast('Call history works in the Lockedintool app'); } break;
+        case 'station3-messages': if(NATIVE && window.StoryNative.toggleMessages){ window.StoryNative.toggleMessages(); } else { showToast('Messages works in the Lockedintool app'); } break;
+        case 'station3-profile': if(NATIVE && window.StoryNative.toggleProfile){ window.StoryNative.toggleProfile(); } else { showToast('Profile works in the Lockedintool app'); } break;
 
         case 'note-delete': {
           state.confirmDialog = { message: 'Delete this note? This cannot be undone.', action: 'confirm-delete-current-note' };
@@ -16260,6 +16388,16 @@ function attachHandlers(){
         case 'sub-cancel': subCancel(); break;
         case 'legal-open': state.legalFrom = el.getAttribute('data-from') || 'information'; state.current = el.getAttribute('data-v'); break;
         case 'pay-mode': state.pay.mode = el.getAttribute('data-v'); state.pay.msg = ''; break;
+        case 'pay-fav': payFavToggle(); break;
+        case 'pay-recent': { const u = payRecents().find(x=>x.uid === el.getAttribute('data-id')); if(u) paySendTo({ kind:'story', id:u.uid, name:u.who, username:u.username }); break; }
+        case 'memb-add': state.membSheet = 'add'; break;
+        case 'memb-open': state.membSheet = el.getAttribute('data-id'); break;
+        case 'memb-close': state.membSheet = null; break;
+        case 'memb-save': {
+          const n = (document.getElementById('memb-name') || {}).value || '', num = (document.getElementById('memb-num') || {}).value || '';
+          if(n.trim().length < 2 || num.trim().length < 3){ showToast('Type the card’s name and number'); return; }
+          membSave(membList().concat({ id:'mb' + Date.now(), name:n.trim(), number:num.trim() })); state.membSheet = null; showToast('Membership added'); break; }
+        case 'memb-remove': membSave(membList().filter(x=>x.id !== el.getAttribute('data-id'))); state.membSheet = null; showToast('Membership removed'); break;
         case 'pay-bank': state.pay.bank = el.getAttribute('data-v'); break;
         case 'pay-unpick': state.pay.to = null; break;
         case 'pay-send': paySend(); break;
@@ -17226,7 +17364,7 @@ window.storyChatPicked = function(json){
   let j = {}; try{ j = JSON.parse(json) || {}; }catch(e){}
   if(j.error){ if(j.error === 'big') showToast('That file is too big to send (40 MB max)'); else if(j.error !== 'cancel') showToast('Couldn’t use that file'); return; }
   cb([{ kind: kind === 'audio' || /^audio\//.test(j.mime) ? 'audio' : /^image\//.test(j.mime) ? 'photo' : /^video\//.test(j.mime) ? 'video' : 'doc', name: j.name || 'file', mime: j.mime || 'application/octet-stream', size: j.size || 0,
-    get: async ()=>{ const r = await fetch(PF_PHOTO_BASE + 'chatfile/' + j.file); if(!r.ok) throw new Error('file'); return new Uint8Array(await r.arrayBuffer()); }, preview:'' }]);
+    file: j.file, get: async ()=>{ const r = await fetch(PF_PHOTO_BASE + 'chatfile/' + j.file); if(!r.ok) throw new Error('file'); return new Uint8Array(await r.arrayBuffer()); }, preview:'' }]);
 };
 // Upload one picked file (locked first when the chat is end-to-end). Returns what the message carries.
 async function litUpload(f, lock){

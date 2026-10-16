@@ -110,6 +110,7 @@ export class Hub {
     try { this.sql.exec(`ALTER TABLE uposts ADD COLUMN title TEXT`); } catch (e) {}
     try { this.sql.exec(`ALTER TABLE uposts ADD COLUMN text TEXT`); } catch (e) {}
     try { this.sql.exec(`ALTER TABLE uposts ADD COLUMN items TEXT`); } catch (e) {}
+    try { this.sql.exec(`ALTER TABLE uposts ADD COLUMN music TEXT`); } catch (e) {}   // a song from your phone with the post / status: {media, name}
     this.sql.exec(`CREATE INDEX IF NOT EXISTS uposts_feed ON uposts(kind, at)`);
     // Hearts and comments on statuses (owner).
     this.sql.exec(`CREATE TABLE IF NOT EXISTS ulikes (pid TEXT, uid TEXT, at INTEGER, PRIMARY KEY (pid, uid))`);
@@ -348,7 +349,7 @@ export class Hub {
   async mediaPut(me, url, req) {
     const data = await req.arrayBuffer();   // always read the whole body first
     const id = url.searchParams.get('id') || '', i = +url.searchParams.get('i'), n = +url.searchParams.get('n'), mime = url.searchParams.get('mime') || '';
-    if (!/^[A-Za-z0-9_-]{16,40}$/.test(id) || !(i >= 0 && i < n && n <= 40 && Number.isInteger(i) && Number.isInteger(n)) || !['image/jpeg', 'video/mp4', 'application/octet-stream'].includes(mime)) return json({ error: 'bad' }, 400);
+    if (!/^[A-Za-z0-9_-]{16,40}$/.test(id) || !(i >= 0 && i < n && n <= 40 && Number.isInteger(i) && Number.isInteger(n)) || !(['image/jpeg', 'video/mp4', 'application/octet-stream'].includes(mime) || /^audio\/[a-z0-9.+-]{2,30}$/.test(mime))) return json({ error: 'bad' }, 400);
     const owner = this.one('SELECT uid FROM media WHERE id = ? LIMIT 1', id);
     if (owner && owner.uid !== me.id) return json({ error: 'bad' }, 403);
     if (!data.byteLength || data.byteLength > 1572864) return json({ error: 'size' }, 413);
@@ -376,9 +377,10 @@ export class Hub {
     return s === 'everyone' || (s === 'followers' && this.follows(viewer.id, owner.id));
   }
   dropOldStatuses() {
-    const old = this.sql.exec("SELECT id, media, thumb FROM uposts WHERE kind = 'status' AND at < ?", Date.now() - 86400000).toArray();
-    for (const p of old) { this.sql.exec('DELETE FROM media WHERE id = ? OR id = ?', p.media, p.thumb || ''); this.sql.exec('DELETE FROM uposts WHERE id = ?', p.id); this.sql.exec('DELETE FROM ulikes WHERE pid = ?', p.id); this.sql.exec('DELETE FROM ucomments WHERE pid = ?', p.id); }
+    const old = this.sql.exec("SELECT * FROM uposts WHERE kind = 'status' AND at < ?", Date.now() - 86400000).toArray();
+    for (const p of old) { this.sql.exec('DELETE FROM media WHERE id = ? OR id = ? OR id = ?', p.media, p.thumb || '', this.postMusic(p).media || ''); this.sql.exec('DELETE FROM uposts WHERE id = ?', p.id); this.sql.exec('DELETE FROM ulikes WHERE pid = ?', p.id); this.sql.exec('DELETE FROM ucomments WHERE pid = ?', p.id); }
   }
+  postMusic(p) { try { return JSON.parse(p.music || 'null') || {}; } catch (e) { return {}; } }
   postItems(p) {
     let it = []; try { it = JSON.parse(p.items || '[]') || []; } catch (e) {}
     if (!it.length && p.media) it = [{ type: p.type, media: p.media, thumb: p.thumb }];
@@ -386,7 +388,9 @@ export class Hub {
   }
   postView(p, me) {
     const items = this.postItems(p).map(i => ({ type: i.type === 'video' ? 'video' : 'photo', url: this.mediaUrl(i.media), thumb: this.mediaUrl(i.thumb) }));
-    const v = { id: p.id, kind: p.kind, type: items[0] ? items[0].type : 'text', url: items[0] ? items[0].url : '', thumb: items[0] ? items[0].thumb : '', at: p.at, title: p.title || '', text: p.text || '', items };
+    const mu = this.postMusic(p);
+    const v = { id: p.id, kind: p.kind, type: items[0] ? items[0].type : 'text', url: items[0] ? items[0].url : '', thumb: items[0] ? items[0].thumb : '', at: p.at, title: p.title || '', text: p.text || '', items,
+      music: mu.media ? { url: this.mediaUrl(mu.media), name: mu.name || '' } : null };
     if (p.kind === 'status' || me) Object.assign(v, {
       hearts: this.one('SELECT COUNT(*) AS n FROM ulikes WHERE pid = ?', p.id).n,
       hearted: !!(me && this.one('SELECT 1 AS x FROM ulikes WHERE pid = ? AND uid = ?', p.id, me.id)),
@@ -442,8 +446,9 @@ export class Hub {
       const title = kind === 'post' ? String(b.title || '').trim().slice(0, 100) : '', text = kind === 'post' ? String(b.text || '').trim().slice(0, 2000) : '';
       if (kind === 'status' ? items.length !== 1 : !items.length && !title && !text) return json({ error: 'empty' }, 400);
       const id = 'u' + rand(10), first = items[0] || {};
-      this.sql.exec('INSERT INTO uposts (id, uid, kind, type, media, thumb, at, title, text, items) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        id, me.id, kind, first.type || 'text', first.media || null, first.thumb || null, Date.now(), title || null, text || null, items.length ? JSON.stringify(items) : null);
+      const music = b.music && b.music.media && this.mediaDone(String(b.music.media), me.id) ? JSON.stringify({ media: String(b.music.media), name: String(b.music.name || '').slice(0, 80) }) : null;
+      this.sql.exec('INSERT INTO uposts (id, uid, kind, type, media, thumb, at, title, text, items, music) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        id, me.id, kind, first.type || 'text', first.media || null, first.thumb || null, Date.now(), title || null, text || null, items.length ? JSON.stringify(items) : null, music);
       this.dropOldStatuses();
       return json(this.postView(this.one('SELECT * FROM uposts WHERE id = ?', id), me));
     }
@@ -476,6 +481,7 @@ export class Hub {
       const p = this.one('SELECT * FROM uposts WHERE id = ? AND uid = ?', String(b.id || ''), me.id);
       if (!p) return json({ error: 'notfound' }, 404);
       for (const i of this.postItems(p)) this.sql.exec('DELETE FROM media WHERE id = ? OR id = ?', i.media || '', i.thumb || '');
+      if (this.postMusic(p).media) this.sql.exec('DELETE FROM media WHERE id = ?', this.postMusic(p).media);
       this.sql.exec('DELETE FROM media WHERE id = ? OR id = ?', p.media, p.thumb || '');
       this.sql.exec('DELETE FROM uposts WHERE id = ?', p.id);
       this.sql.exec('DELETE FROM ulikes WHERE pid = ?', p.id); this.sql.exec('DELETE FROM ucomments WHERE pid = ?', p.id);
@@ -824,6 +830,7 @@ export class Hub {
     if (kind === 'status' || kind === 'post') {
       const p = this.one('SELECT * FROM uposts WHERE id = ?', id); if (!p) return;
       for (const i of this.postItems(p)) this.sql.exec('DELETE FROM media WHERE id = ? OR id = ?', i.media || '', i.thumb || '');
+      if (this.postMusic(p).media) this.sql.exec('DELETE FROM media WHERE id = ?', this.postMusic(p).media);
       this.sql.exec('DELETE FROM media WHERE id = ? OR id = ?', p.media, p.thumb || ''); this.sql.exec('DELETE FROM uposts WHERE id = ?', p.id);
       this.sql.exec('DELETE FROM ulikes WHERE pid = ?', p.id); this.sql.exec('DELETE FROM ucomments WHERE pid = ?', p.id);
     }
@@ -1176,7 +1183,8 @@ export class Hub {
     const other = out ? (p.to_uid ? this.one('SELECT name, username FROM users WHERE id = ?', p.to_uid) : null) : this.one('SELECT name, username FROM users WHERE id = ?', p.uid);
     return { id: p.id, dir: out ? 'out' : 'in', amount: p.cents / 100, currency: 'ZAR', ref: p.ref || '', status: p.status, at: p.created,
       who: out ? (other ? (other.name || '@' + other.username) : p.to_name) : (other ? (other.name || '@' + (other.username || '')) : 'Someone'),
-      bank: out && !p.to_uid ? (PAY_BANKS[p.to_bank] || '') + (p.to_mask ? ' ••' + p.to_mask : '') : '', from: out ? p.payfrom || '' : '' };   // a STORY profile's bank is never shown
+      bank: out && !p.to_uid ? (PAY_BANKS[p.to_bank] || '') + (p.to_mask ? ' ••' + p.to_mask : '') : '', from: out ? p.payfrom || '' : '',   // a STORY profile's bank is never shown
+      uid: out ? (p.to_uid || '') : p.uid, username: other ? other.username || '' : '' };   // who it was with (Wallet's RECENTS)
   }
   async pay(me, op, b, url) {
     const now = Date.now();
