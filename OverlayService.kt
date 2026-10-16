@@ -830,9 +830,10 @@ class OverlayService : Service(), StoryBridge.Host {
         if (snapping) return
         val page = snapQueue.removeFirstOrNull() ?: return
         snapping = true
-        // The same size the Pages are drawn at, so the picture is exactly the page as it shows on the Pages.
-        val W = pagesPane?.web?.width?.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
+        // The Pages' height, and as wide as the widget's shape needs, so the picture fills the WHOLE widget (owner).
         val H = pagesPane?.web?.height?.takeIf { it > 0 } ?: realHeightPx()
+        val W = PageWidgets.aspect(this, page)?.let { a -> (H * a).toInt().coerceIn(H / 4, H * 3) }
+            ?: pagesPane?.web?.width?.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
         val themed = ContextThemeWrapper(this, R.style.Theme_Story)
         val holder = FrameLayout(themed)
         val wv = WebView(themed)
@@ -894,7 +895,7 @@ class OverlayService : Service(), StoryBridge.Host {
     //      Anything that could move the home screen (a touch outside it, scrolling, another screen) puts it away for
     //      a moment - the widget's picture shows meanwhile - and it comes back once the widget has stood still. ----
     private class LiveW(val id: Int, val page: String, val holder: FrameLayout, val web: WebView, val lp: WindowManager.LayoutParams) {
-        var ready = false; var shown = false
+        var ready = false; var shown = false; var pw = 0f
     }
     private val liveWidgets = HashMap<Int, LiveW>()
     private var homePkgCache: String? = null
@@ -954,15 +955,15 @@ class OverlayService : Service(), StoryBridge.Host {
     }
     @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
     private fun placeLive(id: Int, page: String, r: Rect) {
-        // The page keeps the Pages' shape: as big as fits inside the widget, centred (exactly over its picture).
-        val PW = pagesPane?.web?.width?.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
+        // The page fills the WHOLE widget (owner: no gaps at the sides): it keeps the Pages' height and lays out as wide
+        // as the widget's shape needs (pwCss), then the phone shrinks it to the widget - exactly over its picture.
         val PH = pagesPane?.web?.height?.takeIf { it > 0 } ?: realHeightPx()
-        val k = minOf(r.width().toFloat() / PW, r.height().toFloat() / PH)
-        val w = (PW * k).toInt().coerceAtLeast(1); val h = (PH * k).toInt().coerceAtLeast(1)
-        val x = r.left + (r.width() - w) / 2; val y = r.top + (r.height() - h) / 2
-        val lw = liveWidgets[id]?.takeIf { it.page == page } ?: run {
+        val w = r.width().coerceAtLeast(1); val h = r.height().coerceAtLeast(1)
+        val x = r.left; val y = r.top
+        val pwCss = Math.round(PH / dp * w / h).toFloat()
+        val lw = liveWidgets[id]?.takeIf { it.page == page && Math.abs(it.pw - pwCss) < 2f } ?: run {
             liveWidgets.remove(id)?.let { old -> runCatching { wm.removeView(old.holder) }; runCatching { old.web.destroy() } }
-            buildLive(id, page, PW / dp) ?: return
+            (buildLive(id, page, pwCss) ?: return).also { it.pw = pwCss }
         }
         val moved = lw.lp.x != x || lw.lp.y != y || lw.lp.width != w || lw.lp.height != h
         lw.lp.x = x; lw.lp.y = y; lw.lp.width = w; lw.lp.height = h
@@ -1024,6 +1025,10 @@ class OverlayService : Service(), StoryBridge.Host {
         // A touch anywhere else on the home screen may start a swipe: step aside, come back once it's still.
         holder.setOnTouchListener { _, e -> if (e.actionMasked == MotionEvent.ACTION_OUTSIDE && liveTyping !== lw) widgetLiveEvent(true); false }
         holder.addView(web, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        // The page fills the whole widget, so it takes the widget's own rounded corners (the phone's widget radius).
+        val radius = if (Build.VERSION.SDK_INT >= 31) runCatching { resources.getDimension(android.R.dimen.system_app_widget_background_radius) }.getOrDefault(16 * dp) else 16 * dp
+        holder.outlineProvider = object : android.view.ViewOutlineProvider() { override fun getOutline(v: View, o: android.graphics.Outline) { o.setRoundRect(0, 0, v.width, v.height, radius) } }
+        holder.clipToOutline = true
         if (runCatching { wm.addView(holder, lp) }.isFailure) { web.destroy(); return null }
         liveWidgets[id] = lw
         web.loadUrl(remoteBase() + query + "&v=" + System.currentTimeMillis())

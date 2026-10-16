@@ -28,7 +28,7 @@ open class PageWidget(private val page: String) : AppWidgetProvider() {
         PageWidgets.show(c, page)
         PageWidgets.refresh(c, page, minGapMs = 0)
     }
-    override fun onAppWidgetOptionsChanged(c: Context, m: AppWidgetManager, id: Int, o: Bundle) { PageWidgets.show(c, page) }
+    override fun onAppWidgetOptionsChanged(c: Context, m: AppWidgetManager, id: Int, o: Bundle) { PageWidgets.show(c, page); PageWidgets.refresh(c, page, 0L) }   // resized: a new picture in its new shape
     override fun onDisabled(c: Context) { PageWidgets.file(c, page).delete() }
     override fun onDeleted(c: Context, ids: IntArray) { OverlayService.instance?.widgetLiveEvent(false) }
 }
@@ -50,6 +50,16 @@ object PageWidgets {
         runCatching { AppWidgetManager.getInstance(c).getAppWidgetIds(ComponentName(c, providers.getValue(page))) }.getOrDefault(IntArray(0))
     fun placed(c: Context, page: String) = ids(c, page).isNotEmpty()
     /** Every STORY widget on the home screen. */
+    /** The shape (width / height) of the first widget of this page on the home screen, as the launcher reports it
+     *  (portrait: its smallest width by its biggest height). null = none placed / not known yet. */
+    fun aspect(c: Context, page: String): Float? {
+        val id = ids(c, page).firstOrNull() ?: return null
+        val o = AppWidgetManager.getInstance(c).getAppWidgetOptions(id) ?: return null
+        val portrait = c.resources.configuration.orientation != android.content.res.Configuration.ORIENTATION_LANDSCAPE
+        val w = o.getInt(if (portrait) AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH else AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH)
+        val h = o.getInt(if (portrait) AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT else AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT)
+        return if (w > 0 && h > 0) w.toFloat() / h else null
+    }
     fun allIds(c: Context): Set<Int> = providers.keys.flatMap { ids(c, it).toList() }.toSet()
     /** Which page a widget shows. */
     fun pageOf(c: Context, id: Int): String? = providers.keys.firstOrNull { p -> ids(c, p).contains(id) }
