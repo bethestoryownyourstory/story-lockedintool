@@ -28,3 +28,4 @@ commits, pushed as a new update) - nothing else changes.
 | 20 | 2026-10-16 | Subscription: two option buttons at the top - Second system | Only system (cursor over one shows what it is; on a phone tap it, read the details, press ✓); then choose your plan and it's bought under that option and plan - Only system turns on once the plan is paid | 2be03d8, cb54857 |
 | 21 | 2026-10-16 | Only system: the Dashboard's APPS button and everything involving your apps (Apps screen, app pages, Open <platform>, sharing to apps) and the bottom Apps | Pages switch line aren't there at all | db90460, 5dc2da8 |
 | 22 | 2026-10-16 | Subscription options: no background and nothing chosen at first (the chosen one gets an outline + ✓); you can't buy a plan without choosing Second system or Only system | 55fc063 |
+| 23 | 2026-10-16 | Widgets: every page widget (Dashboard, Money, Home / Wallet, Focus, Notes, Community) now fills the whole widget - no gaps at the sides | 0342b5c |
