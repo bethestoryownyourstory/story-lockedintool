@@ -2440,6 +2440,40 @@
   #story-profile .up-p-btns .up-follow-lg[data-pf="up-message"]{ background:transparent; color:var(--pf-fg); }
   #story-profile .up-p-note{ text-align:center; color:var(--pf-muted); font-size:14px; padding:30px 0; }
   /* Updates: the Create post box (looks like the bio box), the composer, and the feed (owner). */
+  /* Live (owner) */
+  #story-profile .pf-live{ position:absolute; inset:0; z-index:56; background:#000; color:#fff; overflow:hidden; }
+  #story-profile .pf-live[hidden]{ display:none; }
+  #story-profile .lv-video{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; background:#000; }
+  #story-profile .lv-video.lv-mirror{ transform:scaleX(-1); }
+  #story-profile .lv-top{ position:absolute; left:14px; right:14px; top:calc(var(--pf-top, 24px) + 10px); display:flex; align-items:center; gap:8px; z-index:2; }
+  #story-profile .lv-who{ display:flex; align-items:center; gap:8px; font-weight:800; font-size:14px; text-shadow:0 1px 4px rgba(0,0,0,0.7); min-width:0; }
+  #story-profile .lv-who .msg-pic{ width:34px; height:34px; }
+  #story-profile .lv-badge{ padding:3px 8px; border-radius:6px; background:#e5484d; font-size:11px; font-weight:900; letter-spacing:0.06em; }
+  #story-profile .lv-badge[hidden], #story-profile .lv-count[hidden]{ display:none; }
+  #story-profile .lv-count{ padding:3px 8px; border-radius:6px; background:rgba(0,0,0,0.5); font-size:12px; font-weight:700; }
+  #story-profile .lv-x{ margin-left:auto; width:36px; height:36px; border-radius:50%; border:0; background:rgba(0,0,0,0.5); color:#fff; font-size:16px; }
+  #story-profile .lv-state{ position:absolute; left:0; right:0; top:45%; text-align:center; font-size:16px; font-weight:700; text-shadow:0 1px 6px rgba(0,0,0,0.8); z-index:2; padding:0 20px; }
+  #story-profile .lv-comments{ position:absolute; left:14px; right:80px; bottom:120px; max-height:38%; overflow:hidden; display:flex; flex-direction:column; justify-content:flex-end; gap:6px; z-index:2; }
+  #story-profile .lv-c{ font-size:13px; line-height:1.35; text-shadow:0 1px 4px rgba(0,0,0,0.85); }
+  #story-profile .lv-bottom{ position:absolute; left:14px; right:14px; bottom:calc(var(--pf-ime, 0px) + 58px); z-index:2; }
+  #story-profile .lv-host-btns, #story-profile .lv-watch-btns{ display:flex; align-items:center; justify-content:center; gap:16px; }
+  #story-profile .lv-host-btns[hidden], #story-profile .lv-watch-btns[hidden]{ display:none; }
+  #story-profile .pf-live .cv-btn{ background:rgba(0,0,0,0.45); border-color:#fff; color:#fff; }
+  #story-profile .pf-live .cv-btn.on{ background:#fff; color:#000; }
+  #story-profile .lv-go{ min-width:130px; height:52px; border-radius:26px; border:0; background:#e5484d; color:#fff; font:inherit; font-size:16px; font-weight:800; }
+  #story-profile .lv-go.lv-end{ background:#fff; color:#000; }
+  #story-profile .lv-in{ flex:1; min-width:0; height:44px; border-radius:22px; border:1px solid rgba(255,255,255,0.6); background:rgba(0,0,0,0.4); color:#fff; padding:0 16px; font:inherit; font-size:14px; outline:none; }
+  #story-profile .lv-heart{ width:44px; height:44px; border-radius:50%; border:0; background:rgba(0,0,0,0.45); color:#ff3b5c; font-size:22px; }
+  #story-profile .lv-heart.pop{ animation:lvpop 0.4s ease; }
+  @keyframes lvpop{ 50%{ transform:scale(1.35); } }
+  #story-profile .up-lives{ display:flex; gap:10px; overflow-x:auto; scrollbar-width:none; margin:14px 0 0; }
+  #story-profile .up-lives::-webkit-scrollbar{ display:none; }
+  #story-profile .up-lives[hidden]{ display:none; }
+  #story-profile .up-live{ flex:none; display:flex; align-items:center; gap:10px; padding:8px 14px 8px 8px; border:1px solid #e5484d; border-radius:16px; background:transparent; color:var(--pf-fg); font:inherit; text-align:left; }
+  #story-profile .up-live .msg-pic{ width:38px; height:38px; }
+  #story-profile .up-live-t{ display:flex; flex-direction:column; font-size:13px; }
+  #story-profile .up-live-t span{ font-size:11.5px; color:var(--pf-muted); }
+  #story-profile .up-live-t i{ font-style:normal; color:#e5484d; font-weight:900; }
   #story-profile .up-cp-box{ display:block; width:100%; text-align:left; margin:16px 0 6px; border:1px solid var(--pf-hair); border-radius:14px; padding:14px 16px; min-height:56px;
     box-sizing:border-box; background:transparent; color:var(--pf-muted); font:inherit; font-size:14px; }
   #story-profile .up-cp-box:active{ opacity:0.6; }
@@ -3709,7 +3743,7 @@
   // A note's own colours (its paper, cover, ink and the swatches that pick them) are the owner's writing,
   // not STORY's look -- they never swap (nor anything marked data-keep-color).
   // The payment cards in Wallet are printed like the real cards, so they keep their own look too.
-  const KEEP_SEL = /\.note-(card|content|page-counter)|\.notes-(swatch|preview-page)|\.canvas-(page|swatch)|\.inline-task|\.draw-canvas|^\.realcard$|\.realcard-(chase|amex|top|brand|chip|num|bottom|label|name|logo)/;
+  const KEEP_SEL = /\.cr-shutter|\.note-(card|content|page-counter)|\.notes-(swatch|preview-page)|\.canvas-(page|swatch)|\.inline-task|\.draw-canvas|^\.realcard$|\.realcard-(chase|amex|top|brand|chip|num|bottom|label|name|logo)/;
   const KEEP_EL = '[data-keep-color], .note-card, .note-content-wrap, .canvas-page-wrap, .notes-swatch, .canvas-swatch, .notes-preview-page, .realcard-chase, .realcard-amex';
   function flip(t){
     const k = t.toLowerCase();
@@ -8993,6 +9027,7 @@ window.storyProfileOnly = function(){
         <label class="pf-msgs-search"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="search" placeholder="Search anyone on Lockedintool" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="search"></label>
       </div>
       <div class="up-status-row"></div>
+      <div class="up-lives" hidden></div>
       <button class="up-cp-box" data-pf="up-compose">What’s on your mind?</button>
       <div class="up-feed"></div>
       <div class="up-h">Profiles</div>
@@ -9168,7 +9203,7 @@ window.storyProfileOnly = function(){
     }
     else if(k === 'cr-mode'){
       const m = b.getAttribute('data-m');
-      if(m === 'live'){ showToast('Live — coming soon'); return; }
+      if(m === 'live'){ liveOpenHost(); return; }
       if(crRecording) return;
       crMode = crMode === m ? null : m; crRender();  // tap a chosen box again: back to the normal camera
     }
@@ -9284,6 +9319,12 @@ window.storyProfileOnly = function(){
     else if(k === 'call-cam') callToggle('cam');
     else if(k === 'call-flip') callFlip();
     else if(k === 'gcall-accept') gcallAccept();
+    else if(k === 'live-go') liveGo();
+    else if(k === 'live-close') liveClose();
+    else if(k === 'live-flip') liveFlip();
+    else if(k === 'live-mute') liveMute();
+    else if(k === 'live-heart') liveHeart();
+    else if(k === 'live-watch') liveWatch(b.getAttribute('data-id'));
     else if(k === 'gcall-decline') gcallDecline();
     else if(k === 'gcall-end') gcallEnd('You left the call');
     else if(k === 'gcall-mute' || k === 'gcall-speaker' || k === 'gcall-cam') gcallToggle(k.slice(6));
@@ -9559,7 +9600,9 @@ function crStatus(t){
 window.storyCreateEvent = function(kind, why){
   const el = document.getElementById('story-profile'); if(!el) return;
   if(kind === 'streaming'){ crCameraReady = true; clearTimeout(crWatch); crStatus(''); return; }
-  if(CR_STEPS[kind] && !crCameraReady) crStatus(CR_STEPS[kind]);
+  // Owner: no "Camera: connecting…" while it opens - the line only shows when there's a real problem (or the first-time
+  // camera question is waiting for your OK).
+  if(kind === 'asking' && !crCameraReady) crStatus(CR_STEPS.asking);
   if(kind === 'launching' || kind === 'opened') return;
   if(kind === 'ready'){ clearTimeout(crWatch); return; }
   if(kind === 'asking'){ clearTimeout(crWatch); return; }  // Android is asking for the camera (first time only)
@@ -9678,7 +9721,7 @@ function upEl(){ const el = document.getElementById('story-profile'); return el 
 async function upLoad(){
   const el = upEl(); if(!el || UP.loading) return;
   if(!msgAccount()){ msgEnsureAccount(); upRender(); return; }
-  UP.loading = true; upRender(); feedLoad(true);
+  UP.loading = true; upRender(); feedLoad(true); liveListLoad();
   try{
     UP.data = await msgApi('/v1/updates'); actRefreshSoon();
     const me = UP.data.me; if(me) upSaveStats(me);
@@ -10615,13 +10658,14 @@ async function msgOnServer(m){
   if(m.t === 'fnote'){   // someone you follow posted (owner: followers are told)
     if(m.seq) msgSend({ t:'ack', seq:m.seq });
     const who = m.name || (m.username ? '@' + m.username : 'Someone');
-    const what = m.kind === 'status' ? 'posted a status' : m.kind === 'highlight' ? 'added to a highlight' : m.kind === 'live' ? 'is live now - tap to watch' : 'shared a new post';
+    const what = m.kind === 'status' ? 'posted a status' : m.kind === 'highlight' ? 'added to a highlight' : m.kind === 'live' ? 'is live now' : 'shared a new post';
     if(NATIVE && window.StoryNative.msgNotify) try{ window.StoryNative.msgNotify(who, who + ' ' + what); }catch(e){}
     if(m.kind === 'live' && typeof liveNote === 'function') liveNote(m);
     if(typeof upLoad === 'function') setTimeout(()=>{ try{ upLoad(); feedLoad && feedLoad(true); }catch(e){} }, 800);
     return;
   }
   if(m.t === 'glive'){ gliveSet(m.group, m.live); return; }
+  if(m.t === 'live'){ liveOnMsg(m); return; }
 }
 // ---- Groups in Messages: every group you're in (public from Community, private made here) is a chat, kept up to date
 // by the server (t:'group'). Private group messages are locked for each member; public group chat is public. ----
@@ -11181,6 +11225,171 @@ async function gcallFlip(){
     gcall.local.getVideoTracks().forEach(t=>{ gcall.local.removeTrack(t); t.stop(); }); gcall.local.addTrack(nt);
     gcallRender();
   }catch(e){}
+}
+// ---- Live (owner): go live from Create's Live box; your followers are told; people who may see your profile watch,
+// heart and comment. The picture goes phone -> Cloudflare's live video service -> everyone watching (msg-worker
+// /v1/live/*). Followers' lives (and anyone's once it has engagement) show at the top of Updates. ----
+const LIVE = { mode:null, id:'', pc:null, stream:null, facing:'user', muted:false, viewers:0, hearts:0, startAt:0, timer:0, user:null, comments:[], ended:false, list:[] };
+const LIVE_ICE = [{ urls:'stun:stun.cloudflare.com:3478' }];
+function liveEl(){
+  const el = document.getElementById('story-profile'); if(!el) return null;
+  let v = el.querySelector('.pf-live');
+  if(!v){
+    v = document.createElement('div'); v.className = 'pf-live'; v.hidden = true;
+    v.innerHTML = '<video class="lv-video" playsinline autoplay muted></video>' +
+      '<div class="lv-top"><div class="lv-who"></div><span class="lv-badge" hidden>LIVE</span><span class="lv-count" hidden></span><button class="lv-x" data-pf="live-close" aria-label="Close">✕</button></div>' +
+      '<div class="lv-state"></div>' +
+      '<div class="lv-comments"></div>' +
+      '<div class="lv-bottom">' +
+        '<div class="lv-host-btns"><button class="cv-btn" data-pf="live-flip" aria-label="Switch camera"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 0 0-14.3-4.9L4 8"/><path d="M4 3v5h5"/><path d="M4 13a8 8 0 0 0 14.3 4.9L20 16"/><path d="M20 21v-5h-5"/></svg></button>' +
+          '<button class="lv-go" data-pf="live-go">Go live</button>' +
+          '<button class="cv-btn" data-pf="live-mute" aria-label="Mute"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1M12 18v4"/><path class="cv-off" d="M3 3l18 18"/></svg></button></div>' +
+        '<div class="lv-watch-btns"><input class="lv-in" maxlength="200" placeholder="Add a comment"><button class="lv-heart" data-pf="live-heart" aria-label="Heart">♥</button></div>' +
+      '</div>';
+    el.appendChild(v);
+    const inp = v.querySelector('.lv-in');
+    inp.addEventListener('pointerdown', profileTypingOn); inp.addEventListener('focus', profileTypingOn);
+    inp.addEventListener('keydown', e=>{ if(e.key === 'Enter'){ e.preventDefault(); liveComment(); } });
+  }
+  return v;
+}
+function liveRender(){
+  const v = liveEl(); if(!v) return;
+  v.hidden = !LIVE.mode; if(!LIVE.mode) return;
+  const host = LIVE.mode === 'host', on = !!LIVE.startAt && !LIVE.ended;
+  v.classList.toggle('lv-hosting', host); v.classList.toggle('lv-watching', !host);
+  const vid = v.querySelector('.lv-video');
+  if(vid.srcObject !== LIVE.stream) vid.srcObject = LIVE.stream || null;
+  vid.muted = host; vid.classList.toggle('lv-mirror', host && LIVE.facing === 'user');
+  const u = LIVE.user || {};
+  v.querySelector('.lv-who').innerHTML = host ? '' : upPic(u) + '<span>' + escText(upName(u)) + '</span>';
+  v.querySelector('.lv-badge').hidden = !on;
+  const c = v.querySelector('.lv-count'); c.hidden = !on; c.textContent = '👁 ' + fmtCount(LIVE.viewers) + (LIVE.hearts ? '  ♥ ' + fmtCount(LIVE.hearts) : '');
+  v.querySelector('.lv-state').textContent = LIVE.ended ? 'Live ended' : LIVE.state || '';
+  v.querySelector('.lv-go').textContent = on ? 'End live' : 'Go live';
+  v.querySelector('.lv-go').classList.toggle('lv-end', on);
+  v.querySelector('[data-pf="live-mute"]').classList.toggle('on', LIVE.muted);
+  v.querySelector('.lv-host-btns').hidden = !host;
+  v.querySelector('.lv-watch-btns').hidden = host || LIVE.ended;
+  v.querySelector('.lv-comments').innerHTML = LIVE.comments.slice(-30).map(x=>'<div class="lv-c"><b>' + escText(x.name || (x.username ? '@' + x.username : '')) + '</b> ' + escText(x.text) + '</div>').join('');
+}
+// Host: the camera preview first; "Go live" sends it out.
+async function liveOpenHost(){
+  if(LIVE.mode) return;
+  if(!litSignedIn()){ showToast('Log in to go live'); return; }
+  if(NATIVE && window.StoryNative.liveMode) window.StoryNative.liveMode(true);
+  Object.assign(LIVE, { mode:'host', id:'', pc:null, stream:null, muted:false, viewers:0, hearts:0, startAt:0, comments:[], ended:false, state:'', user:null });
+  liveRender();
+  await new Promise(r=>setTimeout(r, 450));   // the camera screen lets go of the camera first
+  try{ LIVE.stream = await liveMedia(); }catch(e){ LIVE.state = callMediaProblem(e); liveRender(); return; }
+  liveRender();
+}
+async function liveMedia(){
+  if(NATIVE && window.StoryNative.callAsk){ const ok = callNative('callAsk', true); if(ok === 'asking') throw Object.assign(new Error('asking'), { code:'asking' }); }
+  return navigator.mediaDevices.getUserMedia({ audio:{ echoCancellation:true, noiseSuppression:true }, video:{ facingMode:LIVE.facing, width:{ ideal:720 }, height:{ ideal:1280 } } });
+}
+async function liveGo(){
+  if(LIVE.startAt){ return liveEnd(true); }
+  if(!LIVE.stream){ try{ LIVE.stream = await liveMedia(); }catch(e){ LIVE.state = callMediaProblem(e); liveRender(); return; } }
+  if(!msgWsOpen){ showToast('No connection to Lockedintool right now'); return; }
+  LIVE.state = 'Starting…'; liveRender();
+  try{
+    const s = await msgApi('/v1/live/start', {});
+    LIVE.id = s.id;
+    const pc = new RTCPeerConnection({ iceServers: LIVE_ICE, bundlePolicy:'max-bundle' }); LIVE.pc = pc;
+    const trs = LIVE.stream.getTracks().map(t=>pc.addTransceiver(t, { direction:'sendonly', streams:[LIVE.stream] }));
+    await pc.setLocalDescription(await pc.createOffer());
+    const r = await msgApi('/v1/live/publish', { id: s.id, sdp: pc.localDescription.sdp, tracks: trs.map(t=>({ mid: t.mid, trackName: s.id + '-' + t.sender.track.kind })) });
+    await pc.setRemoteDescription({ type:'answer', sdp: r.sdp });
+    pc.onconnectionstatechange = ()=>{ if(pc.connectionState === 'failed'){ LIVE.state = 'Connection lost'; liveRender(); } };
+    LIVE.startAt = Date.now(); LIVE.state = ''; liveKeepAwake(true);
+    clearInterval(LIVE.timer); LIVE.timer = setInterval(liveRender, 5000);
+    showToast('You’re live'); liveRender();
+  }catch(e){ LIVE.state = e && e.code === 'not-ready' ? 'Live isn’t switched on yet on Lockedintool’s server' : 'Couldn’t go live - try again'; try{ LIVE.pc && LIVE.pc.close(); }catch(x){} LIVE.pc = null; LIVE.id = ''; liveRender(); }
+}
+function liveStopMedia(){ try{ LIVE.pc && LIVE.pc.close(); }catch(e){} try{ LIVE.stream && LIVE.mode === 'host' && LIVE.stream.getTracks().forEach(t=>t.stop()); }catch(e){} LIVE.pc = null; LIVE.stream = null; }
+async function liveEnd(keepOpen){
+  const id = LIVE.id, host = LIVE.mode === 'host';
+  clearInterval(LIVE.timer); liveKeepAwake(false);
+  if(id) try{ await msgApi('/v1/live/' + (host ? 'end' : 'leave'), { id }); }catch(e){}
+  liveStopMedia();
+  if(keepOpen && host){ LIVE.ended = true; liveRender(); setTimeout(liveClose, 1500); return; }
+  liveClose();
+}
+function liveClose(){
+  if(LIVE.mode && LIVE.id && !LIVE.ended){ liveEnd(false); return; }
+  const host = LIVE.mode === 'host';
+  liveStopMedia(); clearInterval(LIVE.timer); liveKeepAwake(false);
+  Object.assign(LIVE, { mode:null, id:'', startAt:0, ended:false, state:'' });
+  liveRender();
+  if(host && NATIVE && window.StoryNative.liveMode) window.StoryNative.liveMode(false);   // back to Create's camera
+  liveListLoad();
+}
+// Watching someone's live.
+async function liveWatch(id){
+  if(LIVE.mode) liveClose();
+  if(gcallBusy()){ showToast('You’re on a call'); return; }
+  Object.assign(LIVE, { mode:'watch', id, pc:null, stream:null, viewers:0, hearts:0, startAt:0, comments:[], ended:false, state:'Joining…', user:null });
+  liveRender();
+  try{
+    const w = await msgApi('/v1/live/watch', { id });
+    Object.assign(LIVE, { user: w.user, viewers: w.viewers, hearts: w.hearts, comments: w.recent || [] });
+    const pc = new RTCPeerConnection({ iceServers: LIVE_ICE, bundlePolicy:'max-bundle' }); LIVE.pc = pc;
+    const ms = new MediaStream(); LIVE.stream = ms;
+    pc.ontrack = e=>{ ms.addTrack(e.track); liveRender(); };
+    pc.onconnectionstatechange = ()=>{ if(pc.connectionState === 'connected'){ LIVE.state = ''; LIVE.startAt = Date.now(); liveRender(); } };
+    await pc.setRemoteDescription({ type: w.type || 'offer', sdp: w.sdp });
+    await pc.setLocalDescription(await pc.createAnswer());
+    await msgApi('/v1/live/answer', { id, sdp: pc.localDescription.sdp });
+    liveRender();
+  }catch(e){ LIVE.state = e && e.code === 'ended' ? 'This live has ended' : e && e.code === 'starting' ? 'Starting - try again in a moment' : 'Couldn’t open this live'; LIVE.ended = e && e.code === 'ended'; liveRender(); }
+}
+async function liveComment(){
+  const v = liveEl(); const inp = v && v.querySelector('.lv-in'); if(!inp) return;
+  const text = inp.value.trim(); if(!text || !LIVE.id) return;
+  inp.value = '';
+  try{ await msgApi('/v1/live/comment', { id: LIVE.id, text }); }catch(e){ showToast('No connection right now'); }
+}
+async function liveHeart(){
+  if(!LIVE.id) return;
+  const b = liveEl().querySelector('.lv-heart'); b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop');
+  try{ await msgApi('/v1/live/heart', { id: LIVE.id }); }catch(e){}
+}
+async function liveFlip(){
+  if(LIVE.mode !== 'host' || !LIVE.stream) return;
+  LIVE.facing = LIVE.facing === 'user' ? 'environment' : 'user';
+  try{
+    const s = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:LIVE.facing } }), nt = s.getVideoTracks()[0];
+    const snd = LIVE.pc && LIVE.pc.getSenders().find(x=>x.track && x.track.kind === 'video'); if(snd) await snd.replaceTrack(nt);
+    LIVE.stream.getVideoTracks().forEach(t=>{ LIVE.stream.removeTrack(t); t.stop(); }); LIVE.stream.addTrack(nt);
+    liveRender();
+  }catch(e){}
+}
+function liveMute(){ LIVE.muted = !LIVE.muted; if(LIVE.stream) LIVE.stream.getAudioTracks().forEach(t=>t.enabled = !LIVE.muted); liveRender(); }
+let liveWake = null;
+async function liveKeepAwake(on){ try{ if(on && navigator.wakeLock) liveWake = await navigator.wakeLock.request('screen'); else if(!on && liveWake){ liveWake.release(); liveWake = null; } }catch(e){} }
+// What happens while live: viewers, hearts, comments, the end (server -> t:'live').
+function liveOnMsg(m){
+  if(m.id !== LIVE.id || !LIVE.mode) return;
+  if(m.kind === 'viewers') LIVE.viewers = m.n;
+  if(m.kind === 'heart') LIVE.hearts++;
+  if(m.kind === 'comment') LIVE.comments.push({ name:m.name, username:m.username, text:m.text });
+  if(m.kind === 'ended' && LIVE.mode === 'watch'){ LIVE.ended = true; liveStopMedia(); }
+  liveRender();
+}
+function liveNote(){ liveListLoad(); }
+// Lives at the top of Updates: the people you follow, and anyone's that has engagement.
+async function liveListLoad(){
+  if(!MSG_ENGINE || !litSignedIn()) return;
+  try{ LIVE.list = (await msgApi('/v1/live/list')).lives || []; }catch(e){ return; }
+  liveListRender();
+}
+function liveListRender(){
+  const el = document.getElementById('story-profile'); if(!el) return;
+  const box = el.querySelector('.pf-updates .up-lives'); if(!box) return;
+  box.hidden = !LIVE.list.length;
+  box.innerHTML = LIVE.list.map(l=>'<button class="up-live" data-pf="live-watch" data-id="' + escText(l.id) + '">' + upPic(l.user || {}) +
+    '<span class="up-live-t"><b>' + escText(upName(l.user || {})) + '</b><span><i>LIVE</i> · ' + fmtCount(l.viewers) + ' watching</span></span></button>').join('');
 }
 // The Pages window (Community) asks Profile's window to start / join a group's call.
 window.addEventListener('storage', e=>{

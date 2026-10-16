@@ -1,0 +1,48 @@
+name: Test Lockedintool Live
+# Live (owner: "make sure everything is working"): makes a short-lived Cloudflare Realtime app, runs this repo's
+# message server locally with it, and runs live-test.mjs - one phone goes live, another watches, hearts and comments.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['live-test.mjs', '.github/workflows/live-test.yml']
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - name: Tools
+        run: |
+          npm i --no-save playwright@1.48.2 wrangler@4
+          npx playwright install --with-deps chromium
+      - name: A Cloudflare Realtime app just for this test
+        id: rt
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          R=$(curl -s -X POST -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'content-type: application/json' -d '{"name":"lockedintool-test"}' https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/calls/apps)
+          APP=$(echo "$R" | python3 -c 'import sys,json; print((json.load(sys.stdin).get("result") or {}).get("uid",""))')
+          SEC=$(echo "$R" | python3 -c 'import sys,json; print((json.load(sys.stdin).get("result") or {}).get("secret",""))')
+          if [ -z "$APP" ]; then echo "Couldn't make a Realtime app: $(echo "$R" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("errors"))')"; exit 1; fi
+          echo "::add-mask::$SEC"
+          echo "app=$APP" >> "$GITHUB_OUTPUT"; echo "sec=$SEC" >> "$GITHUB_OUTPUT"
+      - name: Message server + screens, locally
+        run: |
+          nohup npx wrangler dev -c msg-wrangler.toml --port 8797 --ip 127.0.0.1 --var REALTIME_APP_ID:${{ steps.rt.outputs.app }} --var REALTIME_APP_SECRET:${{ steps.rt.outputs.sec }} > wrangler.log 2>&1 &
+          nohup python3 -m http.server 8800 --bind 127.0.0.1 > /dev/null 2>&1 &
+          for i in $(seq 1 60); do curl -s http://127.0.0.1:8797/v1/health | grep -q '"live":true' && break; sleep 2; done
+          curl -s http://127.0.0.1:8797/v1/health
+      - name: Go live, watch, heart, comment
+        run: node live-test.mjs
+      - name: Server log
+        if: always()
+        run: tail -60 wrangler.log || true
+      - name: Remove the test Realtime app
+        if: always() && steps.rt.outputs.app != ''
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: curl -s -X DELETE -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/calls/apps/${{ steps.rt.outputs.app }} >/dev/null

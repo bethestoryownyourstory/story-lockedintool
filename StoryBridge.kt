@@ -49,6 +49,7 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         fun createDiscard()
         fun createSwitchCamera()
         fun createKeep(): String
+        fun liveMode(on: Boolean)
         fun closeProfile()
         fun setTheme(t: String)
         fun pickProfilePhoto()
@@ -531,6 +532,9 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
     /** Returns "<postId>:<photo|video>" ("" if nothing was made). */
     @JavascriptInterface
     fun createKeep(): String = if (profile) host.createKeep() else ""
+    /** Live (owner): Create's camera screen steps away while you're live (the live picture comes from this window). */
+    @JavascriptInterface
+    fun liveMode(on: Boolean) { if (profile) host.liveMode(on) }
 
     /** The X beside the dial pad. */
     @JavascriptInterface

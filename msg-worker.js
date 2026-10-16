@@ -60,6 +60,11 @@ export class Hub {
     // Group calls (phone to phone, every phone linked to every other): the live call of a group and who is in it.
     // role 'in' = talking, 'ask' = listening until a leader lets them in (private groups set to "Ask to join").
     this.sql.exec(`CREATE TABLE IF NOT EXISTS gcalls (gid TEXT PRIMARY KEY, id TEXT, video INTEGER, starter TEXT, started INTEGER)`);
+    // Live (owner): one phone sends its camera to Cloudflare's live video service (Realtime SFU); everyone watching
+    // pulls it from there. lives = who is live; livewatch = who is watching; livecmt = the comments while live.
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS lives (id TEXT PRIMARY KEY, uid TEXT, sid TEXT, tracks TEXT, title TEXT, started INTEGER, ended INTEGER, hearts INTEGER DEFAULT 0, comments INTEGER DEFAULT 0, peak INTEGER DEFAULT 0)`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS livewatch (lid TEXT, uid TEXT, sid TEXT, at INTEGER, PRIMARY KEY (lid, uid))`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS livecmt (lid TEXT, uid TEXT, text TEXT, at INTEGER)`);
     this.sql.exec(`CREATE TABLE IF NOT EXISTS gcparts (gid TEXT, uid TEXT, role TEXT, at INTEGER, PRIMARY KEY (gid, uid))`);
     this.sql.exec(`CREATE INDEX IF NOT EXISTS gmembers_uid ON gmembers(uid)`);
     this.sql.exec(`CREATE TABLE IF NOT EXISTS gposts (id TEXT PRIMARY KEY, gid TEXT, uid TEXT, text TEXT, image TEXT, at INTEGER, likes INTEGER DEFAULT 0, shares INTEGER DEFAULT 0)`);
@@ -172,7 +177,7 @@ export class Hub {
         // Payments: can the server really sign in to Stitch? (just a sign-in - no payment is made)
         let pay = this.expressReady() ? 'keys' : 'no-keys';
         if (url.searchParams.get('pay') === '1' && this.expressReady()) { try { await this.expressToken(); pay = 'ok'; } catch (e) { pay = String(e.message || e).slice(0, 160); } }
-        return json({ ok: true, sms: !!(this.env.TWILIO_VERIFY_SID || this.env.TWILIO_FROM), mail: this.mailReady(), resetSms: this.smsLinkReady(), plans: this.subPlans(), pay, subs: this.subReady(), transfers: this.payReady() });
+        return json({ ok: true, sms: !!(this.env.TWILIO_VERIFY_SID || this.env.TWILIO_FROM), mail: this.mailReady(), resetSms: this.smsLinkReady(), plans: this.subPlans(), pay, subs: this.subReady(), transfers: this.payReady(), live: this.liveReady() });
       }
       if (path === '/v1/pay/return') return new Response('<!doctype html><meta name=viewport content="width=device-width,initial-scale=1"><body style="margin:0;background:#000;color:#fff;font:600 18px system-ui;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center;padding:24px;box-sizing:border-box">Done - go back to Lockedintool to see your payment.</body>', { headers: { 'content-type': 'text/html; charset=utf-8' } });
       if (path === '/v1/delete') return this.deletePage(req, url);
@@ -215,6 +220,7 @@ export class Hub {
       if (path === '/v1/account/delete-start') return this.deleteStart(me, body);
       if (path === '/v1/account/delete') return json({ error: 'use-link' }, 400);   // only through the link + code (owner)
       if (path.startsWith('/v1/uposts/')) return this.uposts(me, path.slice(11), body);
+      if (path.startsWith('/v1/live/')) return this.live(me, path.slice(9), body);
       if (path === '/v1/user') { const u = this.one('SELECT * FROM users WHERE id = ?', url.searchParams.get('id') || ''); return u ? json(this.pubView(u, me)) : json({ error: 'notfound' }, 404); }
       return json({ error: 'notfound' }, 404);
     } catch (e) { return json({ error: 'server', detail: String(e && e.message || e).slice(0, 200) }, 500); }
@@ -871,6 +877,8 @@ export class Hub {
   // the law requires (they never hold your card or bank login).
   deleteUser(uid, why = 'deleted') {
     for (const r of this.sql.exec('SELECT gid FROM gcparts WHERE uid = ?', uid).toArray()) this.gcallLeave(r.gid, uid);
+    for (const l of this.sql.exec('SELECT * FROM lives WHERE uid = ? AND ended IS NULL', uid).toArray()) this.liveEnd(l);
+    this.sql.exec('DELETE FROM livewatch WHERE uid = ?', uid); this.sql.exec('DELETE FROM livecmt WHERE uid = ?', uid);
     this.sql.exec('DELETE FROM rcodes WHERE uid = ?', uid); this.sql.exec('DELETE FROM resets WHERE uid = ?', uid);
     for (const m of this.sql.exec('SELECT gid FROM gmembers WHERE uid = ?', uid).toArray()) {
       this.sql.exec('DELETE FROM gmembers WHERE gid = ? AND uid = ?', m.gid, uid);
@@ -1400,11 +1408,103 @@ export class Hub {
       for (const p of this.gcallParts(gid)) this.sendTo(p.id, { t: 'gcall', kind: 'role', group: gid, id, role: 'in' });
     }
   }
+  // ---- Live (owner): go live from Create; your followers are told; anyone allowed to see your profile can watch,
+  // heart and comment; it shows in everyone's Updates feed once it has engagement (followers always see it). ----
+  liveReady() { return !!(this.env.REALTIME_APP_ID && this.env.REALTIME_APP_SECRET); }
+  async rt(method, path, body) {
+    const base = (this.env.REALTIME_BASE || 'https://rtc.live.cloudflare.com/v1') + '/apps/' + this.env.REALTIME_APP_ID;
+    const r = await fetch(base + path, { method, headers: { authorization: 'Bearer ' + this.env.REALTIME_APP_SECRET, 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || j.errorCode) throw new Error('rt ' + r.status + ' ' + (j.errorDescription || j.errorCode || ''));
+    return j;
+  }
+  liveWatchers(lid) { return this.one('SELECT COUNT(*) AS n FROM livewatch WHERE lid = ?', lid).n; }
+  liveTell(l, o) { const msg = Object.assign({ t: 'live', id: l.id }, o); this.sendTo(l.uid, msg); for (const w of this.sql.exec('SELECT uid FROM livewatch WHERE lid = ?', l.id).toArray()) this.sendTo(w.uid, msg); }
+  liveRecent(lid) { return this.sql.exec('SELECT c.text, c.at, u.name, u.username FROM livecmt c JOIN users u ON u.id = c.uid WHERE c.lid = ? ORDER BY c.at DESC LIMIT 30', lid).toArray().reverse(); }
+  liveView(l, me) {
+    const u = this.one('SELECT * FROM users WHERE id = ?', l.uid);
+    return { id: l.id, title: l.title || '', started: l.started, live: !l.ended, viewers: this.liveWatchers(l.id), hearts: l.hearts || 0, comments: l.comments || 0, user: u ? this.feedUser(u, me) : null };
+  }
+  liveEnd(l) {
+    if (!l || l.ended) return;
+    this.sql.exec('UPDATE lives SET ended = ? WHERE id = ?', Date.now(), l.id);
+    this.liveTell(l, { kind: 'ended' });
+    this.sql.exec('DELETE FROM livewatch WHERE lid = ?', l.id);
+  }
+  async live(me, op, b) {
+    const now = Date.now(), id = String(b.id || '');
+    const l = id ? this.one('SELECT * FROM lives WHERE id = ?', id) : null;
+    if (op === 'list') {
+      // Lives on now that you may see: the people you follow always; anyone else's once it has engagement (owner).
+      const rows = this.sql.exec('SELECT * FROM lives WHERE ended IS NULL AND started > ? ORDER BY started DESC LIMIT 50', now - 12 * 3600000).toArray();
+      const out = [];
+      for (const r of rows) {
+        if (r.tracks === '[]') continue;   // still starting
+        const u = this.one('SELECT * FROM users WHERE id = ?', r.uid);
+        if (!u || u.id === me.id || !this.canSeeProfile(me, u) || this.blocked(me.id, u.id)) continue;
+        const v = this.liveView(r, me), fol = this.follows(me.id, u.id);
+        if (fol || v.viewers >= 3 || v.hearts + v.comments >= 10) out.push(Object.assign(v, { following: fol }));
+      }
+      return json({ lives: out, ready: this.liveReady() });
+    }
+    if (!this.liveReady()) return json({ error: 'not-ready' }, 503);
+    if (op === 'start') {
+      for (const old of this.sql.exec('SELECT * FROM lives WHERE uid = ? AND ended IS NULL', me.id).toArray()) this.liveEnd(old);
+      const ses = await this.rt('POST', '/sessions/new');
+      const lid = 'lv' + rand(9);
+      this.sql.exec('INSERT INTO lives (id, uid, sid, tracks, title, started) VALUES (?, ?, ?, ?, ?, ?)', lid, me.id, ses.sessionId, '[]', String(b.title || '').slice(0, 80), now);
+      return json({ id: lid, sid: ses.sessionId });
+    }
+    if (!l) return json({ error: 'notfound' }, 404);
+    const mine = l.uid === me.id;
+    if (op === 'publish') {
+      if (!mine || l.ended) return json({ error: 'notfound' }, 404);
+      const tracks = (Array.isArray(b.tracks) ? b.tracks : []).slice(0, 2).map(t => ({ location: 'local', mid: String(t.mid), trackName: String(t.trackName).slice(0, 60) }));
+      const r = await this.rt('POST', '/sessions/' + l.sid + '/tracks/new', { sessionDescription: { type: 'offer', sdp: String(b.sdp || '') }, tracks });
+      const first = l.tracks === '[]';
+      this.sql.exec('UPDATE lives SET tracks = ? WHERE id = ?', JSON.stringify(tracks.map(t => t.trackName)), l.id);
+      if (first) this.notifyFollowers(me, 'live', l.id);   // followers are told the moment the picture goes out
+      return json({ sdp: r.sessionDescription && r.sessionDescription.sdp });
+    }
+    if (op === 'end') { if (mine) this.liveEnd(l); return json({ ok: true }); }
+    const owner = this.one('SELECT * FROM users WHERE id = ?', l.uid);
+    if (!owner || !this.canSeeProfile(me, owner) || this.blocked(me.id, owner.id)) return json({ error: 'notfound' }, 404);
+    if (op === 'get') return json(Object.assign(this.liveView(l, me), { recent: this.liveRecent(l.id) }));
+    if (l.ended) return json({ error: 'ended' }, 410);
+    if (op === 'watch') {
+      const names = JSON.parse(l.tracks || '[]'); if (!names.length) return json({ error: 'starting' }, 409);
+      const ses = await this.rt('POST', '/sessions/new');
+      const r = await this.rt('POST', '/sessions/' + ses.sessionId + '/tracks/new', { tracks: names.map(n => ({ location: 'remote', sessionId: l.sid, trackName: n })) });
+      this.sql.exec('INSERT OR REPLACE INTO livewatch (lid, uid, sid, at) VALUES (?, ?, ?, ?)', l.id, me.id, ses.sessionId, now);
+      const n = this.liveWatchers(l.id); if (n > (l.peak || 0)) this.sql.exec('UPDATE lives SET peak = ? WHERE id = ?', n, l.id);
+      this.liveTell(l, { kind: 'viewers', n });
+      return json(Object.assign(this.liveView(l, me), { sid: ses.sessionId, sdp: r.sessionDescription && r.sessionDescription.sdp, type: r.sessionDescription && r.sessionDescription.type, recent: this.liveRecent(l.id) }));
+    }
+    if (op === 'answer') {
+      const w = this.one('SELECT sid FROM livewatch WHERE lid = ? AND uid = ?', l.id, me.id); if (!w) return json({ error: 'notfound' }, 404);
+      await this.rt('PUT', '/sessions/' + w.sid + '/renegotiate', { sessionDescription: { type: 'answer', sdp: String(b.sdp || '') } });
+      return json({ ok: true });
+    }
+    if (op === 'leave') { this.sql.exec('DELETE FROM livewatch WHERE lid = ? AND uid = ?', l.id, me.id); this.liveTell(l, { kind: 'viewers', n: this.liveWatchers(l.id) }); return json({ ok: true }); }
+    if (op === 'heart') { this.sql.exec('UPDATE lives SET hearts = hearts + 1 WHERE id = ?', l.id); this.liveTell(l, { kind: 'heart', name: me.name || '' }); return json({ ok: true }); }
+    if (op === 'comment') {
+      const text = String(b.text || '').trim().slice(0, 200); if (!text) return json({ error: 'empty' }, 400);
+      this.sql.exec('INSERT INTO livecmt (lid, uid, text, at) VALUES (?, ?, ?, ?)', l.id, me.id, text, now);
+      this.sql.exec('UPDATE lives SET comments = comments + 1 WHERE id = ?', l.id);
+      this.liveTell(l, { kind: 'comment', text, name: me.name || '', username: me.username || '', at: now });
+      return json({ ok: true });
+    }
+    return json({ error: 'op' }, 404);
+  }
   webSocketClose(ws) {
     // The phone's last connection closed: it leaves any group call it was in.
     try {
       const uid = (ws.deserializeAttachment() || {}).uid;
-      if (uid && !this.ctx.getWebSockets(uid).some(x => x !== ws && x.readyState === 1)) for (const r of this.sql.exec('SELECT gid FROM gcparts WHERE uid = ?', uid).toArray()) this.gcallLeave(r.gid, uid);
+      if (uid && !this.ctx.getWebSockets(uid).some(x => x !== ws && x.readyState === 1)) {
+        for (const r of this.sql.exec('SELECT gid FROM gcparts WHERE uid = ?', uid).toArray()) this.gcallLeave(r.gid, uid);
+        for (const l of this.sql.exec('SELECT * FROM lives WHERE uid = ? AND ended IS NULL', uid).toArray()) this.liveEnd(l);   // the phone that was live is gone
+        for (const w of this.sql.exec('SELECT lid FROM livewatch WHERE uid = ?', uid).toArray()) { this.sql.exec('DELETE FROM livewatch WHERE lid = ? AND uid = ?', w.lid, uid); const l = this.one('SELECT * FROM lives WHERE id = ?', w.lid); if (l) this.liveTell(l, { kind: 'viewers', n: this.liveWatchers(l.id) }); }
+      }
     } catch (e) {}
     try { ws.close(); } catch (e) {}
   }
