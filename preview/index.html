@@ -2380,12 +2380,6 @@
     font-size:22px; line-height:1; display:flex; align-items:center; justify-content:center; align-self:flex-start; }
   #story-profile .pf-head-btns{ display:flex; flex-direction:column; align-items:center; align-self:flex-start; gap:2px; position:relative; }
   /* Profile's ⋮ menu: pops out right beside the ⋮ (a pop-up goes with where it comes from - owner). */
-  #story-profile .pf-menu{ position:absolute; right:40px; top:0; z-index:4; min-width:190px; background:var(--pf-bg); color:var(--pf-fg);
-    border:1px solid var(--pf-hair); border-radius:14px; box-shadow:0 8px 24px rgba(0,0,0,0.35); overflow:hidden; }
-  #story-profile .pf-menu button{ display:block; width:100%; text-align:left; padding:13px 16px; border:none; background:transparent; color:inherit; font:inherit; font-size:14px; font-weight:600; }
-  #story-profile .pf-menu button small{ display:block; margin-top:2px; font-size:12px; font-weight:400; color:var(--pf-muted); }
-  #story-profile .pf-menu button:active{ opacity:0.6; }
-  /* Profile privacy: Public / Private. */
   #story-profile .pf-pv-opt{ display:flex; align-items:flex-start; gap:12px; width:100%; text-align:left; padding:14px 2px; border:none; border-top:1px solid var(--pf-hair);
     background:transparent; color:var(--pf-fg); font:inherit; }
   #story-profile .pf-pv-opt:last-of-type{ border-bottom:1px solid var(--pf-hair); }
@@ -5180,12 +5174,27 @@ function fxTx(t, to){
   const b = t.bal == null ? t.bal : fxConvert(t.bal, t.cur, to);
   return Object.assign({}, t, { amt: a, bal: b, cur: to, origAmt: t.amt, origCur: t.cur });
 }
+// Owner ("I never lost $800"): ONLY bank / payment apps and bank SMS are money - trading, crypto and market apps put
+// prices and profits in their notifications and those are never payments. Same rule as the app (MoneyLog.kt).
+const MONEY_SMS = ['com.google.android.apps.messaging', 'com.samsung.android.messaging', 'com.android.mms', 'com.android.messaging'];
+const MONEY_TRADING = /(tradingview|metaquotes|metatrader|deriv|binance|bybit|okx|okex|tradelocker|ctrader|spotware|etoro|plus500|oanda|forex|crypto|coinbase|luno|valr|kraken|alpaca|trading|trader|exness|\.xm\.|hfm|hotforex|icmarkets|pepperstone|avatrade|robinhood|webull|investing|bloomberg|yahoo|stocks|tickmill|fxpro|fxtm|admirals|capital\.com|kucoin|bitget|mexc|gate\.io|fomo)/i;
+const MONEY_PAYMENT = /(bank|pay|wallet|money|financ|cash|card|capitec|fnb|absa|nedbank|standard|investec|tyme|discovery|revolut|wise|monzo|starling|chime|venmo|squareup|mpesa|safaricom|opay|palmpay|kuda|moniepoint|flutterwave|chipper|zapper|snapscan|ozow|payoneer|skrill|neteller|n26|bunq|klarna|afterpay|spay|walletnfcrel|vodapay|ewallet|mukuru|easyequities|old\.?mutual|sanlam|momentum|africanbank|bidvest|access|ecobank|equity|kcb|gtbank|zenith|firstbank|uba|stanbic)/i;
+const MONEY_KNOWN = /(fnb|capitec|absa|nedbank|standardbank|sbsa|tymebank|tyme|discovery\.bank|discoverybank|investec|africanbank|bankzero|paypal|walletnfcrel|samsung\.android\.spay|revolut|transferwise|wise|monzo|starling|chime|venmo|squareup\.cash|mpesa|safaricom|opay|palmpay|kuda|moniepoint|payoneer|n26|bunq|vodapay|snapscan|zapper|ozow|mukuru|ecobank|gtbank|zenith|firstbank|stanbic|equitybank|kcb)/i;
+function moneyCounts(t){
+  const pkg = String(t.pkg || '');
+  if(!pkg) return true;   // test data in the browser preview
+  const ok = MONEY_SMS.includes(pkg) || (!MONEY_TRADING.test(pkg) && !MONEY_TRADING.test(String(t.app || '')) && MONEY_PAYMENT.test(pkg));
+  if(!(ok && (MONEY_KNOWN.test(pkg) || !!t.card || t.bal != null))) return false;
+  // Owner: Lockedintool only shows money that went OUT of your cards or came IN to them - each payment must belong
+  // to a card you added (its last 4, or - when the message names no card - the bank of one of your cards).
+  return walletCards().some(c=>cardMatches(c, t));
+}
 let moneyCache = null;
 function moneyTx(){
   if(moneyCache) return moneyCache;
   let list = [];
   try{ list = JSON.parse((NATIVE && window.StoryNative.moneyList) ? window.StoryNative.moneyList() : (localStorage.getItem('story-money-test') || '[]')) || []; }catch(e){}
-  list = list.filter(t=>t && isFinite(t.amt) && t.amt && t.ts).sort((a, b)=>b.ts - a.ts);
+  list = list.filter(t=>t && isFinite(t.amt) && t.amt && t.ts && moneyCounts(t)).sort((a, b)=>b.ts - a.ts);
   const to = accountCur();
   if(to){ if(list.some(t=>t.cur !== to)) fxEnsure(); list = list.map(t=>t.cur === to ? t : fxTx(t, to)); }
   moneyCache = list;
@@ -8956,7 +8965,6 @@ window.storyProfileOnly = function(){
         <div class="pf-names"><div class="pf-name">${escText(p.name)}</div><div class="pf-user">@${escText(p.username)}</div></div>
         <div class="pf-head-btns">
           <button class="pf-more" data-pf="menu" aria-label="More">⋮</button>
-          <div class="pf-menu" hidden><button data-pf="menu-privacy">Profile privacy<small></small></button><button data-pf="menu-reports" hidden>Reports<small>Review what people reported</small></button></div>
           <button class="pf-more pf-edit-btn" data-pf="edit" aria-label="Edit profile"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
         </div>
       </div>
@@ -8980,7 +8988,6 @@ window.storyProfileOnly = function(){
       <div class="pf-ed-row" data-pf="ed-bio"><span>Bio</span><span class="pf-ed-val">${p.bio ? escText(p.bio) : 'Nothing here yet.'}</span></div>
       <div class="pf-ed-row" data-pf="ed-about"><span>About</span><span class="pf-ed-val">${escText(p.about)}</span></div>
       <div class="pf-ed-row" data-pf="ed-country"><span>Country</span><span class="pf-ed-val"></span></div>
-      <div class="pf-ed-row" data-pf="ed-currency"><span>Account currency</span><span class="pf-ed-val"></span></div>
       <div class="pf-ed-note">About shows in Updates, to people who don’t follow you yet: who you are or what you do.</div>
       <div class="pf-ed-sub">Private details</div>
       <div class="pf-ed-row" data-pf="ed-remail"><span>Email</span><span class="pf-ed-val"></span></div>
@@ -9002,6 +9009,12 @@ window.storyProfileOnly = function(){
     <div class="pf-scroll pf-private" hidden>
       <div class="pf-ed-head"><button class="pf-ed-back" data-pf="pr-back" aria-label="Back">‹</button><div class="pf-ed-title">Email</div></div>
       <div class="pf-pr-body"></div>
+    </div>
+    <div class="pf-scroll pf-menupage" hidden>
+      <div class="pf-ed-head"><button class="pf-ed-back" data-pf="menu-back" aria-label="Back">‹</button><div class="pf-ed-title">Menu</div></div>
+      <div class="pf-ed-row" data-pf="menu-privacy"><span>Profile privacy</span><span class="pf-ed-val pf-mp-privacy"></span></div>
+      <div class="pf-ed-row" data-pf="ed-currency"><span>Account currency</span><span class="pf-ed-val pf-mp-cur"></span></div>
+      <div class="pf-ed-row" data-pf="menu-reports" hidden><span>Reports</span><span class="pf-ed-val">Review what people reported</span></div>
     </div>
     <div class="pf-scroll pf-privacy" hidden>
       <div class="pf-ed-head"><button class="pf-ed-back" data-pf="pv-back" aria-label="Back">‹</button><div class="pf-ed-title">Profile privacy</div></div>
@@ -9172,8 +9185,6 @@ window.storyProfileOnly = function(){
   document.body.appendChild(el);
   el.addEventListener('click', e=>{
     const b = e.target.closest('[data-pf]');
-    const pfMenu = el.querySelector('.pf-menu');
-    if(pfMenu && !pfMenu.hidden && !(b && /^menu/.test(b.getAttribute('data-pf')))) pfMenu.hidden = true;
     if(!b) return;
     const k = b.getAttribute('data-pf');
     const main = el.querySelector('.pf-home'), ed = el.querySelector('.pf-editor'), viewer = el.querySelector('.pf-viewer');
@@ -9184,9 +9195,10 @@ window.storyProfileOnly = function(){
       viewer.querySelector('img').src = src; viewer.hidden = false;
     }
     else if(k === 'viewer-close') viewer.hidden = true;
-    else if(k === 'menu'){ const m = el.querySelector('.pf-menu'); m.querySelector('[data-pf="menu-reports"]').hidden = !profileLocks().official; m.querySelector('small').textContent = profilePrivacy() === 'private' ? 'Private' : 'Public'; m.hidden = !m.hidden; }
-    else if(k === 'menu-reports'){ el.querySelector('.pf-menu').hidden = true; main.hidden = true; const r = el.querySelector('.pf-reports'); r.hidden = false; r.scrollTop = 0; repLoad(); }
-    else if(k === 'rep-back'){ el.querySelector('.pf-reports').hidden = true; main.hidden = false; }
+    else if(k === 'menu'){ pfMenuOpen(); }
+    else if(k === 'menu-back'){ el.querySelector('.pf-menupage').hidden = true; main.hidden = false; }
+    else if(k === 'menu-reports'){ el.querySelector('.pf-menupage').hidden = true; main.hidden = true; const r = el.querySelector('.pf-reports'); r.hidden = false; r.scrollTop = 0; repLoad(); }
+    else if(k === 'rep-back'){ el.querySelector('.pf-reports').hidden = true; pfMenuOpen(); }
     else if(k === 'rep-act') repAct(b.getAttribute('data-id'), b.getAttribute('data-a'));
     else if(k === 'up-p-more'){ const p = UP.person; if(p) litPersonSheet(p, { after: ()=>upOpenPerson(p.id) }); }
     else if(k === 'upv-more'){ const v = UP.view; if(!v) return; const it = v.items[v.i]; upPause();
@@ -9194,8 +9206,8 @@ window.storyProfileOnly = function(){
         { label: v.status ? 'Report status' : 'Report post', fn: ()=>litReport(v.status ? 'status' : 'post', it.id, { onClose: ()=>{ if(UP.view === v) upShowItem(); } }) },
         { label: 'Block', danger:true, fn: ()=>{ if(UP.view === v) upShowItem(); litBlock(v.user, true, ()=>{ upCloseView(); upLoad(); }); } }] }); }
     else if(k === 'upv-creport') litReport('comment', b.getAttribute('data-id'));
-    else if(k === 'menu-privacy'){ el.querySelector('.pf-menu').hidden = true; main.hidden = true; const pv = el.querySelector('.pf-privacy'); pv.hidden = false; pv.scrollTop = 0; pvRender(); }
-    else if(k === 'pv-back'){ el.querySelector('.pf-privacy').hidden = true; main.hidden = false; }
+    else if(k === 'menu-privacy'){ el.querySelector('.pf-menupage').hidden = true; main.hidden = true; const pv = el.querySelector('.pf-privacy'); pv.hidden = false; pv.scrollTop = 0; pvRender(); }
+    else if(k === 'pv-back'){ el.querySelector('.pf-privacy').hidden = true; pfMenuOpen(); }
     else if(k === 'pv-set'){ const p = storyPrivacy(); p.profile = b.getAttribute('data-v') === 'private' ? 'private' : 'public'; setStoryPrivacy(p); pvRender(); msgFlush(); }
     else if(k === 'edit'){ main.hidden = true; ed.hidden = false; ed.scrollTop = 0; prFill(); prLoad(); }
     else if(k === 'ed-remail' || k === 'ed-rphone') prOpen(k === 'ed-rphone' ? 'phone' : 'email');
@@ -9301,8 +9313,8 @@ window.storyProfileOnly = function(){
     else if(k === 'upv-close') upCloseView();
     else if(k === 'upv-delete') upDeleteShown();
     else if(k === 'ed-about') openProfileField('about');
-    else if(k === 'ed-currency'){ ed.hidden = true; const pg = el.querySelector('.pf-currency'); pg.hidden = false; pg.scrollTop = 0; curRender(); }
-    else if(k === 'cur-back'){ el.querySelector('.pf-currency').hidden = true; ed.hidden = false; }
+    else if(k === 'ed-currency'){ el.querySelector('.pf-menupage').hidden = true; const pg = el.querySelector('.pf-currency'); pg.hidden = false; pg.scrollTop = 0; curRender(); }
+    else if(k === 'cur-back'){ el.querySelector('.pf-currency').hidden = true; pfMenuOpen(); }
     else if(k === 'cur-set'){ const v = b.getAttribute('data-v') || ''; try{ if(v) localStorage.setItem(ACCOUNT_CUR_KEY, v); else localStorage.removeItem(ACCOUNT_CUR_KEY); }catch(err){} moneyCache = null; const now = accountCur(); if(now) fxEnsure(); curRender(); const cv = el.querySelector('[data-pf="ed-currency"] .pf-ed-val'); if(cv) cv.textContent = now || 'Each payment’s own'; showToast(now ? 'Money shows in ' + now : 'Money shows each payment’s own currency'); }
     else if(k === 'ed-country'){ ed.hidden = true; const pg = el.querySelector('.pf-country'); pg.hidden = false; pg.scrollTop = 0; pg.querySelector('.pf-country-q').value = ''; countryRender(); }
     else if(k === 'country-back'){ el.querySelector('.pf-country').hidden = true; ed.hidden = false; }
@@ -9468,6 +9480,15 @@ function curRender(){
   box.innerHTML = [['', own ? 'Your country’s currency (' + own + ')' : 'Your country’s currency', own ? accountCountry() : 'Choose your country in Edit profile'], ['AUTO', 'Each payment’s own', 'Every payment in the currency it came in']].concat(ACCOUNT_CURRENCIES.map(([c, n])=>[c, c, n])).map(([v, t, d])=>
     '<button class="pf-pv-opt' + (sel === v ? ' on' : '') + '" data-pf="cur-set" data-v="' + v + '"><span class="pf-pv-txt"><div class="pf-pv-t">' + escText(t) + '</div><div class="pf-pv-d">' + escText(d) + '</div></span><span class="pf-pv-dot"></span></button>').join('');
 }
+// Profile's ⋮ (owner): a full-screen page of its own - Profile privacy, Account currency (and Reports for official).
+function pfMenuOpen(){
+  const el = document.getElementById('story-profile'); if(!el) return;
+  el.querySelector('.pf-home').hidden = true;
+  const m = el.querySelector('.pf-menupage'); m.hidden = false; m.scrollTop = 0;
+  m.querySelector('.pf-mp-privacy').textContent = profilePrivacy() === 'private' ? 'Private' : 'Public';
+  m.querySelector('.pf-mp-cur').textContent = accountCur() || 'Each payment’s own';
+  m.querySelector('[data-pf="menu-reports"]').hidden = !profileLocks().official;
+}
 function countryRender(){
   const pg = document.querySelector('#story-profile .pf-country'); if(!pg) return;
   const q = (pg.querySelector('.pf-country-q').value || '').trim().toLowerCase(), cur = accountCountry(), guess = phoneCountryGuess();
@@ -9536,7 +9557,7 @@ function pfResetView(){
   el.querySelector('.pf-updates').hidden = true; el.querySelector('.pf-person').hidden = true; UP.person = null;
   el.querySelector('.pf-updates .pf-msgs-search input').value = ''; UP.q = ''; UP.found = null;
   el.querySelector('.cr-pick').hidden = true;
-  el.querySelector('.pf-menu').hidden = true; el.querySelector('.pf-privacy').hidden = true; el.querySelector('.pf-reports').hidden = true; el.querySelector('.pf-private').hidden = true; el.querySelector('.pf-currency').hidden = true; el.querySelector('.pf-country').hidden = true;
+  el.querySelector('.pf-menupage').hidden = true; el.querySelector('.pf-privacy').hidden = true; el.querySelector('.pf-reports').hidden = true; el.querySelector('.pf-private').hidden = true; el.querySelector('.pf-currency').hidden = true; el.querySelector('.pf-country').hidden = true;
   el.querySelector('.up-compose').hidden = true; upClosePost(); fcsClose();
   const ms = el.querySelector('.pf-msgs .pf-msgs-search input'); if(ms){ ms.value = ''; } msgView.q = ''; msgView.menuFor = null;
   if(crRecording && NATIVE && window.StoryNative.createVideo) window.StoryNative.createVideo(false);
