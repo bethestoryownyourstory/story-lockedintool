@@ -39,7 +39,21 @@ object MoneyLog {
 
     private fun prefs(c: Context) = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-    fun list(c: Context): String = prefs(c).getString(KEY, "[]") ?: "[]"
+    // Owner ("what are these amounts??"): only BANK / PAYMENT apps and bank SMS are money. Trading, crypto and market
+    // apps (prices, positions, profits) are never payments - your trading accounts are counted on their own.
+    private val TRADING = Regex("(?i)(tradingview|metaquotes|metatrader|deriv|binance|bybit|okx|okex|tradelocker|ctrader|spotware|etoro|plus500|oanda|forex|crypto|coinbase|luno|valr|kraken|alpaca|trading|trader|exness|\\.xm\\.|hfm|hotforex|icmarkets|pepperstone|avatrade|robinhood|webull|investing|bloomberg|yahoo|stocks|tickmill|fxpro|fxtm|admirals|capital\\.com|kucoin|bitget|mexc|gate\\.io)")
+    private val PAYMENT = Regex("(?i)(bank|pay|wallet|money|financ|cash|card|capitec|fnb|absa|nedbank|standard|investec|tyme|discovery|revolut|wise|monzo|starling|chime|venmo|squareup|mpesa|safaricom|opay|palmpay|kuda|moniepoint|flutterwave|chipper|zapper|snapscan|ozow|payoneer|skrill|neteller|n26|bunq|klarna|afterpay|spay|walletnfcrel|vodapay|ewallet|mukuru|easyequities|old\\.?mutual|sanlam|momentum|africanbank|bidvest|access|ecobank|equity|kcb|gtbank|zenith|firstbank|uba|stanbic)")
+    fun allowed(pkg: String): Boolean = pkg in SMS || (!TRADING.containsMatchIn(pkg) && PAYMENT.containsMatchIn(pkg))
+
+    // Anything kept before this rule from an app that isn't a bank / payment app is left out.
+    fun list(c: Context): String {
+        val raw = prefs(c).getString(KEY, "[]") ?: "[]"
+        val arr = runCatching { JSONArray(raw) }.getOrDefault(JSONArray())
+        val out = JSONArray(); var dropped = false
+        for (i in 0 until arr.length()) { val o = arr.optJSONObject(i) ?: continue; if (allowed(o.optString("pkg"))) out.put(o) else dropped = true }
+        if (dropped) prefs(c).edit().putString(KEY, out.toString()).apply()
+        return if (dropped) out.toString() else raw
+    }
 
     fun clear(c: Context) { prefs(c).edit().remove(KEY).apply() }
 
@@ -52,7 +66,7 @@ object MoneyLog {
     /** Reads one notification; true if it was a payment and got kept. */
     fun handle(c: Context, sbn: StatusBarNotification): Boolean {
         val pkg = sbn.packageName ?: return false
-        if (pkg == c.packageName || pkg in SKIP) return false
+        if (pkg == c.packageName || pkg in SKIP || !allowed(pkg)) return false
         val n = sbn.notification ?: return false
         if (n.flags and Notification.FLAG_GROUP_SUMMARY != 0) return false
         val ex = n.extras ?: return false
