@@ -6789,7 +6789,7 @@ function focusAddon(){
   return v;
 }
 function focusSet(v){ try{ localStorage.setItem(FOCUS_KEY, v || ''); }catch(e){} }
-const FOCUS_ADDONS = [{ key:'trading', name:'Trading', sub:'TradingView chart + your broker in one page' }];
+const FOCUS_ADDONS = [{ key:'trading', name:'Trading Page', sub:'TradingView chart + your broker in one page' }];
 function tradingScreen(){
   const f = focusAddon();
   if(f === 'trading') return tradingPageScreen();
@@ -15792,7 +15792,7 @@ function attachHandlers(){
         case 'focus-cancel': state.focusAdd = null; break;
         case 'focus-add-go': {
           const v = el.getAttribute('data-v'); focusSet(v); state.focusAdd = null;
-          showToast(v === 'trading' ? 'Trading added to Focus' : 'Added to Focus');
+          showToast(v === 'trading' ? 'Trading Page added to Focus' : 'Added to Focus');
           break; }
         case 'app-page-open': {
           const pkg = el.getAttribute('data-pkg');
