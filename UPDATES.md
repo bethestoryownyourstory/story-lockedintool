@@ -36,3 +36,4 @@ commits, pushed as a new update) - nothing else changes.
 | 28 | 2026-10-16 | Wallet: Net worth button + pencil (pick the accounts combined to pay, total shown); Send asks Pay with - the card showing in Wallet, a different card (+), or net worth (the payment split over your accounts, approved in each bank, one after the other) | 3a98993 |
 | 29 | 2026-10-16 | New permanent Lockedintool logo (app icon, widget preview, web icons, download page) | bd7a909 |
 | 30 | 2026-10-16 | Subscription: the owner text under the options is gone - it shows 'Your plan: Basic · Second system · paid until …' like everyone's | cde3629 |
+| 31 | 2026-10-16 | Reviewer download (app-review.apk): the app exactly as it is on the owner's phone, for Stitch's review - no owner controls | 9501896 |
