@@ -300,7 +300,27 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
 
     /** Wallet > Tap to Pay: opens the phone's own tap-to-pay app (the one set under Contactless payments) so you pay
      *  for real; "none" if the phone has no tap-to-pay app set (then its Contactless payments screen opens), "nonfc"
-     *  if the phone has no NFC. */
+     *  if the phone has no NFC. (Kept for older screens - Tap to Pay now stays in Lockedintool, nfcState.) */
+    /** Tap to Pay (owner: no other app opens): is there NFC, is it on, and which wallet pays when you tap -
+     *  "nonfc" | "off" | "on|<package>|<name>" (package / name empty when the phone doesn't say). */
+    @JavascriptInterface
+    fun nfcState(): String {
+        if (!pages) return "nonfc"
+        val nfc = android.nfc.NfcAdapter.getDefaultAdapter(ctx) ?: return "nonfc"
+        if (!nfc.isEnabled) return "off"
+        val comp = runCatching { Settings.Secure.getString(ctx.contentResolver, "nfc_payment_default_component") }.getOrNull()
+        val pkg = comp?.let { android.content.ComponentName.unflattenFromString(it)?.packageName }.orEmpty()
+        val name = if (pkg.isEmpty()) "" else runCatching { ctx.packageManager.getApplicationLabel(ctx.packageManager.getApplicationInfo(pkg, 0)).toString() }.getOrDefault("")
+        return "on|$pkg|$name"
+    }
+    /** Only to switch NFC on (Android doesn't let an app do it itself). */
+    @JavascriptInterface
+    fun nfcSettings() {
+        if (!pages) return
+        host.hidePanel()
+        runCatching { ctx.startActivity(Intent(Settings.ACTION_NFC_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+    }
+
     @JavascriptInterface
     fun payApp(): String {
         if (!pages) return ""
