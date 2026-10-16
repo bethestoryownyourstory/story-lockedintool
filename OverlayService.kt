@@ -68,6 +68,7 @@ class OverlayService : Service(), StoryBridge.Host {
         override fun onReceive(c: Context, i: Intent) {
             userPresentAt = System.currentTimeMillis()
             widgetLiveEvent(false)  // unlocked onto the home screen: live widgets come back
+            if (SystemMode.on(c)) { ui.removeCallbacks(systemCheckRun); ui.postDelayed(systemCheckRun, 500) }  // Lockedintool as your system: unlocked onto another app / the home screen
             AodActivity.instance?.finish()  // unlocked (e.g. fingerprint) while the Always On Display was up
             ui.post { syncLockDial(); profileLayer(false) }   // unlocked: Station 3's window back where the keyboard works
             for (d in longArrayOf(300, 1000, 2500)) ui.postDelayed({ syncLockDial(); updateBubble() }, d)
@@ -705,6 +706,7 @@ class OverlayService : Service(), StoryBridge.Host {
 
     private fun setShown(p: Pane, shown: Boolean) {
         p.shown = shown
+        if (p === pagesPane) { if (shown) SystemMode.reset() else if (SystemMode.on(this)) { ui.removeCallbacks(systemCheckRun); ui.postDelayed(systemCheckRun, 700) } }
         // Cooling (owner): a hidden Pages / Profile window rests (its page counts as hidden: no drawing, no animation
         // frames, timers slowed) and wakes the moment it shows. Never during a call (Profile carries the call), and
         // Station 3 / the dial pads are left exactly as they are.
@@ -1030,6 +1032,7 @@ class OverlayService : Service(), StoryBridge.Host {
     private var appPagePkg: String? = null
     private var appEdge: View? = null
     override fun appPageOpen(pkg: String) { ui.post {
+        if (SystemMode.refuses(this)) return@post
         val i = packageManager.getLaunchIntentForPackage(pkg) ?: run { showToast("That app isn't on this phone any more"); return@post }
         i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         pagesPane?.takeIf { it.shown }?.let { hideOne(it) }
@@ -1059,7 +1062,40 @@ class OverlayService : Service(), StoryBridge.Host {
     }
     private fun removeAppEdge() { appEdge?.let { runCatching { layerWm.removeView(it) } }; appEdge = null }
     /** The app on screen changed (accessibility): leaving the app page's app takes the strip away. */
-    fun foregroundChanged(pkg: String) { widgetLiveEvent(pkg != homePkg()); ui.post { if (appPagePkg != null && pkg != appPagePkg && pkg != packageName) { appPagePkg = null; removeAppEdge() } } }
+    fun foregroundChanged(pkg: String) { widgetLiveEvent(pkg != homePkg()); ui.post { if (appPagePkg != null && pkg != appPagePkg && pkg != packageName) { appPagePkg = null; removeAppEdge() }; systemEnforce(pkg) } }
+
+    // ---- Lockedintool as your system (SystemMode.kt): no other app, nor the phone's home screen / recent apps - they're
+    //      sent away and the Pages come back (as they were, no page change). Calls, emergency, the lock screen and what
+    //      Lockedintool itself opens still work. ----
+    private var systemToastAt = 0L
+    private fun systemEnforce(pkg: String) {
+        if (!SystemMode.on(this) || pickerHid.isNotEmpty() || createActive || keyguardLocked()) return
+        val home = homePkg()
+        if (SystemMode.allowed(this, pkg, home)) return
+        if (pkg != home) {
+            StoryAccessibilityService.instance?.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME)
+            val now = System.currentTimeMillis()
+            if (now - systemToastAt > 4000) { systemToastAt = now; showToast("Lockedintool is your system - other apps are off") }
+        }
+        systemShowPages()
+    }
+    private fun systemShowPages() {
+        val p = pagesPane ?: return
+        hideLiveWidgets()
+        if (!p.shown) { warmUp(); setShown(p, true) }
+        updateBubble(); addBar()
+    }
+    /** The Pages went away while nothing allowed is in front (the phone's home screen showing): they come back. */
+    private val systemCheckRun = Runnable {
+        if (!SystemMode.on(this) || pagesPane?.shown == true || profilePane?.shown == true || pickerHid.isNotEmpty() || createActive || keyguardLocked() || appPagePkg != null) return@Runnable
+        val front = StoryAccessibilityService.frontPkg ?: return@Runnable
+        if (front == packageName) return@Runnable
+        systemEnforce(front)
+    }
+    fun systemModeChanged() { ui.post { if (SystemMode.on(this)) { SystemMode.reset(); systemShowPages() } } }
+    // Every launch Lockedintool makes is one of its own features: the app it opens is let through (SystemMode.grant).
+    override fun startActivity(intent: Intent?) { SystemMode.grant(); super.startActivity(intent) }
+    override fun startActivity(intent: Intent?, options: android.os.Bundle?) { SystemMode.grant(); super.startActivity(intent, options) }
 
     /** The Station 3 button is always there and always the same -- over apps, over the Pages, open or closed. */
     /** The Station 3 button is always there and always the same -- except where Settings > QUICK ACCESS says

@@ -214,7 +214,7 @@ object NoteTools {
     }
 
     /** Opens the app you picked with the note in it (the text, and the pictures as files it may read). */
-    fun shareTo(c: Context, pkg: String, cls: String, title: String, text: String, images: List<File>): Boolean = runCatching {
+    fun shareTo(c: Context, pkg: String, cls: String, title: String, text: String, images: List<File>): Boolean = if (SystemMode.refuses(c)) true else runCatching {
         val uris = ArrayList(images.mapNotNull { runCatching { androidx.core.content.FileProvider.getUriForFile(c, "com.story.launcher.files", it) }.getOrNull() })
         val send = when {
             uris.size > 1 -> Intent(Intent.ACTION_SEND_MULTIPLE).setType("image/png").putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)

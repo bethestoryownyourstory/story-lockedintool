@@ -59,7 +59,10 @@ class MainActivity : Activity() {
             startForegroundService(Intent(this, OverlayService::class.java))
             finish()
         })
-        col.addView(btn("Stop Lockedintool") { getSharedPreferences("story", MODE_PRIVATE).edit().putBoolean("enabled", false).apply(); stopService(Intent(this, OverlayService::class.java)) })
+        col.addView(btn("Stop Lockedintool") {
+            // Lockedintool as your system only goes off by logging out or deleting your account (owner).
+            if (SystemMode.on(this)) { android.widget.Toast.makeText(this, "Lockedintool is your system - log out of your account to turn it off", android.widget.Toast.LENGTH_LONG).show(); return@btn }
+            getSharedPreferences("story", MODE_PRIVATE).edit().putBoolean("enabled", false).apply(); stopService(Intent(this, OverlayService::class.java)) })
         // So the phone never shuts STORY down to save battery, and lets it start by itself after a restart.
         col.addView(btn("4. Keep Lockedintool always on") { keepAlwaysOn() })
         // STORY's Always On Display (switch Samsung's own Always On Display off when using this).
@@ -158,4 +161,9 @@ class MainActivity : Activity() {
     // Opening STORY also checks for a newer version, and brings back an install prompt you missed.
     override fun onResume() { super.onResume(); Updater.check(applicationContext, force = true); ui.post(refresh) }
     override fun onPause() { super.onPause(); ui.removeCallbacks(refresh) }
+
+    // Lockedintool as your system: the setup screen's switches open the phone's Settings only while system actions are
+    // off (to turn them back on) - otherwise Settings stays closed, like every other app.
+    override fun startActivity(intent: Intent?) { if (!SystemMode.on(this) || StoryAccessibilityService.instance == null) SystemMode.grant(); super.startActivity(intent) }
+    override fun startActivity(intent: Intent?, options: Bundle?) { if (!SystemMode.on(this) || StoryAccessibilityService.instance == null) SystemMode.grant(); super.startActivity(intent, options) }
 }

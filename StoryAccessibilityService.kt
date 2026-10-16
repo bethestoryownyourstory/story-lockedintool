@@ -27,9 +27,11 @@ class StoryAccessibilityService : AccessibilityService() {
         when (e.eventType) {
             // Which app is on screen (so music playing in the background can be told apart from it).
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
-                if (pkg == packageName) return
                 val cls = e.className?.toString() ?: return
-                if (runCatching { packageManager.getActivityInfo(ComponentName(pkg, cls), 0) }.isSuccess) { foregroundPkg = pkg; OverlayService.instance?.foregroundChanged(pkg) }
+                val activity = runCatching { packageManager.getActivityInfo(ComponentName(pkg, cls), 0) }.isSuccess
+                if (activity) frontPkg = pkg   // Lockedintool's own screens too (Lockedintool as your system)
+                if (pkg == packageName) return
+                if (activity) { foregroundPkg = pkg; OverlayService.instance?.foregroundChanged(pkg) }
             }
             // The home screen moved (swiping between screens, the app drawer...) or windows changed: STORY's live
             // widgets step aside and come back once it's still.
@@ -137,6 +139,7 @@ class StoryAccessibilityService : AccessibilityService() {
             return out
         }
         @Volatile var foregroundPkg: String? = null
+        @Volatile var frontPkg: String? = null
         private val mediaSessions = ConcurrentHashMap<String, MediaSession.Token>()
 
         /** Music: something playing from an app that isn't the one on screen (Spotify, YouTube Music...). */

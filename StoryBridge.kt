@@ -86,6 +86,7 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
     /** Opens the real app exactly as the phone's own launcher would, and gets STORY out of the way. */
     @JavascriptInterface
     fun launchApp(pkg: String) {
+        if (SystemMode.refuses(ctx)) return
         val i = ctx.packageManager.getLaunchIntentForPackage(pkg) ?: return
         i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         host.hidePanel()
@@ -186,6 +187,18 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
     @JavascriptInterface
     fun wipeAll(sure: String) { if ((profile || pages) && sure == "ACCOUNT-DELETED") host.wipeAll() }
 
+    /** Lockedintool as your system (owner): on from the Subscription page (signed in); off ONLY by logging out or deleting
+     *  your account - the page passes "LOGGED-OUT" then. */
+    @JavascriptInterface
+    fun systemModeState(): String = (if (SystemMode.on(ctx)) "on" else "off") + "|" + (if (StoryAccessibilityService.instance != null) "ready" else "noaccess")
+    @JavascriptInterface
+    fun systemModeSet(on: Boolean, sure: String) {
+        if (station3 || dial) return
+        if (on) { if (StoryAccessibilityService.instance == null) return; SystemMode.set(ctx, true) }
+        else if (sure == "LOGGED-OUT") SystemMode.set(ctx, false) else return
+        OverlayService.instance?.systemModeChanged()
+    }
+
     @JavascriptInterface
     fun confirmIdentity(title: String) { if (profile || pages) host.confirmIdentity(title) }
 
@@ -250,6 +263,7 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
     /** Opens an app on the phone by its package (e.g. MetaTrader 5); false if it isn't installed. */
     @JavascriptInterface
     fun openPackage(pkg: String): Boolean {
+        if (SystemMode.refuses(ctx)) return true
         val i = ctx.packageManager.getLaunchIntentForPackage(pkg) ?: return false
         i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); host.hidePanel(); ctx.startActivity(i); return true
     }

@@ -1370,6 +1370,7 @@
   .sub-tag{ font-size:15px; font-weight:800; margin:10px 0 8px; }
   .sub-text{ font-size:13.5px; line-height:1.5; color:var(--text); }
   .sub-list{ margin:10px 0 14px; padding-left:20px; font-size:13.5px; line-height:1.7; }
+  .sub-system{ margin-top:18px; }
   .sub-zar{ font-size:11px; color:var(--muted); text-align:center; margin-top:8px; }
   /* 3D Circle's pages keep their own top (name + buttons); the back button and page dots stay out of a preview. */
   .preview-top .dash-back, .preview-top .page-dots{ visibility:hidden !important; }
@@ -7472,11 +7473,35 @@ function subscriptionScreen(){
         <div class="sub-zar">Paid in rand: R${Number(pr.zar || 0).toFixed(2)} a month, approved in your own bank</div>`}
       </div>`; }).join('')}
     ${state.sub.msg ? `<div class="note pay-msg">${escText(state.sub.msg)}</div>` : ''}
+    ${sysModeCardHTML()}
     <div class="note" style="margin:12px 0 4px;">Both plans are designed to help you stay organized, focused, and consistent.</div>
     <div class="sub-norefund">No refunds - payments can’t be refunded once made.</div>
     <div class="legal-links">By choosing a plan you agree to the <button data-action="legal-open" data-v="legal-terms" data-from="subscription">Terms of Service</button> and <button data-action="legal-open" data-v="legal-privacy" data-from="subscription">Privacy Policy</button>.</div>
     </div>`;
 }
+// ---- Lockedintool as your system (owner, a section in the plans): your phone only uses Lockedintool - no other app at
+// all (calls and emergency still work). Off ONLY by logging out or deleting your account (SystemMode.kt). ----
+function sysModeState(){ try{ const v = (NATIVE && window.StoryNative.systemModeState) ? String(window.StoryNative.systemModeState()).split('|') : ['off', 'none']; return { on: v[0] === 'on', ready: v[1] === 'ready', app: v[1] !== 'none' }; }catch(e){ return { on:false, ready:false, app:false }; } }
+function sysModeCardHTML(){
+  const m = sysModeState();
+  return `<div class="sub-card sub-system">
+        <div class="sub-top"><div class="sub-name">Lockedintool as your system</div>${m.on ? '<div class="sub-price">On</div>' : ''}</div>
+        <div class="sub-tag">Your phone only uses Lockedintool.</div>
+        <div class="sub-text">Lockedintool becomes your phone’s system: the Dashboard is your home. No other app opens - not even the phone’s own home screen, app list or recent apps.</div>
+        <ul class="sub-list"><li>Everything you do is in Lockedintool</li><li>Phone calls and emergency calls always still work</li><li>The lock screen and the phone’s own panel work as always</li><li>Turns off only when you log out or delete your account</li></ul>
+        ${m.on ? `<div class="sub-zar">It’s on. To turn it off, log out (Settings &gt; Privacy &gt; Log out) or delete your account.</div>`
+          : `<button class="btn-wide btn-primary" data-action="sys-mode-on">Make Lockedintool my system</button>`}
+      </div>`;
+}
+function sysModeAsk(){
+  const m = sysModeState();
+  if(!m.app){ showToast('Lockedintool as your system works in the Lockedintool app'); return; }
+  if(!litSignedIn()){ showToast('Log in to your account first'); return; }
+  if(!m.ready){ showToast('Turn on Lockedintool system actions first (on the setup screen)'); return; }
+  litSheet({ title:'Make Lockedintool your system?', text:'Your phone will only use Lockedintool - no other app will open, not even the phone’s home screen or app list. Phone calls and emergency calls still work. The only way to turn it off is to log out or delete your account.',
+    items:[{ label:'Make it my system', fn: ()=>{ try{ window.StoryNative.systemModeSet(true, ''); }catch(e){} setTimeout(()=>{ if(sysModeState().on){ showToast('Lockedintool is your system now'); } else showToast('Couldn’t turn it on - check Lockedintool system actions'); renderDevice(); }, 150); } }] });
+}
+function sysModeOff(){ try{ if(NATIVE && window.StoryNative.systemModeSet) window.StoryNative.systemModeSet(false, 'LOGGED-OUT'); }catch(e){} }
 let subPollT = 0;
 function subPoll(){
   clearTimeout(subPollT);
@@ -7772,6 +7797,7 @@ async function delStep4(noLock){
 // (owner) - Pages, notes, money, cards, trading logins, settings - and Lockedintool starts fresh, like a new app.
 // A banned account only loses the account (its phone keeps its own notes and pages).
 function litAccountGone(why){
+  sysModeOff();   // ... and when the account is deleted
   delAccountForget();
   if(why !== 'banned'){
     if(NATIVE && window.StoryNative.wipeAll){ try{ localStorage.clear(); }catch(e){} window.StoryNative.wipeAll('ACCOUNT-DELETED'); return; }   // the app closes every window, clears it all and reopens them
@@ -7912,6 +7938,8 @@ const LEGAL = {
       'Plans do not renew by themselves yet - you pay each month. Payments are made through Stitch and approved by you on your own bank’s or card’s page.',
       'Before you pay you can cancel or switch plans at any time. Once a payment is made it is not refundable, except where South African law requires a refund.',
       'We may change prices or what a plan includes; you will be told in the app before it affects you.' ]],
+    ['Lockedintool as your system', [
+      'If you switch on “Lockedintool as your system” (on the Subscription page), your phone only uses Lockedintool: other apps, the phone’s home screen and its app list are closed as soon as they open. Phone calls, emergency calls, the lock screen and the phone’s own panel keep working. It turns off only when you log out or delete your account. It needs Lockedintool system actions switched on.' ]],
     ['Trading - please read', [
       'Lockedintool is not a broker, not a financial adviser and does not give investment advice. It is only a gateway to your own account at your own broker: your broker agreement is between you and your broker, and deposits and withdrawals always stay with them.',
       'Orders you place in Lockedintool are sent to your broker exactly as you place them. You are responsible for every trade. Trading is risky and you can lose more than you put in.',
@@ -15587,6 +15615,7 @@ function attachHandlers(){
         case 'send-open': state.current = 'send-money'; state.pay.info = null; state.pay.loading = false; break;
         case 'receive-open': state.current = 'receive-money'; state.pay.info = null; state.pay.loading = false; break;
         case 'sub-buy': subBuy(el.getAttribute('data-plan')); break;
+        case 'sys-mode-on': sysModeAsk(); break;
         case 'sub-reopen': if(state.sub.waiting) payOpenBank(state.sub.waiting.url); break;
         case 'sub-done': state.sub.waiting = null; break;
         case 'sub-cancel': subCancel(); break;
@@ -16926,6 +16955,7 @@ async function litLogoutHere(){
 }
 // Signed out (logged out here, or logged in on another phone): the account leaves this phone; the Pages stay.
 function litSignedOut(){
+  sysModeOff();   // Lockedintool as your system goes off when you log out (owner)
   delAccountForget();
   try{ localStorage.setItem('story-signed-out', String(Date.now())); }catch(e){}
   if(MSG_ENGINE){ try{ if(msgWs) msgWs.close(); }catch(e){} try{ indexedDB.deleteDatabase('story-keys'); }catch(e){} setTimeout(()=>location.reload(), 400); }
