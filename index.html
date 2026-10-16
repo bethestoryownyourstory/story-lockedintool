@@ -10525,6 +10525,12 @@ function callRender(){
   const lv = v.querySelector('.cv-local'); if(lv.srcObject !== call.local) lv.srcObject = call.local; lv.hidden = !call.video || call.camOff || !call.local;
   const rv = v.querySelector('.cv-remote'); if(rv.srcObject !== call.remote) rv.srcObject = call.remote;
 }
+// What went wrong opening the microphone / camera, in words.
+function callMediaProblem(e){
+  const n = e && (e.code || e.name);
+  return n === 'asking' ? 'Allow the microphone, then try again' : n === 'NotAllowedError' || n === 'SecurityError' ? 'Lockedintool needs the microphone' + (call.video || gcall.video ? ' and camera' : '') + ' - allow it in the phone’s settings' :
+    n === 'NotReadableError' || n === 'AbortError' ? 'The microphone or camera is busy in another app' : n === 'NotFoundError' ? 'No microphone or camera found' : 'Couldn’t start the call';
+}
 async function callMedia(video){
   // Android asks once for the microphone (and camera for video) the first time you call.
   if(NATIVE && window.StoryNative.callAsk){ const ok = callNative('callAsk', video); if(ok === 'asking') throw Object.assign(new Error('asking'), { code:'asking' }); }
@@ -10555,7 +10561,7 @@ async function callStart(peerId, video){
     msgSend({ t:'call', to:peerId, kind:'offer', callId:call.id, video:!!video, sdp:call.pc.localDescription.sdp });
     callRender();
     clearTimeout(call.ringT); call.ringT = setTimeout(()=>{ if(call.state === 'calling' || call.state === 'ringing'){ msgSend({ t:'call', to:call.peer, kind:'end', callId:call.id }); callEnd('No answer', true); } }, 45000);
-  }catch(e){ callEnd(e && e.code === 'asking' ? 'Allow the microphone, then call again' : 'Couldn’t start the call', true); }
+  }catch(e){ callEnd(callMediaProblem(e), true); }
 }
 async function callOnSignal(m){
   if(m.kind === 'offer'){
@@ -10745,8 +10751,16 @@ async function gcallGo(gid, video, join, gname){
   const vid = live ? !!live.video : !!video;
   gcallReset({ state:'joining', gid, id:'', name:c.name || gname || '', video:vid });
   callNative('callUi', true); gcallRender();
-  try{ gcall.local = await callMedia(vid); }
-  catch(e){ gcallEnd(e && e.code === 'asking' ? 'Allow the microphone, then try again' : 'Couldn’t start the call'); return; }
+  // Started from Community the window may only now be coming on screen (it rests while hidden) - the microphone and
+  // camera can only be opened once it shows, so wait for that (up to 3 s), and try once more if the first try fails.
+  if(document.visibilityState === 'hidden') await new Promise(res=>{ const t = setTimeout(res, 3000); document.addEventListener('visibilitychange', function f(){ if(document.visibilityState === 'visible'){ clearTimeout(t); document.removeEventListener('visibilitychange', f); res(); } }); });
+  let err = null;
+  for(let i = 0; i < 2 && !gcall.local; i++){
+    try{ gcall.local = await callMedia(vid); }
+    catch(e){ err = e; if(e && e.code === 'asking') break; await new Promise(r=>setTimeout(r, 700)); }
+  }
+  if(gcall.state !== 'joining'){ try{ gcall.local && gcall.local.getTracks().forEach(t=>t.stop()); }catch(e){} return; }
+  if(!gcall.local){ gcallEnd(callMediaProblem(err)); return; }
   gcallApplyTracks();
   gcallSend({ kind: join || live ? 'join' : 'start', video:vid });
 }
