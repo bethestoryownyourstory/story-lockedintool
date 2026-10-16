@@ -118,4 +118,12 @@ jobs:
           cp build_src/app/build/outputs/apk/debug/app-debug.apk app-debug.apk
           echo "{\"versionCode\": $N}" > version.json
           gh release delete latest --yes --cleanup-tag || true
-          gh release create latest app-debug.apk version.json --title "STORY test build $N" --notes "Test channel: newest STORY build (owner's phone)" --latest=false
+          # Reviewer copy (e.g. Stitch's payment review): the same build + assets/review.txt, signed with the same key.
+          # A phone that installs it runs the Test channel (exactly what the owner's phone runs) without owner controls.
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          mkdir -p rv/assets && echo review > rv/assets/review.txt
+          cp app-debug.apk rv/u.apk && (cd rv && zip -q u.apk assets/review.txt)
+          "$BT/zipalign" -f -p 4 rv/u.apk rv/a.apk
+          "$BT/apksigner" sign --ks build_src/story.keystore --ks-pass pass:android --ks-key-alias androiddebugkey --key-pass pass:android --out app-review.apk rv/a.apk
+          "$BT/apksigner" verify app-review.apk
+          gh release create latest app-debug.apk app-review.apk version.json --title "STORY test build $N" --notes "Test channel: newest STORY build (owner's phone). app-review.apk = the same build for reviewers." --latest=false

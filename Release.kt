@@ -27,7 +27,19 @@ object Release {
 
     fun isOwner(ctx: Context) = prefs(ctx).getBoolean("owner", false)
     fun setOwner(ctx: Context, on: Boolean) { prefs(ctx).edit().putBoolean("owner", on).apply() }
-    fun base(ctx: Context) = if (isOwner(ctx)) TEST_BASE else LIVE_BASE
+    /** A reviewer's phone (e.g. Stitch's payment review): installed from app-review.apk, which carries assets/review.txt.
+     *  It gets the Test channel - the newest screens and builds, exactly what the owner's phone runs - but none of the
+     *  owner's controls. Remembered on first start, so it stays a reviewer phone after the next update. */
+    fun isReview(ctx: Context): Boolean {
+        val p = prefs(ctx)
+        if (p.getBoolean("review", false)) return true
+        val has = runCatching { ctx.assets.open("review.txt").close(); true }.getOrDefault(false)
+        if (has) p.edit().putBoolean("review", true).apply()
+        return has
+    }
+    /** Test channel (newest screens + builds): the owner's phone and reviewer phones. */
+    fun testChannel(ctx: Context) = isOwner(ctx) || isReview(ctx)
+    fun base(ctx: Context) = if (testChannel(ctx)) TEST_BASE else LIVE_BASE
 
     /** The user signed "Automatic updates - I agree" once: updates install by themselves, never asked again. */
     // Owner: Lockedintool ALWAYS updates itself - no "I agree" screen, no choice. Every phone counts as agreed.

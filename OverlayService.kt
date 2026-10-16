@@ -219,9 +219,9 @@ class OverlayService : Service(), StoryBridge.Host {
         running = true
     }
 
-    /** Live screens for everyone; the owner (Test channel) gets the newest copy from /preview/. */
+    /** Live screens for everyone; the owner and reviewer phones (Test channel) get the newest copy from /preview/. */
     private fun remoteBase(): String =
-        REMOTE + if (Release.isOwner(this)) "preview/" else ""
+        REMOTE + if (Release.testChannel(this)) "preview/" else ""
 
     private fun pickLayer() {
         val a = StoryAccessibilityService.instance
@@ -232,7 +232,7 @@ class OverlayService : Service(), StoryBridge.Host {
 
     /** Asks the STORY site which screens are current; if they changed, the panes reload (when closed). */
     private fun checkScreens() {
-        val url = remoteBase() + (if (Release.isOwner(this)) "source.txt" else "live-source.txt") + "?t=" + System.currentTimeMillis()
+        val url = remoteBase() + (if (Release.testChannel(this)) "source.txt" else "live-source.txt") + "?t=" + System.currentTimeMillis()
         Thread {
             val v = runCatching {
                 (java.net.URL(url).openConnection() as java.net.HttpURLConnection).run {
@@ -306,7 +306,7 @@ class OverlayService : Service(), StoryBridge.Host {
         runCatching { android.webkit.WebStorage.getInstance().deleteAllData() }
         runCatching { android.webkit.CookieManager.getInstance().removeAllCookies(null); android.webkit.CookieManager.getInstance().flush() }
         Thread {
-            val keep = Regex("^(enabled|owner|auto_agreed|upd_.*)$")   // only what keeps Lockedintool running and updating
+            val keep = Regex("^(enabled|owner|review|auto_agreed|upd_.*)$")   // only what keeps Lockedintool running and updating
             runCatching {
                 val dir = java.io.File(applicationInfo.dataDir, "shared_prefs")
                 for (f in dir.listFiles() ?: arrayOf()) {

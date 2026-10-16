@@ -94,7 +94,7 @@ object Updater {
                 nm.cancel(InstallResultReceiver.UPDATE_NOTIFICATION); if (Release.agreedAuto(ctx)) nm.cancel(UpdateActivity.NOTIFICATION)
                 return
             }
-            if (!Release.isOwner(ctx) && !Release.agreedAuto(ctx)) { setStatus(ctx, "Build $latest is available"); offerToUser(ctx, latest, force); return }
+            if (!Release.testChannel(ctx) && !Release.agreedAuto(ctx)) { setStatus(ctx, "Build $latest is available"); offerToUser(ctx, latest, force); return }
             // Owner, or a user who agreed to automatic updates: install by itself. Needs the one-time "allow Lockedintool to update itself" switch.
             if (!ctx.packageManager.canRequestPackageInstalls()) { setStatus(ctx, "Build $latest is ready - tap \"Allow Lockedintool to update itself\""); return }
             if (!force && latest == offered && System.currentTimeMillis() - offeredAt < 10 * 60_000) return
