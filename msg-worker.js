@@ -70,6 +70,9 @@ export class Hub {
     this.sql.exec(`CREATE INDEX IF NOT EXISTS payments_to ON payments(to_uid, created)`);
     try { this.sql.exec(`ALTER TABLE payments ADD COLUMN kind TEXT`); } catch (e) {}
     this.sql.exec(`CREATE TABLE IF NOT EXISTS subs (uid TEXT PRIMARY KEY, plan TEXT, until INTEGER, updated INTEGER)`);
+    // The option a plan is bought under (owner): 'second' = Lockedintool as your second system, 'only' = your only system.
+    try { this.sql.exec(`ALTER TABLE subs ADD COLUMN mode TEXT`); } catch (e) {}
+    try { this.sql.exec(`ALTER TABLE payments ADD COLUMN mode TEXT`); } catch (e) {}
     this.sql.exec(`CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT)`);
     // Updates (owner): following, profile posts and 24-hour statuses, and the pictures / videos they show.
     try { this.sql.exec(`ALTER TABLE users ADD COLUMN about TEXT`); } catch (e) {}
@@ -1037,7 +1040,7 @@ export class Hub {
   subView(me) {
     const r = this.one('SELECT * FROM subs WHERE uid = ?', me.id), now = Date.now();
     const active = !!(r && r.until > now);
-    return { connected: this.subReady(), enforced: this.env.SUB_ENFORCE === '1', plan: active ? r.plan : null, until: r ? r.until : 0, active, plans: this.subPlans() };
+    return { connected: this.subReady(), enforced: this.env.SUB_ENFORCE === '1', plan: active ? r.plan : null, mode: active ? (r.mode || 'second') : null, until: r ? r.until : 0, active, plans: this.subPlans() };
   }
   // Stitch Express REST API (express.stitch.money/api/v1, its own OpenAPI spec): a 15-minute token from clientId +
   // clientSecret, then payment links. Amounts are in cents.
@@ -1080,7 +1083,7 @@ export class Hub {
       if (st === 'paid') {
         const plan = p.kind.slice(4), cur = this.one('SELECT * FROM subs WHERE uid = ?', me.id);
         const from = cur && cur.plan === plan && cur.until > now ? cur.until : now;
-        this.sql.exec('INSERT OR REPLACE INTO subs (uid, plan, until, updated) VALUES (?, ?, ?, ?)', me.id, plan, from + 30 * 86400000, now);
+        this.sql.exec('INSERT OR REPLACE INTO subs (uid, plan, until, updated, mode) VALUES (?, ?, ?, ?, ?)', me.id, plan, from + 30 * 86400000, now, p.mode === 'only' ? 'only' : 'second');
       }
     }
     return p.status;
@@ -1114,8 +1117,8 @@ export class Hub {
         merchantReference: ('LIT-' + plan + '-' + me.id + '-' + id).replace(/[^A-Za-z0-9 -]/g, '').slice(0, 50) });
       const link = d.payment || {};
       if (!link.id || !link.link) throw new Error('stitch: no payment link');
-      this.sql.exec('INSERT INTO payments (id, uid, to_uid, to_name, to_bank, to_mask, cents, ref, stitch, status, created, updated, kind) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        id, me.id, 'LOCKED IN TOOL ' + plan, '', '', cents, 'LIT ' + plan.toUpperCase(), link.id, 'pending', now, now, 'sub:' + plan);
+      this.sql.exec('INSERT INTO payments (id, uid, to_uid, to_name, to_bank, to_mask, cents, ref, stitch, status, created, updated, kind, mode) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        id, me.id, 'LOCKED IN TOOL ' + plan, '', '', cents, 'LIT ' + plan.toUpperCase(), link.id, 'pending', now, now, 'sub:' + plan, b.mode === 'only' ? 'only' : 'second');
       const back = await this.expressBack(url);
       return json({ id, url: link.link + (link.link.includes('?') ? '&' : '?') + 'redirect_url=' + encodeURIComponent(back) });
     }
