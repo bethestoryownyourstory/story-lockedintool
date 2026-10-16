@@ -7742,9 +7742,9 @@ function widgetsOnlySettingsHTML(){
   return `
     <div class="section-title">WIDGETS</div>
     <div class="set2-card">
-      <div class="set2-row">
-        <div class="set2-text"><div class="set2-name">Only use widgets</div><div class="set2-sub">You can only use Lockedintool's widgets on your home screen - everything else disappears: the Pages, Station 3 and the bottom line. You can't make pages. Turn it off in the Lockedintool app.</div></div>
-        <button class="toggle-switch${wgOn() ? ' on' : ''}" data-action="widgets-only"><span class="toggle-knob"></span></button>
+      <div class="set2-row set2-stack">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;"><div class="set2-name">Only use widgets</div><button class="toggle-switch${wgOn() ? ' on' : ''}" data-action="widgets-only"><span class="toggle-knob"></span></button></div>
+        <div class="set2-sub">You can only use Lockedintool’s widgets on your home screen - everything else disappears: the Pages, Station 3 and the bottom line. You can’t make pages. Turn it off in the Lockedintool app.</div>
       </div>
     </div>`;
 }
