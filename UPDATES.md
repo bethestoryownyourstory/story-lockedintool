@@ -30,3 +30,4 @@ commits, pushed as a new update) - nothing else changes.
 | 22 | 2026-10-16 | Subscription options: no background and nothing chosen at first (the chosen one gets an outline + ✓); you can't buy a plan without choosing Second system or Only system | 55fc063 |
 | 23 | 2026-10-16 | Widgets: every page widget (Dashboard, Money, Home / Wallet, Focus, Notes, Community) now fills the whole widget - no gaps at the sides | 0342b5c |
 | 24 | 2026-10-16 | Settings > Only use widgets: Lockedintool is only your home screen widgets - the Pages, Station 3, the bottom line and everything else disappear and no pages can be made; turning it on closes the system and shows your phone's apps; opening the Lockedintool app then shows only the widgets button - Turn off - which brings the system back | da0b8a4, ad68233, dd2631e |
+| 25 | 2026-10-16 | Plan prices: Basic $5 a month (R95), Premium $15 a month (R285) - Subscription page and Terms | b26473a |
