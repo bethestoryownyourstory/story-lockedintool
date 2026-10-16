@@ -22,7 +22,11 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          GIVEN_APP: ${{ secrets.REALTIME_APP_ID }}
+          GIVEN_SEC: ${{ secrets.REALTIME_APP_SECRET }}
         run: |
+          # The owner's own Realtime keys (repo secrets) if they're there, else a short-lived app for this test.
+          if [ -n "$GIVEN_APP" ] && [ -n "$GIVEN_SEC" ]; then echo "::add-mask::$GIVEN_SEC"; echo "app=$GIVEN_APP" >> "$GITHUB_OUTPUT"; echo "sec=$GIVEN_SEC" >> "$GITHUB_OUTPUT"; echo "given=1" >> "$GITHUB_OUTPUT"; exit 0; fi
           R=$(curl -s -X POST -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'content-type: application/json' -d '{"name":"lockedintool-test"}' https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/calls/apps)
           APP=$(echo "$R" | python3 -c 'import sys,json; print((json.load(sys.stdin).get("result") or {}).get("uid",""))')
           SEC=$(echo "$R" | python3 -c 'import sys,json; print((json.load(sys.stdin).get("result") or {}).get("secret",""))')
@@ -41,7 +45,7 @@ jobs:
         if: always()
         run: tail -60 wrangler.log || true
       - name: Remove the test Realtime app
-        if: always() && steps.rt.outputs.app != ''
+        if: always() && steps.rt.outputs.app != '' && steps.rt.outputs.given != '1'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
