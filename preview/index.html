@@ -2240,6 +2240,14 @@
   #story-profile .pf-msgs-search{ flex:1; min-width:0; display:flex; align-items:center; gap:8px; border:1px solid var(--pf-hair); border-radius:12px; padding:0 12px; color:var(--pf-muted); }
   #story-profile .pf-msgs-search input{ flex:1; min-width:0; border:none; outline:none; background:transparent; color:var(--pf-fg); font-size:15px; font-family:inherit; padding:11px 0; -webkit-user-select:text; user-select:text; -webkit-appearance:none; appearance:none; }
   #story-profile .pf-msgs-search input::placeholder{ color:var(--pf-muted); }
+  .lit-recent{ margin:8px 0 6px; border:1px solid rgba(128,128,128,0.35); border-radius:12px; padding:4px 0; font-size:14px; text-align:left; }
+  .lit-recent-h{ display:flex; align-items:center; justify-content:space-between; padding:6px 12px 4px; font-size:11px; font-weight:800; letter-spacing:0.08em; text-transform:uppercase; opacity:0.6; }
+  .lit-recent-h button{ border:0; background:none; color:inherit; font:inherit; font-size:11px; padding:0; text-transform:none; letter-spacing:0; text-decoration:underline; }
+  .lit-recent-row{ display:flex; align-items:center; }
+  .lit-recent-q{ flex:1; min-width:0; display:flex; align-items:center; gap:10px; border:0; background:none; color:inherit; font:inherit; padding:9px 12px; text-align:left; }
+  .lit-recent-q svg{ flex:none; opacity:0.55; }
+  .lit-recent-q span{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .lit-recent-x{ flex:none; width:40px; border:0; background:none; color:inherit; opacity:0.55; font-size:18px; padding:6px 0; }
   #story-profile .pf-msgs-search input::-webkit-search-cancel-button{ -webkit-appearance:none; }
   #story-profile .pf-msgs-filters{ display:flex; gap:8px; margin-top:12px; }
   #story-profile .pf-mf{ flex:1; padding:9px 0; border-radius:10px; border:1px solid var(--pf-hair); background:transparent; color:var(--pf-fg); font-size:13px; font-weight:600; font-family:inherit; }
@@ -8073,7 +8081,7 @@ function litAccountGone(why){
 }
 function delAccountForget(){
   ['story-msg-account', 'story-msg-peers', MSG_KEY, MSG_OUTBOX, 'story-profile', 'story-profile-stats', PF_LOCKS_KEY, 'story-posts', 'story-highlights', 'story-upost-queue',
-   'story-status-seen', 'story-status-remind', 'story-activity', 'story-calls', 'story-privacy', 'story-blocked', 'story-community', 'story-community-chats', 'story-community-always-mine', 'story-sub', 'story-photo-up', 'story-recovery', 'story-auth-locked', 'story-glive']
+   'story-status-seen', 'story-status-remind', 'story-activity', 'story-calls', 'story-privacy', 'story-blocked', 'story-community', 'story-community-chats', 'story-community-always-mine', 'story-sub', 'story-photo-up', 'story-recovery', 'story-auth-locked', 'story-glive', 'story-recent-messages', 'story-recent-updates', 'story-recent-calls', 'story-recent-web', 'story-recent-groups']
     .forEach(k=>{ try{ localStorage.removeItem(k); }catch(e){} });
   msgChatsCache = null;
   if(NATIVE && window.StoryNative.removeProfilePhoto) try{ window.StoryNative.removeProfilePhoto(); }catch(e){}
@@ -8321,7 +8329,7 @@ function settingsHubScreen(){
 const NATIVE = (typeof window !== 'undefined') && !!window.StoryNative;
 // Pages in the Android app: tell the app when a text box is being typed in, so the keyboard shows above the Pages.
 if(NATIVE && window.StoryNative.setTyping && !/[?&]s3=1/.test(location.search)){
-  const editable = el=>!!el && (el.tagName==='INPUT' || el.tagName==='TEXTAREA' || el.isContentEditable);
+  const editable = el=>!!el && !el.readOnly && (el.tagName==='INPUT' || el.tagName==='TEXTAREA' || el.isContentEditable);
   document.addEventListener('focusin', e=>{ if(editable(e.target)) try{ window.StoryNative.setTyping(true); }catch(err){} }, true);
   // A live home screen widget gives the keyboard back as soon as the box is left.
   if(window.__storyWidgetLive) document.addEventListener('focusout', e=>{ if(editable(e.target)) setTimeout(()=>{ if(!editable(document.activeElement)) try{ window.StoryNative.setTyping(false); }catch(err){} }, 50); }, true);
@@ -8461,7 +8469,6 @@ window.storyAppsChanged = function(){
 // Anything that isn't built yet tells you so when tapped ("... — coming soon"), everywhere in STORY.
 const COMING_SOON = [
   ['[data-dash]:not([data-dash="camera"]):not([data-dash="gallery"])', el=>el.textContent.trim()],
-  ['.search-row', ()=>'Search'],
   ['.avatar-add:not([data-action="add-card"] .avatar-add)', ()=>'Add'],
   ['.btn-row-action:not([data-action])', el=>el.textContent.trim()],
   ['[data-action="favorites-open"]', ()=>'Favorites'],
@@ -8582,6 +8589,66 @@ function openProfileField(k){
 function profileFieldBox(){
   const f = document.querySelector('#story-profile .pf-field'); if(!f) return null;
   return ['bio', 'about'].includes(f.getAttribute('data-field')) ? f.querySelector('textarea') : f.querySelector('input');
+}
+
+// ---- Recent searches (owner): every search bar keeps what you searched (`story-recent-<bar>`, newest first, 10).
+// The first tap shows them under the bar WITHOUT the keyboard; tap the bar again for the keyboard. Tap one to search it
+// again, × removes one, Clear all removes them all. A search is kept when you press Enter or leave the bar. ----
+const LIT_RECENT_MAX = 10, litRecentWriting = {};
+function litRecentList(key){ try{ return JSON.parse(localStorage.getItem('story-recent-' + key) || '[]') || []; }catch(e){ return []; } }
+function litRecentSave(key, list){ try{ localStorage.setItem('story-recent-' + key, JSON.stringify(list.slice(0, LIT_RECENT_MAX))); }catch(e){} }
+function litRecentAdd(key, q){
+  q = String(q || '').trim(); if(q.length < 2) return;
+  litRecentSave(key, [q].concat(litRecentList(key).filter(x=>x.toLowerCase() !== q.toLowerCase())));
+}
+function litKeyboard(on){ if(NATIVE && window.StoryNative.setTyping) try{ window.StoryNative.setTyping(!!on); }catch(e){} }
+// inp: the search box; key: which bar; run(q): search for q (fill + search); anchor: the element the list goes under.
+function litRecentAttach(inp, key, run, anchor){
+  if(!inp || inp.__litRecent) return; inp.__litRecent = true;
+  anchor = anchor || inp;
+  const writing = ()=>!!litRecentWriting[key];
+  if(!writing()) inp.readOnly = true;   // no keyboard on the first tap
+  let panel = null;
+  const close = ()=>{ if(panel){ panel.remove(); panel = null; } };
+  const open = ()=>{
+    close();
+    const list = litRecentList(key);
+    if(!list.length) return false;
+    panel = document.createElement('div'); panel.className = 'lit-recent';
+    panel.innerHTML = '<div class="lit-recent-h"><span>Recent</span><button type="button" data-r="clear">Clear all</button></div>' +
+      list.map((q, i)=>'<div class="lit-recent-row"><button type="button" class="lit-recent-q" data-r="go" data-i="' + i + '"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg><span>' + escText(q) + '</span></button><button type="button" class="lit-recent-x" data-r="del" data-i="' + i + '" aria-label="Remove">×</button></div>').join('');
+    panel.addEventListener('pointerdown', e=>e.preventDefault());   // keep the bar as it is while choosing
+    panel.addEventListener('click', e=>{
+      const b = e.target.closest('[data-r]'); if(!b) return;
+      e.stopPropagation();
+      const r = b.getAttribute('data-r'), l = litRecentList(key), q = l[+b.getAttribute('data-i')];
+      if(r === 'clear'){ litRecentSave(key, []); close(); return; }
+      if(r === 'del'){ l.splice(+b.getAttribute('data-i'), 1); litRecentSave(key, l); if(!open()) close(); return; }
+      if(r === 'go' && q){ close(); litRecentAdd(key, q); run(q); }
+    });
+    anchor.insertAdjacentElement('afterend', panel);
+    return true;
+  };
+  inp.addEventListener('pointerdown', e=>{
+    if(inp.readOnly){
+      // First tap: your recent searches, no keyboard. With none saved, straight to typing.
+      if(!panel && open()){ e.preventDefault(); return; }
+      // Second tap: the box becomes writable and this same tap puts you in it, with the keyboard.
+      close(); inp.readOnly = false; litRecentWriting[key] = true;
+      // Put you in the box once this tap is over (focusing during the tap itself gets undone by the tap).
+      setTimeout(()=>{ if(document.activeElement !== inp) inp.focus(); litKeyboard(true); }, 30);
+      return;
+    }
+    litKeyboard(true);
+  });
+  inp.addEventListener('focus', ()=>{ if(!inp.readOnly) litKeyboard(true); });
+  inp.addEventListener('input', ()=>{ if(inp.value) close(); });
+  inp.addEventListener('keydown', e=>{ if(e.key === 'Enter') litRecentAdd(key, inp.value); });
+  inp.addEventListener('blur', ()=>{
+    litRecentAdd(key, inp.value);
+    setTimeout(()=>{ if(document.activeElement === inp) return; litRecentWriting[key] = false; inp.readOnly = true; close(); }, 0);
+  });
+  document.addEventListener('pointerdown', e=>{ if(panel && !panel.contains(e.target) && e.target !== inp) close(); }, true);
 }
 // Ask the app for the keyboard (as the box opens and whenever it's tapped).
 function profileTypingOn(){ if(NATIVE && window.StoryNative.setTyping) try{ window.StoryNative.setTyping(true); }catch(err){} }
@@ -9028,8 +9095,7 @@ window.storyProfileOnly = function(){
   renderHighlights();
   const msgSearch = el.querySelector('.pf-msgs .pf-msgs-search input');
   msgSearch.addEventListener('input', ()=>{ msgView.q = msgSearch.value; msgFindFor(msgSearch.value); renderMsgList(); });
-  msgSearch.addEventListener('pointerdown', profileTypingOn);
-  msgSearch.addEventListener('focus', profileTypingOn);
+  litRecentAttach(msgSearch, 'messages', q=>{ msgSearch.value = q; msgSearch.dispatchEvent(new Event('input')); }, msgSearch.closest('.pf-msgs-search'));
   msgSearch.addEventListener('blur', ()=>{ if(NATIVE && window.StoryNative.setTyping) try{ window.StoryNative.setTyping(false); }catch(err){} });
   // Hold a chat for Archive / Unarchive (hidden chats live in Archive).
   let holdT = 0, held = false;
@@ -9047,13 +9113,11 @@ window.storyProfileOnly = function(){
   upCBox.addEventListener('keydown', e=>{ if(e.key === 'Enter'){ e.preventDefault(); upSendComment(); } });
   const upSearchBox = el.querySelector('.pf-updates .pf-msgs-search input');
   upSearchBox.addEventListener('input', ()=>upSearch(upSearchBox.value));
-  upSearchBox.addEventListener('pointerdown', profileTypingOn);
-  upSearchBox.addEventListener('focus', profileTypingOn);
+  litRecentAttach(upSearchBox, 'updates', q=>{ upSearchBox.value = q; upSearchBox.dispatchEvent(new Event('input')); }, upSearchBox.closest('.pf-msgs-search'));
   upSearchBox.addEventListener('blur', ()=>{ if(NATIVE && window.StoryNative.setTyping) try{ window.StoryNative.setTyping(false); }catch(err){} });
   const callSearch = el.querySelector('.pf-calls .pf-msgs-search input');
   callSearch.addEventListener('input', renderCalls);
-  callSearch.addEventListener('pointerdown', profileTypingOn);
-  callSearch.addEventListener('focus', profileTypingOn);
+  litRecentAttach(callSearch, 'calls', q=>{ callSearch.value = q; callSearch.dispatchEvent(new Event('input')); }, callSearch.closest('.pf-msgs-search'));
   callSearch.addEventListener('blur', ()=>{ if(NATIVE && window.StoryNative.setTyping) try{ window.StoryNative.setTyping(false); }catch(err){} });
   const chatBox = el.querySelector('.pf-chat-box textarea');
   chatBox.addEventListener('input', ()=>{ fitChatBox(); el.querySelector('.pf-chat-send').disabled = !chatBox.value.trim(); msgTypingOut(); });
@@ -14778,6 +14842,7 @@ function attachHandlers(){
   if(searchGoArrow){ searchGoArrow.addEventListener('click', searchStepGo); }
 
   const dashSearchInput = document.getElementById('dash-search-input');
+  if(dashSearchInput) litRecentAttach(dashSearchInput, 'web', q=>{ dashSearchInput.value = q; state.searchQuery = q; searchStepGo('dash-search-input'); }, dashSearchInput.closest('.search-row'));
   if(dashSearchInput){
     dashSearchInput.style.height = 'auto';
     dashSearchInput.style.height = dashSearchInput.scrollHeight + 'px';
@@ -15001,6 +15066,7 @@ function attachHandlers(){
   });
 
   const groupSearchInput = document.getElementById('community-group-search-input');
+  if(groupSearchInput) litRecentAttach(groupSearchInput, 'groups', q=>{ groupSearchInput.value = q; groupSearchInput.dispatchEvent(new Event('input')); });
   if(groupSearchInput){
     groupSearchInput.addEventListener('input', ()=>{
       const cursorPos = groupSearchInput.selectionStart;
