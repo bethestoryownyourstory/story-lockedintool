@@ -82,6 +82,7 @@ export class Hub {
     this.sql.exec(`CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT)`);
     // Updates (owner): following, profile posts and 24-hour statuses, and the pictures / videos they show.
     try { this.sql.exec(`ALTER TABLE users ADD COLUMN about TEXT`); } catch (e) {}
+    try { this.sql.exec(`ALTER TABLE users ADD COLUMN country TEXT`); } catch (e) {}   // chosen at Create your account (sets the default currency)
     try { this.sql.exec(`ALTER TABLE users ADD COLUMN bio TEXT`); } catch (e) {}
     try { this.sql.exec(`ALTER TABLE users ADD COLUMN photo TEXT`); } catch (e) {}
     try { this.sql.exec(`ALTER TABLE users ADD COLUMN name_at INTEGER`); } catch (e) {}
@@ -279,7 +280,7 @@ export class Hub {
   }
 
   // ---- Your profile (name, @username, privacy) ----
-  meView(u) { return { id: u.id, name: u.name || '', username: u.username || '', nameAt: u.name_at || 0, usernameAt: u.username_at || 0, official: !!u.official }; }
+  meView(u) { return { id: u.id, name: u.name || '', username: u.username || '', nameAt: u.name_at || 0, usernameAt: u.username_at || 0, official: !!u.official, country: u.country || '' }; }
   saveMe(me, b) {
     const sets = [], vals = [], now = Date.now();
     const no = (error, extra) => json(Object.assign({ error }, this.meView(me), extra || {}), 409);
@@ -313,6 +314,7 @@ export class Hub {
     }
     if (b.pub !== undefined) { const pub = String(b.pub || ''); if (pub && pub.length <= 400) { sets.push('pub = ?'); vals.push(pub); } }
     if (b.about !== undefined) { sets.push('about = ?'); vals.push(String(b.about || '').slice(0, 150) || null); }
+    if (b.country !== undefined) { sets.push('country = ?'); vals.push(String(b.country || '').slice(0, 60) || null); }
     if (b.bio !== undefined) { sets.push('bio = ?'); vals.push(String(b.bio || '').slice(0, 150) || null); }
     if (b.photo !== undefined) {
       const ph = String(b.photo || '');
@@ -531,7 +533,7 @@ export class Hub {
     const token = rand(32);
     this.sql.exec('UPDATE users SET token = ? WHERE id = ?', await sha('tok|' + token), me.id);
     for (const ws of this.ctx.getWebSockets(me.id)) { try { ws.close(4002, 'signed-in-elsewhere'); } catch (e) {} }   // the phone it was on is signed out
-    return json({ id: me.id, token, name: me.name || '', username: me.username || '', bksalt: me.bksalt || '', keybox: me.keybox ? JSON.parse(me.keybox) : null, backup: me.backup ? JSON.parse(me.backup) : null,
+    return json({ id: me.id, token, name: me.name || '', username: me.username || '', country: me.country || '', bksalt: me.bksalt || '', keybox: me.keybox ? JSON.parse(me.keybox) : null, backup: me.backup ? JSON.parse(me.backup) : null,
       mkbox: me.mkbox ? JSON.parse(me.mkbox) : null, mk: me.rewrap && me.mkspare ? me.mkspare : '' });
   }
   authSet(me, b) {
