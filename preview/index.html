@@ -7428,7 +7428,7 @@ function payRecvSave(){
     r.busy = false; r.editing = false; r.acct = ''; if(state.pay.info) state.pay.info.bank = x.bank; showToast('Saved - people on Lockedintool can send you money'); payShow();
   }).catch(e=>{ r.busy = false; r.msg = PAY_ERRORS[e.code] || 'Couldn’t save - try again.'; payShow(); });
 }
-// ---- LOCKED IN TOOL subscription (owner: Basic $1 / Premium $5 a month; no plan = STORY doesn't open). Paid in your
+// ---- LOCKED IN TOOL subscription (owner: Basic $5 / Premium $15 a month; no plan = STORY doesn't open). Paid in your
 // own bank through Stitch (msg-worker.js /v1/sub/*), 30 days per payment. Nobody is ever asked before payments are
 // really connected, and the owner's own phone (Test channel, /preview/) always has everything. ----
 const SUB_KEY = 'story-sub';
@@ -7458,7 +7458,7 @@ state.sub = { waiting:null, busy:false, msg:'' };
 function subscriptionScreen(){
   const s = subState() || {};
   if(!state.sub.asked){ state.sub.asked = true; subRefresh(true); }
-  const plans = s.plans || { basic:{ usd:1, zar:19 }, premium:{ usd:5, zar:95 } };
+  const plans = s.plans || { basic:{ usd:5, zar:95 }, premium:{ usd:15, zar:285 } };
   const locked = subLocked(), active = subActive();
   const until = s.until ? new Date(s.until).toLocaleDateString('en-ZA', { day:'numeric', month:'short', year:'numeric' }) : '';
   const w = state.sub.waiting;
@@ -8008,7 +8008,7 @@ const LEGAL = {
     ['Automatic updates', [
       'Using Lockedintool means agreeing that it keeps itself up to date: new versions install automatically.' ]],
     ['Subscription', [
-      'Basic is $1 a month and Premium $5 a month, charged in rand (shown before you pay - currently R19 and R95). One payment gives 30 days of your plan; paying the same plan again adds 30 days.',
+      'Basic is $5 a month and Premium $15 a month, charged in rand (shown before you pay - currently R95 and R285). One payment gives 30 days of your plan; paying the same plan again adds 30 days.',
       'Plans do not renew by themselves yet - you pay each month. Payments are made through Stitch and approved by you on your own bank’s or card’s page.',
       'Before you pay you can cancel or switch plans at any time. Once a payment is made it is not refundable, except where South African law requires a refund.',
       'We may change prices or what a plan includes; you will be told in the app before it affects you.' ]],
