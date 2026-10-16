@@ -1434,6 +1434,7 @@
   .cal-dow{ font-size:10px; color:var(--muted); padding:4px 0; }
   .cal-day{ height:36px; border:0; border-radius:10px; background:none; color:var(--text); font-size:13px; }
   .cal-day.off{ color:var(--muted); opacity:0.3; }
+  .order-corner-btn.money-all-on{ background:#e8e6e1; color:#0a0a0a; }
   .cal-day.today{ box-shadow:inset 0 0 0 1px var(--line); }
   .cal-day.in{ background:rgba(255,255,255,0.12); }
   .cal-day.edge{ background:#e8e6e1; color:#0a0a0a; font-weight:700; }
@@ -5064,7 +5065,26 @@ window.storyMoneyNew = function(){
   if(MONEY_PAGES.includes(state.current) && !(a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA')) && !pageSwipeAnimating) renderDevice();
 };
 // Money shows the card that's showing in Wallet (all your payments when no card is picked).
-function moneyView(){ const c = activeCard(); return c ? moneyTx().filter(t=>cardMatches(c, t)) : moneyTx(); }
+// All your money (owner; the button under the calendar on Money): on = Money shows ALL the accounts you added to it
+// together (bank accounts seen in your bank's messages + trading accounts) instead of only the card showing in Wallet;
+// the pencil next to it picks which accounts count. Kept in 'story-money-all' {on, keys} (keys = 'b:<app>|<card>' /
+// 't:<trading account id>'; no list yet = every account).
+const MONEY_ALL_KEY = 'story-money-all';
+function moneyAll(){ try{ return JSON.parse(localStorage.getItem(MONEY_ALL_KEY) || '{}') || {}; }catch(e){ return {}; } }
+function moneyAllSave(v){ try{ localStorage.setItem(MONEY_ALL_KEY, JSON.stringify(v)); }catch(e){} }
+function moneyAllOn(){ return !!moneyAll().on; }
+const moneyAcctKey = t=>'b:' + t.pkg + '|' + (t.card || '');
+function moneyAllAccounts(){
+  const seen = {}, out = [];
+  moneyTx().forEach(t=>{ const k = moneyAcctKey(t); if(seen[k]) return; seen[k] = 1; out.push({ key:k, name: (t.app || 'Bank') + (t.card ? ' ••' + t.card : ''), icon:'🏦' }); });
+  tradeAccounts().forEach(a=>out.push({ key:'t:' + a.id, name:a.name, icon:'📈' }));
+  return out;
+}
+function moneyAllHas(key){ const v = moneyAll(); return !Array.isArray(v.keys) || v.keys.includes(key); }
+function moneyView(){
+  if(moneyAllOn()) return moneyTx().filter(t=>moneyAllHas(moneyAcctKey(t)));
+  const c = activeCard(); return c ? moneyTx().filter(t=>cardMatches(c, t)) : moneyTx();
+}
 function moneyAccessOk(){ try{ return !NATIVE || !window.StoryNative.moneyAccess || !!window.StoryNative.moneyAccess(); }catch(e){ return true; } }
 // The currency most of your payments are in (before any payment: the phone's region).
 function moneyMainCur(){
@@ -5124,7 +5144,7 @@ function moneyBalances(forCard){
     if(t.bal == null) return;
     const k = t.pkg + '|' + (t.card || '');
     if(seen[k]) return; seen[k] = 1;
-    out.push({ name: t.app + (t.card ? ' ••' + t.card : ''), bal: t.bal, cur: t.cur, ts: t.ts, icon:'🏦' });
+    out.push({ key: moneyAcctKey(t), name: t.app + (t.card ? ' ••' + t.card : ''), bal: t.bal, cur: t.cur, ts: t.ts, icon:'🏦' });
   });
   return out;
 }
@@ -5134,9 +5154,12 @@ function tradeAssets(){
   let last = {}; try{ last = JSON.parse(localStorage.getItem(TRADE_LAST_KEY) || '{}') || {}; }catch(e){}
   const to = accountCur();
   return tradeAccounts().map(a=>{ const l = last[a.id]; if(!(l && l.eq != null)) return null; const cur = a.currency || 'USD', v = to ? fxConvert(+l.eq, cur, to) : null;
-    return { name:a.name, bal: v == null ? +l.eq : v, cur: v == null ? cur : to, ts:l.ts, icon:'📈' }; }).filter(Boolean);
+    return { key:'t:' + a.id, name:a.name, bal: v == null ? +l.eq : v, cur: v == null ? cur : to, ts:l.ts, icon:'📈' }; }).filter(Boolean);
 }
-function moneyAssets(){ return activeCard() ? moneyBalances(true) : moneyBalances().concat(tradeAssets()); }
+function moneyAssets(){
+  if(moneyAllOn()) return moneyBalances().filter(a=>moneyAllHas(a.key)).concat(tradeAssets().filter(a=>moneyAllHas(a.key)));
+  return activeCard() ? moneyBalances(true) : moneyBalances().concat(tradeAssets());
+}
 function netWorth(cur){ return moneyAssets().filter(a=>a.cur === cur).reduce((s, a)=>s + a.bal, 0); }
 // This month's change, from the real net worth STORY saw each day (kept on the phone).
 function netWorthPct(nw, cur){
@@ -5272,8 +5295,14 @@ function moneyScreen(){
     ${topBar('Money', true, '<button class="order-corner-btn" data-nav="money-summary" title="Summary"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9"></path><path d="M21 12 12 12 12 3"></path></svg></button>')}
     ${pageArrows()}
     <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;"><div class="big-num">${fmtCur(nw, cur)}</div><button class="order-corner-btn" data-action="cal-open" title="Pick the days to show"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg></button></div>
-    <div style="color:${pctNeg?'var(--red)':'var(--green)'};font-size:12px;font-weight:600;${pctNow == null ? 'visibility:hidden;' : ''}">${pctNeg?'-':'+'}${Math.abs(pctNow || 0)}% this month</div>
-    ${(c=>`<div class="row-sub" style="margin-top:2px;${c ? '' : 'visibility:hidden;'}">${c ? escText(c.bank || 'Card') + ' ••' + escText(c.last4 || '') : 'All'}</div>`)(activeCard())}
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:4px;">
+      <div style="color:${pctNeg?'var(--red)':'var(--green)'};font-size:12px;font-weight:600;${pctNow == null ? 'visibility:hidden;' : ''}">${pctNeg?'-':'+'}${Math.abs(pctNow || 0)}% this month</div>
+      <div style="display:flex;gap:6px;">
+        <button class="order-corner-btn" data-action="money-all-edit" title="Pick the accounts" style="${moneyAllOn() ? '' : 'visibility:hidden;'}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg></button>
+        <button class="order-corner-btn${moneyAllOn() ? ' money-all-on' : ''}" data-action="money-all" title="All your money"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg></button>
+      </div>
+    </div>
+    ${(c=>moneyAllOn() ? `<div class="row-sub" style="margin-top:2px;">All your money · ${moneyAllAccounts().filter(a=>moneyAllHas(a.key)).length} accounts</div>` : `<div class="row-sub" style="margin-top:2px;${c ? '' : 'visibility:hidden;'}">${c ? escText(c.bank || 'Card') + ' ••' + escText(c.last4 || '') : 'All'}</div>`)(activeCard())}
 
     <div class="section-title">PAYMENTS</div>
     <div class="notif-scroll-wrap">
@@ -5384,6 +5413,7 @@ function moneyScreen(){
 
     ${state.notifPopupId ? notifDetailTemplate() : ''}
     ${state.calOpen ? calPopupTemplate() : ''}
+    ${state.moneyAllEdit ? moneyAllEditTemplate() : ''}
     ${state.moneyTransferOpen ? moneyTransferPopupTemplate() : ''}
   `;
 }
@@ -5436,9 +5466,24 @@ function moneySummaryScreen(){
   `;
 }
 
+// The accounts "All your money" counts - tick the ones you want.
+function moneyAllEditTemplate(){
+  const list = moneyAllAccounts();
+  return `
+    <div class="modal-overlay" data-action="money-all-close">
+      <div class="confirm-sheet" onclick="event.stopPropagation()">
+        <div class="confirm-title">Accounts in All your money</div>
+        <div class="note" style="margin:0 0 10px;">Only the accounts you tick count.</div>
+        ${list.length ? `<div class="row-card" style="margin:0;">${list.map(a=>`<div class="row" data-moneyacct="${escText(a.key)}" style="cursor:pointer;"><div class="row-left"><div class="row-icon">${a.icon}</div><div class="row-name">${escText(a.name)}</div></div><span class="qa-radio${moneyAllHas(a.key) ? ' on' : ''}"></span></div>`).join('')}</div>`
+          : `<div class="note">No accounts yet - they show here as your bank’s messages and your trading accounts come in.</div>`}
+        <div class="confirm-btn-row" style="margin-top:12px;"><button class="btn-wide btn-primary" style="margin-top:0;" data-action="money-all-close">Done</button></div>
+      </div>
+    </div>`;
+}
 function calPopupTemplate(){
   const r = state.moneyRange || { kind:'month' };
-  const first = moneyFirstDay(), last = dayStart(Date.now());
+  // Any day in the past can be picked (owner) - not only days you already have payments for.
+  const first = new Date(2000, 0, 1).getTime(), last = dayStart(Date.now());
   const sel = state.calSel || (r.kind === 'date' ? { from: dayStart(r.from), to: dayStart(r.to || r.from) } : {});
   const v = state.calView || (()=>{ const d = new Date(sel.from || last); return { y: d.getFullYear(), m: d.getMonth() }; })();
   const start = new Date(v.y, v.m, 1), startDow = (start.getDay() + 6) % 7, days = new Date(v.y, v.m + 1, 0).getDate();
@@ -14289,6 +14334,12 @@ function attachHandlers(){
     });
   });
 
+  document.querySelectorAll('[data-moneyacct]').forEach(el=>el.addEventListener('click', ()=>{
+    const k = el.getAttribute('data-moneyacct'), v = moneyAll();
+    let keys = Array.isArray(v.keys) ? v.keys.slice() : moneyAllAccounts().map(a=>a.key);
+    keys = keys.includes(k) ? keys.filter(x=>x !== k) : keys.concat(k);
+    v.keys = keys; moneyAllSave(v); renderDevice();
+  }));
   document.querySelectorAll('[data-moneyrange]').forEach(el=>el.addEventListener('click', ()=>{ setMoneyRange({ kind: el.getAttribute('data-moneyrange') }); state.calOpen = false; state.calSel = null; state.calView = null; renderDevice(); }));
   // The calendar: first tap = a day, second tap = the other end of the range, a third tap starts again.
   document.querySelectorAll('[data-calday]').forEach(el=>el.addEventListener('click', ()=>{
@@ -15805,6 +15856,9 @@ function attachHandlers(){
         case 'privacy-calls': { const p = storyPrivacy(); p.calls = el.getAttribute('data-value'); setStoryPrivacy(p); break; }
         case 'privacy-call-person': { const p = storyPrivacy(), id = el.getAttribute('data-value'); const l = p.callPeople || []; p.callPeople = l.includes(id) ? l.filter(x=>x !== id) : l.concat(id); setStoryPrivacy(p); break; }
         case 'cal-open': state.calOpen = true; state.calSel = null; state.calView = null; break;
+        case 'money-all': { const v = moneyAll(); v.on = !v.on; moneyAllSave(v); showToast(v.on ? 'All your money' : 'Showing your card'); break; }
+        case 'money-all-edit': state.moneyAllEdit = true; break;
+        case 'money-all-close': state.moneyAllEdit = false; break;
         case 'add-card': state.addCard = {}; state.addCardOpen = true; break;
         case 'card-scan': cardScanSides = {}; state.addCard = Object.assign(state.addCard || {}, state.addCard && state.addCard.mode ? cardFormVals() : {}); state.addCardOpen = false; renderDevice(); openCardCamera('front'); return;
         case 'card-manual': state.addCard = { mode:'manual' }; break;
