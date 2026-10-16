@@ -42,3 +42,4 @@ commits, pushed as a new update) - nothing else changes.
 | 34 | 2026-10-16 | Group calls: fixed 'Couldn't start the call' when a call is started from Community; a call that still can't start now says why | 934ee7d |
 | 35 | 2026-10-16 | Recent searches: every search bar saves your searches - the first tap shows them (no keyboard), the second tap opens the keyboard | 46166a5 |
 | 36 | 2026-10-16 | Country: chosen when you create your account (and in Edit profile) - your account currency is your country's currency by default; every country's currency can be picked | fb05681 |
+| 37 | 2026-10-16 | Trading: our timeframe row is gone (TradingView has its own) and the chart is taller in its place; Buy / Sell with no account opens Search broker instead of a TradeLocker login | d6d4c7b |
