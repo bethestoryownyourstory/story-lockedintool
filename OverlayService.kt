@@ -403,6 +403,9 @@ class OverlayService : Service(), StoryBridge.Host {
     @SuppressLint("ClickableViewAccessibility")
     private fun addBar() {
         bar?.let { runCatching { (barWm ?: wm).removeView(it) } }
+        // Only system (owner): the bottom line that switches Apps | Pages (and swipes to the home screen / recent apps)
+        // doesn't exist at all - not shown, not in the background, nowhere.
+        if (SystemMode.on(this)) { bar = null; barLine = null; hidePicker(); return }
         val hasLine = phoneHasGestureLine()
         val w = (150 * dp).toInt(); val h = (26 * dp).toInt()
         val touch = ViewConfiguration.get(this).scaledTouchSlop
@@ -477,6 +480,7 @@ class OverlayService : Service(), StoryBridge.Host {
     // ---- Apps | Pages switch ----
     private fun showPicker() {
         hidePicker()
+        if (SystemMode.on(this)) return
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER
             setPadding((22 * dp).toInt(), (12 * dp).toInt(), (22 * dp).toInt(), (12 * dp).toInt())
@@ -1094,7 +1098,7 @@ class OverlayService : Service(), StoryBridge.Host {
         if (front == packageName) return@Runnable
         systemEnforce(front)
     }
-    fun systemModeChanged() { ui.post { if (SystemMode.on(this)) { SystemMode.reset(); systemShowPages() } } }
+    fun systemModeChanged() { ui.post { if (SystemMode.on(this)) { SystemMode.reset(); addBar(); systemShowPages() } else addBar() } }
     // Every launch Lockedintool makes is one of its own features: the app it opens is let through (SystemMode.grant).
     override fun startActivity(intent: Intent?) { SystemMode.grant(); super.startActivity(intent) }
     override fun startActivity(intent: Intent?, options: android.os.Bundle?) { SystemMode.grant(); super.startActivity(intent, options) }
