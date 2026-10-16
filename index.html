@@ -10007,7 +10007,7 @@ function profileWaitDate(at){ return new Date(at).toLocaleDateString('en-ZA', { 
 function profileChangeProblem(k, v){
   const L = profileLocks(), cur = profileData();
   if(k === 'name' ? v === cur.name : v === cur.username) return '';
-  if(!L.official && v.toLowerCase().replace(/[^a-z0-9]/g, '').includes('lockedintool')) return 'Only Lockedintool’s own profile can use that name.';
+  if(!L.official && !['officiallockedintoolprofile'].includes(String(cur.username || '').toLowerCase()) && v.toLowerCase().replace(/[^a-z0-9]/g, '').includes('lockedintool')) return 'Only Lockedintool’s own profile can use that name.';
   if(L.official) return '';   // the official profile isn't held to the waits
   const at = k === 'name' ? L.nameAt : L.usernameAt, wait = (k === 'name' ? 60 : 100) * 86400000;
   if(at && Date.now() - at < wait) return 'You can change your ' + (k === 'name' ? 'name' : '@username') + ' again on ' + profileWaitDate(at + wait) + '.';
@@ -16628,7 +16628,9 @@ function litAuthCheck(){
   if(litAuthMode === 'login') ok = v('.lit-auth-user').length >= 3 && v('.lit-auth-pw').length >= 1;
   else {
     const name = v('.lit-auth-name').trim(), un = v('.lit-auth-user').trim(), pw = v('.lit-auth-pw'), pw2 = v('.lit-auth-pw2');
-    const brand = x=>x.toLowerCase().replace(/[^a-z0-9]/g, '').includes('lockedintool');
+    // The official profile's own @username (msg-worker.js OFFICIAL_USERNAMES) may use the name - the server checks it.
+    const official = ['officiallockedintoolprofile'].includes(un.toLowerCase()) || !!(typeof profileLocks === 'function' && (profileLocks() || {}).official);
+    const brand = x=>!official && x.toLowerCase().replace(/[^a-z0-9]/g, '').includes('lockedintool');
     if(name && brand(name)) problem = 'Only Lockedintool’s own profile can use that name.';
     else if(un && (usernameProblem(un) || brand(un))) problem = brand(un) ? 'Only Lockedintool’s own profile can use that name.' : usernameProblem(un);
     else if(pw && pw.length < 8) problem = 'The password needs at least 8 characters.';
