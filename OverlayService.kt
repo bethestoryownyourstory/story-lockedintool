@@ -243,14 +243,22 @@ class OverlayService : Service(), StoryBridge.Host {
             ui.post {
                 val before = screensSeen
                 screensSeen = v
-                if (before != null && before != v) for (p in listOfNotNull(s3Pane, pagesPane, dialPane, profilePane, profileGapPane, lockDialPane)) { if (p.shown || (p === profilePane && callActive)) p.stale = true else reload(p) }  // every STORY window, the dial pad included
+                val now = System.currentTimeMillis()
+                for (p in listOfNotNull(s3Pane, pagesPane, dialPane, profilePane, profileGapPane, lockDialPane)) {  // every STORY window, the dial pad included
+                    // Loaded from the site just before this first check: it already has these screens.
+                    if (p.ver == null && before == null && now - p.loadedAt < 60_000) { p.ver = v; continue }
+                    if (p.ver == v) continue
+                    // Stuck on the built-in copy (no signal when it loaded) or on older screens: get the current ones.
+                    if (p.shown || (p === profilePane && callActive)) p.stale = true
+                    else if (p.ver != "local" || now - p.loadedAt > 60_000) reload(p)
+                }
             }
         }.start()
     }
 
     /** Fresh copy of the screens, skipping the website's cache. */
     private fun reload(p: Pane) {
-        p.stale = false; p.loadedAt = System.currentTimeMillis()
+        p.stale = false; p.loadedAt = System.currentTimeMillis(); p.ver = screensSeen
         p.web.loadUrl(remoteBase() + "?" + (if (p.lock) "s3=1&dial=1&lock=1&" else if (p.gap) "s3=1&profile=1&gap=1&" else if (p.profile) "s3=1&profile=1&" else if (p.dial) "s3=1&dial=1&" else if (p.small) "s3=1&" else "") + "v=" + System.currentTimeMillis())
     }
 
@@ -505,6 +513,9 @@ class OverlayService : Service(), StoryBridge.Host {
     // ---- STORY panes (built once, kept warm, so they open instantly) ----
     private class Pane(val frame: FrameLayout, val web: WebView, val lp: WindowManager.LayoutParams, val small: Boolean, var wm: WindowManager, val dial: Boolean = false, val profile: Boolean = false, val gap: Boolean = false, val lock: Boolean = false) {
         var shown = false; var loadedAt = System.currentTimeMillis(); var stale = false
+        // Which screens it has: the version from source.txt when it loaded ("local" = the copy built into the app,
+        // used when the site couldn't be reached; null = loaded before the first check). checkScreens compares it.
+        var ver: String? = null
         // Station 3 only: true while its page (re)loads -- it stays invisible until it's drawn, never a white box.
         var loading = true
         // Station 3 only: the window size while open, cut down to what Station 3 really covers.
@@ -592,10 +603,10 @@ class OverlayService : Service(), StoryBridge.Host {
             }
             // No signal / site unreachable: fall back to the copy built into the app.
             override fun onReceivedError(v: WebView, r: WebResourceRequest, e: android.webkit.WebResourceError) {
-                if (r.isForMainFrame && r.url.toString().startsWith(REMOTE)) v.loadUrl(LOCAL + query)
+                if (r.isForMainFrame && r.url.toString().startsWith(REMOTE)) { paneRef?.ver = "local"; v.loadUrl(LOCAL + query) }
             }
             override fun onReceivedHttpError(v: WebView, r: WebResourceRequest, e: WebResourceResponse) {
-                if (r.isForMainFrame && r.url.toString().startsWith(REMOTE)) v.loadUrl(LOCAL + query)
+                if (r.isForMainFrame && r.url.toString().startsWith(REMOTE)) { paneRef?.ver = "local"; v.loadUrl(LOCAL + query) }
             }
             override fun onPageFinished(v: WebView, url: String) {
                 if (profile) {
@@ -674,7 +685,7 @@ class OverlayService : Service(), StoryBridge.Host {
         val paneWm = if (inLayer) layerWm else wm
         if (inLayer) lp.type = layerType
         val p = Pane(frame, wv, lp, small, paneWm, dial, profile, gap, lock)
-        paneRef = p
+        paneRef = p; p.ver = screensSeen
         paneWm.addView(frame, lp)
         return p
     }
