@@ -3847,8 +3847,12 @@ function isAppPage(key){ return typeof key === 'string' && key.indexOf('app:') =
 function appPagesStored(){
   try{ const a = JSON.parse(localStorage.getItem('story-app-pages') || '[]'); return Array.isArray(a) ? a.filter(x=>x && x.pkg) : []; }catch(e){ return []; }
 }
+// Lockedintool as your only system (owner): the Apps button and anything involving your apps (Apps, app pages,
+// Open <platform>, sharing to apps, the Apps | Pages picker) aren't there. Asked from the app (SystemMode).
+function sysOn(){ try{ return !!(window.StoryNative && window.StoryNative.systemModeState && String(window.StoryNative.systemModeState()).indexOf('on|') === 0); }catch(e){ return false; } }
 function syncAppPages(){
   PAGES.length = CORE_PAGE_COUNT; PAGE_SWITCH_ITEMS.length = CORE_PAGE_COUNT;
+  if(sysOn()) return;
   appPagesStored().forEach(a=>{ PAGES.push('app:' + a.pkg); PAGE_SWITCH_ITEMS.push({key:'app:' + a.pkg, label:escText(a.name || ''), app:a}); });
 }
 syncAppPages();
@@ -4784,7 +4788,7 @@ function dashboardScreen(){
           <div class="sidebar-item" data-nav="information">INFORMATION</div>
           <div class="sidebar-item" data-dash="camera">CAMERA</div>
           <div class="sidebar-item" data-dash="gallery">GALLERY</div>
-          <div class="sidebar-item" data-nav="apps">APPS</div>
+          ${sysOn() ? '' : '<div class="sidebar-item" data-nav="apps">APPS</div>'}
         </div>
         <div class="quotes-card">
           <div class="quotes-title">QUOTES</div>
@@ -6633,7 +6637,7 @@ function tradingScreen(){
       </div>
       <div class="acct-foot">${acc ? status : `<button class="btn-wide btn-primary acct-add-btn" data-action="add-account-open">Add account</button>`}</div>
       ${state.brokerPanelOpen ? brokerPanelHTML() : ''}
-      <button class="mt5-corner-btn left" data-action="mt5-open">Open ${acc ? escText(platformAppName(acc)) : 'broker'}</button>
+      <button class="mt5-corner-btn left" data-action="mt5-open"${sysOn() ? ' style="visibility:hidden" tabindex="-1"' : ''}>Open ${acc ? escText(platformAppName(acc)) : 'broker'}</button>
       <button class="mt5-corner-btn right" data-action="mt5-switch">Accounts ⌄</button>
     </div>
     ${list.length > 1 ? `<div class="acct-dots">${list.map((a, i)=>`<span class="${i===idx?'on':''}"></span>`).join('')}</div>` : ''}
@@ -7534,16 +7538,16 @@ function subOptConfirm(){
   else showToast('Only system - now choose your plan');
 }
 // A plan paid under "Only system" turns it on (here, and whenever Lockedintool sees that plan).
-function subApplyMode(){ const s = subState() || {}; if(s.active && s.mode === 'only' && litSignedIn() && !sysModeState().on && sysModeState().ready){ try{ window.StoryNative.systemModeSet(true, ''); }catch(e){} } }
+function subApplyMode(){ const s = subState() || {}; if(s.active && s.mode === 'only' && litSignedIn() && !sysModeState().on && sysModeState().ready){ try{ window.StoryNative.systemModeSet(true, ''); }catch(e){} syncAppPages(); } }
 function sysModeAsk(){
   const m = sysModeState();
   if(!m.app){ showToast('Lockedintool as your system works in the Lockedintool app'); return; }
   if(!litSignedIn()){ showToast('Log in to your account first'); return; }
   if(!m.ready){ showToast('Turn on Lockedintool system actions first (on the setup screen)'); return; }
   litSheet({ title:'Make Lockedintool your only system?', text:'Your phone will only use Lockedintool - no other app will open, not even the phone’s home screen or app list. Phone calls and emergency calls still work. The only way to turn it off is to log out or delete your account.',
-    items:[{ label:'Make it my system', fn: ()=>{ try{ window.StoryNative.systemModeSet(true, ''); }catch(e){} setTimeout(()=>{ if(sysModeState().on){ showToast('Lockedintool is your system now'); } else showToast('Couldn’t turn it on - check Lockedintool system actions'); renderDevice(); }, 150); } }] });
+    items:[{ label:'Make it my system', fn: ()=>{ try{ window.StoryNative.systemModeSet(true, ''); }catch(e){} setTimeout(()=>{ syncAppPages(); if(sysModeState().on){ showToast('Lockedintool is your system now'); } else showToast('Couldn’t turn it on - check Lockedintool system actions'); renderDevice(); }, 150); } }] });
 }
-function sysModeOff(){ try{ if(NATIVE && window.StoryNative.systemModeSet) window.StoryNative.systemModeSet(false, 'LOGGED-OUT'); }catch(e){} }
+function sysModeOff(){ try{ if(NATIVE && window.StoryNative.systemModeSet) window.StoryNative.systemModeSet(false, 'LOGGED-OUT'); }catch(e){} try{ syncAppPages(); }catch(e){} }
 let subPollT = 0;
 function subPoll(){
   clearTimeout(subPollT);
@@ -8226,6 +8230,7 @@ document.addEventListener('click', (e)=>{
   const el = e.target.closest && e.target.closest('[data-nav="apps"]');
   if(!el) return;
   e.stopPropagation(); e.preventDefault();
+  if(sysOn()) return;
   state.appMenuId = null;
   if(!state.installedApps.some(a=>a.pkg)) loadNativeApps();   // normally already loaded (and kept up to date)
   state.current = 'apps';
@@ -12351,7 +12356,7 @@ function renderScreenContent(){
     case 'notifications': return notificationsPanelScreen();
     case 'notif-settings': return notifSettingsScreen();
     case 'community-guidelines': return communityGuidelinesScreen();
-    case 'apps': return appsScreen();
+    case 'apps': if(sysOn()){ state.current = 'dashboard'; return dashboardScreen(); } return appsScreen();
   }
 }
 
@@ -13004,8 +13009,8 @@ function buildPhone(){
           ${state.homePickerOpen ? `<div class="home-picker-backdrop" data-action="home-picker-cancel"></div>` : ''}
           <div class="home-picker-sheet${state.homePickerOpen ? ' open' : ''}" id="home-picker-sheet">
             <div class="home-picker-row">
-              <span class="home-picker-word" data-home-pick="apps">Apps</span>
-              <span class="home-picker-divider">|</span>
+              ${sysOn() ? '' : `<span class="home-picker-word" data-home-pick="apps">Apps</span>
+              <span class="home-picker-divider">|</span>`}
               <span class="home-picker-word" data-home-pick="pages">Pages</span>
             </div>
             ${state.homePickerOpen
@@ -17416,7 +17421,7 @@ function shareSheetTemplate(){
         <div class="plus-menu-list" style="margin-top:8px;">
           ${s.allowCommunity !== false ? `<div class="plus-menu-list-item" data-action="share-sheet-to-community">Share to Stories</div>` : ''}
         </div>
-        ${(()=>{ const apps = shareTargetsFor(shareSheetType(s)); return apps.length ? `
+        ${(()=>{ const apps = sysOn() ? [] : shareTargetsFor(shareSheetType(s)); return apps.length ? `
         <div class="share-apps-title">Share to</div>
         <div class="share-apps">${apps.map((a, i)=>`<button class="share-app" data-action="share-sheet-app" data-i="${i}"><img alt="" src="data:image/png;base64,${a.icon}"><span>${escText(a.label === a.app || !a.app ? a.label : a.app)}</span></button>`).join('')}</div>` : `<div class="plus-menu-list"><div class="plus-menu-list-item" data-action="share-sheet-via">Share via…</div></div>`; })()}
       </div>
@@ -18373,6 +18378,7 @@ function endHomeSwipe(e){
   }
   const farEnough = (h.dy / 168) > 0.3;
   homeSwipe = null;
+  if(farEnough && sysOn()){ state.homePickerOpen = true; renderDevice(); return; }   // no Apps / recent apps (only system)
   if(farEnough){
     if(h.mode === 'recents'){ if(NATIVE){ window.StoryNative.openRecents(); } else { state.recentsOpen = true; } }
     else { state.current = 'apps'; }
