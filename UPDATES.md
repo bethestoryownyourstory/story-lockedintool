@@ -22,3 +22,4 @@ commits, pushed as a new update) - nothing else changes.
 | 14 | 2026-10-15 | Accounts: Lockedintool opens on Create your account / Log in; passwords; Log out in Settings > Privacy (your Pages stay); chats backed up locked with your password so logging in on any phone brings them back; deleting an account goes back to sign up / log in | 3c7875a |
 | 15 | 2026-10-15 | Tap Your status (or its +) in Updates to make a status straight away; Station 3 goes back above the keyboard / every screen as soon as Lockedintool system actions is on, and a notification says if it's switched off | d5f00be |
 | 16 | 2026-10-15 | Setup screen shows where Station 3 is right now (on top of everything / not on top / hidden by Quick Access) | 3c0bb4f |
+| 17 | 2026-10-16 | Your official profile (@officiallockedintoolprofile) can keep the name Lockedintool - Protect your account no longer says only Lockedintool's own profile can use it | 1598181 |
