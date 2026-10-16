@@ -44,13 +44,17 @@ object MoneyLog {
     private val TRADING = Regex("(?i)(tradingview|metaquotes|metatrader|deriv|binance|bybit|okx|okex|tradelocker|ctrader|spotware|etoro|plus500|oanda|forex|crypto|coinbase|luno|valr|kraken|alpaca|trading|trader|exness|\\.xm\\.|hfm|hotforex|icmarkets|pepperstone|avatrade|robinhood|webull|investing|bloomberg|yahoo|stocks|tickmill|fxpro|fxtm|admirals|capital\\.com|kucoin|bitget|mexc|gate\\.io)")
     private val PAYMENT = Regex("(?i)(bank|pay|wallet|money|financ|cash|card|capitec|fnb|absa|nedbank|standard|investec|tyme|discovery|revolut|wise|monzo|starling|chime|venmo|squareup|mpesa|safaricom|opay|palmpay|kuda|moniepoint|flutterwave|chipper|zapper|snapscan|ozow|payoneer|skrill|neteller|n26|bunq|klarna|afterpay|spay|walletnfcrel|vodapay|ewallet|mukuru|easyequities|old\\.?mutual|sanlam|momentum|africanbank|bidvest|access|ecobank|equity|kcb|gtbank|zenith|firstbank|uba|stanbic)")
     fun allowed(pkg: String): Boolean = pkg in SMS || (!TRADING.containsMatchIn(pkg) && PAYMENT.containsMatchIn(pkg))
+    // Real banks / wallets. Any other app (or a bank SMS) only counts when it names your card / account or your balance.
+    private val KNOWN = Regex("(?i)(fnb|capitec|absa|nedbank|standardbank|sbsa|tymebank|tyme|discovery\\.bank|discoverybank|investec|africanbank|bankzero|paypal|walletnfcrel|samsung\\.android\\.spay|revolut|transferwise|wise|monzo|starling|chime|venmo|squareup\\.cash|mpesa|safaricom|opay|palmpay|kuda|moniepoint|payoneer|n26|bunq|vodapay|snapscan|zapper|ozow|mukuru|ecobank|gtbank|zenith|firstbank|stanbic|equitybank|kcb)")
+    fun counts(pkg: String, card: String?, bal: Double?): Boolean = allowed(pkg) && (KNOWN.containsMatchIn(pkg) || card != null || bal != null)
 
     // Anything kept before this rule from an app that isn't a bank / payment app is left out.
     fun list(c: Context): String {
         val raw = prefs(c).getString(KEY, "[]") ?: "[]"
         val arr = runCatching { JSONArray(raw) }.getOrDefault(JSONArray())
         val out = JSONArray(); var dropped = false
-        for (i in 0 until arr.length()) { val o = arr.optJSONObject(i) ?: continue; if (allowed(o.optString("pkg"))) out.put(o) else dropped = true }
+        for (i in 0 until arr.length()) { val o = arr.optJSONObject(i) ?: continue
+            if (counts(o.optString("pkg"), o.optString("card").ifEmpty { null }, if (o.has("bal")) o.optDouble("bal") else null)) out.put(o) else dropped = true }
         if (dropped) prefs(c).edit().putString(KEY, out.toString()).apply()
         return if (dropped) out.toString() else raw
     }
@@ -76,6 +80,7 @@ object MoneyLog {
         if (pkg in SMS && Regex("^[+0-9 ()-]{7,}$").matches(title.trim())) return false
         val text = (title + " · " + body).replace('\n', ' ').trim()
         val r = parse(text) ?: return false
+        if (!counts(pkg, r.card, r.bal)) return false
         val ts = if (sbn.postTime > 0) sbn.postTime else System.currentTimeMillis()
         val app = runCatching { c.packageManager.getApplicationLabel(c.packageManager.getApplicationInfo(pkg, 0)).toString() }.getOrDefault(pkg)
         synchronized(this) {
