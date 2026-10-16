@@ -13005,12 +13005,12 @@ function buildPhone(){
         ${fullScreenTakeoverActive ? '' : station3RegionHTML()}
         ${state.shareSheet ? shareSheetTemplate() : ''}
         ${state.toastMessage ? toastTemplate() : ''}
-        ${fullScreenTakeoverActive ? '' : `
+        ${fullScreenTakeoverActive || sysOn() ? '' : `
           ${state.homePickerOpen ? `<div class="home-picker-backdrop" data-action="home-picker-cancel"></div>` : ''}
           <div class="home-picker-sheet${state.homePickerOpen ? ' open' : ''}" id="home-picker-sheet">
             <div class="home-picker-row">
-              ${sysOn() ? '' : `<span class="home-picker-word" data-home-pick="apps">Apps</span>
-              <span class="home-picker-divider">|</span>`}
+              <span class="home-picker-word" data-home-pick="apps">Apps</span>
+              <span class="home-picker-divider">|</span>
               <span class="home-picker-word" data-home-pick="pages">Pages</span>
             </div>
             ${state.homePickerOpen
@@ -18378,7 +18378,6 @@ function endHomeSwipe(e){
   }
   const farEnough = (h.dy / 168) > 0.3;
   homeSwipe = null;
-  if(farEnough && sysOn()){ state.homePickerOpen = true; renderDevice(); return; }   // no Apps / recent apps (only system)
   if(farEnough){
     if(h.mode === 'recents'){ if(NATIVE){ window.StoryNative.openRecents(); } else { state.recentsOpen = true; } }
     else { state.current = 'apps'; }
