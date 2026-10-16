@@ -79,6 +79,6 @@ class AodActivity : Activity() {
 
     companion object {
         @Volatile var instance: AodActivity? = null
-        fun enabled(c: android.content.Context) = QuickAccess.aodScreen(c)  // Station 3 and/or the dial pad (Settings > QUICK ACCESS)
+        fun enabled(c: android.content.Context) = QuickAccess.aodScreen(c) && !WidgetMode.on(c)   // not with Only use widgets  // Station 3 and/or the dial pad (Settings > QUICK ACCESS)
     }
 }

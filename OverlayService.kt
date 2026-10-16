@@ -257,6 +257,7 @@ class OverlayService : Service(), StoryBridge.Host {
     private var relayerPending = false
     /** For the setup screen: where Station 3 is right now (so a hidden Station 3 can be explained). */
     fun station3State(): String = when {
+        WidgetMode.on(this) -> "off - Only use widgets is on"
         bubble == null -> "not started"
         bubble?.visibility != View.VISIBLE -> "hidden by Settings > Quick Access"
         layerType == WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY -> "on top of everything"
@@ -405,7 +406,7 @@ class OverlayService : Service(), StoryBridge.Host {
         bar?.let { runCatching { (barWm ?: wm).removeView(it) } }
         // Only system (owner): the bottom line that switches Apps | Pages (and swipes to the home screen / recent apps)
         // doesn't exist at all - not shown, not in the background, nowhere.
-        if (SystemMode.on(this)) { bar = null; barLine = null; hidePicker(); return }
+        if (SystemMode.on(this) || WidgetMode.on(this)) { bar = null; barLine = null; hidePicker(); return }   // ... and with Only use widgets
         val hasLine = phoneHasGestureLine()
         val w = (150 * dp).toInt(); val h = (26 * dp).toInt()
         val touch = ViewConfiguration.get(this).scaledTouchSlop
@@ -789,6 +790,7 @@ class OverlayService : Service(), StoryBridge.Host {
     }
 
     private fun showPanel(station3Only: Boolean) {
+        if (WidgetMode.on(this)) return   // Only use widgets: only the widgets
         warmUp()
         if (station3Only) {
             // Station 3 opens exactly the same over the Pages as over any app -- the Pages stay put.
@@ -814,6 +816,7 @@ class OverlayService : Service(), StoryBridge.Host {
     //      one page at a time, then thrown away - nothing stays running. ----
     override fun openPages(page: String) { ui.post { openPageFromWidget(page) } }
     private fun openPageFromWidget(page: String) {
+        if (WidgetMode.on(this)) { showToast("Only use widgets is on - open the Lockedintool app to turn it off"); return }
         hideLiveWidgets()
         warmUp()
         val p = pagesPane ?: return
@@ -1103,6 +1106,14 @@ class OverlayService : Service(), StoryBridge.Host {
         if (front == packageName) return@Runnable
         systemEnforce(front)
     }
+    /** Only use widgets switched: everything but the widgets goes away (or comes back). */
+    fun widgetModeChanged() { ui.post {
+        if (WidgetMode.on(this)) {
+            listOfNotNull(dialPane, s3Pane, profilePane, pagesPane).filter { it.shown && !(it === profilePane && callActive) }.forEach { hideOne(it) }
+            closeStation3Now()
+        }
+        addBar(); updateBubble(); syncLockDial()
+    } }
     fun systemModeChanged() { ui.post { if (SystemMode.on(this)) { SystemMode.reset(); addBar(); systemShowPages() } else addBar() } }
     // Every launch Lockedintool makes is one of its own features: the app it opens is let through (SystemMode.grant).
     override fun startActivity(intent: Intent?) { SystemMode.grant(); super.startActivity(intent) }
@@ -1120,6 +1131,7 @@ class OverlayService : Service(), StoryBridge.Host {
         val where = QuickAccess.where(this)
         var on = QuickAccess.station3On(this) && when (where) { "pages" -> pagesUp; "apps" -> !pagesUp; else -> true }
         if (aodShowing() && !QuickAccess.s3Aod(this)) on = false
+        if (WidgetMode.on(this)) on = false   // Only use widgets: no Station 3
         // Station 3 must stay on top everywhere (owner): it can only sit above the keyboard and every app's screen in
         // the accessibility layer. If that layer came back (the system re-connected Lockedintool system actions) while
         // Station 3 was still in the normal layer, move everything up at once.
@@ -1410,7 +1422,7 @@ class OverlayService : Service(), StoryBridge.Host {
         // It never moves (owner): it simply stays put through screen off / Always On Display / lock screen, so it's
         // already there the instant anything shows. Only hidden on the Always On Display if that's switched off for it.
         val onAod = aodUp || (!awake && AodActivity.enabled(this))
-        val want = QuickAccess.lockDial(this) && locked && !lockDialAway && !lockDialPeek && entry != true && !shade &&
+        val want = !WidgetMode.on(this) && QuickAccess.lockDial(this) && locked && !lockDialAway && !lockDialPeek && entry != true && !shade &&
             (if (onAod) QuickAccess.dialAod(this) else true)
         if (want != p.shown) {
             if (!want) p.web.evaluateJavascript("window.storyDialClear&&window.storyDialClear()", null)

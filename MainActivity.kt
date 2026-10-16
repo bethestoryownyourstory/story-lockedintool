@@ -34,6 +34,18 @@ class MainActivity : Activity() {
         fun title(t: String, size: Float = 22f) = TextView(this).apply { text = t; setTextColor(StoryTheme.swap(this@MainActivity, Color.WHITE)); textSize = size; setPadding(0, 0, 0, pad / 2) }
         fun btn(t: String, f: () -> Unit) = Button(this).apply { text = t; isAllCaps = false; setOnClickListener { f() } }
         col.addView(title("Lockedintool", 32f))
+        // Only use widgets (owner): the app shows just its one switch - on / off. (The owner keeps their own buttons.)
+        if (WidgetMode.on(this)) {
+            col.addView(title("Only use widgets is on: Lockedintool is only your home screen widgets.", 15f))
+            col.addView(btn("Only use widgets: ON  -  tap to turn off") { WidgetMode.set(this, false); recreate() })
+            if (Release.isOwner(this)) {
+                col.addView(title("Owner - Test channel", 15f).apply { setTextColor(Color.parseColor("#FFE8B23D")); setPadding(0, pad, 0, pad / 2) })
+                col.addView(btn("Publish live update") { askPin("Publish live update", "Everything you see on this phone now goes to everyone.") { pin -> publish(pin, "publish") } })
+                col.addView(btn("Undo last update") { askPin("Undo last update", "Everyone goes back to the screens from before the last update.") { pin -> publish(pin, "undo") } })
+            }
+            setContentView(ScrollView(this).apply { setBackgroundColor(StoryTheme.swap(this@MainActivity, Color.BLACK)); addView(col) })
+            return
+        }
         col.addView(title("Floats over your phone. Your home screen, lock screen and apps stay exactly as they are.", 15f))
         col.addView(btn("1. Allow display over other apps") {
             startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
@@ -63,6 +75,10 @@ class MainActivity : Activity() {
             // Lockedintool as your system only goes off by logging out or deleting your account (owner).
             if (SystemMode.on(this)) { android.widget.Toast.makeText(this, "Lockedintool is your system - log out of your account to turn it off", android.widget.Toast.LENGTH_LONG).show(); return@btn }
             getSharedPreferences("story", MODE_PRIVATE).edit().putBoolean("enabled", false).apply(); stopService(Intent(this, OverlayService::class.java)) })
+        // Only use widgets (owner): Lockedintool becomes only its home screen widgets; the app then shows just this switch.
+        col.addView(btn("Only use widgets: off  -  tap to turn on") {
+            if (!WidgetMode.set(this, true)) android.widget.Toast.makeText(this, "Lockedintool is your only system - log out to change it", android.widget.Toast.LENGTH_LONG).show() else recreate()
+        })
         // So the phone never shuts STORY down to save battery, and lets it start by itself after a restart.
         col.addView(btn("4. Keep Lockedintool always on") { keepAlwaysOn() })
         // STORY's Always On Display (switch Samsung's own Always On Display off when using this).

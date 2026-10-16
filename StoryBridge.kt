@@ -191,10 +191,15 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
      *  your account - the page passes "LOGGED-OUT" then. */
     @JavascriptInterface
     fun systemModeState(): String = (if (SystemMode.on(ctx)) "on" else "off") + "|" + (if (StoryAccessibilityService.instance != null) "ready" else "noaccess")
+    /** Only use widgets (Settings): on from the Pages; off (or on) from the Lockedintool app's screen. */
+    @JavascriptInterface
+    fun widgetsOnlyState(): String = if (WidgetMode.on(ctx)) "on" else "off"
+    @JavascriptInterface
+    fun widgetsOnlySet(on: Boolean): Boolean = if (station3 || dial || widget) false else WidgetMode.set(ctx, on)
     @JavascriptInterface
     fun systemModeSet(on: Boolean, sure: String) {
         if (station3 || dial) return
-        if (on) { if (StoryAccessibilityService.instance == null) return; SystemMode.set(ctx, true) }
+        if (on) { if (StoryAccessibilityService.instance == null || WidgetMode.on(ctx)) return; SystemMode.set(ctx, true) }
         else if (sure == "LOGGED-OUT") SystemMode.set(ctx, false) else return
         OverlayService.instance?.systemModeChanged()
     }
