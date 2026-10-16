@@ -43,3 +43,4 @@ commits, pushed as a new update) - nothing else changes.
 | 35 | 2026-10-16 | Recent searches: every search bar saves your searches - the first tap shows them (no keyboard), the second tap opens the keyboard | 46166a5 |
 | 36 | 2026-10-16 | Country: chosen when you create your account (and in Edit profile) - your account currency is your country's currency by default; every country's currency can be picked | fb05681 |
 | 37 | 2026-10-16 | Trading: our timeframe row is gone (TradingView has its own) and the chart is taller in its place; Buy / Sell with no account opens Search broker instead of a TradeLocker login | d6d4c7b |
+| 38 | 2026-10-16 | No more coming soon: Wallet button opens Wallet Overview; Favorites (star people in Send Money); Memberships (your loyalty cards with a barcode); Recents of who you paid; Music on statuses and posts; platforms that aren't connected are hidden | f24f9ed |
