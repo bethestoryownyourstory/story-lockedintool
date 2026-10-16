@@ -1523,6 +1523,14 @@
   .memb-barcode{ display:block; width:100%; height:70px; }
   .pay-star.on{ color:#f5c518; }
   .pay-star-wide{ margin-top:8px; }
+  .tp-sheet{ text-align:center; }
+  .tp-card{ display:flex; align-items:center; justify-content:space-between; margin:8px auto 4px; max-width:260px; padding:16px 18px; border-radius:14px; background:#000000; border:1px solid rgba(255,255,255,0.18); color:#ffffff; font-weight:700; }
+  .tp-card b{ font-family:var(--font-mono, monospace); letter-spacing:0.08em; }
+  .tp-ring{ display:flex; justify-content:center; margin:18px 0 10px; color:var(--text); opacity:0.7; }
+  .tp-ring.on{ opacity:1; animation:tppulse 1.6s ease-in-out infinite; }
+  @keyframes tppulse{ 50%{ transform:scale(1.06); opacity:0.75; } }
+  .tp-t{ font-size:17px; font-weight:800; margin:4px 0 6px; }
+  .tp-d{ font-size:13px; color:var(--muted); line-height:1.45; margin-bottom:6px; }
   /* A sheet open over Wallet: the Transfer Money bar steps away so it never covers the sheet's buttons. */
   .phone-screen:has(.modal-overlay) .wallet-float-dock, #device-wrap:has(.modal-overlay) .wallet-float-dock{ visibility:hidden; }
   .settings-option{
@@ -7469,6 +7477,7 @@ function walletScreen(){
 
     ${state.addCardOpen ? addCardTemplate() : ''}
     ${state.membSheet ? membSheetTemplate() : ''}
+    ${state.tapPayOpen ? tapPayTemplate() : ''}
     ${state.favoritesOpen ? favoritesPopupTemplate() : ''}
     ${state.cardSheetId ? cardSheetTemplate() : ''}
     ${state.moneyAllEdit ? moneyAllEditTemplate() : ''}
@@ -7603,6 +7612,30 @@ function payPick(id){
 }
 const PAY_PERSON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>';
 const PAY_BANK_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 10l9-6 9 6"/><path d="M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20h18"/></svg>';
+// ---- Tap to Pay (owner: it must work, no other app opening): Lockedintool's own screen - your card, and "hold your
+// phone near the card reader". The phone's own wallet (the default under Contactless payments) makes the payment in
+// the background as you tap; Lockedintool itself can't be the card until a bank / card partner issues its cards. ----
+function tapPayTemplate(){
+  let st = 'app', wallet = '';
+  if(NATIVE && window.StoryNative.nfcState){ const v = String(window.StoryNative.nfcState()).split('|'); st = v[0]; wallet = v[2] || ''; }
+  const c = activeCard();
+  const card = c ? `<div class="tp-card"><span>${escText(c.bank || 'Card')}</span><b>•••• ${escText(c.last4 || '')}</b></div>` : '';
+  const ring = `<div class="tp-ring${st === 'on' ? ' on' : ''}"><svg viewBox="0 0 70 46" width="120" height="80" fill="none" stroke="currentColor" stroke-linecap="round"><path d="M14 13a14 14 0 0 1 0 20" stroke-width="2.4"/><path d="M8 8a21 21 0 0 1 0 30" stroke-width="2.4"/><rect x="35" y="4" width="22" height="38" rx="5" stroke-width="2.4"/></svg></div>`;
+  const body = st === 'nonfc' ? '<div class="tp-t">This phone can’t tap to pay</div><div class="tp-d">It has no NFC.</div>'
+    : st === 'off' ? '<div class="tp-t">Turn on NFC to tap to pay</div><button class="btn-wide btn-primary" data-action="tap-pay-nfc">Turn on NFC</button>'
+    : st === 'app' ? '<div class="tp-t">Tap to Pay works in the Lockedintool app</div>'
+    : `<div class="tp-t">Hold the back of your phone near the card reader</div><div class="tp-d">Your phone pays with ${escText(wallet || 'its wallet')} as you tap. If it asks, confirm with your fingerprint or PIN.</div>`;
+  return `
+    <div class="modal-overlay tp-overlay" data-action="tap-pay-close">
+      <div class="confirm-sheet tp-sheet" onclick="event.stopPropagation()">
+        <div class="confirm-title">Tap to Pay</div>
+        ${card}${ring}${body}
+        <button class="btn-wide" data-action="tap-pay-close">Done</button>
+      </div>
+    </div>`;
+}
+// Back from the phone's NFC switch: the screen shows the new state.
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState === 'visible' && state.tapPayOpen && typeof renderDevice === 'function') renderDevice(); });
 // Favorites (owner: nothing made up): the Lockedintool profiles and bank accounts YOU starred in Send Money.
 const PAY_FAVS_KEY = 'story-pay-favs';
 function payFavs(){ try{ return JSON.parse(localStorage.getItem(PAY_FAVS_KEY) || '[]') || []; }catch(e){ return []; } }
@@ -16813,13 +16846,9 @@ function attachHandlers(){
           showToast('Card removed');
           break;
         }
-        case 'tap-to-pay': {
-          const r = NATIVE && window.StoryNative.payApp ? window.StoryNative.payApp() : 'none';
-          if(r === 'nonfc') showToast('This phone has no tap to pay (NFC)');
-          else if(r === 'nfcoff') showToast('Turn on NFC to tap to pay');
-          else if(r === 'none') showToast('Pick your tap to pay app (e.g. Google Wallet) in Contactless payments');
-          break;
-        }
+        case 'tap-to-pay': state.tapPayOpen = true; break;
+        case 'tap-pay-close': state.tapPayOpen = false; break;
+        case 'tap-pay-nfc': if(NATIVE && window.StoryNative.nfcSettings) window.StoryNative.nfcSettings(); break;
         case 'money-access': { if(NATIVE && window.StoryNative.moneyAccessOpen) window.StoryNative.moneyAccessOpen(); else showToast('Turn on notification access for Lockedintool'); break; }
         case 'spend-limit-open': state.spendLimitOpen = true; break;
         case 'spend-limit-close': state.spendLimitOpen = false; break;
