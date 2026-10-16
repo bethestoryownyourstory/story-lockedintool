@@ -32,6 +32,7 @@ const REPORT_REASONS = { spam: 'spam', scam: 'scam or fraud', abuse: 'bullying o
 const OFFICIAL_USERNAMES = ['officiallockedintoolprofile'];
 const BRAND = 'lockedintool';
 const brandIn = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '').includes(BRAND);
+const LIT_ITER = 210000;   // the app's password key rounds (index.html LIT_ITER) - the reset page uses the same
 const NAME_WAIT = 60 * 86400000, USERNAME_WAIT = 100 * 86400000;   // owner: name once every 60 days, @username once every 100
 const USERNAME = /^(?!.*\.\.)(?!\.)(?!.*\.$)[a-z0-9_.]{3,30}$/;
 // South African banks Stitch pays into (its BankBeneficiaryBankId names) - shown by their own names.
@@ -82,6 +83,13 @@ export class Hub {
     // with a second key from the password (bksalt) - the server can't open them.
     for (const c of ['pw TEXT', 'pwsalt TEXT', 'bksalt TEXT', 'keybox TEXT', 'backup TEXT']) { try { this.sql.exec(`ALTER TABLE users ADD COLUMN ${c}`); } catch (e) {} }
     this.sql.exec(`CREATE TABLE IF NOT EXISTS logins (k TEXT PRIMARY KEY, n INTEGER, until INTEGER)`);
+    // Password reset (owner): your private details (email / phone - never shown to anyone, only for resetting your
+    // password or confirming you want to delete your account) and a spare of your account key, so a reset brings your
+    // chats back (owner's choice). mkbox = that key locked with your password; mkspare = the spare Lockedintool keeps.
+    for (const c of ['remail TEXT', 'rphone TEXT', 'mkbox TEXT', 'mkspare TEXT', 'rewrap INTEGER']) { try { this.sql.exec(`ALTER TABLE users ADD COLUMN ${c}`); } catch (e) {} }
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS rcodes (uid TEXT, kind TEXT, value TEXT, code TEXT, exp INTEGER, tries INTEGER, sent INTEGER, PRIMARY KEY (uid, kind))`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS resets (token TEXT PRIMARY KEY, uid TEXT, exp INTEGER)`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS rlimit (k TEXT PRIMARY KEY, hour INTEGER, n INTEGER)`);
     for (const un of OFFICIAL_USERNAMES) this.sql.exec('UPDATE users SET official = 1 WHERE username = ?', un);
     this.sql.exec(`CREATE TABLE IF NOT EXISTS follows (uid TEXT, fid TEXT, at INTEGER, PRIMARY KEY (uid, fid))`);
     this.sql.exec(`CREATE INDEX IF NOT EXISTS follows_fid ON follows(fid)`);
@@ -151,14 +159,17 @@ export class Hub {
         // Payments: can the server really sign in to Stitch? (just a sign-in - no payment is made)
         let pay = this.expressReady() ? 'keys' : 'no-keys';
         if (url.searchParams.get('pay') === '1' && this.expressReady()) { try { await this.expressToken(); pay = 'ok'; } catch (e) { pay = String(e.message || e).slice(0, 160); } }
-        return json({ ok: true, sms: !!(this.env.TWILIO_VERIFY_SID || this.env.TWILIO_FROM), pay, subs: this.subReady(), transfers: this.payReady() });
+        return json({ ok: true, sms: !!(this.env.TWILIO_VERIFY_SID || this.env.TWILIO_FROM), mail: this.mailReady(), resetSms: this.smsLinkReady(), pay, subs: this.subReady(), transfers: this.payReady() });
       }
       if (path === '/v1/pay/return') return new Response('<!doctype html><meta name=viewport content="width=device-width,initial-scale=1"><body style="margin:0;background:#000;color:#fff;font:600 18px system-ui;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center;padding:24px;box-sizing:border-box">Done - go back to Lockedintool to see your payment.</body>', { headers: { 'content-type': 'text/html; charset=utf-8' } });
       if (path === '/v1/delete') return this.deletePage(req, url);
       if (path === '/v1/login/salt') return this.loginSalt(url.searchParams.get('u') || '');
+      if (path === '/v1/reset') return this.resetPage(req, url);
+      if (path === '/v1/reset/options') return this.resetOptions(url.searchParams.get('u') || '', req.headers.get('cf-connecting-ip') || '');
       const body = req.method === 'POST' ? await req.json().catch(() => ({})) : {};
       if (path === '/v1/register') return this.register(body, req.headers.get('cf-connecting-ip') || '');
       if (path === '/v1/login') return this.login(body);
+      if (path === '/v1/reset/start') return this.resetStart(body, req.headers.get('cf-connecting-ip') || '');
       const tok = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
       const me = await this.userByToken(tok);
       const tomb = !me && tok ? this.one('SELECT why FROM tombs WHERE tok = ?', await sha('tok|' + tok)) : null;
@@ -180,8 +191,13 @@ export class Hub {
       if (path === '/v1/reports') return this.reportsList(me);
       if (path === '/v1/reports/act') return this.reportAct(me, body);
       if (path === '/v1/auth/set') return this.authSet(me, body);
+      if (path === '/v1/auth/mk') return this.authMk(me, body);
+      if (path === '/v1/recovery/get') return json(this.recoveryView(me));
+      if (path === '/v1/recovery/start') return this.recoveryStart(me, body);
+      if (path === '/v1/recovery/verify') return this.recoveryVerify(me, body);
+      if (path === '/v1/recovery/remove') { const k = body.kind === 'phone' ? 'rphone' : 'remail'; this.sql.exec(`UPDATE users SET ${k} = NULL WHERE id = ?`, me.id); return json(this.recoveryView(this.one('SELECT * FROM users WHERE id = ?', me.id))); }
       if (path === '/v1/backup/set') return this.backupSet(me, body);
-      if (path === '/v1/backup/get') return json({ backup: me.backup ? JSON.parse(me.backup) : null, keybox: me.keybox ? JSON.parse(me.keybox) : null, bksalt: me.bksalt || '' });
+      if (path === '/v1/backup/get') return json({ backup: me.backup ? JSON.parse(me.backup) : null, keybox: me.keybox ? JSON.parse(me.keybox) : null, bksalt: me.bksalt || '', mkbox: me.mkbox ? JSON.parse(me.mkbox) : null });
       if (path === '/v1/logout') { this.sql.exec('UPDATE users SET token = ? WHERE id = ?', await sha('tok|' + rand(32)), me.id); return json({ ok: true }); }
       if (path === '/v1/account/delete-start') return this.deleteStart(me, body);
       if (path === '/v1/account/delete') return json({ error: 'use-link' }, 400);   // only through the link + code (owner)
@@ -506,14 +522,149 @@ export class Hub {
     const token = rand(32);
     this.sql.exec('UPDATE users SET token = ? WHERE id = ?', await sha('tok|' + token), me.id);
     for (const ws of this.ctx.getWebSockets(me.id)) { try { ws.close(4002, 'signed-in-elsewhere'); } catch (e) {} }   // the phone it was on is signed out
-    return json({ id: me.id, token, name: me.name || '', username: me.username || '', bksalt: me.bksalt || '', keybox: me.keybox ? JSON.parse(me.keybox) : null, backup: me.backup ? JSON.parse(me.backup) : null });
+    return json({ id: me.id, token, name: me.name || '', username: me.username || '', bksalt: me.bksalt || '', keybox: me.keybox ? JSON.parse(me.keybox) : null, backup: me.backup ? JSON.parse(me.backup) : null,
+      mkbox: me.mkbox ? JSON.parse(me.mkbox) : null, mk: me.rewrap && me.mkspare ? me.mkspare : '' });
   }
   authSet(me, b) {
     if (me.pw) return json({ error: 'has-password' }, 409);
     const auth = String(b.auth || ''), pwsalt = String(b.pwsalt || ''), bksalt = String(b.bksalt || '');
     if (auth.length < 20 || !/^[A-Za-z0-9_-]{16,40}$/.test(pwsalt) || !/^[A-Za-z0-9_-]{16,40}$/.test(bksalt)) return json({ error: 'bad' }, 400);
     const kb = b.keybox && typeof b.keybox === 'object' ? JSON.stringify({ box: String(b.keybox.box || '').slice(0, 4000), iv: String(b.keybox.iv || '').slice(0, 40) }) : null;
-    return sha('pw|' + auth).then(h => { this.sql.exec('UPDATE users SET pw = ?, pwsalt = ?, bksalt = ?, keybox = ? WHERE id = ?', h, pwsalt, bksalt, kb, me.id); return json({ ok: true }); });
+    const mb = this.sealed(b.mkbox), ms = /^[A-Za-z0-9+/=_-]{40,60}$/.test(String(b.mkspare || '')) ? String(b.mkspare) : null;
+    return sha('pw|' + auth).then(h => { this.sql.exec('UPDATE users SET pw = ?, pwsalt = ?, bksalt = ?, keybox = ?, mkbox = ?, mkspare = ?, rewrap = 0 WHERE id = ?', h, pwsalt, bksalt, kb, mb, ms, me.id); return json({ ok: true }); });
+  }
+  sealed(x) { return x && typeof x === 'object' && x.box && x.iv ? JSON.stringify({ box: String(x.box).slice(0, 4000), iv: String(x.iv).slice(0, 40) }) : null; }
+  // The account key locked again with your (new) password; a phone from before this sends its spare and key box too.
+  authMk(me, b) {
+    if (!me.pw) return json({ error: 'no-password' }, 409);
+    const mb = this.sealed(b.mkbox); if (!mb) return json({ error: 'bad' }, 400);
+    const sets = ['mkbox = ?', 'rewrap = 0'], vals = [mb];
+    if (/^[A-Za-z0-9+/=_-]{40,60}$/.test(String(b.mkspare || '')) && !me.mkspare) { sets.push('mkspare = ?'); vals.push(String(b.mkspare)); }
+    const kb = this.sealed(b.keybox); if (kb) { sets.push('keybox = ?'); vals.push(kb); }
+    this.sql.exec('UPDATE users SET ' + sets.join(', ') + ' WHERE id = ?', ...vals, me.id);
+    return json({ ok: true });
+  }
+
+  // ---- Private details + password reset (owner) ----
+  // Your email / phone: only for you to see (the server never shows them to anyone else).
+  recoveryView(u) { return { email: u.remail || '', phone: u.rphone || '', emailReady: this.mailReady(), smsReady: this.smsLinkReady() }; }
+  mailReady() { return !!(this.env.RESEND_API_KEY && this.env.MAIL_FROM); }
+  smsLinkReady() { return !!(this.env.TWILIO_ACCOUNT_SID && this.env.TWILIO_AUTH_TOKEN && this.env.TWILIO_FROM); }
+  async sendMail(to, subject, text) {
+    if (!this.mailReady()) return false;
+    const html = '<div style="font:15px/1.6 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#111;max-width:480px">' + String(text).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])).replace(/(https:\/\/\S+)/g, '<a href="$1" style="display:inline-block;margin:6px 0;padding:12px 18px;background:#000;color:#fff;border-radius:10px;text-decoration:none;font-weight:700">Open the link</a>').replace(/\n/g, '<br>') + '</div>';
+    const r = await fetch((this.env.RESEND_BASE || 'https://api.resend.com') + '/emails', { method: 'POST', headers: { authorization: 'Bearer ' + this.env.RESEND_API_KEY, 'content-type': 'application/json' },
+      body: JSON.stringify({ from: this.env.MAIL_FROM, to: [to], subject, text, html }) }).catch(() => null);
+    return !!(r && r.ok);
+  }
+  async sendText(to, body) {
+    if (!this.smsLinkReady()) return false;
+    const r = await this.twilio('/2010-04-01/Accounts/' + this.env.TWILIO_ACCOUNT_SID + '/Messages.json', { From: this.env.TWILIO_FROM, To: to, Body: body }).catch(() => null);
+    return !!(r && r.ok);
+  }
+  limit(k, max) {
+    const hour = Math.floor(Date.now() / 3600000), r = this.one('SELECT * FROM rlimit WHERE k = ?', k), n = r && r.hour === hour ? r.n + 1 : 1;
+    this.sql.exec('INSERT OR REPLACE INTO rlimit (k, hour, n) VALUES (?, ?, ?)', k, hour, n);
+    return n > max;
+  }
+  // Adding an email / phone: Lockedintool sends a 6-digit code there; it's saved once you type the code back.
+  async recoveryStart(me, b) {
+    const kind = b.kind === 'phone' ? 'phone' : 'email', now = Date.now();
+    let value = String(b.value || '').trim();
+    if (kind === 'email') { value = value.toLowerCase(); if (!/^[^\s@]{1,64}@[^\s@]{1,190}\.[a-z]{2,24}$/.test(value)) return json({ error: 'email' }, 400); if (!this.mailReady()) return json({ error: 'mail-not-ready' }, 503); }
+    else { value = value.replace(/[^\d+]/g, ''); if (!PHONE.test(value)) return json({ error: 'phone' }, 400); if (!this.smsLinkReady()) return json({ error: 'sms-not-ready' }, 503); }
+    const c = this.one('SELECT * FROM rcodes WHERE uid = ? AND kind = ?', me.id, kind);
+    if (c && now - c.sent < 30000) return json({ error: 'wait', wait: Math.ceil((30000 - (now - c.sent)) / 1000) }, 429);
+    if (this.limit('rc|' + me.id, 8)) return json({ error: 'too-many' }, 429);
+    const code = String(100000 + (crypto.getRandomValues(new Uint32Array(1))[0] % 900000));
+    const msg = 'Your Lockedintool code is ' + code + '. It works for 10 minutes. Never share it.';
+    const ok = kind === 'email' ? await this.sendMail(value, 'Your Lockedintool code: ' + code, msg + '\nYou asked to add this email to your Lockedintool account. If this wasn’t you, ignore this email.') : await this.sendText(value, msg);
+    if (!ok) return json({ error: 'send-failed' }, 502);
+    this.sql.exec('INSERT OR REPLACE INTO rcodes (uid, kind, value, code, exp, tries, sent) VALUES (?, ?, ?, ?, ?, 0, ?)', me.id, kind, value, await sha('rc|' + me.id + '|' + kind + '|' + code), now + 600000, now);
+    return json({ ok: true });
+  }
+  async recoveryVerify(me, b) {
+    const kind = b.kind === 'phone' ? 'phone' : 'email', code = String(b.code || '').replace(/\D/g, '');
+    const c = this.one('SELECT * FROM rcodes WHERE uid = ? AND kind = ?', me.id, kind);
+    if (!c || c.exp < Date.now()) return json({ error: 'expired' }, 400);
+    if (c.tries >= 5) return json({ error: 'too-many' }, 429);
+    this.sql.exec('UPDATE rcodes SET tries = tries + 1 WHERE uid = ? AND kind = ?', me.id, kind);
+    if (c.code !== await sha('rc|' + me.id + '|' + kind + '|' + code)) return json({ error: 'wrong', left: Math.max(0, 4 - c.tries) }, 400);
+    this.sql.exec('DELETE FROM rcodes WHERE uid = ? AND kind = ?', me.id, kind);
+    this.sql.exec(`UPDATE users SET ${kind === 'phone' ? 'rphone' : 'remail'} = ? WHERE id = ?`, c.value, me.id);
+    return json(this.recoveryView(this.one('SELECT * FROM users WHERE id = ?', me.id)));
+  }
+  maskEmail(e) { const [a, d] = String(e).split('@'); return (a.length <= 2 ? a[0] + '•' : a.slice(0, 2) + '•••') + '@' + d; }
+  maskPhone(p) { return String(p).slice(0, 3) + ' ••• ••' + String(p).slice(-2); }
+  // Forgot password: which ways this account can be reached (hidden, only partly shown).
+  async resetOptions(u, ip) {
+    if (this.limit('ro|' + await sha('ip|' + ip), 30)) return json({ error: 'too-many' }, 429);
+    const me = this.one('SELECT * FROM users WHERE username = ? AND pw IS NOT NULL', String(u).toLowerCase().replace(/^@/, '').slice(0, 30));
+    const out = { email: '', phone: '' };
+    if (me && me.remail && this.mailReady()) out.email = this.maskEmail(me.remail);
+    if (me && me.rphone && this.smsLinkReady()) out.phone = this.maskPhone(me.rphone);
+    return json(out);
+  }
+  async resetStart(b, ip) {
+    const now = Date.now(), u = String(b.username || '').toLowerCase().replace(/^@/, '').slice(0, 30);
+    if (this.limit('rs|' + await sha('ip|' + ip), 10) || this.limit('rsu|' + u, 5)) return json({ error: 'too-many' }, 429);
+    const me = u && this.one('SELECT * FROM users WHERE username = ? AND pw IS NOT NULL', u);
+    if (!me) return json({ ok: true });   // never says whether the account exists
+    const via = ['email', 'phone', 'both'].includes(b.via) ? b.via : 'both';
+    this.sql.exec('DELETE FROM resets WHERE uid = ? OR exp < ?', me.id, now);
+    const token = rand(24);
+    this.sql.exec('INSERT INTO resets (token, uid, exp) VALUES (?, ?, ?)', await sha('rs|' + token), me.id, now + 30 * 60000);
+    const link = (this.origin || '') + '/v1/reset?t=' + token;
+    const text = 'You asked to reset the password of your Lockedintool account @' + me.username + '. To confirm, open this link, put in your new password, confirm it and tap Apply change:\n' + link + '\nThe link works for 30 minutes. If this wasn’t you, ignore this message - your password stays the same.';
+    let sent = 0;
+    if ((via === 'email' || via === 'both') && me.remail && await this.sendMail(me.remail, 'Reset your Lockedintool password', text)) sent++;
+    if ((via === 'phone' || via === 'both') && me.rphone && await this.sendText(me.rphone, 'Lockedintool: reset your password for @' + me.username + ' here (30 min): ' + link + ' - not you? Ignore this.')) sent++;
+    return json({ ok: true, sent });
+  }
+  // The link's page: new password + confirm -> Apply change. The page works out the sign-in key itself (the same way the
+  // app does), so the new password never travels to Lockedintool either.
+  async resetPage(req, url) {
+    const page = (inner) => new Response('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Reset password</title><style>' +
+      ':root{color-scheme:dark}body{margin:0;background:#000;color:#fff;font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}main{max-width:420px;margin:0 auto;padding:48px 20px}' +
+      'h1{font-size:22px;margin:0 0 10px}p{color:#bbb;margin:0 0 16px}label{display:block;font-size:13px;font-weight:700;color:#999;margin:14px 0 6px}input{width:100%;box-sizing:border-box;padding:14px;border-radius:12px;border:1px solid #444;background:#000;color:#fff;font-size:16px}' +
+      'button{width:100%;margin-top:18px;padding:15px;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;background:#fff;color:#000}button[disabled]{opacity:.45}.err{color:#ff6b60;min-height:20px;margin-top:10px;font-size:14px}</style></head><body><main>' + inner + '</main></body></html>',
+      { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'x-frame-options': 'DENY', 'referrer-policy': 'no-referrer' } });
+    const esc = v => String(v).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const now = Date.now();
+    if (req.method === 'POST') {
+      const b = await req.json().catch(() => ({}));
+      const r = this.one('SELECT * FROM resets WHERE token = ?', await sha('rs|' + String(b.t || '').slice(0, 40)));
+      if (!r || r.exp < now) return json({ error: 'expired' }, 400);
+      const auth = String(b.auth || ''), pwsalt = String(b.pwsalt || ''), bksalt = String(b.bksalt || '');
+      if (auth.length < 20 || !/^[A-Za-z0-9_-]{16,40}$/.test(pwsalt) || !/^[A-Za-z0-9_-]{16,40}$/.test(bksalt)) return json({ error: 'bad' }, 400);
+      const me = this.one('SELECT * FROM users WHERE id = ?', r.uid); if (!me) return json({ error: 'expired' }, 400);
+      this.sql.exec('DELETE FROM resets WHERE uid = ?', me.id);
+      // With the spare, the key box and chat backup stay (the next log in locks the key with the new password);
+      // without one (an account from before) they can't be opened any more.
+      const keep = !!me.mkspare;
+      this.sql.exec('UPDATE users SET pw = ?, pwsalt = ?, bksalt = ?, token = ?, mkbox = NULL, rewrap = ?' + (keep ? '' : ', keybox = NULL, backup = NULL') + ' WHERE id = ?',
+        await sha('pw|' + auth), pwsalt, bksalt, await sha('tok|' + rand(32)), keep ? 1 : 0, me.id);
+      this.sql.exec('DELETE FROM logins WHERE k = ?', me.username || '');
+      for (const ws of this.ctx.getWebSockets(me.id)) { try { ws.close(4004, 'password-changed'); } catch (e) {} }
+      return json({ ok: true, username: me.username || '' });
+    }
+    const t = String(url.searchParams.get('t') || '').slice(0, 40);
+    const r = t && this.one('SELECT * FROM resets WHERE token = ?', await sha('rs|' + t));
+    const me = r && r.exp >= now && this.one('SELECT username FROM users WHERE id = ?', r.uid);
+    if (!me) return page('<h1>This link has expired</h1><p>Start again in Lockedintool: Log in &gt; Forgot password?</p>');
+    return page('<div id="f"><h1>Reset your password</h1><p>For @' + esc(me.username || '') + '. Put in your new password, confirm it and tap Apply change.</p>' +
+      '<label>New password</label><input id="a" type="password" autocomplete="new-password" maxlength="128" placeholder="At least 8 characters">' +
+      '<label>Confirm new password</label><input id="b" type="password" autocomplete="new-password" maxlength="128">' +
+      '<div class="err" id="e"></div><button id="go" disabled>Apply change</button></div>' +
+      '<script>(function(){var T=' + JSON.stringify(t) + ',I=' + LIT_ITER + ',a=document.getElementById("a"),b=document.getElementById("b"),e=document.getElementById("e"),go=document.getElementById("go");' +
+      'function chk(){var m="";if(a.value&&a.value.length<8)m="The password needs at least 8 characters.";else if(b.value&&a.value!==b.value)m="The passwords don’t match.";e.textContent=m;go.disabled=!!m||a.value.length<8||a.value!==b.value;}a.oninput=chk;b.oninput=chk;' +
+      'function rnd(n){var u=crypto.getRandomValues(new Uint8Array(n)),s="";for(var i=0;i<u.length;i++)s+=String.fromCharCode(u[i]);return btoa(s).replace(/\\+/g,"-").replace(/\\//g,"_").replace(/=+$/,"");}' +
+      'function b64(buf){var u=new Uint8Array(buf),s="";for(var i=0;i<u.length;i++)s+=String.fromCharCode(u[i]);return btoa(s);}' +
+      'go.onclick=async function(){go.disabled=true;go.textContent="Applying…";try{var ps=rnd(18),bs=rnd(18),base=await crypto.subtle.importKey("raw",new TextEncoder().encode(a.value),"PBKDF2",false,["deriveBits"]);' +
+      'var bits=await crypto.subtle.deriveBits({name:"PBKDF2",hash:"SHA-256",salt:new TextEncoder().encode("lit-auth|"+ps),iterations:I},base,256);' +
+      'var r=await fetch(location.pathname,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({t:T,auth:b64(bits),pwsalt:ps,bksalt:bs})});var j=await r.json().catch(function(){return{}});' +
+      'if(!r.ok)throw new Error(j.error||"x");document.getElementById("f").innerHTML="<h1>Your password is changed</h1><p>Go back to Lockedintool and log in with @"+(j.username||"")+" and your new password. You can close this page.</p>";}' +
+      'catch(x){go.textContent="Apply change";go.disabled=false;e.textContent=x.message==="expired"?"This link has expired - start again in Lockedintool.":"Couldn’t change it - check your connection and try again.";}};})();</script>');
   }
   backupSet(me, b) {
     const media = String(b.media || ''), iv = String(b.iv || '');
@@ -534,7 +685,10 @@ export class Hub {
     this.sql.exec('INSERT INTO delreq (token, uid, code, exp, tries, ok, reason, note) VALUES (?, ?, ?, ?, 0, 0, ?, ?)',
       token, me.id, await sha('del|' + token + '|' + code), now + 30 * 60000, reasons.includes(b.reason) ? b.reason : 'other', String(b.note || '').slice(0, 300));
     const link = (this.origin || '') + '/v1/delete?t=' + token;
-    this.alert(me.id, 'You asked to delete your Lockedintool account. To confirm, open this link and enter the code ' + code + ':\n' + link + '\nThe link and code work for 30 minutes. If this wasn’t you, ignore this message - your account stays.');
+    const dtext = 'You asked to delete your Lockedintool account. To confirm, open this link and enter the code ' + code + ':\n' + link + '\nThe link and code work for 30 minutes. If this wasn’t you, ignore this message - your account stays.';
+    this.alert(me.id, dtext);
+    if (me.remail) await this.sendMail(me.remail, 'Confirm deleting your Lockedintool account', dtext);
+    if (me.rphone) await this.sendText(me.rphone, 'Lockedintool: to delete your account open ' + link + ' and enter the code ' + code + ' (30 min). Not you? Ignore this.');
     return json({ ok: true, exp: now + 30 * 60000 });
   }
   async deletePage(req, url) {
@@ -676,6 +830,7 @@ export class Hub {
   // Delete account (owner; POPIA): everything Lockedintool's server keeps about you goes. Payment records stay, as
   // the law requires (they never hold your card or bank login).
   deleteUser(uid, why = 'deleted') {
+    this.sql.exec('DELETE FROM rcodes WHERE uid = ?', uid); this.sql.exec('DELETE FROM resets WHERE uid = ?', uid);
     for (const m of this.sql.exec('SELECT gid FROM gmembers WHERE uid = ?', uid).toArray()) {
       this.sql.exec('DELETE FROM gmembers WHERE gid = ? AND uid = ?', m.gid, uid);
       const left = this.memberIds(m.gid);

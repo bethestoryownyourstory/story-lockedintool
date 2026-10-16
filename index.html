@@ -2410,6 +2410,14 @@
   #story-profile .up-cell img{ width:100%; height:100%; object-fit:cover; display:block; }
   #story-profile .up-cell-v{ position:absolute; right:6px; top:5px; font-size:11px; color:#fff; text-shadow:0 0 3px #000; }
   #story-profile .pf-ed-note{ font-size:12px; color:var(--pf-muted); line-height:1.4; padding:2px 2px 10px; }
+  #story-profile .pf-ed-sub{ font-size:12px; font-weight:700; color:var(--pf-muted); letter-spacing:0.4px; text-transform:uppercase; margin:22px 2px 8px; }
+  #story-profile .pf-pr-body input{ width:100%; box-sizing:border-box; padding:13px 14px; border-radius:12px; border:1px solid var(--pf-hair); background:transparent; color:var(--pf-fg); font:inherit; font-size:15px; outline:none; margin-top:6px; }
+  #story-profile .pf-pr-body input.pf-pr-code{ font-size:22px; letter-spacing:6px; text-align:center; }
+  #story-profile .pf-pr-body button{ display:block; width:100%; margin-top:14px; padding:13px; border-radius:12px; border:none; background:var(--pf-fg); color:var(--pf-bg); font:inherit; font-size:15px; font-weight:700; }
+  #story-profile .pf-pr-body button.pf-pr-alt{ background:transparent; color:var(--pf-muted); border:1px solid var(--pf-hair); }
+  #story-profile .pf-pr-body button[disabled]{ opacity:0.45; }
+  #story-profile .pf-pr-cur{ font-size:16px; font-weight:600; padding:6px 2px 2px; word-break:break-all; }
+  #story-profile .pf-pr-msg{ min-height:18px; margin-top:10px; font-size:13px; color:#ff6b60; }
   /* Viewing a status / post: the whole window, black. */
   #story-profile .up-viewer{ position:fixed; inset:0; z-index:6; background:#000; }
   #story-profile .up-v-media{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; }
@@ -3381,6 +3389,18 @@
   .lit-auth button.lit-auth-link{ background:transparent; color:#8b8b92; padding:8px; margin-top:14px; font-weight:600; font-size:13px; }
   .lit-auth .lit-auth-msg{ min-height:18px; margin-top:12px; font-size:13px; color:#ff6b60; }
   .lit-auth .lit-auth-note{ margin-top:16px; font-size:12px; line-height:1.5; color:#8b8b92; }
+  .lit-auth button.lit-auth-save{ display:flex; align-items:center; justify-content:space-between; gap:14px; text-align:left; background:transparent; color:#ffffff; border:1px solid #333333; margin-top:16px; padding:12px 14px; font-weight:600; }
+  .lit-auth .lit-auth-save-t{ display:flex; flex-direction:column; gap:2px; min-width:0; }
+  .lit-auth .lit-auth-save-t b{ font-size:14px; font-weight:700; }
+  .lit-auth .lit-auth-save-t small{ font-size:12px; color:#8b8b92; font-weight:500; }
+  .lit-auth .lit-auth-save i{ flex-shrink:0; width:42px; height:24px; border-radius:12px; background:#333333; position:relative; }
+  .lit-auth .lit-auth-save i::after{ content:''; position:absolute; top:3px; left:3px; width:18px; height:18px; border-radius:50%; background:#8b8b92; }
+  .lit-auth .lit-auth-save.on i{ background:#ffffff; }
+  .lit-auth .lit-auth-save.on i::after{ left:21px; background:#000000; }
+  .lit-auth button.lit-auth-way{ display:flex; align-items:center; justify-content:space-between; background:transparent; color:#ffffff; border:1px solid #333333; margin-top:10px; text-align:left; font-weight:600; }
+  .lit-auth button.lit-auth-way::after{ content:''; width:16px; height:16px; border-radius:50%; border:2px solid #8b8b92; box-sizing:border-box; flex-shrink:0; }
+  .lit-auth button.lit-auth-way.on{ border-color:#ffffff; }
+  .lit-auth button.lit-auth-way.on::after{ border-color:#ffffff; background:radial-gradient(circle, #ffffff 0 3.5px, transparent 4px); }
   .community-report-btn{ margin-left:auto; }
   .community-comment-report{ border:none; background:transparent; color:var(--muted); font:inherit; font-size:10px; padding:0 0 0 6px; cursor:pointer; }
   /* Community (owner): Your Community | Publics community, side by side like Layouts' Dashboard | Pages. */
@@ -7764,7 +7784,7 @@ function litAccountGone(why){
 }
 function delAccountForget(){
   ['story-msg-account', 'story-msg-peers', MSG_KEY, MSG_OUTBOX, 'story-profile', 'story-profile-stats', PF_LOCKS_KEY, 'story-posts', 'story-highlights', 'story-upost-queue',
-   'story-status-seen', 'story-status-remind', 'story-activity', 'story-calls', 'story-privacy', 'story-blocked', 'story-community', 'story-community-chats', 'story-community-always-mine', 'story-sub', 'story-photo-up']
+   'story-status-seen', 'story-status-remind', 'story-activity', 'story-calls', 'story-privacy', 'story-blocked', 'story-community', 'story-community-chats', 'story-community-always-mine', 'story-sub', 'story-photo-up', 'story-recovery', 'story-auth-locked']
     .forEach(k=>{ try{ localStorage.removeItem(k); }catch(e){} });
   msgChatsCache = null;
   if(NATIVE && window.StoryNative.removeProfilePhoto) try{ window.StoryNative.removeProfilePhoto(); }catch(e){}
@@ -7825,7 +7845,7 @@ function privacySettingsHTML(){
 // ---- Privacy Policy + Terms of Service (owner, under Information). Written from how Lockedintool really works; the
 //      owner's details: Lockedintool, lockedintool@gmail.com, no refunds (except where the law requires). Also reachable from the
 //      Subscription page (someone without a plan sees only that page, and must be able to read what they agree to).
-const LEGAL_UPDATED = '15 October 2026';
+const LEGAL_UPDATED = '16 October 2026';
 const LEGAL = {
   'legal-privacy': { title:'Privacy Policy', sections:[
     ['Who we are', [
@@ -7843,12 +7863,13 @@ const LEGAL = {
       'Call history: calls made with Lockedintool, and contact names if you allow contacts.',
       'Removing Lockedintool from your phone removes all of this.' ]],
     ['Kept on our server', [
-      'Your account: your @username and a key made from your password on your phone (only a scrambled copy is kept - your password itself never leaves your phone), a locked backup of your chats and your message key (locked with your password, so only you can open it - we can’t), a random ID, the public half of your encryption key, your name, @username, profile picture, bio and About (so people can find you and see who you are - a private profile can’t be found and only shows to people you follow, message or share a group with) and your privacy choices (who can see your profile, who can message and call you and who can see your status).',
+      'Your account: your @username and a key made from your password on your phone (only a scrambled copy is kept - your password itself never leaves your phone), a locked backup of your chats and your message key (locked with an account key; that key is kept locked with your password, and we keep a spare of it so a password reset can bring your chats back), a random ID, the public half of your encryption key, your name, @username, profile picture, bio and About (so people can find you and see who you are - a private profile can’t be found and only shows to people you follow, message or share a group with) and your privacy choices (who can see your profile, who can message and call you and who can see your status).',
       'Updates: who you follow and who follows you, the posts you share (their title, text, pictures and videos - shown in the feed and on your profile to everyone who can see your profile), your statuses (deleted after 24 hours with their hearts and comments; only seen by who your status setting allows), and the hearts and comments you leave on posts and statuses. Delete a post any time from its ⋮.',
       'Messages and calls: locked messages waiting for a phone that is offline (deleted once delivered), and whether a message was delivered, seen or read. Calls go straight from phone to phone; our server only helps them connect.',
       'Community: groups you create or join, and what you post, like or comment in public groups - public groups are visible to everyone. Private group messages and Your Community’s chat are end-to-end encrypted.',
       'Payments: your plan, its price, status and dates, and the payment reference from our payment partner. If you add a bank account to receive money, it is kept to pay you - anyone viewing it sees only the last 3 digits, and people sending you money never see it.',
       'Phone number: only if Lockedintool ever needs to verify something, and then only kept as a scrambled (hashed) value - never used to find you.',
+      'Private details: the email and / or phone number you add in Edit profile (checked with a code first). They are never shown to anyone and never used to find you - only to send you a password reset link or a Delete account confirmation.',
       'Your internet address (IP) for a short time to stop abuse such as mass sign-ups.' ]],
     ['Who we share with', [
       'Stitch (our payment partner, a licensed South African payment provider) when you pay a plan or send money - you pay on Stitch’s or your bank’s own page; we never see your card or banking login.',
@@ -7856,7 +7877,8 @@ const LEGAL = {
       'TradingView: the chart is TradingView’s own website inside Lockedintool; signing in to TradingView is between you and TradingView.',
       'binlist.net: only the first 8 digits of a card you add, to show its bank’s name.',
       'Cloudflare (runs our servers) and GitHub (delivers app updates).',
-      'Twilio, only if a phone number is ever verified by text.',
+      'Twilio, to send text messages (codes and password reset links) to the phone number you add.',
+      'Resend, to send emails (codes, password reset links and Delete account confirmations) to the email you add.',
       'Card scanning runs on your phone (Google ML Kit) and works offline - the pictures are not sent anywhere.',
       'We share information with authorities only when the law requires it.' ]],
     ['Permissions Lockedintool asks for', [
@@ -8117,6 +8139,7 @@ window.storyDialClear = function(){ state.station3DialInput = ''; renderDevice()
 window.storyReset = function(){
   state.station3Open = false; state.station3DialpadOpen = false;
   renderDevice();
+  if(!/[?&]s3=/.test(location.search)){ litLockNow(); litAuthGate(); }   // the Pages closed: log in again next time if you didn't save your login info
 };
 document.addEventListener('click', (e)=>{
   if(!NATIVE || !document.body.classList.contains('s3-only')) return;
@@ -8334,6 +8357,14 @@ window.storyProfileOnly = function(){
       <div class="pf-ed-row" data-pf="ed-bio"><span>Bio</span><span class="pf-ed-val">${p.bio ? escText(p.bio) : 'Nothing here yet.'}</span></div>
       <div class="pf-ed-row" data-pf="ed-about"><span>About</span><span class="pf-ed-val">${escText(p.about)}</span></div>
       <div class="pf-ed-note">About shows in Updates, to people who don’t follow you yet: who you are or what you do.</div>
+      <div class="pf-ed-sub">Private details</div>
+      <div class="pf-ed-row" data-pf="ed-remail"><span>Email</span><span class="pf-ed-val"></span></div>
+      <div class="pf-ed-row" data-pf="ed-rphone"><span>Phone number</span><span class="pf-ed-val"></span></div>
+      <div class="pf-ed-note">Only Lockedintool sees these - they never show to anyone. They’re used if you forget your password or want to delete your account.</div>
+    </div>
+    <div class="pf-scroll pf-private" hidden>
+      <div class="pf-ed-head"><button class="pf-ed-back" data-pf="pr-back" aria-label="Back">‹</button><div class="pf-ed-title">Email</div></div>
+      <div class="pf-pr-body"></div>
     </div>
     <div class="pf-scroll pf-privacy" hidden>
       <div class="pf-ed-head"><button class="pf-ed-back" data-pf="pv-back" aria-label="Back">‹</button><div class="pf-ed-title">Profile privacy</div></div>
@@ -8527,7 +8558,13 @@ window.storyProfileOnly = function(){
     else if(k === 'menu-privacy'){ el.querySelector('.pf-menu').hidden = true; main.hidden = true; const pv = el.querySelector('.pf-privacy'); pv.hidden = false; pv.scrollTop = 0; pvRender(); }
     else if(k === 'pv-back'){ el.querySelector('.pf-privacy').hidden = true; main.hidden = false; }
     else if(k === 'pv-set'){ const p = storyPrivacy(); p.profile = b.getAttribute('data-v') === 'private' ? 'private' : 'public'; setStoryPrivacy(p); pvRender(); msgFlush(); }
-    else if(k === 'edit'){ main.hidden = true; ed.hidden = false; ed.scrollTop = 0; }
+    else if(k === 'edit'){ main.hidden = true; ed.hidden = false; ed.scrollTop = 0; prFill(); prLoad(); }
+    else if(k === 'ed-remail' || k === 'ed-rphone') prOpen(k === 'ed-rphone' ? 'phone' : 'email');
+    else if(k === 'pr-back'){ el.querySelector('.pf-private').hidden = true; ed.hidden = false; prFill(); }
+    else if(k === 'pr-send') prSend();
+    else if(k === 'pr-verify') prVerify();
+    else if(k === 'pr-change'){ PR.step = 'enter'; prRender(); }
+    else if(k === 'pr-remove') prRemove();
     else if(k === 'edit-back'){ ed.hidden = true; main.hidden = false; }
     else if(k === 'photo-change') pickProfilePhoto();
     else if(k === 'photos-back'){ el.querySelector('.pf-photos').hidden = true; if(pfGridFor === 'create') crShow(); else if(pfGridFor === 'post'){ el.querySelector('.up-compose').hidden = false; cpRender(); } else ed.hidden = false; }
@@ -8746,8 +8783,63 @@ window.storyProfilePhotoChanged = function(){
   el.querySelectorAll('.pf-avatar').forEach(a=>{ a.innerHTML = src ? '<img alt="" src="' + src + '">' : PF_PHOTO_PLACEHOLDER; a.classList.toggle('has-photo', !!src); });
   el.querySelector('.pf-ed-remove').hidden = !src;
 };
-// Profile closed: next time it opens on the profile itself (not Edit profile or the picture).
-window.storyProfileReset = function(){
+// ---- Private details (owner): your email / phone number - only Lockedintool sees them, never shown to anyone. Used to
+// reset a forgotten password (and a copy of the Delete account link). Lockedintool sends a code there to check it's yours. ----
+const PR_KEY = 'story-recovery';
+const PR = { kind:'email', step:'view', value:'' };
+function prData(){ try{ return JSON.parse(localStorage.getItem(PR_KEY) || '{}') || {}; }catch(e){ return {}; } }
+function prSave(d){ try{ localStorage.setItem(PR_KEY, JSON.stringify({ email: d.email || '', phone: d.phone || '', emailReady: !!d.emailReady, smsReady: !!d.smsReady })); }catch(e){} }
+function prFill(){
+  const el = document.getElementById('story-profile'); if(!el) return; const d = prData();
+  const e = el.querySelector('[data-pf="ed-remail"] .pf-ed-val'), ph = el.querySelector('[data-pf="ed-rphone"] .pf-ed-val');
+  if(e) e.textContent = d.email || 'Add'; if(ph) ph.textContent = d.phone || 'Add';
+}
+async function prLoad(){ if(!litSignedIn()) return; try{ prSave(await msgApi('/v1/recovery/get')); prFill(); }catch(e){} }
+function prOpen(kind){
+  const el = document.getElementById('story-profile'); if(!el) return;
+  PR.kind = kind; PR.step = prData()[kind] ? 'view' : 'enter'; PR.value = '';
+  el.querySelector('.pf-editor').hidden = true; const pg = el.querySelector('.pf-private'); pg.hidden = false; pg.scrollTop = 0;
+  pg.querySelector('.pf-ed-title').textContent = kind === 'phone' ? 'Phone number' : 'Email';
+  prRender(); prLoad().then(()=>{ if(!pg.hidden && PR.step === 'view') prRender(); });
+}
+function prRender(){
+  const el = document.getElementById('story-profile'); if(!el) return;
+  const box = el.querySelector('.pf-pr-body'), d = prData(), ph = PR.kind === 'phone', cur = d[PR.kind];
+  const note = '<div class="pf-ed-note">Only Lockedintool sees your ' + (ph ? 'phone number' : 'email') + ' - it never shows to anyone. It’s used if you forget your password or want to delete your account.</div>';
+  if(PR.step === 'view' && cur) box.innerHTML = note + '<div class="pf-pr-cur">' + escText(cur) + '</div>' +
+    '<button data-pf="pr-change">Change ' + (ph ? 'phone number' : 'email') + '</button><button class="pf-pr-alt" data-pf="pr-remove">Remove</button><div class="pf-pr-msg"></div>';
+  else if(PR.step === 'code') box.innerHTML = '<div class="pf-ed-note">Lockedintool sent a 6-digit code to ' + escText(PR.value) + '. Type it here.</div>' +
+    '<input class="pf-pr-code" inputmode="numeric" maxlength="6" autocomplete="one-time-code"><button data-pf="pr-verify">Confirm</button><button class="pf-pr-alt" data-pf="pr-change">Use a different ' + (ph ? 'number' : 'email') + '</button><div class="pf-pr-msg"></div>';
+  else box.innerHTML = note + (ph ? '<input class="pf-pr-in" type="tel" inputmode="tel" autocomplete="tel" placeholder="+27 82 123 4567" maxlength="20">' : '<input class="pf-pr-in" type="email" inputmode="email" autocomplete="email" autocapitalize="none" spellcheck="false" placeholder="you@example.com" maxlength="254">') +
+    '<button data-pf="pr-send">Send code</button><div class="pf-pr-msg"></div>';
+  const inp = box.querySelector('input'); if(inp) setTimeout(()=>{ try{ inp.focus(); if(NATIVE && window.StoryNative.setTyping) window.StoryNative.setTyping(true); }catch(e){} }, 60);
+}
+function prSay(t){ const m = document.querySelector('#story-profile .pf-pr-msg'); if(m) m.textContent = t; }
+function prBusy(on, label){ const b = document.querySelector('#story-profile .pf-pr-body button'); if(b){ b.disabled = on; if(label) b.textContent = label; } }
+async function prSend(){
+  const inp = document.querySelector('#story-profile .pf-pr-in'); if(!inp) return;
+  let v = inp.value.trim(); const ph = PR.kind === 'phone';
+  if(ph){ v = v.replace(/[^\d+]/g, ''); if(/^0\d{9}$/.test(v)) v = '+27' + v.slice(1); if(!/^\+[1-9]\d{6,14}$/.test(v)){ prSay('Type the number with its country code, like +27 82 123 4567.'); return; } }
+  else if(!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(v)){ prSay('That email doesn’t look right.'); return; }
+  prBusy(true, 'Sending…'); prSay('');
+  try{ await msgApi('/v1/recovery/start', { kind: PR.kind, value: v }); PR.value = v; PR.step = 'code'; prRender(); }
+  catch(e){ prBusy(false, 'Send code'); prSay(e.code === 'mail-not-ready' ? 'Lockedintool can’t send emails yet - this works once Lockedintool’s email is set up.' : e.code === 'sms-not-ready' ? 'Lockedintool can’t send text messages yet - this works once Lockedintool’s text messages are set up.' : e.code === 'wait' ? 'Wait a few seconds and try again.' : e.code === 'too-many' ? 'Too many tries - try again later.' : e.code === 'email' ? 'That email doesn’t look right.' : e.code === 'phone' ? 'Type the number with its country code, like +27 82 123 4567.' : 'Couldn’t send the code - check your connection and try again.'); }
+}
+async function prVerify(){
+  const inp = document.querySelector('#story-profile .pf-pr-code'); if(!inp) return;
+  const code = inp.value.replace(/\D/g, ''); if(code.length !== 6){ prSay('Type the 6-digit code.'); return; }
+  prBusy(true, 'Checking…'); prSay('');
+  try{ prSave(await msgApi('/v1/recovery/verify', { kind: PR.kind, code })); PR.step = 'view'; prRender(); prFill(); showToast(PR.kind === 'phone' ? 'Phone number saved' : 'Email saved'); }
+  catch(e){ prBusy(false, 'Confirm'); prSay(e.code === 'wrong' ? 'That code isn’t right.' : e.code === 'expired' ? 'That code has expired - send a new one.' : e.code === 'too-many' ? 'Too many tries - send a new code.' : 'Couldn’t check the code - check your connection.'); }
+}
+async function prRemove(){
+  try{ prSave(await msgApi('/v1/recovery/remove', { kind: PR.kind })); PR.step = 'enter'; prRender(); prFill(); }
+  catch(e){ prSay('Couldn’t remove it - check your connection.'); }
+}
+// Profile closed: next time it opens on the profile itself (not Edit profile or the picture). If you chose not to save
+// your login info, closing it means logging in again next time (owner).
+window.storyProfileReset = function(){ pfResetView(); litLockNow(); };
+function pfResetView(){
   const el = document.getElementById('story-profile'); if(!el || PF_GAP_WINDOW) return;
   const ae = document.activeElement; if(ae && ae.closest && ae.closest('.pf-field')) ae.blur();
   el.querySelector('.pf-editor').hidden = true; el.querySelector('.pf-viewer').hidden = true; el.querySelector('.pf-photos').hidden = true; el.querySelector('.pf-field').hidden = true; el.querySelector('.pf-msgs').hidden = true;
@@ -8756,7 +8848,7 @@ window.storyProfileReset = function(){
   el.querySelector('.pf-updates').hidden = true; el.querySelector('.pf-person').hidden = true; UP.person = null;
   el.querySelector('.pf-updates .pf-msgs-search input').value = ''; UP.q = ''; UP.found = null;
   el.querySelector('.cr-pick').hidden = true;
-  el.querySelector('.pf-menu').hidden = true; el.querySelector('.pf-privacy').hidden = true; el.querySelector('.pf-reports').hidden = true;
+  el.querySelector('.pf-menu').hidden = true; el.querySelector('.pf-privacy').hidden = true; el.querySelector('.pf-reports').hidden = true; el.querySelector('.pf-private').hidden = true;
   el.querySelector('.up-compose').hidden = true; upClosePost(); fcsClose();
   const ms = el.querySelector('.pf-msgs .pf-msgs-search input'); if(ms){ ms.value = ''; } msgView.q = ''; msgView.menuFor = null;
   if(crRecording && NATIVE && window.StoryNative.createVideo) window.StoryNative.createVideo(false);
@@ -8764,15 +8856,15 @@ window.storyProfileReset = function(){
   crRecording = false; crClear(); el.querySelector('.cr-sheet').hidden = true; crCameraReady = false; clearTimeout(crWatch); crMode = null; crStatus('');
   el.classList.remove('pf-creating'); el.querySelector('.pf-create').hidden = true;
   const main = el.querySelector('.pf-home'); main.hidden = false; main.scrollTop = 0;
-};
+}
 // Profile and Messages share ONE window attached to Station 3 (same gap, line and scene): the app says which shows.
 window.storyS3Page = function(which){
   const el = document.getElementById('story-profile'); if(!el || PF_GAP_WINDOW) return;
   if(which !== 'create') crForStatus = false;
-  window.storyProfileReset();
+  pfResetView(); litS3Last = which;
   // Sign-up (owner): a new profile starts empty - before Profile, Messages, Updates or Create you choose your name
   // and @username. (Call history works without it.)
-  if(which !== 'calls' && !litSignedIn()){ el.querySelector('.pf-home').hidden = true; litAuthOpen(); return; }
+  if(which !== 'calls' && (!litSignedIn() || litLocked())){ el.querySelector('.pf-home').hidden = true; litAuthOpen(); return; }
   litAuthClose();
   if(which === 'create'){ el.querySelector('.pf-home').hidden = true; crShow(); return; }
   if(which === 'calls'){ el.querySelector('.pf-home').hidden = true; el.querySelector('.pf-calls').hidden = false; el.querySelector('.pf-calls').scrollTop = 0; renderCalls(); return; }
@@ -9773,7 +9865,8 @@ function msgConnect(){
   ws.onopen = ()=>{ msgWsOpen = true; msgWsTry = 0; clearInterval(msgPing); msgPing = setInterval(()=>{ try{ ws.send('{"t":"ping"}'); }catch(e){} }, 25000); msgFlush(); msgSyncProfile(); msgSyncGroups(); upFlush(); upReminder(); upLoad(); actRefreshSoon(); };
   ws.onmessage = e=>{ let m; try{ m = JSON.parse(e.data); }catch(err){ return; } msgOnServer(m).catch(()=>{}); };
   ws.onclose = e=>{ msgWsOpen = false; clearInterval(msgPing); if(e && (e.code === 4001 || e.code === 4003)){ msgWs = null; litAccountGone(e.code === 4003 ? 'banned' : 'deleted'); return; }
-    if(e && e.code === 4002){ msgWs = null; showToast('You logged in on another phone'); litSignedOut(); return; } if(msgWs === ws){ msgWs = null; msgRetry(); } };
+    if(e && e.code === 4002){ msgWs = null; showToast('You logged in on another phone'); litSignedOut(); return; }
+    if(e && e.code === 4004){ msgWs = null; showToast('Your password was changed - log in with your new password'); litSignedOut(); return; } if(msgWs === ws){ msgWs = null; msgRetry(); } };
   ws.onerror = ()=>{ try{ ws.close(); }catch(e){} };
 }
 function msgRetry(){ clearTimeout(msgWsTimer); if(!msgAccount()) return; msgWsTimer = setTimeout(msgConnect, Math.min(30000, 1000 * Math.pow(2, msgWsTry++))); }
@@ -16527,7 +16620,7 @@ function litSendToChat(chatId, files, after){
 // ---- Accounts (owner): Create your account / Log in first thing, for everyone; Log out (not deleting); and your chats
 // backed up LOCKED with your password so logging in on any phone brings them back. The password never leaves the
 // phone: two keys are worked out from it (PBKDF2) - one signs you in (only its hash is on the server), one locks the
-// backup and your message key (the server can't open either). ----
+// backup and your message key - through the account key (litMkNew), which Lockedintool keeps a spare of for resets. ----
 const LIT_ITER = 210000;
 function litRand(n){ return B64.to(crypto.getRandomValues(new Uint8Array(n))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
 async function litPwBase(pw){ return crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveBits', 'deriveKey']); }
@@ -16585,39 +16678,106 @@ async function litBackupRestore(bk, backup){
   for(const k of LIT_BACKUP_KEYS) if(j.data && j.data[k] != null) try{ localStorage.setItem(k, j.data[k]); }catch(e){}
 }
 // ---- The screens ----
-let litAuthMode = 'welcome', litAuthBusy = false, litAuthTemp = null;
+let litAuthMode = 'welcome', litAuthBusy = false, litAuthTemp = null, litAuthRemember = true, litS3Last = null, litForgot = { u:'', opts:null, via:'' };
+// ---- Save login info (owner): yes = log in once and Lockedintool stays signed in; no = every time you close any part of
+// Lockedintool (the Pages, or Station 3's Profile / Messages / Updates / Create), you log in again to use it. You stay in
+// your account meanwhile (messages still arrive). The password is checked on the phone (a hash of its sign-in key). ----
+const LIT_LOCK_KEY = 'story-auth-locked';
+function litLocked(){ const a = msgAccount(); if(!(a && a.token && a.pw && a.remember === false)) return false; try{ return localStorage.getItem(LIT_LOCK_KEY) === '1'; }catch(e){ return false; } }
+function litLockNow(){ const a = msgAccount(); if(a && a.token && a.pw && a.remember === false) try{ localStorage.setItem(LIT_LOCK_KEY, '1'); }catch(e){} }
+function litUnlockNow(){ try{ localStorage.removeItem(LIT_LOCK_KEY); }catch(e){} }
+async function litChk(auth){ return B64.to(await crypto.subtle.digest('SHA-256', new TextEncoder().encode('lit-chk|' + auth))); }
+async function litAccountSave(acct, extra, pw, pwsalt){
+  const a = Object.assign({ id: acct.id, token: acct.token, pw: true, mk: true }, extra || {});
+  a.remember = !!litAuthRemember;
+  if(!a.remember && pw && pwsalt){ a.pwsalt = pwsalt; a.chk = await litChk(await litAuthKey(pw, pwsalt)); }
+  setMsgAccount(a); litUnlockNow();
+}
+// The account key (owner: a password reset brings your chats back): one random key locks your message key and your chat
+// backup; it's kept locked with your password (mkbox), and Lockedintool keeps a spare (mkspare) for resets.
+async function litMkImport(b64){ return crypto.subtle.importKey('raw', B64.from(b64), { name:'AES-GCM' }, false, ['encrypt', 'decrypt']); }
+async function litMkNew(){ const b64 = B64.to(crypto.getRandomValues(new Uint8Array(32))); return { b64, key: await litMkImport(b64) }; }
+async function litKeysFromJwk(jwk){
+  const priv = await crypto.subtle.importKey('jwk', jwk, { name:'ECDH', namedCurve:'P-256' }, false, ['deriveBits']);
+  const pubKey = await crypto.subtle.importKey('jwk', { kty:jwk.kty, crv:jwk.crv, x:jwk.x, y:jwk.y, ext:true }, { name:'ECDH', namedCurve:'P-256' }, true, []);
+  return { priv, pub: B64.to(await crypto.subtle.exportKey('raw', pubKey)) };
+}
+// A phone signed in before the account key existed: move it over once (same message key - nothing changes for anyone).
+async function litMkMigrate(){
+  const a = msgAccount(); if(!litSignedIn() || a.mk) return;
+  try{
+    const bk = await litKeyGet('bk'); if(!bk) return;
+    const j = await msgApi('/v1/backup/get');
+    if(j.mkbox){ const mk = (await litOpen(bk, j.mkbox)).mk; await litKeyPut('bk', await litMkImport(mk)); setMsgAccount(Object.assign(msgAccount() || {}, { mk:true })); return; }
+    const mk = await litMkNew(), body = { mkbox: await litSeal(bk, { mk: mk.b64 }), mkspare: mk.b64 };
+    if(j.keybox) body.keybox = await litSeal(mk.key, await litOpen(bk, j.keybox));
+    else { const keys = await litNewKeys(mk.key); body.keybox = keys.keybox; await keysPut({ priv: keys.priv, pub: keys.pub }); await msgApi('/v1/me', { pub: keys.pub }); }
+    await msgApi('/v1/auth/mk', body);
+    await litKeyPut('bk', mk.key); setMsgAccount(Object.assign(msgAccount() || {}, { mk:true }));
+    litBackupAt = 0; litBackupNow();
+  }catch(e){}
+}
+if(MSG_ENGINE) setTimeout(litMkMigrate, 5000);
+// ---- The screens ----
+function litSaveRow(){
+  return '<button class="lit-auth-save' + (litAuthRemember ? ' on' : '') + '" data-auth="save-toggle" type="button"><span class="lit-auth-save-t"><b>Save login info</b><small>' +
+    (litAuthRemember ? 'You’ll stay logged in on this phone.' : 'You’ll log in every time you close Lockedintool.') + '</small></span><i></i></button>';
+}
 function litAuthOpen(mode){
   if(document.documentElement.classList.contains('story-widget')) return;
   const a = msgAccount();
-  litAuthMode = mode || (a && a.token && !a.pw ? 'setpw' : litAuthMode === 'login' || litAuthMode === 'signup' ? litAuthMode : 'welcome');
+  litAuthMode = mode || (a && a.token && !a.pw ? 'setpw' : litSignedIn() && litLocked() ? 'unlock' : ['login', 'signup', 'forgot', 'forgot2', 'forgot3'].includes(litAuthMode) ? litAuthMode : 'welcome');
+  if(litAuthMode === 'unlock') litAuthRemember = false;
   let el = document.querySelector('.lit-auth');
   if(!el){ el = document.createElement('div'); el.className = 'lit-auth'; (document.getElementById('story-profile') || document.body).appendChild(el);
     const typing = on=>{ if(NATIVE && window.StoryNative.setTyping) try{ window.StoryNative.setTyping(on); }catch(err){} };
     el.addEventListener('pointerdown', e=>{ if(e.target.closest('input')) typing(true); });
     el.addEventListener('focusin', e=>{ if(e.target.closest('input')) typing(true); });
     el.addEventListener('focusout', ()=>setTimeout(()=>{ const ae = document.activeElement; if(!(ae && ae.closest && ae.closest('.lit-auth input'))) typing(false); }, 60));
-    el.addEventListener('click', e=>{ const b = e.target.closest('[data-auth]'); if(b) litAuthAct(b.getAttribute('data-auth')); });
+    el.addEventListener('click', e=>{ const b = e.target.closest('[data-auth]'); if(b) litAuthAct(b.getAttribute('data-auth'), b); });
     el.addEventListener('input', e=>{ const u = e.target.closest('.lit-auth-user'); if(u){ const low = u.value.toLowerCase().replace(/\s+/g, '').replace(/^@/, ''); if(low !== u.value) u.value = low; } litAuthCheck(); });
     el.addEventListener('keydown', e=>{ if(e.key === 'Enter'){ e.preventDefault(); const go = el.querySelector('.lit-auth-go'); if(go && !go.disabled) go.click(); } });
   }
   const logo = '<img alt="" src="icon-192.png">';
   const p = profileData();
+  const forgotBtn = '<button class="lit-auth-link" data-auth="to-forgot">Forgot password?</button>';
   if(litAuthMode === 'welcome') el.innerHTML = '<div class="lit-auth-in">' + logo + '<h1>Welcome</h1><p>Create your account, or log in to the one you have.</p>' +
     '<button data-auth="to-signup">Create your account</button><button class="lit-auth-alt" data-auth="to-login">Log in</button></div>';
   else if(litAuthMode === 'login') el.innerHTML = '<div class="lit-auth-in">' + logo + '<h1>Log in</h1><p>Your @username and password.</p>' +
-    '<label>Username</label><div class="lit-auth-at"><span>@</span><input class="lit-auth-user" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="30"></div>' +
-    '<label>Password</label><input class="lit-auth-pw" type="password" autocomplete="current-password" maxlength="128">' +
-    '<div class="lit-auth-msg"></div><button class="lit-auth-go" data-auth="login" disabled>Log in</button><button class="lit-auth-link" data-auth="to-signup">Create an account instead</button></div>';
+    '<label>Username</label><div class="lit-auth-at"><span>@</span><input class="lit-auth-user" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="30" value="' + escText(litForgot.u || '') + '"></div>' +
+    '<label>Password</label><input class="lit-auth-pw" type="password" autocomplete="current-password" maxlength="128">' + litSaveRow() +
+    '<div class="lit-auth-msg"></div><button class="lit-auth-go" data-auth="login" disabled>Log in</button>' + forgotBtn + '<button class="lit-auth-link" data-auth="to-signup">Create an account instead</button></div>';
+  else if(litAuthMode === 'unlock') el.innerHTML = '<div class="lit-auth-in">' + logo + '<h1>Log in</h1><p>@' + escText(p.username || '') + ' - type your password to use Lockedintool.</p>' +
+    '<label>Password</label><input class="lit-auth-pw" type="password" autocomplete="current-password" maxlength="128">' + litSaveRow() +
+    '<div class="lit-auth-msg"></div><button class="lit-auth-go" data-auth="unlock" disabled>Log in</button>' + forgotBtn + '<button class="lit-auth-link" data-auth="unlock-logout">Log in to another account</button></div>';
+  else if(litAuthMode === 'forgot') el.innerHTML = '<div class="lit-auth-in">' + logo + '<h1>Reset your password</h1><p>Type your @username. Lockedintool sends a link to the private email or phone number on your account.</p>' +
+    '<label>Username</label><div class="lit-auth-at"><span>@</span><input class="lit-auth-user" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="30" value="' + escText(litForgot.u || (litSignedIn() ? p.username || '' : '')) + '"></div>' +
+    '<div class="lit-auth-msg"></div><button class="lit-auth-go" data-auth="forgot-next" disabled>Next</button><button class="lit-auth-link" data-auth="to-back">Back to Log in</button></div>';
+  else if(litAuthMode === 'forgot2'){
+    const o = litForgot.opts || {}, ways = [];
+    if(o.email) ways.push(['email', 'Email to ' + o.email]);
+    if(o.phone) ways.push(['phone', 'Text message to ' + o.phone]);
+    if(o.email && o.phone) ways.push(['both', 'Both']);
+    if(!litForgot.via && ways.length) litForgot.via = ways.length === 3 ? 'both' : ways[0][0];
+    el.innerHTML = '<div class="lit-auth-in">' + logo + '<h1>Reset your password</h1>' + (ways.length ?
+      '<p>Where should Lockedintool send the link for @' + escText(litForgot.u) + '?</p>' + ways.map(([k, l])=>'<button class="lit-auth-way' + (litForgot.via === k ? ' on' : '') + '" data-auth="way" data-v="' + k + '" type="button">' + escText(l) + '</button>').join('') +
+      '<div class="lit-auth-msg"></div><button class="lit-auth-go" data-auth="forgot-send">Send link</button>' :
+      '<p>Lockedintool can’t send a reset link for @' + escText(litForgot.u) + ' - the account has no private email or phone number yet (you add them in Profile > Edit profile > Private details), or Lockedintool can’t send there right now.</p>') +
+      '<button class="lit-auth-link" data-auth="to-back">Back to Log in</button></div>';
+  }
+  else if(litAuthMode === 'forgot3') el.innerHTML = '<div class="lit-auth-in">' + logo + '<h1>Check your ' + (litForgot.via === 'phone' ? 'messages' : litForgot.via === 'email' ? 'email' : 'email and messages') + '</h1>' +
+    '<p>If @' + escText(litForgot.u) + ' has that ' + (litForgot.via === 'phone' ? 'phone number' : litForgot.via === 'email' ? 'email' : 'email and phone number') + ', Lockedintool sent a link there. Open it, put in your new password, confirm it and tap Apply change. Then come back here and log in with it.</p>' +
+    '<p>The link works for 30 minutes. Your chats come back when you log in.</p><button data-auth="to-back">Back to Log in</button></div>';
   else el.innerHTML = '<div class="lit-auth-in">' + logo + '<h1>' + (litAuthMode === 'setpw' ? 'Protect your account' : 'Create your account') + '</h1>' +
     '<p>' + (litAuthMode === 'setpw' ? 'Choose a password. You’ll use it with your @username to log in on any phone.' : 'Choose the name and @username people will know you by, and a password to log in with.') + '</p>' +
     '<label>Name</label><input class="lit-auth-name" autocomplete="name" autocapitalize="words" maxlength="30" value="' + escText(p.name || '') + '">' +
     '<label>Username</label><div class="lit-auth-at"><span>@</span><input class="lit-auth-user" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="30" value="' + escText(p.username || '') + '"' + (litAuthMode === 'setpw' && p.username ? ' readonly' : '') + '></div>' +
     '<label>Password</label><input class="lit-auth-pw" type="password" autocomplete="new-password" maxlength="128" placeholder="At least 8 characters">' +
-    '<label>Confirm password</label><input class="lit-auth-pw2" type="password" autocomplete="new-password" maxlength="128">' +
+    '<label>Confirm password</label><input class="lit-auth-pw2" type="password" autocomplete="new-password" maxlength="128">' + litSaveRow() +
     '<div class="lit-auth-msg"></div><button class="lit-auth-go" data-auth="signup" disabled>' + (litAuthMode === 'setpw' ? 'Save' : 'Create account') + '</button>' +
     (litAuthMode === 'setpw' ? '' : '<button class="lit-auth-link" data-auth="to-login">I already have an account</button>') +
-    '<div class="lit-auth-note">Your password locks your chat backup - nobody, not even Lockedintool, can see it or reset it. Keep it safe.</div></div>';
-  el.hidden = false; litAuthCheck();
+    '<div class="lit-auth-note">Your password locks your chat backup. If you forget it, you can reset it with the private email or phone number you add in Edit profile.</div></div>';
+  el.hidden = false; el.scrollTop = 0; litAuthCheck();
 }
 function litAuthClose(){ const el = document.querySelector('.lit-auth'); if(el) el.remove(); litAuthTemp = null; }
 function litAuthCheck(){
@@ -16626,6 +16786,9 @@ function litAuthCheck(){
   const v = c=>((el.querySelector(c) || {}).value || '');
   let problem = '', ok;
   if(litAuthMode === 'login') ok = v('.lit-auth-user').length >= 3 && v('.lit-auth-pw').length >= 1;
+  else if(litAuthMode === 'unlock') ok = v('.lit-auth-pw').length >= 1;
+  else if(litAuthMode === 'forgot') ok = v('.lit-auth-user').length >= 3;
+  else if(litAuthMode === 'forgot2' || litAuthMode === 'forgot3') ok = true;
   else {
     const name = v('.lit-auth-name').trim(), un = v('.lit-auth-user').trim(), pw = v('.lit-auth-pw'), pw2 = v('.lit-auth-pw2');
     // The official profile's own @username (msg-worker.js OFFICIAL_USERNAMES) may use the name - the server checks it.
@@ -16642,12 +16805,43 @@ function litAuthCheck(){
 }
 function litAuthSay(t){ const m = document.querySelector('.lit-auth .lit-auth-msg'); if(m) m.textContent = t; }
 function litAuthBusySet(on, label){ litAuthBusy = on; const go = document.querySelector('.lit-auth .lit-auth-go'); if(go){ if(label) go.textContent = label; go.disabled = on; } if(!on) litAuthCheck(); }
-async function litAuthAct(k){
+async function litAuthAct(k, btn){
+  if(k === 'save-toggle'){ litAuthRemember = !litAuthRemember; const b = document.querySelector('.lit-auth .lit-auth-save'); if(b) b.outerHTML = litSaveRow(); return; }
+  if(k === 'way'){ litForgot.via = btn.getAttribute('data-v'); document.querySelectorAll('.lit-auth .lit-auth-way').forEach(x=>x.classList.toggle('on', x === btn)); return; }
   if(k === 'to-signup' || k === 'to-login'){ litAuthMode = k === 'to-login' ? 'login' : 'signup'; litAuthOpen(litAuthMode); return; }
+  if(k === 'to-forgot'){ const u = (document.querySelector('.lit-auth .lit-auth-user') || {}).value; litForgot = { u: u || '', opts:null, via:'' }; litAuthOpen('forgot'); return; }
+  if(k === 'to-back'){ litAuthOpen(litSignedIn() && litLocked() ? 'unlock' : litSignedIn() ? 'setpw' : 'login'); return; }
+  if(k === 'unlock-logout'){ litLogoutSheet(); return; }
   if(litAuthBusy) return;
   const el = document.querySelector('.lit-auth'); if(!el) return;
   const v = c=>((el.querySelector(c) || {}).value || '');
   document.activeElement && document.activeElement.blur && document.activeElement.blur();
+  if(k === 'forgot-next'){
+    const u = v('.lit-auth-user').trim(); litForgot = { u, opts:null, via:'' };
+    litAuthBusySet(true, 'Checking…'); litAuthSay('');
+    try{ const r = await fetch(MSG_API + '/v1/reset/options?u=' + encodeURIComponent(u)); const j = await r.json().catch(()=>({})); if(!r.ok) throw Object.assign(new Error(j.error || 'x'), { code: j.error }); litAuthBusy = false; litForgot.opts = j; litAuthOpen('forgot2'); }
+    catch(e){ litAuthBusySet(false, 'Next'); litAuthSay(e.code === 'too-many' ? 'Too many tries - try again later.' : 'No connection to Lockedintool right now.'); }
+    return;
+  }
+  if(k === 'forgot-send'){
+    litAuthBusySet(true, 'Sending…'); litAuthSay('');
+    try{ const r = await fetch(MSG_API + '/v1/reset/start', { method:'POST', headers:{ 'content-type':'application/json' }, body: JSON.stringify({ username: litForgot.u, via: litForgot.via }) }); const j = await r.json().catch(()=>({})); if(!r.ok) throw Object.assign(new Error(j.error || 'x'), { code: j.error }); litAuthBusy = false; litAuthOpen('forgot3'); }
+    catch(e){ litAuthBusySet(false, 'Send link'); litAuthSay(e.code === 'too-many' ? 'Too many tries - try again later.' : 'Couldn’t send - check your connection and try again.'); }
+    return;
+  }
+  if(k === 'unlock'){
+    const a = msgAccount() || {}, pw = v('.lit-auth-pw');
+    litAuthBusySet(true, 'Logging in…'); litAuthSay('');
+    try{
+      const good = a.pwsalt && a.chk && (await litChk(await litAuthKey(pw, a.pwsalt))) === a.chk;
+      if(!good){ litAuthBusySet(false, 'Log in'); litAuthSay('That password isn’t right.'); return; }
+      if(litAuthRemember){ const n = Object.assign({}, a, { remember: true }); delete n.chk; delete n.pwsalt; setMsgAccount(n); }
+      litUnlockNow(); litAuthBusy = false; litAuthClose(); showToast('Welcome back');
+      if(MSG_ENGINE){ if(litS3Last && window.storyS3Page) window.storyS3Page(litS3Last); }
+      else if(typeof renderDevice === 'function' && document.getElementById('content-area')) renderDevice();
+    }catch(e){ litAuthBusySet(false, 'Log in'); litAuthSay('Couldn’t check your password - try again.'); }
+    return;
+  }
   if(k === 'login'){
     const username = v('.lit-auth-user').trim(), pw = v('.lit-auth-pw');
     litAuthBusySet(true, 'Logging in…'); litAuthSay('');
@@ -16657,15 +16851,29 @@ async function litAuthAct(k){
       const r = await fetch(MSG_API + '/v1/login', { method:'POST', headers:{ 'content-type':'application/json' }, body: JSON.stringify({ username, auth }) });
       const j = await r.json().catch(()=>({}));
       if(!r.ok){ litAuthBusySet(false, 'Log in'); litAuthSay(j.error === 'locked' ? 'Too many tries - wait 15 minutes and try again.' : j.error === 'wrong' ? 'That @username or password isn’t right.' : 'No connection to Lockedintool right now.'); return; }
-      const bk = await litBackupKey(pw, j.bksalt);
-      if(j.keybox){ const keys = await litKeysFromBox(bk, j.keybox); await keysPut({ priv: keys.priv, pub: keys.pub }); }
-      await litKeyPut('bk', bk);
-      try{ await litBackupRestore(bk, j.backup); }catch(e){ showToast('Couldn’t bring back your chats this time'); }
+      const call = async (path, body)=>{ const rr = await fetch(MSG_API + path, { method:'POST', headers:{ 'content-type':'application/json', authorization:'Bearer ' + j.token }, body: JSON.stringify(body) }); const jj = await rr.json().catch(()=>({})); if(!rr.ok) throw Object.assign(new Error(jj.error || 'server'), { code: jj.error }); return jj; };
+      const wrap = await litBackupKey(pw, j.bksalt);
+      // The account key: locked with your password; once after a reset, the spare - locked again with the new password.
+      let mk = null, rewrap = false;
+      if(j.mkbox){ try{ mk = (await litOpen(wrap, j.mkbox)).mk; }catch(e){} }
+      if(!mk && j.mk){ mk = j.mk; rewrap = true; }
+      const lockKey = mk ? await litMkImport(mk) : wrap;   // accounts from before the account key: locked with the password key
+      let jwk = null; if(j.keybox){ try{ jwk = await litOpen(lockKey, j.keybox); }catch(e){} }
+      try{ await litBackupRestore(lockKey, j.backup); }catch(e){ if(j.backup) showToast('Couldn’t bring back your chats this time'); }
+      let mkKey = mk ? lockKey : null, keys = jwk ? await litKeysFromJwk(jwk) : null, newPub = '';
+      const mkBody = {};
+      if(!mk){ const n = await litMkNew(); mk = n.b64; mkKey = n.key; mkBody.mkspare = mk; rewrap = true; if(jwk) mkBody.keybox = await litSeal(mkKey, jwk); }
+      if(!keys){ const nk = await litNewKeys(mkKey); keys = { priv: nk.priv, pub: nk.pub }; mkBody.keybox = nk.keybox; newPub = nk.pub; }
+      if(rewrap || mkBody.keybox){ mkBody.mkbox = await litSeal(wrap, { mk }); await call('/v1/auth/mk', mkBody); }
+      if(newPub) await call('/v1/me', { pub: newPub });
+      await keysPut({ priv: keys.priv, pub: keys.pub }); await litKeyPut('bk', mkKey);
       // Your profile comes back from the server (bio and About too), so nothing on it is lost.
       let prof = {}; try{ const pr = await fetch(MSG_API + '/v1/profile?id=' + encodeURIComponent(j.id), { headers:{ authorization:'Bearer ' + j.token } }); if(pr.ok) prof = await pr.json(); }catch(e){}
       saveProfileData({ name: j.name || '', username: j.username || username, bio: prof.bio || '', about: prof.about || '' });
-      setMsgAccount({ id: j.id, token: j.token, pw: true });
+      await litAccountSave({ id: j.id, token: j.token }, null, pw, salt);
+      if(!j.mkbox){ litBackupAt = 0; litBackupNow(); }   // the backup is locked with the account key from now on
       try{ localStorage.removeItem('story-signed-out'); }catch(e){}
+      litForgot = { u:'', opts:null, via:'' };
       litAuthDone('Welcome back');
     }catch(e){ litAuthBusySet(false, 'Log in'); litAuthSay('Couldn’t log in - check your connection and try again.'); }
     return;
@@ -16676,17 +16884,17 @@ async function litAuthAct(k){
     litAuthBusySet(true, setpw ? 'Saving…' : 'Creating…'); litAuthSay('');
     try{
       const pwsalt = litRand(18), bksalt = litRand(18);
-      const [auth, bk] = await Promise.all([litAuthKey(pw, pwsalt), litBackupKey(pw, bksalt)]);
-      const keys = await litNewKeys(bk);
+      const [auth, wrap, mk] = await Promise.all([litAuthKey(pw, pwsalt), litBackupKey(pw, bksalt), litMkNew()]);
+      const keys = await litNewKeys(mk.key);
       // The account: an existing one (setting its password) or a new one (made once - kept if the @username is taken).
       let acct = setpw ? msgAccount() : litAuthTemp;
       if(!acct){ const r = await fetch(MSG_API + '/v1/register', { method:'POST', headers:{ 'content-type':'application/json' }, body: JSON.stringify({ pub: keys.pub }) }); const j = await r.json(); if(!r.ok) throw Object.assign(new Error(j.error || 'register'), { code: j.error }); acct = litAuthTemp = { id: j.id, token: j.token }; }
       const call = async (path, body)=>{ const r = await fetch(MSG_API + path, { method:'POST', headers:{ 'content-type':'application/json', authorization:'Bearer ' + acct.token }, body: JSON.stringify(body) }); const j = await r.json().catch(()=>({})); if(!r.ok) throw Object.assign(new Error(j.error || 'server'), { code: j.error }); return j; };
       const me = await call('/v1/me', { name, username, pub: keys.pub });
-      await call('/v1/auth/set', { auth, pwsalt, bksalt, keybox: keys.keybox });
-      await keysPut({ priv: keys.priv, pub: keys.pub }); await litKeyPut('bk', bk);
+      await call('/v1/auth/set', { auth, pwsalt, bksalt, keybox: keys.keybox, mkbox: await litSeal(wrap, { mk: mk.b64 }), mkspare: mk.b64 });
+      await keysPut({ priv: keys.priv, pub: keys.pub }); await litKeyPut('bk', mk.key);
       profileLocksSave(me); saveProfileData({ name: me.name || name, username: me.username || username });
-      setMsgAccount({ id: acct.id, token: acct.token, pw: true });
+      await litAccountSave(acct, null, pw, pwsalt);
       try{ localStorage.removeItem('story-signed-out'); }catch(e){}
       litAuthDone(setpw ? 'Your account is protected' : 'Welcome to Lockedintool');
     }catch(e){
@@ -16726,12 +16934,13 @@ function litSignedOut(){
 window.addEventListener('storage', e=>{
   if(e.key === 'story-logout-now' && e.newValue && MSG_ENGINE) litLogoutHere();
   if(e.key === 'story-signed-out' && e.newValue){ if(MSG_ENGINE){ try{ if(msgWs) msgWs.close(); }catch(err){} setTimeout(()=>location.reload(), 300); } else litAuthGate(); }
-  if(e.key === MSG_ACCOUNT_KEY && !MSG_ENGINE){ if(litSignedIn()) litAuthClose(); else litAuthGate(); }
+  if(e.key === MSG_ACCOUNT_KEY && !MSG_ENGINE){ if(litSignedIn() && !litLocked()) litAuthClose(); else litAuthGate(); }
+  if(e.key === LIT_LOCK_KEY && !MSG_ENGINE){ if(e.newValue === '1') litAuthGate(); else if(litAuthMode === 'unlock' && litSignedIn()) litAuthClose(); }
 });
 // First thing, for everyone (owner): the Pages open on Create your account / Log in until you're signed in.
 function litAuthGate(){
   const pagesWindow = !/[?&](s3|widget)=/.test(location.search) && !document.documentElement.classList.contains('story-widget');
-  if(pagesWindow && !litSignedIn()) litAuthOpen();
+  if(pagesWindow && (!litSignedIn() || litLocked())) litAuthOpen();
 }
 setTimeout(litAuthGate, 0);
 const CM_ALWAYS_KEY = 'story-community-always-mine';
