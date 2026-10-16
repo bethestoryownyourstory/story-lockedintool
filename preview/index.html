@@ -1365,7 +1365,9 @@
   .sub-premium{ border-color:#555555; }
   .sub-top{ display:flex; justify-content:space-between; align-items:baseline; gap:10px; }
   .sub-name{ font-size:22px; font-weight:800; }
-  .sub-price{ font-size:20px; font-weight:800; }
+  .sub-price{ font-size:20px; font-weight:800; white-space:nowrap; }
+  .sub-was{ font-size:15px; font-weight:600; color:var(--muted); text-decoration:line-through; margin-right:6px; }
+  .sub-intro{ font-size:11.5px; color:var(--muted); margin-top:4px; }
   .sub-badge{ display:inline-block; margin-top:8px; padding:3px 10px; border-radius:10px; background:rgba(62,207,106,0.14); color:var(--green); font-size:12px; font-weight:700; }
   .sub-tag{ font-size:15px; font-weight:800; margin:10px 0 8px; }
   .sub-text{ font-size:13.5px; line-height:1.5; color:var(--text); }
@@ -7609,6 +7611,8 @@ function subRefresh(force){
   msgApi('/v1/sub/info').then(i=>{ const was = subLocked(); subSave(i); subApplyMode(); if(was !== subLocked() || state.current === 'subscription') renderDevice(); }).catch(()=>{});
 }
 setTimeout(()=>subRefresh(false), 4000);
+// Regular prices (owner): the plans' prices now are the Introduction Welcome price; the regular one shows crossed out beside it.
+const SUB_REGULAR = { basic:48, premium:120 };
 const SUB_PLANS = [
   { key:'basic', name:'Basic', tag:'Your essentials. Stay locked in.', badge:'',
     text:'Get the core LOCKED IN TOOL experience with your three essential pages: Money, Home/Wallet, and Focus. Keep your finances, wallet, and goals in one place, with the freedom to build your daily routine around what matters most.',
@@ -7644,7 +7648,8 @@ function subscriptionScreen(){
     </div>` : ''}
     ${SUB_PLANS.map(p=>{ const pr = plans[p.key] || {}; const mine = active && s.plan === p.key; return `
       <div class="sub-card${p.key === 'premium' ? ' sub-premium' : ''}">
-        <div class="sub-top"><div class="sub-name">${p.name}</div><div class="sub-price">$${pr.usd}/month</div></div>
+        <div class="sub-top"><div class="sub-name">${p.name}</div><div class="sub-price">${SUB_REGULAR[p.key] && SUB_REGULAR[p.key] > pr.usd ? `<span class="sub-was">$${SUB_REGULAR[p.key]}</span>` : ''}$${pr.usd}/month</div></div>
+        ${SUB_REGULAR[p.key] && SUB_REGULAR[p.key] > pr.usd ? `<div class="sub-intro">Introduction Welcome price. Changes to current prices will be announced if made.</div>` : ''}
         ${p.badge ? `<div class="sub-badge">${p.badge}</div>` : ''}
         <div class="sub-tag">${p.tag}</div>
         <div class="sub-text">${p.text}</div>
@@ -8171,7 +8176,7 @@ const LEGAL = {
     ['Automatic updates', [
       'Using Lockedintool means agreeing that it keeps itself up to date: new versions install automatically.' ]],
     ['Subscription', [
-      'Basic is $5 a month and Premium $15 a month, charged in rand (shown before you pay - currently R95 and R285). One payment gives 30 days of your plan; paying the same plan again adds 30 days.',
+      'Basic is $5 a month and Premium $15 a month - our Introduction Welcome price (regular prices: Basic $48, Premium $120 a month). Changes to current prices will be announced before they apply. Plans are charged in rand (shown before you pay - currently R95 and R285). One payment gives 30 days of your plan; paying the same plan again adds 30 days.',
       'Plans do not renew by themselves yet - you pay each month. Payments are made through Stitch and approved by you on your own bank’s or card’s page.',
       'Before you pay you can cancel or switch plans at any time. Once a payment is made it is not refundable, except where South African law requires a refund.',
       'We may change prices or what a plan includes; you will be told in the app before it affects you.' ]],
@@ -9765,6 +9770,18 @@ async function upDeleteShown(){
 const UP_REMIND_KEY = 'story-status-remind', UP_REMIND_TEXT = 'Post a status today so people who don’t know you can catch up and see what you’re up to. Tap + on Station 3, choose Profile, then Status.';
 let upRemindT = 0, upLoadedAt = 0;
 document.addEventListener('visibilitychange', ()=>{ if(MSG_ENGINE && document.visibilityState === 'visible' && Date.now() - upLoadedAt > 300000){ upLoadedAt = Date.now(); upLoad(); } });
+// Launch welcome (owner): once per phone, a message from Lockedintool about the Introduction Welcome price. Only on the
+// Live screens (users), so it reaches everyone when Lockedintool is launched / published.
+const WELCOME_PRICE_KEY = 'story-welcome-price';
+const WELCOME_PRICE_TEXT = 'Welcome to Lockedintool! You’re getting our Introduction Welcome price: Basic $5 a month (regular price $48) and Premium $15 a month (regular price $120). Changes to current prices will be announced if made.';
+function litWelcomePrice(){
+  if(!MSG_ENGINE || !msgAccount() || STORY_OWNER) return;
+  try{ if(localStorage.getItem(WELCOME_PRICE_KEY)) return; localStorage.setItem(WELCOME_PRICE_KEY, String(Date.now())); }catch(e){ return; }
+  const c = chatFor('lit-reminder', { name:'Lockedintool' }); c.kind = 'system';
+  c.messages = (c.messages || []).concat({ id:'w' + Date.now(), from:'them', text: WELCOME_PRICE_TEXT, at: Date.now() }).slice(-30);
+  c.unread = (c.unread || 0) + 1; saveMsgChats(); renderMsgList();
+  if(NATIVE && window.StoryNative.msgNotify) try{ window.StoryNative.msgNotify('Lockedintool', 'Welcome - you’re getting our Introduction Welcome price'); }catch(e){}
+}
 async function upReminder(){
   clearTimeout(upRemindT);
   if(!MSG_ENGINE || !msgAccount()) return;
@@ -10146,7 +10163,7 @@ function msgConnect(){
   clearTimeout(msgWsTimer);
   let ws; try{ ws = new WebSocket(MSG_API.replace(/^http/, 'ws') + '/v1/ws?token=' + encodeURIComponent(a.token)); }catch(e){ return msgRetry(); }
   msgWs = ws;
-  ws.onopen = ()=>{ msgWsOpen = true; msgWsTry = 0; clearInterval(msgPing); msgPing = setInterval(()=>{ try{ ws.send('{"t":"ping"}'); }catch(e){} }, 25000); msgFlush(); msgSyncProfile(); msgSyncGroups(); upFlush(); upReminder(); upLoad(); actRefreshSoon(); };
+  ws.onopen = ()=>{ msgWsOpen = true; msgWsTry = 0; clearInterval(msgPing); msgPing = setInterval(()=>{ try{ ws.send('{"t":"ping"}'); }catch(e){} }, 25000); msgFlush(); msgSyncProfile(); msgSyncGroups(); upFlush(); upReminder(); litWelcomePrice(); upLoad(); actRefreshSoon(); };
   ws.onmessage = e=>{ let m; try{ m = JSON.parse(e.data); }catch(err){ return; } msgOnServer(m).catch(()=>{}); };
   ws.onclose = e=>{ msgWsOpen = false; clearInterval(msgPing); if(e && (e.code === 4001 || e.code === 4003)){ msgWs = null; litAccountGone(e.code === 4003 ? 'banned' : 'deleted'); return; }
     if(e && e.code === 4002){ msgWs = null; showToast('You logged in on another phone'); litSignedOut(); return; }
