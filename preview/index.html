@@ -3423,6 +3423,16 @@
   .lit-auth h1{ font-size:24px; font-weight:800; margin:0 0 6px; }
   .lit-auth p{ font-size:13px; line-height:1.5; color:#8b8b92; margin:0 0 18px; }
   .lit-auth label{ display:block; font-size:12px; font-weight:700; color:#8b8b92; margin:14px 0 6px; }
+  .lit-auth .lit-auth-country{ display:flex; align-items:center; justify-content:space-between; width:100%; box-sizing:border-box; margin:0; padding:13px 14px; border-radius:12px; border:1px solid #333333; background:#000000; color:#8b8b92; font:inherit; font-size:15px; font-weight:400; text-align:left; }
+  .lit-auth .lit-auth-country.on{ color:#ffffff; }
+  .lit-auth .lit-auth-country span{ color:#8b8b92; }
+  .lit-auth-clist{ margin-top:8px; border:1px solid #333333; border-radius:12px; padding:8px; }
+  .lit-auth-clist[hidden]{ display:none; }
+  .lit-auth-citems{ max-height:220px; overflow-y:auto; scrollbar-width:none; margin-top:6px; }
+  .lit-auth-citems::-webkit-scrollbar{ display:none; }
+  .lit-auth-citems button{ display:flex; align-items:center; justify-content:space-between; width:100%; margin:0; padding:11px 8px; border:0; border-radius:8px; background:transparent; color:#ffffff; font:inherit; font-size:14px; font-weight:500; text-align:left; }
+  .lit-auth-citems button.on{ background:#1a1a1a; }
+  .lit-auth-citems small{ color:#8b8b92; font-size:12px; }
   .lit-auth input{ width:100%; box-sizing:border-box; padding:13px 14px; border-radius:12px; border:1px solid #333333; background:#000000; color:#ffffff; font:inherit; font-size:15px; outline:none; }
   .lit-auth input:focus{ border-color:#ffffff; }
   .lit-auth .lit-auth-at{ position:relative; }
@@ -5048,8 +5058,21 @@ const MONEY_SYM = { ZAR:'R', USD:'$', EUR:'€', GBP:'£', NGN:'₦', INR:'₹',
 // even money that came in another currency (converted at the day's exchange rate). '' = automatic (each payment's own
 // currency, as before). Rates: ExchangeRate-API's free daily rates, fetched at most once a day (no loop). ----
 const ACCOUNT_CUR_KEY = 'story-currency', FX_KEY = 'story-fx';
-const ACCOUNT_CURRENCIES = [['ZAR','South African rand'],['USD','US dollar'],['EUR','Euro'],['GBP','British pound'],['NGN','Nigerian naira'],['KES','Kenyan shilling'],['GHS','Ghanaian cedi'],['BWP','Botswana pula'],['NAD','Namibian dollar'],['ZMW','Zambian kwacha'],['EGP','Egyptian pound'],['MAD','Moroccan dirham'],['AED','UAE dirham'],['SAR','Saudi riyal'],['INR','Indian rupee'],['CNY','Chinese yuan'],['JPY','Japanese yen'],['AUD','Australian dollar'],['CAD','Canadian dollar'],['CHF','Swiss franc'],['BRL','Brazilian real']];
-function accountCur(){ try{ const c = localStorage.getItem(ACCOUNT_CUR_KEY) || ''; return /^[A-Z]{3}$/.test(c) ? c : ''; }catch(e){ return ''; } }
+// Every country's currency (owner: the default currency goes with your country - COUNTRY_CURRENCY).
+const ACCOUNT_CURRENCIES = [["ZAR","South African rand"],["USD","US dollar"],["EUR","Euro"],["GBP","British pound"],["AFN","Afghan afghani"],["ALL","Albanian lek"],["DZD","Algerian dinar"],["AOA","Angolan kwanza"],["ARS","Argentine peso"],["AMD","Armenian dram"],["AUD","Australian dollar"],["AZN","Azerbaijani manat"],["BSD","Bahamian dollar"],["BHD","Bahraini dinar"],["BDT","Bangladeshi taka"],["BBD","Barbadian dollar"],["BYN","Belarusian ruble"],["BZD","Belize dollar"],["BTN","Bhutanese ngultrum"],["BOB","Bolivian boliviano"],["BAM","Bosnia-Herzegovina mark"],["BWP","Botswana pula"],["BRL","Brazilian real"],["BND","Brunei dollar"],["BGN","Bulgarian lev"],["BIF","Burundian franc"],["KHR","Cambodian riel"],["CAD","Canadian dollar"],["CVE","Cape Verdean escudo"],["XAF","Central African CFA franc"],["CLP","Chilean peso"],["CNY","Chinese yuan"],["COP","Colombian peso"],["KMF","Comorian franc"],["CRC","Costa Rican colón"],["CUP","Cuban peso"],["CZK","Czech koruna"],["DKK","Danish krone"],["DJF","Djiboutian franc"],["DOP","Dominican peso"],["XCD","East Caribbean dollar"],["EGP","Egyptian pound"],["ERN","Eritrean nakfa"],["SZL","Eswatini lilangeni"],["ETB","Ethiopian birr"],["FJD","Fijian dollar"],["GMD","Gambian dalasi"],["GEL","Georgian lari"],["GHS","Ghanaian cedi"],["GTQ","Guatemalan quetzal"],["GNF","Guinean franc"],["GYD","Guyanese dollar"],["HTG","Haitian gourde"],["HNL","Honduran lempira"],["HUF","Hungarian forint"],["ISK","Icelandic króna"],["INR","Indian rupee"],["IDR","Indonesian rupiah"],["IRR","Iranian rial"],["IQD","Iraqi dinar"],["ILS","Israeli shekel"],["JMD","Jamaican dollar"],["JPY","Japanese yen"],["JOD","Jordanian dinar"],["KZT","Kazakhstani tenge"],["KES","Kenyan shilling"],["KWD","Kuwaiti dinar"],["KGS","Kyrgyzstani som"],["LAK","Lao kip"],["LBP","Lebanese pound"],["LSL","Lesotho loti"],["LRD","Liberian dollar"],["LYD","Libyan dinar"],["MKD","Macedonian denar"],["MGA","Malagasy ariary"],["MWK","Malawian kwacha"],["MYR","Malaysian ringgit"],["MVR","Maldivian rufiyaa"],["MRU","Mauritanian ouguiya"],["MUR","Mauritian rupee"],["MXN","Mexican peso"],["MDL","Moldovan leu"],["MNT","Mongolian tögrög"],["MAD","Moroccan dirham"],["MZN","Mozambican metical"],["MMK","Myanmar kyat"],["NAD","Namibian dollar"],["NPR","Nepalese rupee"],["TWD","New Taiwan dollar"],["NZD","New Zealand dollar"],["NIO","Nicaraguan córdoba"],["NGN","Nigerian naira"],["KPW","North Korean won"],["NOK","Norwegian krone"],["OMR","Omani rial"],["PKR","Pakistani rupee"],["PAB","Panamanian balboa"],["PGK","Papua New Guinean kina"],["PYG","Paraguayan guaraní"],["PEN","Peruvian sol"],["PHP","Philippine peso"],["PLN","Polish złoty"],["QAR","Qatari riyal"],["RON","Romanian leu"],["RUB","Russian ruble"],["RWF","Rwandan franc"],["WST","Samoan tālā"],["SAR","Saudi riyal"],["RSD","Serbian dinar"],["SCR","Seychellois rupee"],["SLE","Sierra Leonean leone"],["SGD","Singapore dollar"],["SBD","Solomon Islands dollar"],["SOS","Somali shilling"],["KRW","South Korean won"],["SSP","South Sudanese pound"],["LKR","Sri Lankan rupee"],["SDG","Sudanese pound"],["SRD","Surinamese dollar"],["SEK","Swedish krona"],["CHF","Swiss franc"],["SYP","Syrian pound"],["TJS","Tajikistani somoni"],["TZS","Tanzanian shilling"],["THB","Thai baht"],["TOP","Tongan paʻanga"],["TTD","Trinidad and Tobago dollar"],["TND","Tunisian dinar"],["TRY","Turkish lira"],["TMT","Turkmenistani manat"],["AED","UAE dirham"],["UGX","Ugandan shilling"],["UAH","Ukrainian hryvnia"],["UYU","Uruguayan peso"],["UZS","Uzbekistani som"],["VUV","Vanuatu vatu"],["VES","Venezuelan bolívar"],["VND","Vietnamese đồng"],["XOF","West African CFA franc"],["YER","Yemeni rial"],["ZMW","Zambian kwacha"],["ZWG","Zimbabwe gold"]];
+const COUNTRY_CURRENCY = {"Afghanistan":"AFN","Albania":"ALL","Algeria":"DZD","Andorra":"EUR","Angola":"AOA","Argentina":"ARS","Armenia":"AMD","Australia":"AUD","Austria":"EUR","Azerbaijan":"AZN","Bahamas":"BSD","Bahrain":"BHD","Bangladesh":"BDT","Barbados":"BBD","Belarus":"BYN","Belgium":"EUR","Belize":"BZD","Benin":"XOF","Bhutan":"BTN","Bolivia":"BOB","Bosnia and Herzegovina":"BAM","Botswana":"BWP","Brazil":"BRL","Brunei":"BND","Bulgaria":"BGN","Burkina Faso":"XOF","Burundi":"BIF","Cambodia":"KHR","Cameroon":"XAF","Canada":"CAD","Cape Verde":"CVE","Central African Republic":"XAF","Chad":"XAF","Chile":"CLP","China":"CNY","Colombia":"COP","Comoros":"KMF","Congo":"XAF","Costa Rica":"CRC","Croatia":"EUR","Cuba":"CUP","Cyprus":"EUR","Czech Republic":"CZK","Denmark":"DKK","Djibouti":"DJF","Dominica":"XCD","Dominican Republic":"DOP","Ecuador":"USD","Egypt":"EGP","El Salvador":"USD","Equatorial Guinea":"XAF","Eritrea":"ERN","Estonia":"EUR","Eswatini":"SZL","Ethiopia":"ETB","Fiji":"FJD","Finland":"EUR","France":"EUR","Gabon":"XAF","Gambia":"GMD","Georgia":"GEL","Germany":"EUR","Ghana":"GHS","Greece":"EUR","Grenada":"XCD","Guatemala":"GTQ","Guinea":"GNF","Guinea-Bissau":"XOF","Guyana":"GYD","Haiti":"HTG","Honduras":"HNL","Hungary":"HUF","Iceland":"ISK","India":"INR","Indonesia":"IDR","Iran":"IRR","Iraq":"IQD","Ireland":"EUR","Israel":"ILS","Italy":"EUR","Ivory Coast":"XOF","Jamaica":"JMD","Japan":"JPY","Jordan":"JOD","Kazakhstan":"KZT","Kenya":"KES","Kiribati":"AUD","Kosovo":"EUR","Kuwait":"KWD","Kyrgyzstan":"KGS","Laos":"LAK","Latvia":"EUR","Lebanon":"LBP","Lesotho":"LSL","Liberia":"LRD","Libya":"LYD","Liechtenstein":"CHF","Lithuania":"EUR","Luxembourg":"EUR","Madagascar":"MGA","Malawi":"MWK","Malaysia":"MYR","Maldives":"MVR","Mali":"XOF","Malta":"EUR","Marshall Islands":"USD","Mauritania":"MRU","Mauritius":"MUR","Mexico":"MXN","Micronesia":"USD","Moldova":"MDL","Monaco":"EUR","Mongolia":"MNT","Montenegro":"EUR","Morocco":"MAD","Mozambique":"MZN","Myanmar":"MMK","Namibia":"NAD","Nauru":"AUD","Nepal":"NPR","Netherlands":"EUR","New Zealand":"NZD","Nicaragua":"NIO","Niger":"XOF","Nigeria":"NGN","North Korea":"KPW","North Macedonia":"MKD","Norway":"NOK","Oman":"OMR","Pakistan":"PKR","Palau":"USD","Palestine":"ILS","Panama":"PAB","Papua New Guinea":"PGK","Paraguay":"PYG","Peru":"PEN","Philippines":"PHP","Poland":"PLN","Portugal":"EUR","Qatar":"QAR","Romania":"RON","Russia":"RUB","Rwanda":"RWF","Saint Lucia":"XCD","Samoa":"WST","San Marino":"EUR","Saudi Arabia":"SAR","Senegal":"XOF","Serbia":"RSD","Seychelles":"SCR","Sierra Leone":"SLE","Singapore":"SGD","Slovakia":"EUR","Slovenia":"EUR","Solomon Islands":"SBD","Somalia":"SOS","South Africa":"ZAR","South Korea":"KRW","South Sudan":"SSP","Spain":"EUR","Sri Lanka":"LKR","Sudan":"SDG","Suriname":"SRD","Sweden":"SEK","Switzerland":"CHF","Syria":"SYP","Taiwan":"TWD","Tajikistan":"TJS","Tanzania":"TZS","Thailand":"THB","Timor-Leste":"USD","Togo":"XOF","Tonga":"TOP","Trinidad and Tobago":"TTD","Tunisia":"TND","Turkey":"TRY","Turkmenistan":"TMT","Tuvalu":"AUD","Uganda":"UGX","Ukraine":"UAH","United Arab Emirates":"AED","United Kingdom":"GBP","United States":"USD","Uruguay":"UYU","Uzbekistan":"UZS","Vanuatu":"VUV","Vatican City":"EUR","Venezuela":"VES","Vietnam":"VND","Yemen":"YER","Zambia":"ZMW","Zimbabwe":"ZWG"};
+const COUNTRY_KEY = 'story-country';
+function accountCountry(){ try{ return localStorage.getItem(COUNTRY_KEY) || ''; }catch(e){ return ''; } }
+function accountCountrySet(c){ try{ if(c) localStorage.setItem(COUNTRY_KEY, c); else localStorage.removeItem(COUNTRY_KEY); }catch(e){} }
+// Your phone's region (from its language setting) - shown first in the country list, never chosen for you.
+function phoneCountryGuess(){
+  try{ const r = (new Intl.Locale(navigator.language || '')).maximize().region; if(!r) return ''; const n = new Intl.DisplayNames(['en'], { type:'region' }).of(r);
+    const alias = { 'Côte d’Ivoire':'Ivory Coast', 'Czechia':'Czech Republic', 'Myanmar (Burma)':'Myanmar', 'Palestinian Territories':'Palestine', 'Congo - Brazzaville':'Congo', 'Türkiye':'Turkey', 'Vatican City':'Vatican City' };
+    const name = alias[n] || n; return COUNTRY_CURRENCY[name] ? name : ''; }catch(e){ return ''; }
+}
+// The currency every amount shows in: the one you picked in Account currency, else your country's (owner: the
+// default goes with your country), else each payment in its own currency.
+function accountCur(){ try{ const c = localStorage.getItem(ACCOUNT_CUR_KEY) || ''; if(c === 'AUTO') return ''; if(/^[A-Z]{3}$/.test(c)) return c; return COUNTRY_CURRENCY[accountCountry()] || ''; }catch(e){ return ''; } }
 function fxRates(){ try{ return JSON.parse(localStorage.getItem(FX_KEY) || 'null'); }catch(e){ return null; } }
 let fxBusy = false;
 function fxEnsure(){
@@ -5088,7 +5111,7 @@ function moneyTx(){
   moneyCache = list;
   return moneyCache;
 }
-window.addEventListener('storage', e=>{ if(e.key === ACCOUNT_CUR_KEY || e.key === FX_KEY){ moneyCache = null; if(MONEY_PAGES.includes(state.current)) renderDevice(); } });
+window.addEventListener('storage', e=>{ if(e.key === ACCOUNT_CUR_KEY || e.key === FX_KEY || e.key === COUNTRY_KEY){ moneyCache = null; if(MONEY_PAGES.includes(state.current)) renderDevice(); } });
 const MONEY_PAGES = ['money', 'money-summary', 'wallet', 'wallet-overview', 'tx-history'];
 // The app says when a new payment came in: the money pages update straight away.
 window.storyMoneyNew = function(){
@@ -8081,7 +8104,7 @@ function litAccountGone(why){
 }
 function delAccountForget(){
   ['story-msg-account', 'story-msg-peers', MSG_KEY, MSG_OUTBOX, 'story-profile', 'story-profile-stats', PF_LOCKS_KEY, 'story-posts', 'story-highlights', 'story-upost-queue',
-   'story-status-seen', 'story-status-remind', 'story-activity', 'story-calls', 'story-privacy', 'story-blocked', 'story-community', 'story-community-chats', 'story-community-always-mine', 'story-sub', 'story-photo-up', 'story-recovery', 'story-auth-locked', 'story-glive', 'story-recent-messages', 'story-recent-updates', 'story-recent-calls', 'story-recent-web', 'story-recent-groups']
+   'story-status-seen', 'story-status-remind', 'story-activity', 'story-calls', 'story-privacy', 'story-blocked', 'story-community', 'story-community-chats', 'story-community-always-mine', 'story-sub', 'story-photo-up', 'story-recovery', 'story-auth-locked', 'story-glive', 'story-recent-messages', 'story-recent-updates', 'story-recent-calls', 'story-recent-web', 'story-recent-groups', 'story-country']
     .forEach(k=>{ try{ localStorage.removeItem(k); }catch(e){} });
   msgChatsCache = null;
   if(NATIVE && window.StoryNative.removeProfilePhoto) try{ window.StoryNative.removeProfilePhoto(); }catch(e){}
@@ -8547,7 +8570,8 @@ window.storyProfileText = function(){
   el.querySelector('[data-pf="ed-username"] .pf-ed-val').textContent = p.username ? '@' + p.username : '';
   el.querySelector('[data-pf="ed-bio"] .pf-ed-val').textContent = p.bio;
   el.querySelector('[data-pf="ed-about"] .pf-ed-val').textContent = p.about;
-  const cv = el.querySelector('[data-pf="ed-currency"] .pf-ed-val'); if(cv) cv.textContent = accountCur() || 'Automatic';
+  const cv = el.querySelector('[data-pf="ed-currency"] .pf-ed-val'); if(cv) cv.textContent = accountCur() || 'Each payment’s own';
+  const cov = el.querySelector('[data-pf="ed-country"] .pf-ed-val'); if(cov) cov.textContent = accountCountry() || 'Choose';
   // Bio: the word "BIO" shows only while it's empty; once there's text, only the text shows.
   el.querySelector('.pf-bio-l').hidden = !!p.bio;
   el.querySelector('.pf-bio-t').innerHTML = p.bio ? escText(p.bio) : '<span style="color:var(--pf-muted)">Nothing here yet.</span>';
@@ -8717,6 +8741,7 @@ window.storyProfileOnly = function(){
       <div class="pf-ed-row" data-pf="ed-username"><span>Username</span><span class="pf-ed-val">@${escText(p.username)}</span></div>
       <div class="pf-ed-row" data-pf="ed-bio"><span>Bio</span><span class="pf-ed-val">${p.bio ? escText(p.bio) : 'Nothing here yet.'}</span></div>
       <div class="pf-ed-row" data-pf="ed-about"><span>About</span><span class="pf-ed-val">${escText(p.about)}</span></div>
+      <div class="pf-ed-row" data-pf="ed-country"><span>Country</span><span class="pf-ed-val"></span></div>
       <div class="pf-ed-row" data-pf="ed-currency"><span>Account currency</span><span class="pf-ed-val"></span></div>
       <div class="pf-ed-note">About shows in Updates, to people who don’t follow you yet: who you are or what you do.</div>
       <div class="pf-ed-sub">Private details</div>
@@ -8729,6 +8754,12 @@ window.storyProfileOnly = function(){
       <div class="pf-ed-note">Every amount in Money and Wallet shows in this currency - even money that came in another currency is shown in it, at the day’s exchange rate.</div>
       <div class="pf-cur-list"></div>
       <div class="pf-ed-note">Exchange rates by ExchangeRate-API, updated once a day.</div>
+    </div>
+    <div class="pf-scroll pf-country" hidden>
+      <div class="pf-ed-head"><button class="pf-ed-back" data-pf="country-back" aria-label="Back">‹</button><div class="pf-ed-title">Country</div></div>
+      <div class="pf-ed-note">Where you are. Your account currency follows it unless you pick another one.</div>
+      <label class="pf-msgs-search"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="search" class="pf-country-q" placeholder="Search country" autocomplete="off"></label>
+      <div class="pf-country-list"></div>
     </div>
     <div class="pf-scroll pf-private" hidden>
       <div class="pf-ed-head"><button class="pf-ed-back" data-pf="pr-back" aria-label="Back">‹</button><div class="pf-ed-title">Email</div></div>
@@ -9026,7 +9057,16 @@ window.storyProfileOnly = function(){
     else if(k === 'ed-about') openProfileField('about');
     else if(k === 'ed-currency'){ ed.hidden = true; const pg = el.querySelector('.pf-currency'); pg.hidden = false; pg.scrollTop = 0; curRender(); }
     else if(k === 'cur-back'){ el.querySelector('.pf-currency').hidden = true; ed.hidden = false; }
-    else if(k === 'cur-set'){ const v = b.getAttribute('data-v') || ''; try{ if(v) localStorage.setItem(ACCOUNT_CUR_KEY, v); else localStorage.removeItem(ACCOUNT_CUR_KEY); }catch(err){} moneyCache = null; if(v) fxEnsure(); curRender(); const cv = el.querySelector('[data-pf="ed-currency"] .pf-ed-val'); if(cv) cv.textContent = v || 'Automatic'; showToast(v ? 'Money shows in ' + v : 'Money shows each payment’s own currency'); }
+    else if(k === 'cur-set'){ const v = b.getAttribute('data-v') || ''; try{ if(v) localStorage.setItem(ACCOUNT_CUR_KEY, v); else localStorage.removeItem(ACCOUNT_CUR_KEY); }catch(err){} moneyCache = null; const now = accountCur(); if(now) fxEnsure(); curRender(); const cv = el.querySelector('[data-pf="ed-currency"] .pf-ed-val'); if(cv) cv.textContent = now || 'Each payment’s own'; showToast(now ? 'Money shows in ' + now : 'Money shows each payment’s own currency'); }
+    else if(k === 'ed-country'){ ed.hidden = true; const pg = el.querySelector('.pf-country'); pg.hidden = false; pg.scrollTop = 0; pg.querySelector('.pf-country-q').value = ''; countryRender(); }
+    else if(k === 'country-back'){ el.querySelector('.pf-country').hidden = true; ed.hidden = false; }
+    else if(k === 'country-set'){
+      const c = b.getAttribute('data-v'); accountCountrySet(c); msgOut({ type:'country', country:c }); moneyCache = null; if(accountCur()) fxEnsure();
+      el.querySelector('.pf-country').hidden = true; ed.hidden = false;
+      const cov = el.querySelector('[data-pf="ed-country"] .pf-ed-val'); if(cov) cov.textContent = c;
+      const cv = el.querySelector('[data-pf="ed-currency"] .pf-ed-val'); if(cv) cv.textContent = accountCur() || 'Each payment’s own';
+      showToast('Country: ' + c);
+    }
     else if(k === 'cr-hl-pick') crAddToHighlight(b.getAttribute('data-id'));
     else if(k === 'cr-hl-new'){
       const inp = el.querySelector('.cr-sheet-new input'), name = inp.value.trim();
@@ -9115,6 +9155,8 @@ window.storyProfileOnly = function(){
   upSearchBox.addEventListener('input', ()=>upSearch(upSearchBox.value));
   litRecentAttach(upSearchBox, 'updates', q=>{ upSearchBox.value = q; upSearchBox.dispatchEvent(new Event('input')); }, upSearchBox.closest('.pf-msgs-search'));
   upSearchBox.addEventListener('blur', ()=>{ if(NATIVE && window.StoryNative.setTyping) try{ window.StoryNative.setTyping(false); }catch(err){} });
+  const countryQ = el.querySelector('.pf-country-q');
+  countryQ.addEventListener('input', countryRender); countryQ.addEventListener('pointerdown', profileTypingOn); countryQ.addEventListener('focus', profileTypingOn);
   const callSearch = el.querySelector('.pf-calls .pf-msgs-search input');
   callSearch.addEventListener('input', renderCalls);
   litRecentAttach(callSearch, 'calls', q=>{ callSearch.value = q; callSearch.dispatchEvent(new Event('input')); }, callSearch.closest('.pf-msgs-search'));
@@ -9165,8 +9207,16 @@ const PR = { kind:'email', step:'view', value:'' };
 function curRender(){
   const box = document.querySelector('#story-profile .pf-cur-list'); if(!box) return;
   const cur = accountCur();
-  box.innerHTML = [['', 'Automatic', 'Each payment in its own currency']].concat(ACCOUNT_CURRENCIES.map(([c, n])=>[c, c, n])).map(([v, t, d])=>
-    '<button class="pf-pv-opt' + (cur === v ? ' on' : '') + '" data-pf="cur-set" data-v="' + v + '"><span class="pf-pv-txt"><div class="pf-pv-t">' + escText(t) + '</div><div class="pf-pv-d">' + escText(d) + '</div></span><span class="pf-pv-dot"></span></button>').join('');
+  const own = COUNTRY_CURRENCY[accountCountry()] || '', sel = (()=>{ try{ return localStorage.getItem(ACCOUNT_CUR_KEY) || ''; }catch(e){ return ''; } })();
+  box.innerHTML = [['', own ? 'Your country’s currency (' + own + ')' : 'Your country’s currency', own ? accountCountry() : 'Choose your country in Edit profile'], ['AUTO', 'Each payment’s own', 'Every payment in the currency it came in']].concat(ACCOUNT_CURRENCIES.map(([c, n])=>[c, c, n])).map(([v, t, d])=>
+    '<button class="pf-pv-opt' + (sel === v ? ' on' : '') + '" data-pf="cur-set" data-v="' + v + '"><span class="pf-pv-txt"><div class="pf-pv-t">' + escText(t) + '</div><div class="pf-pv-d">' + escText(d) + '</div></span><span class="pf-pv-dot"></span></button>').join('');
+}
+function countryRender(){
+  const pg = document.querySelector('#story-profile .pf-country'); if(!pg) return;
+  const q = (pg.querySelector('.pf-country-q').value || '').trim().toLowerCase(), cur = accountCountry(), guess = phoneCountryGuess();
+  let list = Object.keys(COUNTRY_CURRENCY).filter(c=>!q || c.toLowerCase().includes(q));
+  if(!q && guess) list = [guess].concat(list.filter(c=>c !== guess));
+  pg.querySelector('.pf-country-list').innerHTML = list.map(c=>'<button class="pf-pv-opt' + (c === cur ? ' on' : '') + '" data-pf="country-set" data-v="' + escText(c) + '"><span class="pf-pv-txt"><div class="pf-pv-t">' + escText(c) + '</div><div class="pf-pv-d">' + COUNTRY_CURRENCY[c] + '</div></span></button>').join('') || '<div class="pf-ed-note">No country by that name.</div>';
 }
 function prData(){ try{ return JSON.parse(localStorage.getItem(PR_KEY) || '{}') || {}; }catch(e){ return {}; } }
 function prSave(d){ try{ localStorage.setItem(PR_KEY, JSON.stringify({ email: d.email || '', phone: d.phone || '', emailReady: !!d.emailReady, smsReady: !!d.smsReady })); }catch(e){} }
@@ -9229,7 +9279,7 @@ function pfResetView(){
   el.querySelector('.pf-updates').hidden = true; el.querySelector('.pf-person').hidden = true; UP.person = null;
   el.querySelector('.pf-updates .pf-msgs-search input').value = ''; UP.q = ''; UP.found = null;
   el.querySelector('.cr-pick').hidden = true;
-  el.querySelector('.pf-menu').hidden = true; el.querySelector('.pf-privacy').hidden = true; el.querySelector('.pf-reports').hidden = true; el.querySelector('.pf-private').hidden = true; el.querySelector('.pf-currency').hidden = true;
+  el.querySelector('.pf-menu').hidden = true; el.querySelector('.pf-privacy').hidden = true; el.querySelector('.pf-reports').hidden = true; el.querySelector('.pf-private').hidden = true; el.querySelector('.pf-currency').hidden = true; el.querySelector('.pf-country').hidden = true;
   el.querySelector('.up-compose').hidden = true; upClosePost(); fcsClose();
   const ms = el.querySelector('.pf-msgs .pf-msgs-search input'); if(ms){ ms.value = ''; } msgView.q = ''; msgView.menuFor = null;
   if(crRecording && NATIVE && window.StoryNative.createVideo) window.StoryNative.createVideo(false);
@@ -10437,6 +10487,7 @@ async function msgFlush(){
       let done = false;
       try{
         if(ev.type === 'privacy'){ await msgApi('/v1/me', { privacy: ev.privacy }); done = true; }
+        else if(ev.type === 'country'){ await msgApi('/v1/me', { country: ev.country }); done = true; }
         else if(/^cg:|^pg/.test(ev.chatId || '')) done = true;          // Lockedintool's built-in feeds / old phone-only groups
         else if(!msgWsOpen) done = false;
         else if(/^grp/.test(ev.chatId || '')){
@@ -17281,7 +17332,7 @@ async function litKeysFromBox(bk, keybox){
 }
 function litSignedIn(){ const a = msgAccount(); return !!(a && a.token && a.pw); }
 // ---- The locked backup: chats, people's keys, call history, privacy, blocks, community choices ----
-const LIT_BACKUP_KEYS = ['story-currency', 'story-messages', 'story-msg-peers', 'story-calls', 'story-privacy', 'story-blocked', 'story-community', 'story-community-chats', 'story-community-always-mine', 'story-status-seen', 'story-profile-locks'];
+const LIT_BACKUP_KEYS = ['story-currency', 'story-country', 'story-messages', 'story-msg-peers', 'story-calls', 'story-privacy', 'story-blocked', 'story-community', 'story-community-chats', 'story-community-always-mine', 'story-status-seen', 'story-profile-locks'];
 let litBackupT = 0, litBackupAt = 0, litBackupBusy = false;
 function litBackupSoon(){
   if(!MSG_ENGINE || !litSignedIn()) return;
@@ -17313,6 +17364,14 @@ async function litBackupRestore(bk, backup){
   for(const k of LIT_BACKUP_KEYS) if(j.data && j.data[k] != null) try{ localStorage.setItem(k, j.data[k]); }catch(e){}
 }
 // ---- The screens ----
+let litAuthCountry = '';
+function litAuthCountries(){
+  const el = document.querySelector('.lit-auth'); if(!el) return;
+  const q = ((el.querySelector('.lit-auth-cq') || {}).value || '').trim().toLowerCase(), guess = phoneCountryGuess();
+  let list = Object.keys(COUNTRY_CURRENCY).filter(c=>!q || c.toLowerCase().includes(q));
+  if(!q && guess) list = [guess].concat(list.filter(c=>c !== guess));
+  el.querySelector('.lit-auth-citems').innerHTML = list.map(c=>'<button type="button" data-auth="country-pick" data-v="' + escText(c) + '"' + (c === litAuthCountry ? ' class="on"' : '') + '>' + escText(c) + '<small>' + COUNTRY_CURRENCY[c] + '</small></button>').join('') || '<div class="lit-auth-note">No country by that name.</div>';
+}
 let litAuthMode = 'welcome', litAuthBusy = false, litAuthTemp = null, litAuthRemember = true, litS3Last = null, litForgot = { u:'', opts:null, via:'' };
 // ---- Save login info (owner): yes = log in once and Lockedintool stays signed in; no = every time you close any part of
 // Lockedintool (the Pages, or Station 3's Profile / Messages / Updates / Create), you log in again to use it. You stay in
@@ -17370,7 +17429,7 @@ function litAuthOpen(mode){
     el.addEventListener('focusin', e=>{ if(e.target.closest('input')) typing(true); });
     el.addEventListener('focusout', ()=>setTimeout(()=>{ const ae = document.activeElement; if(!(ae && ae.closest && ae.closest('.lit-auth input'))) typing(false); }, 60));
     el.addEventListener('click', e=>{ const b = e.target.closest('[data-auth]'); if(b) litAuthAct(b.getAttribute('data-auth'), b); });
-    el.addEventListener('input', e=>{ const u = e.target.closest('.lit-auth-user'); if(u){ const low = u.value.toLowerCase().replace(/\s+/g, '').replace(/^@/, ''); if(low !== u.value) u.value = low; } litAuthCheck(); });
+    el.addEventListener('input', e=>{ if(e.target.closest('.lit-auth-cq')){ litAuthCountries(); return; } const u = e.target.closest('.lit-auth-user'); if(u){ const low = u.value.toLowerCase().replace(/\s+/g, '').replace(/^@/, ''); if(low !== u.value) u.value = low; } litAuthCheck(); });
     el.addEventListener('keydown', e=>{ if(e.key === 'Enter'){ e.preventDefault(); const go = el.querySelector('.lit-auth-go'); if(go && !go.disabled) go.click(); } });
   }
   const logo = '<img alt="" src="icon-192.png">';
@@ -17407,6 +17466,8 @@ function litAuthOpen(mode){
     '<p>' + (litAuthMode === 'setpw' ? 'Choose a password. You’ll use it with your @username to log in on any phone.' : 'Choose the name and @username people will know you by, and a password to log in with.') + '</p>' +
     '<label>Name</label><input class="lit-auth-name" autocomplete="name" autocapitalize="words" maxlength="30" value="' + escText(p.name || '') + '">' +
     '<label>Username</label><div class="lit-auth-at"><span>@</span><input class="lit-auth-user" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="30" value="' + escText(p.username || '') + '"' + (litAuthMode === 'setpw' && p.username ? ' readonly' : '') + '></div>' +
+    '<label>Country</label><button type="button" class="lit-auth-country' + (litAuthCountry ? ' on' : '') + '" data-auth="country">' + escText(litAuthCountry || 'Choose your country') + '<span>⌄</span></button>' +
+    '<div class="lit-auth-clist" hidden><input class="lit-auth-cq" placeholder="Search country" autocomplete="off"><div class="lit-auth-citems"></div></div>' +
     '<label>Password</label><input class="lit-auth-pw" type="password" autocomplete="new-password" maxlength="128" placeholder="At least 8 characters">' +
     '<label>Confirm password</label><input class="lit-auth-pw2" type="password" autocomplete="new-password" maxlength="128">' + litSaveRow() +
     '<div class="lit-auth-msg"></div><button class="lit-auth-go" data-auth="signup" disabled>' + (litAuthMode === 'setpw' ? 'Save' : 'Create account') + '</button>' +
@@ -17433,7 +17494,7 @@ function litAuthCheck(){
     else if(un && (usernameProblem(un) || brand(un))) problem = brand(un) ? 'Only Lockedintool’s own profile can use that name.' : usernameProblem(un);
     else if(pw && pw.length < 8) problem = 'The password needs at least 8 characters.';
     else if(pw2 && pw !== pw2) problem = 'The passwords don’t match.';
-    ok = !problem && name && un && pw.length >= 8 && pw === pw2;
+    ok = !problem && name && un && pw.length >= 8 && pw === pw2 && !!litAuthCountry;
   }
   if(msg && !litAuthBusy) msg.textContent = problem;
   go.disabled = !ok || litAuthBusy;
@@ -17443,6 +17504,13 @@ function litAuthBusySet(on, label){ litAuthBusy = on; const go = document.queryS
 async function litAuthAct(k, btn){
   if(k === 'save-toggle'){ litAuthRemember = !litAuthRemember; const b = document.querySelector('.lit-auth .lit-auth-save'); if(b) b.outerHTML = litSaveRow(); return; }
   if(k === 'way'){ litForgot.via = btn.getAttribute('data-v'); document.querySelectorAll('.lit-auth .lit-auth-way').forEach(x=>x.classList.toggle('on', x === btn)); return; }
+  if(k === 'country'){ const l = document.querySelector('.lit-auth .lit-auth-clist'); if(l){ l.hidden = !l.hidden; if(!l.hidden){ litAuthCountries(); } } return; }
+  if(k === 'country-pick'){
+    litAuthCountry = btn.getAttribute('data-v');
+    const b = document.querySelector('.lit-auth .lit-auth-country'); if(b){ b.firstChild.textContent = litAuthCountry; b.classList.add('on'); }
+    const l = document.querySelector('.lit-auth .lit-auth-clist'); if(l) l.hidden = true;
+    litAuthCheck(); return;
+  }
   if(k === 'to-signup' || k === 'to-login'){ litAuthMode = k === 'to-login' ? 'login' : 'signup'; litAuthOpen(litAuthMode); return; }
   if(k === 'to-forgot'){ const u = (document.querySelector('.lit-auth .lit-auth-user') || {}).value; litForgot = { u: u || '', opts:null, via:'' }; litAuthOpen('forgot'); return; }
   if(k === 'to-back'){ litAuthOpen(litSignedIn() && litLocked() ? 'unlock' : litSignedIn() ? 'setpw' : 'login'); return; }
@@ -17505,6 +17573,7 @@ async function litAuthAct(k, btn){
       // Your profile comes back from the server (bio and About too), so nothing on it is lost.
       let prof = {}; try{ const pr = await fetch(MSG_API + '/v1/profile?id=' + encodeURIComponent(j.id), { headers:{ authorization:'Bearer ' + j.token } }); if(pr.ok) prof = await pr.json(); }catch(e){}
       saveProfileData({ name: j.name || '', username: j.username || username, bio: prof.bio || '', about: prof.about || '' });
+      if(j.country) accountCountrySet(j.country);
       await litAccountSave({ id: j.id, token: j.token }, null, pw, salt);
       if(!j.mkbox){ litBackupAt = 0; litBackupNow(); }   // the backup is locked with the account key from now on
       try{ localStorage.removeItem('story-signed-out'); }catch(e){}
@@ -17525,7 +17594,8 @@ async function litAuthAct(k, btn){
       let acct = setpw ? msgAccount() : litAuthTemp;
       if(!acct){ const r = await fetch(MSG_API + '/v1/register', { method:'POST', headers:{ 'content-type':'application/json' }, body: JSON.stringify({ pub: keys.pub }) }); const j = await r.json(); if(!r.ok) throw Object.assign(new Error(j.error || 'register'), { code: j.error }); acct = litAuthTemp = { id: j.id, token: j.token }; }
       const call = async (path, body)=>{ const r = await fetch(MSG_API + path, { method:'POST', headers:{ 'content-type':'application/json', authorization:'Bearer ' + acct.token }, body: JSON.stringify(body) }); const j = await r.json().catch(()=>({})); if(!r.ok) throw Object.assign(new Error(j.error || 'server'), { code: j.error }); return j; };
-      const me = await call('/v1/me', { name, username, pub: keys.pub });
+      const me = await call('/v1/me', { name, username, pub: keys.pub, country: litAuthCountry });
+      accountCountrySet(litAuthCountry);
       await call('/v1/auth/set', { auth, pwsalt, bksalt, keybox: keys.keybox, mkbox: await litSeal(wrap, { mk: mk.b64 }), mkspare: mk.b64 });
       await keysPut({ priv: keys.priv, pub: keys.pub }); await litKeyPut('bk', mk.key);
       profileLocksSave(me); saveProfileData({ name: me.name || name, username: me.username || username });
