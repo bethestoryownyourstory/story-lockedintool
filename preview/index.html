@@ -7499,8 +7499,8 @@ const SUB_OPTIONS = [
   { key:'second', name:'Second system', short:'Lockedintool works with your phone - your apps stay as they are.',
     text:'Lockedintool works alongside your phone, like a second system. Your phone’s home screen and all your apps stay exactly as they are, and Lockedintool is always there on top of them - the Pages, Station 3 and everything in it.',
     list:['Your apps and home screen stay as they are', 'Lockedintool always there, over everything', 'Switch between Lockedintool and your apps any time'] },
-  { key:'only', name:'Only system', short:'Your phone only uses Lockedintool - the Dashboard is your apps.',
-    text:'Lockedintool becomes your phone’s only system. The Dashboard acts as your apps - you only stay inside Lockedintool. No other app opens, not even the phone’s own home screen, app list or recent apps.',
+  { key:'only', name:'Only system', short:'Your phone only uses Lockedintool - the Dashboard becomes your home screen.',
+    text:'Lockedintool becomes your phone’s only system. The Dashboard becomes your home screen and you only stay inside Lockedintool. No other app opens, not even the phone’s own home screen, app list or recent apps.',
     list:['Everything you do is in Lockedintool', 'Phone calls and emergency calls always still work', 'The lock screen and the phone’s own panel work as always', 'Turns off only when you log out or delete your account'] }
 ];
 function subOptName(k){ const o = SUB_OPTIONS.find(x=>x.key === k); return o ? o.name : SUB_OPTIONS[0].name; }
