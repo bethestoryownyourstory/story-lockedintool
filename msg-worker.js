@@ -110,7 +110,9 @@ export class Hub {
     try { this.sql.exec(`ALTER TABLE uposts ADD COLUMN title TEXT`); } catch (e) {}
     try { this.sql.exec(`ALTER TABLE uposts ADD COLUMN text TEXT`); } catch (e) {}
     try { this.sql.exec(`ALTER TABLE uposts ADD COLUMN items TEXT`); } catch (e) {}
-    try { this.sql.exec(`ALTER TABLE uposts ADD COLUMN music TEXT`); } catch (e) {}   // a song from your phone with the post / status: {media, name}
+    try { this.sql.exec(`ALTER TABLE uposts ADD COLUMN music TEXT`); } catch (e) {}
+    try { this.sql.exec(`ALTER TABLE uposts ADD COLUMN hl TEXT`); } catch (e) {}       // highlights: which highlight (its id on the phone)
+    try { this.sql.exec(`ALTER TABLE uposts ADD COLUMN hlname TEXT`); } catch (e) {}   // a song from your phone with the post / status: {media, name}
     this.sql.exec(`CREATE INDEX IF NOT EXISTS uposts_feed ON uposts(kind, at)`);
     // Hearts and comments on statuses (owner).
     this.sql.exec(`CREATE TABLE IF NOT EXISTS ulikes (pid TEXT, uid TEXT, at INTEGER, PRIMARY KEY (pid, uid))`);
@@ -407,6 +409,22 @@ export class Hub {
       posts: n("SELECT COUNT(*) AS n FROM uposts WHERE uid = ? AND kind = 'post'"),
       isFollowing: u.id !== me.id && this.follows(me.id, u.id), followsYou: u.id !== me.id && this.follows(u.id, me.id), me: u.id === me.id });
   }
+  // Highlights on a profile (owner): circles, the newest thing in each as its cover; open one to watch it.
+  highlightsOf(u, me) {
+    const rows = this.sql.exec("SELECT * FROM uposts WHERE uid = ? AND kind = 'highlight' ORDER BY at DESC", u.id).toArray();
+    const by = new Map();
+    for (const p of rows) { if (!by.has(p.hl)) by.set(p.hl, { id: p.hl, name: p.hlname || 'Highlight', items: [] }); by.get(p.hl).items.push(this.postView(p, me)); }
+    return [...by.values()].map(h => Object.assign(h, { cover: h.items[0].thumb || h.items[0].url, items: h.items.reverse() }));
+  }
+  // People who follow you hear about a new status, post, highlight or live (owner) - queued for phones that are off.
+  notifyFollowers(me, kind, id) {
+    const fans = this.sql.exec('SELECT uid FROM follows WHERE fid = ? LIMIT 5000', me.id).toArray();
+    for (const f of fans) {
+      if (this.blocked(me.id, f.uid)) continue;
+      if (kind === 'status') { const u = this.one('SELECT * FROM users WHERE id = ?', f.uid); if (!u || !this.canSeeStatus(u, me)) continue; }
+      this.deliver(f.uid, { t: 'fnote', kind, id, from: me.id, name: me.name || '', username: me.username || '', at: Date.now() });
+    }
+  }
   statusesOf(u, me) {
     if (!this.canSeeStatus(me, u)) return [];
     return this.sql.exec("SELECT * FROM uposts WHERE uid = ? AND kind = 'status' AND at >= ? ORDER BY at", u.id, Date.now() - 86400000).toArray().map(p => this.postView(p, me));
@@ -424,7 +442,7 @@ export class Hub {
     if (!this.canSeeProfile(me, u)) return json(this.personView(u, me));  // private: only who it is
     this.dropOldStatuses();
     const posts = this.sql.exec("SELECT * FROM uposts WHERE uid = ? AND kind = 'post' ORDER BY at DESC LIMIT 90", u.id).toArray().map(p => this.postView(p, me));
-    return json(Object.assign(this.personView(u, me), { postList: posts, statuses: this.statusesOf(u, me) }));
+    return json(Object.assign(this.personView(u, me), { postList: posts, statuses: this.statusesOf(u, me), highlights: this.highlightsOf(u, me) }));
   }
   updates(me) {
     this.dropOldStatuses();
@@ -438,17 +456,21 @@ export class Hub {
   }
   uposts(me, op, b) {
     if (op === 'create') {
-      const kind = b.kind === 'status' ? 'status' : 'post';
+      const kind = b.kind === 'status' ? 'status' : b.kind === 'highlight' ? 'highlight' : 'post';
+      const hl = kind === 'highlight' ? String(b.hl || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 40) : '';
+      if (kind === 'highlight' && !hl) return json({ error: 'hl' }, 400);
       // A post: title + text + up to 20 pictures / videos (any of them can be left out, but not all). A status: one.
       let items = Array.isArray(b.items) ? b.items.slice(0, 20).map(i => ({ type: i && i.type === 'video' ? 'video' : 'photo', media: String(i && i.media || ''), thumb: String(i && i.thumb || '') })) : [];
       if (!items.length && b.media) items = [{ type: b.type === 'video' ? 'video' : 'photo', media: String(b.media), thumb: String(b.thumb || '') }];
       for (const i of items) if (!this.mediaDone(i.media, me.id) || (i.thumb && !this.mediaDone(i.thumb, me.id))) return json({ error: 'media' }, 400);
       const title = kind === 'post' ? String(b.title || '').trim().slice(0, 100) : '', text = kind === 'post' ? String(b.text || '').trim().slice(0, 2000) : '';
-      if (kind === 'status' ? items.length !== 1 : !items.length && !title && !text) return json({ error: 'empty' }, 400);
+      if (kind !== 'post' ? items.length !== 1 : !items.length && !title && !text) return json({ error: 'empty' }, 400);
       const id = 'u' + rand(10), first = items[0] || {};
       const music = b.music && b.music.media && this.mediaDone(String(b.music.media), me.id) ? JSON.stringify({ media: String(b.music.media), name: String(b.music.name || '').slice(0, 80) }) : null;
       this.sql.exec('INSERT INTO uposts (id, uid, kind, type, media, thumb, at, title, text, items, music) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         id, me.id, kind, first.type || 'text', first.media || null, first.thumb || null, Date.now(), title || null, text || null, items.length ? JSON.stringify(items) : null, music);
+      if (hl) this.sql.exec('UPDATE uposts SET hl = ?, hlname = ? WHERE id = ?', hl, String(b.hlname || '').trim().slice(0, 40) || 'Highlight', id);
+      this.notifyFollowers(me, kind, id);
       this.dropOldStatuses();
       return json(this.postView(this.one('SELECT * FROM uposts WHERE id = ?', id), me));
     }

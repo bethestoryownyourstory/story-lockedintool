@@ -2433,6 +2433,7 @@
   #story-profile .up-p-pic .msg-pic{ width:78px; height:78px; }
   #story-profile .up-p-pic .msg-pic svg{ width:38px; height:38px; }
   #story-profile .up-p-about{ font-size:14px; line-height:1.45; margin-bottom:10px; }
+  #story-profile .up-p-hls{ margin:0 0 12px; }
   #story-profile .up-p-bio{ border:1px solid var(--pf-hair); border-radius:14px; padding:12px 14px; font-size:14px; line-height:1.5; white-space:pre-wrap; margin-bottom:12px; }
   #story-profile .up-p-btns{ display:flex; gap:10px; margin:4px 0 16px; }
   #story-profile .up-follow-lg{ flex:1; padding:11px 0; font-size:14px; }
@@ -9193,6 +9194,7 @@ window.storyProfileOnly = function(){
     else if(k === 'up-follow'){ e.stopPropagation(); upFollow(b.getAttribute('data-id'), b); }
     else if(k === 'up-person-back') upClosePerson();
     else if(k === 'up-p-status'){ const p = UP.person; if(p && (p.statuses || []).length) upView(p, p.statuses, 0, true); }
+    else if(k === 'up-hl'){ const p = UP.person, h = p && (p.highlights || [])[+b.getAttribute('data-i')]; if(h) upView(p, h.items, 0, false); }
     else if(k === 'up-post'){ const p = UP.person; if(!p) return; const x = (p.postList || [])[+b.getAttribute('data-i')]; if(!x) return;
       const single = (p.postList || []).filter(y=>!y.title && !y.text && (y.items || []).length === 1);
       if(single.includes(x)) upView(p, single, single.indexOf(x), false);
@@ -9251,7 +9253,12 @@ window.storyProfileOnly = function(){
       inp.value = ''; inp.blur(); crAddToHighlight(h.id);
     }
     else if(k === 'cr-hl-cancel'){ el.querySelector('.cr-sheet').hidden = true; }
-    else if(k === 'hl-open') showToast('Highlights — coming soon');
+    else if(k === 'hl-open'){
+      const h = profileHighlights().find(x=>x.id === b.getAttribute('data-id')); if(!h || !h.items.length) return;
+      const d = profileData(), me = { id:(msgAccount() || {}).id, name:d.name || '', username:d.username || '', photo: profilePhoto() };
+      const items = h.items.slice().reverse().map(x=>({ id:x.id, type: x.kind === 'video' ? 'video' : 'photo', url: PF_PHOTO_BASE + 'post/' + x.id, at: x.at }));
+      upView(me, items, 0, false); if(UP.view) UP.view.local = true; upShowItem();
+    }
     else if(k === 'ed-name') openProfileField('name');
     else if(k === 'ed-username') openProfileField('username');
     else if(k === 'field-box'){ const box = profileFieldBox(); profileTypingOn(); if(box && document.activeElement !== box) box.focus(); }
@@ -9639,6 +9646,7 @@ function crAddToHighlight(hid){
   const kept = window.StoryNative.createKeep(); if(!kept){ showToast('That didn’t work — try again'); return; }
   const [id, kind] = kept.split(':');
   h.items.unshift({ id, kind, at: Date.now() }); saveHighlights(hl);
+  upAddToServer(id, kind, 'highlight', { hl: h.id, hlname: h.name });   // on your profile for everyone, followers told
   el.querySelector('.cr-sheet').hidden = true;
   crClear(); showToast('Added to ' + h.name);
 }
@@ -9969,6 +9977,7 @@ function upRenderPerson(){
     '<div class="pf-stats">' + [['following', 'Following'], ['followers', 'Followers'], ['posts', 'Posts']].map(([k, l])=>'<div class="pf-stat"><div class="pf-stat-n">' + (p[k] === undefined ? '—' : fmtCount(p[k])) + '</div><div class="pf-stat-l">' + l + '</div></div>').join('') + '</div>' +
     (p.about && !p.isFollowing && !isMe ? '<div class="up-p-about">' + escText(p.about) + '</div>' : '') +
     (p.bio ? '<div class="up-p-bio">' + escText(p.bio) + '</div>' : '') +
+    ((p.highlights || []).length ? '<div class="pf-hls up-p-hls">' + p.highlights.map((h, i)=>'<button class="pf-hl" data-pf="up-hl" data-i="' + i + '"><span class="pf-hl-c"><img alt="" loading="lazy" src="' + escText(h.cover || '') + '"></span><span class="pf-hl-n">' + escText(h.name) + '</span></button>').join('') + '</div>' : '') +
     (isMe ? '' : '<div class="up-p-btns"><button class="up-follow up-follow-lg' + (p.isFollowing ? ' on' : '') + '" data-pf="up-follow" data-id="' + escText(p.id) + '">' + (p.isFollowing ? 'Following' : 'Follow') + '</button>' +
       (p.canMsg === false ? '' : '<button class="up-follow up-follow-lg" data-pf="up-message">Message</button>') + '</div>') +
     (p.loading ? '<div class="up-p-note">Loading…</div>' : p.error ? '<div class="up-p-note">No connection right now</div>'
@@ -10000,7 +10009,7 @@ function upShowItem(){
   if(v.status) upMarkSeen(it.id);
   box.querySelector('.up-v-bars').innerHTML = v.status ? v.items.map((x, i)=>'<span class="up-v-bar' + (i < v.i ? ' done' : '') + '"><i' + (i === v.i ? ' class="run"' : '') + '></i></span>').join('') : '';
   box.querySelector('.up-v-who').innerHTML = upPic(v.user) + '<span class="up-v-name">' + escText(upName(v.user)) + '</span><span class="up-v-time">' + upAgo(it.at) + '</span>';
-  box.querySelector('[data-pf="upv-delete"]').hidden = v.user.id !== meId;
+  box.querySelector('[data-pf="upv-delete"]').hidden = v.user.id !== meId || !!v.local;
   box.querySelector('[data-pf="upv-more"]').hidden = v.user.id === meId;
   // Statuses (owner): heart it, comment under it, or message the person.
   box.querySelector('.up-v-bottom').hidden = !v.status;
@@ -10181,7 +10190,7 @@ async function upPutMedia(f){
 function upQueue(){ try{ return JSON.parse(localStorage.getItem(UP_QUEUE) || '[]') || []; }catch(e){ return []; } }
 function upQueueSave(q){ try{ localStorage.setItem(UP_QUEUE, JSON.stringify(q)); }catch(e){} }
 // Create's ✓: a post or a status goes into the queue and up to the server (kept trying until it's there).
-function upAddToServer(localId, type, kind){ const q = upQueue(); q.push({ localId, type, kind, at: Date.now(), music: crMusic ? Object.assign({}, crMusic) : null }); upQueueSave(q); upFlush(); }
+function upAddToServer(localId, type, kind, extra){ const q = upQueue(); q.push(Object.assign({ localId, type, kind, at: Date.now(), music: crMusic ? Object.assign({}, crMusic) : null }, extra || {})); upQueueSave(q); upFlush(); }
 let upFlushing = false;
 async function upFlush(){
   if(upFlushing || !MSG_ENGINE || !msgAccount()) return;
@@ -10216,7 +10225,7 @@ async function upFlush(){
         if(job.type === 'video'){ try{ thumb = await upPutMedia(await upBytes(PF_PHOTO_BASE + 'postthumb/' + job.localId, 720)); }catch(e){} }
         let music = null;
         if(job.music){ try{ const r = await fetch(PF_PHOTO_BASE + 'chatfile/' + job.music.file); if(r.ok) music = { media: await upPutMedia({ bytes: new Uint8Array(await r.arrayBuffer()), mime: job.music.mime }), name: job.music.name }; }catch(e){ if(e.code === 'big') showToast('That song is too big to share (40 MB max)'); } }
-        await msgApi('/v1/uposts/create', { kind: job.kind, type: job.type, media, thumb, music });
+        await msgApi('/v1/uposts/create', { kind: job.kind, type: job.type, media, thumb, music, hl: job.hl, hlname: job.hlname });
         if(job.kind === 'status') showToast('Your status is up');
       }catch(e){
         if(e.code === 'big' || e.message === 'file'){ showToast(e.code === 'big' ? 'That video is too big to share (40 MB max)' : 'That file is gone'); }
@@ -10603,6 +10612,15 @@ async function msgOnServer(m){
   if(m.t === 'signedout'){ msgSignedOut(); return; }
   if(m.t === 'call'){ callOnSignal(m); return; }
   if(m.t === 'gcall'){ gcallOnMsg(m).catch(()=>{}); return; }
+  if(m.t === 'fnote'){   // someone you follow posted (owner: followers are told)
+    if(m.seq) msgSend({ t:'ack', seq:m.seq });
+    const who = m.name || (m.username ? '@' + m.username : 'Someone');
+    const what = m.kind === 'status' ? 'posted a status' : m.kind === 'highlight' ? 'added to a highlight' : m.kind === 'live' ? 'is live now - tap to watch' : 'shared a new post';
+    if(NATIVE && window.StoryNative.msgNotify) try{ window.StoryNative.msgNotify(who, who + ' ' + what); }catch(e){}
+    if(m.kind === 'live' && typeof liveNote === 'function') liveNote(m);
+    if(typeof upLoad === 'function') setTimeout(()=>{ try{ upLoad(); feedLoad && feedLoad(true); }catch(e){} }, 800);
+    return;
+  }
   if(m.t === 'glive'){ gliveSet(m.group, m.live); return; }
 }
 // ---- Groups in Messages: every group you're in (public from Community, private made here) is a chat, kept up to date
