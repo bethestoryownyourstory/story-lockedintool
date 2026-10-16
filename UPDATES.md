@@ -35,3 +35,4 @@ commits, pushed as a new update) - nothing else changes.
 | 27 | 2026-10-16 | Money: Net worth button under the calendar - all your accounts together, with a pencil to pick which accounts count; the calendar now lets you pick any past days (from a date to a date) | 4df621f, 1b6ca3f, 48028a1 |
 | 28 | 2026-10-16 | Wallet: Net worth button + pencil (pick the accounts combined to pay, total shown); Send asks Pay with - the card showing in Wallet, a different card (+), or net worth (the payment split over your accounts, approved in each bank, one after the other) | 3a98993 |
 | 29 | 2026-10-16 | New permanent Lockedintool logo (app icon, widget preview, web icons, download page) | bd7a909 |
+| 30 | 2026-10-16 | Subscription: the owner text under the options is gone - it shows 'Your plan: Basic · Second system · paid until …' like everyone's | cde3629 |
