@@ -37,3 +37,4 @@ commits, pushed as a new update) - nothing else changes.
 | 29 | 2026-10-16 | New permanent Lockedintool logo (app icon, widget preview, web icons, download page) | bd7a909 |
 | 30 | 2026-10-16 | Subscription: the owner text under the options is gone - it shows 'Your plan: Basic · Second system · paid until …' like everyone's | cde3629 |
 | 31 | 2026-10-16 | Reviewer download (app-review.apk): the app exactly as it is on the owner's phone, for Stitch's review - no owner controls | 9501896 |
+| 32 | 2026-10-16 | Subscription: Introduction Welcome price - $48 / $120 crossed out next to $5 / $15, 'Changes to current prices will be announced if made', Terms updated; at launch every user gets one welcome-price message from Lockedintool | 81e2256 |
