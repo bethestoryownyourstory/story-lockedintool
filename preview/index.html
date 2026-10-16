@@ -5069,10 +5069,20 @@ window.storyMoneyNew = function(){
 // together (bank accounts seen in your bank's messages + trading accounts) instead of only the card showing in Wallet;
 // the pencil next to it picks which accounts count. Kept in 'story-money-all' {on, keys} (keys = 'b:<app>|<card>' /
 // 't:<trading account id>'; no list yet = every account).
-const MONEY_ALL_KEY = 'story-money-all';
-function moneyAll(){ try{ return JSON.parse(localStorage.getItem(MONEY_ALL_KEY) || '{}') || {}; }catch(e){ return {}; } }
-function moneyAllSave(v){ try{ localStorage.setItem(MONEY_ALL_KEY, JSON.stringify(v)); }catch(e){} }
+const MONEY_ALL_KEY = 'story-money-all', WALLET_NW_KEY = 'story-wallet-nw';
+// Wallet's Net worth (owner) is its own button with its own accounts: it combines your bank accounts' money to pay
+// (Send > Pay with > Use net worth). Only bank accounts - trading accounts can't pay.
+function nwGet(store){ try{ return JSON.parse(localStorage.getItem(store) || '{}') || {}; }catch(e){ return {}; } }
+function nwSave(store, v){ try{ localStorage.setItem(store, JSON.stringify(v)); }catch(e){} }
+function nwHas(store, key){ const v = nwGet(store); return !Array.isArray(v.keys) || v.keys.includes(key); }
+function nwAccounts(store){ return store === WALLET_NW_KEY ? moneyAllAccounts().filter(a=>a.key.startsWith('b:')) : moneyAllAccounts(); }
+function moneyAll(){ return nwGet(MONEY_ALL_KEY); }
+function moneyAllSave(v){ nwSave(MONEY_ALL_KEY, v); }
 function moneyAllOn(){ return !!moneyAll().on; }
+function walletNwOn(){ return !!nwGet(WALLET_NW_KEY).on; }
+// The newest balance your bank stated for each account (by key), in the account currency when one is picked.
+function acctBalances(){ const m = {}; moneyBalances().forEach(a=>{ if(!(a.key in m)) m[a.key] = a; }); return m; }
+function walletNwList(){ const bal = acctBalances(); return nwAccounts(WALLET_NW_KEY).filter(a=>nwHas(WALLET_NW_KEY, a.key)).map(a=>Object.assign({}, a, { bal: bal[a.key] ? bal[a.key].bal : null, cur: bal[a.key] ? bal[a.key].cur : null })); }
 const moneyAcctKey = t=>'b:' + t.pkg + '|' + (t.card || '');
 function moneyAllAccounts(){
   const seen = {}, out = [];
@@ -5080,7 +5090,7 @@ function moneyAllAccounts(){
   tradeAccounts().forEach(a=>out.push({ key:'t:' + a.id, name:a.name, icon:'📈' }));
   return out;
 }
-function moneyAllHas(key){ const v = moneyAll(); return !Array.isArray(v.keys) || v.keys.includes(key); }
+function moneyAllHas(key){ return nwHas(MONEY_ALL_KEY, key); }
 function moneyView(){
   if(moneyAllOn()) return moneyTx().filter(t=>moneyAllHas(moneyAcctKey(t)));
   const c = activeCard(); return c ? moneyTx().filter(t=>cardMatches(c, t)) : moneyTx();
@@ -5468,13 +5478,14 @@ function moneySummaryScreen(){
 
 // The accounts Net worth counts - tick the ones you want.
 function moneyAllEditTemplate(){
-  const list = moneyAllAccounts();
+  const store = state.moneyAllEdit === WALLET_NW_KEY ? WALLET_NW_KEY : MONEY_ALL_KEY;
+  const list = nwAccounts(store);
   return `
     <div class="modal-overlay" data-action="money-all-close">
       <div class="confirm-sheet" onclick="event.stopPropagation()">
         <div class="confirm-title">Combined accounts under net worth</div>
         <div class="note" style="margin:0 0 10px;">Only the accounts you tick count.</div>
-        ${list.length ? `<div class="row-card" style="margin:0;">${list.map(a=>`<div class="row" data-moneyacct="${escText(a.key)}" style="cursor:pointer;"><div class="row-left"><div class="row-icon">${a.icon}</div><div class="row-name">${escText(a.name)}</div></div><span class="qa-radio${moneyAllHas(a.key) ? ' on' : ''}"></span></div>`).join('')}</div>`
+        ${list.length ? `<div class="row-card" style="margin:0;text-align:left;">${list.map(a=>`<div class="row" data-moneyacct="${escText(a.key)}" style="cursor:pointer;"><div class="row-left"><div class="row-icon">${a.icon}</div><div class="row-name">${escText(a.name)}</div></div><span class="qa-radio${nwHas(store, a.key) ? ' on' : ''}"></span></div>`).join('')}</div>`
           : `<div class="note">No accounts yet - they show here as your bank’s messages and your trading accounts come in.</div>`}
         <div class="confirm-btn-row" style="margin-top:12px;"><button class="btn-wide btn-primary" style="margin-top:0;" data-action="money-all-close">Done</button></div>
       </div>
@@ -7160,7 +7171,9 @@ function cardMatches(c, t){
   return !!a && !!b && (b.includes(a) || a.includes(b.split(' ')[0]));
 }
 // The whole Wallet follows the card that's showing (owner), like Money.
-const walletActivityList = ()=>moneyView().slice(0, 5);
+const walletActivityList = ()=>walletNwOn() ? moneyTx().filter(t=>nwHas(WALLET_NW_KEY, moneyAcctKey(t))).slice(0, 5) : moneyView().slice(0, 5);
+const NW_ICON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg>';
+const NW_PENCIL = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>';
 function walletActivityColor(amt, ts){
   const age = Date.now() - ts;
   if(age >= WALLET_ACTIVITY_COLOR_WINDOW_MS) return 'var(--text)';
@@ -7204,7 +7217,7 @@ function walletScreen(){
   const subs = walletSubscriptions();
   return `
     <div class="page-shell">
-    ${topBar('Wallet', true, '<button class="order-corner-btn" data-action="open-tx-from-wallet" title="Transaction History"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg></button>')}
+    ${topBar('Wallet', true, '<span style="display:flex;gap:6px;"><button class="order-corner-btn" data-action="wallet-nw-edit" title="Pick the accounts" style="' + (walletNwOn() ? '' : 'visibility:hidden;') + '">' + NW_PENCIL + '</button><button class="order-corner-btn' + (walletNwOn() ? ' money-all-on' : '') + '" data-action="wallet-nw" title="Net worth">' + NW_ICON + '</button><button class="order-corner-btn" data-action="open-tx-from-wallet" title="Transaction History"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg></button></span>')}
     ${pageArrows()}
     <div class="paycard-carousel" id="paycard-swipe" style="width:122%;margin-left:-11%;">
       <div class="paycard-track" style="width:${nSlides * 100}%;transform:translateX(calc(-${state.walletCardIndex} * ${100 / nSlides}%));">
@@ -7219,6 +7232,8 @@ function walletScreen(){
     <div class="paycard-dots">
       ${Array.from({ length:nSlides }, (_, k)=>`<span class="dot${state.walletCardIndex===k?' active':''}" data-cardidx="${k}"></span>`).join('')}
     </div>
+    ${walletNwOn() ? (()=>{ const l = walletNwList(), cur = moneyMainCur(), tot = l.reduce((x, a)=>x + (a.bal != null && a.cur === cur ? a.bal : 0), 0);
+      return `<div class="row-card" style="margin-top:6px;"><div class="row"><div class="row-left"><div class="row-icon">${NW_ICON}</div><div><div class="row-name">Net worth</div><div class="row-sub">${l.length} account${l.length === 1 ? '' : 's'} combined to pay</div></div></div><div class="row-amt">${fmtCur(tot, cur)}</div></div></div>`; })() : ''}
     <div class="btn-row"><button class="btn btn-row-action" data-action="tap-to-pay" style="background:#e8e6e1;color:#0a0a0a;">Tap to Pay<svg class="row-action-ico" viewBox="0 0 70 46" fill="none" stroke="currentColor" stroke-linecap="round">
               <!-- Recentered + scaled to the same footprint as the Wallet icon below (same
                    viewBox center, similar width/height) -- drawn full-size on its own axis
@@ -7263,6 +7278,7 @@ function walletScreen(){
 
     ${state.addCardOpen ? addCardTemplate() : ''}
     ${state.cardSheetId ? cardSheetTemplate() : ''}
+    ${state.moneyAllEdit ? moneyAllEditTemplate() : ''}
   `;
 }
 
@@ -7398,7 +7414,7 @@ function payHistoryHTML(){
   if(!h || !h.length) return '';
   const word = { pending:'Waiting for your bank', paid:'Paid', cancelled:'Cancelled', expired:'Not approved in time' };
   return `<div class="section-title">TRANSFERS</div><div class="row-card">${h.slice(0, 30).map(t=>`
-    <div class="row"><div class="row-left"><div class="row-icon">${t.dir === 'in' ? '↙' : '↗'}</div><div><div class="row-name">${escText(t.who || '')}</div><div class="row-sub">${escText(word[t.status] || t.status)}${t.ref ? ' · ' + escText(t.ref) : ''} · ${moneyDate(t.at)}</div></div></div>
+    <div class="row"><div class="row-left"><div class="row-icon">${t.dir === 'in' ? '↙' : '↗'}</div><div><div class="row-name">${escText(t.who || '')}</div><div class="row-sub">${escText(word[t.status] || t.status)}${t.from ? ' · from ' + escText(t.from) : ''}${t.ref ? ' · ' + escText(t.ref) : ''} · ${moneyDate(t.at)}</div></div></div>
     <div class="row-amt" style="color:${t.dir === 'in' ? 'var(--green)' : 'var(--text)'};">${t.dir === 'in' ? '+' : '-'}${payMoney(t.amount)}</div></div>`).join('')}</div>`;
 }
 function sendMoneyScreen(){
@@ -7410,8 +7426,9 @@ function sendMoneyScreen(){
     ${topBar('Send Money', false, '', 'wallet')}
     <div class="row-card pay-wait">
       <div class="pay-wait-amt">${payMoney(w.amount)}</div>
-      <div class="pay-wait-who">to ${escText(w.who)}</div>
-      <div class="pay-wait-status">${w.status === 'paid' ? 'Paid - it’s on its way to their bank' : w.status === 'cancelled' ? 'Cancelled in your bank' : w.status === 'expired' ? 'Not approved in time - nothing was paid' : 'Approve it in your bank’s page that opened. This updates by itself.'}</div>
+      <div class="pay-wait-who">to ${escText(w.who)}${w.from ? ' · from ' + escText(w.from) : ''}${w.of > 1 ? ' · part ' + (w.part + 1) + ' of ' + w.of : ''}</div>
+      ${w.of > 1 ? `<div class="note" style="margin:6px 0 0;">${state.pay.parts.map(q=>escText(q.from) + ' ' + payMoney(q.amount) + ' - ' + ({ todo:'next', starting:'starting', pending:'waiting for your bank', paid:'paid', cancelled:'cancelled', expired:'not approved', failed:'not sent' }[q.status] || q.status)).join('<br>')}</div>` : ''}
+      <div class="pay-wait-status">${w.status === 'pending' && w.from ? 'Approve it in your bank’s page with ' + escText(w.from) + '. This updates by itself.' : w.status === 'paid' ? 'Paid - it’s on its way to their bank' : w.status === 'cancelled' ? 'Cancelled in your bank' : w.status === 'expired' ? 'Not approved in time - nothing was paid' : 'Approve it in your bank’s page that opened. This updates by itself.'}</div>
       ${w.status === 'pending' ? `<button class="btn-wide" data-action="pay-reopen">Open my bank’s page again</button>` : `<button class="btn-wide btn-primary" data-action="pay-done">Done</button>`}
     </div>
     </div>`;
@@ -7440,7 +7457,8 @@ function sendMoneyScreen(){
     <button class="btn-wide btn-primary" data-action="pay-send" style="margin-top:14px;"${p.busy ? ' disabled' : ''}>${p.busy ? 'One moment…' : 'Send' + (amt > 0 ? ' ' + payMoney(amt) : '') + (toName ? ' to ' + escText(toName) : '')}</button>
     <div class="note" style="margin-top:10px;">You approve every payment in your own bank. It goes straight from your account into theirs - Lockedintool never holds your money.</div>
     ${payHistoryHTML()}
-    </div>`;
+    </div>
+    ${p.choose ? payWithTemplate() : ''}`;
 }
 function receiveMoneyScreen(){
   const p = state.pay, r = p.recv;
@@ -7480,7 +7498,16 @@ function payPoll(){
   if(document.visibilityState === 'hidden' || state.current !== 'send-money'){ payPollT = setTimeout(payPoll, 4000); return; }
   msgApi('/v1/pay/status?id=' + encodeURIComponent(w.id)).then(r=>{
     if(state.pay.waiting !== w) return;
-    if(r.status !== 'pending'){ w.status = r.status; showToast(r.status === 'paid' ? payMoney(w.amount) + ' paid to ' + w.who : r.status === 'cancelled' ? 'Payment cancelled' : 'Payment not approved in time'); payLoad(); payShow(); }
+    if(r.status !== 'pending'){
+      w.status = r.status;
+      const parts = state.pay.parts, part = parts && parts[w.part];
+      if(part) part.status = r.status;
+      // Net worth: the next account's part starts by itself once this one is paid; anything else stops the rest.
+      if(r.status === 'paid' && parts && w.part + 1 < parts.length){ showToast(payMoney(w.amount) + ' paid from ' + (w.from || 'your bank') + ' - now the next account'); payStartPart(w.part + 1); return; }
+      const done = parts ? parts.filter(q=>q.status === 'paid').reduce((x, q)=>x + q.amount, 0) : 0;
+      showToast(r.status === 'paid' ? (parts && parts.length > 1 ? payMoney(done) : payMoney(w.amount)) + ' paid to ' + w.who : (r.status === 'cancelled' ? 'Payment cancelled' : 'Payment not approved in time') + (done ? ' - ' + payMoney(done) + ' was already paid' : ''));
+      payLoad(); payShow();
+    }
     else payPollT = setTimeout(payPoll, 3000);
   }).catch(()=>{ payPollT = setTimeout(payPoll, 5000); });
 }
@@ -7492,15 +7519,66 @@ function paySend(){
   if(p.mode === 'story' && !p.to){ p.msg = 'Choose who you’re sending to.'; return; }
   if(p.mode === 'bank' && (!p.name.trim() || !p.bank || !/^\d{6,16}$/.test(p.acct.replace(/\s+/g, '')))){ p.msg = PAY_ERRORS['bank-details']; return; }
   if(!(amt >= 1 && amt <= 50000)){ p.msg = PAY_ERRORS.amount; return; }
-  const body = p.mode === 'story' ? { to:p.to.id, amount:amt, ref:p.ref } : { bank:{ name:p.name.trim(), bank:p.bank, acct:p.acct.replace(/\s+/g, '') }, amount:amt, ref:p.ref };
-  const who = p.mode === 'story' ? (p.to.name || '@' + p.to.username) : p.name.trim();
-  p.busy = true; p.msg = '';
+  // Before it goes through (owner): Pay with - the card showing in Wallet, a different card, or net worth.
+  p.choose = { amt, more:false }; p.msg = ''; payShow();
+}
+// The balance your bank last stated for a card (null = not known).
+function cardBalance(c){ const t = moneyTx().find(x=>x.bal != null && cardMatches(c, x)); return t ? { bal:t.bal, cur:t.cur } : null; }
+const cardLabel = c=>(c.bank || 'Card') + ' ••' + (c.last4 || '');
+// Net worth: the payment split over the accounts added to Wallet's Net worth - the most money first.
+function netWorthSplit(amt){
+  const l = walletNwList().filter(a=>a.bal != null && a.bal > 0 && (a.cur === 'ZAR' || a.cur == null)).sort((a, b)=>b.bal - a.bal);
+  let left = Math.round(amt * 100); const parts = [];
+  for(const a of l){ if(left <= 0) break; const take = Math.min(left, Math.floor(a.bal * 100)); if(take >= 100){ parts.push({ from:a.name, amount: take / 100, status:'todo' }); left -= take; } }
+  return { parts, short: left > 0 ? left / 100 : 0, total: l.reduce((x, a)=>x + a.bal, 0) };
+}
+function payWithTemplate(){
+  const p = state.pay, c = p.choose; if(!c) return '';
+  const cards = walletCards(), act = activeCard(), split = netWorthSplit(c.amt);
+  const bal = x=>{ const b = cardBalance(x); return b ? fmtCur(b.bal, b.cur) : 'Balance not known yet'; };
+  const row = (action, title, sub, extra)=>`<div class="row" data-action="${action}"${extra || ''} style="cursor:pointer;"><div class="row-left"><div><div class="row-name">${title}</div><div class="row-sub">${sub}</div></div></div><span class="row-amt">›</span></div>`;
+  return `
+    <div class="modal-overlay" data-action="paywith-close">
+      <div class="confirm-sheet" onclick="event.stopPropagation()">
+        <div class="confirm-title">Pay ${payMoney(c.amt)} with</div>
+        <div class="row-card" style="margin:0;text-align:left;">
+          ${act ? row('paywith-card', 'Use card ' + escText(cardLabel(act)), bal(act), ' data-id="' + escText(act.id) + '"') : ''}
+          ${cards.length > (act ? 1 : 0) ? row('paywith-more', 'Use different card ( + )', c.more ? 'Pick one below' : 'All your cards on Lockedintool') : ''}
+          ${c.more ? cards.filter(x=>!act || x.id !== act.id).map(x=>row('paywith-card', '&nbsp;&nbsp;' + escText(cardLabel(x)), bal(x), ' data-id="' + escText(x.id) + '"')).join('') : ''}
+          ${row('paywith-nw', 'Use net worth', split.parts.length > 1 ? 'Combines ' + split.parts.length + ' accounts - you approve each one in its bank' : split.parts.length === 1 ? 'From ' + escText(split.parts[0].from) : 'Turn on Net worth in Wallet and add your accounts')}
+          ${!cards.length ? row('paywith-bank', 'Choose at my bank', 'Pick the account on your bank’s page') : ''}
+        </div>
+        <div class="confirm-btn-row" style="margin-top:12px;"><button class="btn-wide" style="margin-top:0;" data-action="paywith-close">Cancel</button></div>
+      </div>
+    </div>`;
+}
+// One payment (or one part of a net worth payment) - your bank's page opens to approve it.
+function payStartPart(i){
+  const p = state.pay, parts = p.parts; if(!parts || !parts[i]) return;
+  const part = parts[i], d = p.dest;
+  const body = Object.assign({}, d.body, { amount: part.amount, from: part.from || '' });
+  p.busy = true; p.msg = ''; part.status = 'starting'; payShow();
   msgApi('/v1/pay/send', body).then(r=>{
-    p.busy = false;
-    p.waiting = { id:r.id, url:r.url, amount:amt, who, status:'pending', started:Date.now() };
-    p.amount = ''; p.ref = '';
+    p.busy = false; part.status = 'pending';
+    p.waiting = { id:r.id, url:r.url, amount:part.amount, who:d.who, from:part.from, part:i, of:parts.length, status:'pending', started:Date.now() };
     payOpenBank(r.url); payShow(); payPollT = setTimeout(payPoll, 4000);
-  }).catch(e=>{ p.busy = false; p.msg = PAY_ERRORS[e.code] || 'Couldn’t start the payment - try again.'; payShow(); });
+  }).catch(e=>{ p.busy = false; part.status = 'failed'; p.msg = PAY_ERRORS[e.code] || 'Couldn’t start the payment - try again.'; if(i > 0) p.msg += ' ' + payMoney(parts.slice(0, i).reduce((x, q)=>x + q.amount, 0)) + ' was already paid.'; p.parts = null; payShow(); });
+}
+function payWithGo(kind, id){
+  const p = state.pay, c = p.choose; if(!c) return;
+  const amt = c.amt;
+  let parts;
+  if(kind === 'nw'){
+    const sp = netWorthSplit(amt);
+    if(!sp.parts.length){ showToast(walletNwOn() ? 'Lockedintool doesn’t know your accounts’ balances yet' : 'Turn on Net worth in Wallet and add your accounts'); return; }
+    if(sp.short > 0){ showToast('Your accounts together have ' + payMoney(sp.total) + ' - not enough for ' + payMoney(amt)); return; }
+    parts = sp.parts;
+  } else if(kind === 'card'){ const card = walletCards().find(x=>x.id === id); parts = [{ from: card ? cardLabel(card) : '', amount: amt, status:'todo' }]; }
+  else parts = [{ from:'', amount: amt, status:'todo' }];
+  const body = p.mode === 'story' ? { to:p.to.id, ref:p.ref } : { bank:{ name:p.name.trim(), bank:p.bank, acct:p.acct.replace(/\s+/g, '') }, ref:p.ref };
+  p.dest = { body, who: p.mode === 'story' ? (p.to.name || '@' + p.to.username) : p.name.trim() };
+  p.parts = parts; p.choose = null; p.amount = ''; p.ref = '';
+  payStartPart(0);
 }
 function payOpenBank(url){ if(!url) return; if(NATIVE && window.StoryNative.openUrl) window.StoryNative.openUrl(url); else window.open(url, '_blank'); }
 function payRecvSave(){
@@ -14335,10 +14413,11 @@ function attachHandlers(){
   });
 
   document.querySelectorAll('[data-moneyacct]').forEach(el=>el.addEventListener('click', ()=>{
-    const k = el.getAttribute('data-moneyacct'), v = moneyAll();
-    let keys = Array.isArray(v.keys) ? v.keys.slice() : moneyAllAccounts().map(a=>a.key);
+    const store = state.moneyAllEdit === WALLET_NW_KEY ? WALLET_NW_KEY : MONEY_ALL_KEY;
+    const k = el.getAttribute('data-moneyacct'), v = nwGet(store);
+    let keys = Array.isArray(v.keys) ? v.keys.slice() : nwAccounts(store).map(a=>a.key);
     keys = keys.includes(k) ? keys.filter(x=>x !== k) : keys.concat(k);
-    v.keys = keys; moneyAllSave(v); renderDevice();
+    v.keys = keys; nwSave(store, v); renderDevice();
   }));
   document.querySelectorAll('[data-moneyrange]').forEach(el=>el.addEventListener('click', ()=>{ setMoneyRange({ kind: el.getAttribute('data-moneyrange') }); state.calOpen = false; state.calSel = null; state.calView = null; renderDevice(); }));
   // The calendar: first tap = a day, second tap = the other end of the range, a third tap starts again.
@@ -15813,7 +15892,12 @@ function attachHandlers(){
         case 'pay-unpick': state.pay.to = null; break;
         case 'pay-send': paySend(); break;
         case 'pay-reopen': if(state.pay.waiting) payOpenBank(state.pay.waiting.url); break;
-        case 'pay-done': state.pay.waiting = null; break;
+        case 'pay-done': state.pay.waiting = null; state.pay.parts = null; break;
+        case 'paywith-close': state.pay.choose = null; break;
+        case 'paywith-more': state.pay.choose.more = !state.pay.choose.more; break;
+        case 'paywith-card': payWithGo('card', el.getAttribute('data-id')); break;
+        case 'paywith-nw': payWithGo('nw'); break;
+        case 'paywith-bank': payWithGo('bank'); break;
         case 'pay-recv-bank': state.pay.recv.bank = el.getAttribute('data-v'); break;
         case 'pay-recv-save': payRecvSave(); break;
         case 'pay-recv-edit': { const m = state.pay.info && state.pay.info.bank; Object.assign(state.pay.recv, { editing:true, name: m ? m.name : '', bank: m ? m.bank : '', acct:'', msg:'' }); break; }
@@ -15857,7 +15941,9 @@ function attachHandlers(){
         case 'privacy-call-person': { const p = storyPrivacy(), id = el.getAttribute('data-value'); const l = p.callPeople || []; p.callPeople = l.includes(id) ? l.filter(x=>x !== id) : l.concat(id); setStoryPrivacy(p); break; }
         case 'cal-open': state.calOpen = true; state.calSel = null; state.calView = null; break;
         case 'money-all': { const v = moneyAll(); v.on = !v.on; moneyAllSave(v); showToast(v.on ? 'Net worth' : 'Showing your card'); break; }
-        case 'money-all-edit': state.moneyAllEdit = true; break;
+        case 'money-all-edit': state.moneyAllEdit = MONEY_ALL_KEY; break;
+        case 'wallet-nw': { const v = nwGet(WALLET_NW_KEY); v.on = !v.on; nwSave(WALLET_NW_KEY, v); showToast(v.on ? 'Net worth' : 'Showing your card'); break; }
+        case 'wallet-nw-edit': state.moneyAllEdit = WALLET_NW_KEY; break;
         case 'money-all-close': state.moneyAllEdit = false; break;
         case 'add-card': state.addCard = {}; state.addCardOpen = true; break;
         case 'card-scan': cardScanSides = {}; state.addCard = Object.assign(state.addCard || {}, state.addCard && state.addCard.mode ? cardFormVals() : {}); state.addCardOpen = false; renderDevice(); openCardCamera('front'); return;
