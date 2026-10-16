@@ -1372,7 +1372,10 @@
   .sub-list{ margin:10px 0 14px; padding-left:20px; font-size:13.5px; line-height:1.7; }
   .sub-opts{ display:flex; gap:10px; margin:2px 0 10px; }
   .sub-opt{ position:relative; flex:1; padding:12px 8px; border-radius:14px; border:1px solid #2a2a2a; background:#000000; color:#ffffff; font:inherit; font-size:14px; font-weight:800; cursor:pointer; }
-  .sub-opt.on{ background:#ffffff; color:#000000; border-color:#ffffff; }
+  .sub-opt{ display:flex; align-items:center; justify-content:center; gap:6px; }
+  .sub-opt.on{ border-color:#ffffff; }
+  .sub-opt-mark{ display:inline-block; width:14px; font-size:13px; }
+  .sub-opt:not(.on) .sub-opt-mark{ display:none; }
   .sub-opt-tip{ display:none; position:absolute; left:0; right:0; top:calc(100% + 8px); z-index:5; padding:10px 12px; border-radius:12px; border:1px solid #2a2a2a; background:#000000; color:#ffffff; font-size:12.5px; font-weight:500; line-height:1.45; text-align:left; box-shadow:0 8px 24px rgba(0,0,0,0.5); }
   .sub-opt-tip b{ display:block; font-size:13px; margin-bottom:3px; }
   @media (hover:hover){ .sub-opt:hover .sub-opt-tip{ display:block; } }
@@ -7468,7 +7471,7 @@ function subscriptionScreen(){
     <div class="page-shell sub-page">
     ${topBar('Subscription', false, '', 'dashboard', '', locked)}
     <div class="sub-head">LOCKED IN TOOL</div>
-    <div class="sub-opts">${SUB_OPTIONS.map(o=>`<button class="sub-opt${mode === o.key ? ' on' : ''}" data-action="sub-opt" data-v="${o.key}">${o.name}<span class="sub-opt-tip"><b>${o.name}</b>${o.short}</span></button>`).join('')}</div>
+    <div class="sub-opts">${SUB_OPTIONS.map(o=>`<button class="sub-opt${mode === o.key ? ' on' : ''}" data-action="sub-opt" data-v="${o.key}"><span class="sub-opt-mark">${mode === o.key ? '✓' : ''}</span>${o.name}<span class="sub-opt-tip"><b>${o.name}</b>${o.short}</span></button>`).join('')}</div>
     <div class="sub-status">${escText(status)}</div>
     ${w ? `<div class="row-card pay-wait">
       <div class="pay-wait-amt">${escText(w.name)}</div>
@@ -7508,7 +7511,8 @@ const SUB_OPTIONS = [
     list:['Everything you do is in Lockedintool', 'Phone calls and emergency calls always still work', 'The lock screen and the phone’s own panel work as always', 'Turns off only when you log out or delete your account'] }
 ];
 function subOptName(k){ const o = SUB_OPTIONS.find(x=>x.key === k); return o ? o.name : SUB_OPTIONS[0].name; }
-function subMode(){ if(sysModeState().on) return 'only'; return state.sub.mode || ((subState() || {}).mode) || 'second'; }
+// Nothing is chosen until you pick an option (owner: a pre-chosen one was confusing) - except Only system while it's on.
+function subMode(){ if(sysModeState().on) return 'only'; return state.sub.mode || null; }
 function subOptionScreen(locked){
   const o = SUB_OPTIONS.find(x=>x.key === state.sub.optView) || SUB_OPTIONS[0];
   return `
@@ -7562,6 +7566,7 @@ function subPoll(){
 }
 function subBuy(plan){
   const s = subState() || {};
+  if(!subMode()){ showToast('Choose Second system or Only system first'); return; }   // owner: no plan without an option
   if(!s.connected){ showToast('Subscriptions open once LOCKED IN TOOL’s payments are set up'); return; }
   if(!msgAccount()){ showToast('Your Lockedintool account is being set up - try again in a moment'); return; }
   const p = SUB_PLANS.find(x=>x.key === plan), pr = (s.plans || {})[plan] || {};
