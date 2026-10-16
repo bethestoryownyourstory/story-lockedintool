@@ -7625,8 +7625,7 @@ function subscriptionScreen(){
   const locked = subLocked(), active = subActive();
   const until = s.until ? new Date(s.until).toLocaleDateString('en-ZA', { day:'numeric', month:'short', year:'numeric' }) : '';
   const w = state.sub.waiting;
-  const status = STORY_OWNER ? 'Owner - you have everything' + (active ? ' (plan: ' + (s.plan === 'premium' ? 'Premium' : 'Basic') + ' until ' + until + ')' : '') + '. You can still pay a plan, e.g. to test payments.'
-    : active ? 'Your plan: ' + (s.plan === 'premium' ? 'Premium' : 'Basic') + ' · ' + subOptName(s.mode) + ' · paid until ' + until
+  const status = active ? 'Your plan: ' + (s.plan === 'premium' ? 'Premium' : 'Basic') + ' · ' + subOptName(s.mode) + ' · paid until ' + until
     : s.connected ? 'Choose a plan to use LOCKED IN TOOL.' : 'Subscriptions open once LOCKED IN TOOL’s payments are set up.';
   if(state.sub.optView) return subOptionScreen(locked);
   const mode = subMode();
