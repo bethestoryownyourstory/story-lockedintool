@@ -73,6 +73,7 @@ export class Hub {
     // The option a plan is bought under (owner): 'second' = Lockedintool as your second system, 'only' = your only system.
     try { this.sql.exec(`ALTER TABLE subs ADD COLUMN mode TEXT`); } catch (e) {}
     try { this.sql.exec(`ALTER TABLE payments ADD COLUMN mode TEXT`); } catch (e) {}
+    try { this.sql.exec(`ALTER TABLE payments ADD COLUMN payfrom TEXT`); } catch (e) {}   // which of your accounts you chose to pay from (Pay with)
     this.sql.exec(`CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT)`);
     // Updates (owner): following, profile posts and 24-hour statuses, and the pictures / videos they show.
     try { this.sql.exec(`ALTER TABLE users ADD COLUMN about TEXT`); } catch (e) {}
@@ -1163,7 +1164,7 @@ export class Hub {
     const other = out ? (p.to_uid ? this.one('SELECT name, username FROM users WHERE id = ?', p.to_uid) : null) : this.one('SELECT name, username FROM users WHERE id = ?', p.uid);
     return { id: p.id, dir: out ? 'out' : 'in', amount: p.cents / 100, currency: 'ZAR', ref: p.ref || '', status: p.status, at: p.created,
       who: out ? (other ? (other.name || '@' + other.username) : p.to_name) : (other ? (other.name || '@' + (other.username || '')) : 'Someone'),
-      bank: out && !p.to_uid ? (PAY_BANKS[p.to_bank] || '') + (p.to_mask ? ' ••' + p.to_mask : '') : '' };   // a STORY profile's bank is never shown
+      bank: out && !p.to_uid ? (PAY_BANKS[p.to_bank] || '') + (p.to_mask ? ' ••' + p.to_mask : '') : '', from: out ? p.payfrom || '' : '' };   // a STORY profile's bank is never shown
   }
   async pay(me, op, b, url) {
     const now = Date.now();
@@ -1199,8 +1200,8 @@ export class Hub {
           beneficiary: { bankAccount: { name: $name, bankId: $bankId, accountNumber: $acct } } }) { paymentInitiationRequest { id url } } }`,
         { amount: { quantity: (cents / 100).toFixed(2), currency: 'ZAR' }, payerReference: ref.slice(0, 12), beneficiaryReference: ref, externalReference: id, name: to.name, bankId: to.bank, acct: to.acct });
       const pr = d.clientPaymentInitiationRequestCreate.paymentInitiationRequest;
-      this.sql.exec('INSERT INTO payments (id, uid, to_uid, to_name, to_bank, to_mask, cents, ref, stitch, status, created, updated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        id, me.id, toUid, toUid ? null : to.name, to.bank, toUid ? '' : to.acct.slice(-3), cents, ref, pr.id, 'pending', now, now);
+      this.sql.exec('INSERT INTO payments (id, uid, to_uid, to_name, to_bank, to_mask, cents, ref, stitch, status, created, updated, payfrom) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        id, me.id, toUid, toUid ? null : to.name, to.bank, toUid ? '' : to.acct.slice(-3), cents, ref, pr.id, 'pending', now, now, String(b.from || '').replace(/[^\p{L}\p{N} .•'&-]/gu, '').slice(0, 40) || null);
       const back = this.env.STITCH_REDIRECT || (url.origin + '/v1/pay/return');
       return json({ id, url: pr.url + (pr.url.includes('?') ? '&' : '?') + 'redirect_uri=' + encodeURIComponent(back) });
     }
