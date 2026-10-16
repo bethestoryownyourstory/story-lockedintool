@@ -1082,7 +1082,7 @@ class OverlayService : Service(), StoryBridge.Host {
     private fun systemShowPages() {
         val p = pagesPane ?: return
         hideLiveWidgets()
-        // The Dashboard is your home (owner: the Dashboard acts as your apps): coming back always lands on it. Pages
+        // The Dashboard is your home (owner: the Dashboard becomes your home screen): coming back always lands on it. Pages
         // already up (e.g. back from Lockedintool's own picture picker) stay where they are.
         if (!p.shown) { warmUp(); p.web.evaluateJavascript("window.storyShow&&window.storyShow('dashboard',false)", null); setShown(p, true) }
         updateBubble(); addBar()
