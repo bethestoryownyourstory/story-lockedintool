@@ -1506,6 +1506,16 @@
   }
   .membership .ico{ font-size:15px; display:block; margin-bottom:4px; }
   .membership-grid{ flex-wrap:wrap; }
+  .focus-empty-body{ display:flex; align-items:center; justify-content:center; min-height:60vh; }
+  .focus-plus{ width:84px; height:84px; border-radius:50%; border:1.5px dashed rgba(255,255,255,0.45); background:transparent; color:var(--text); font-size:40px; font-weight:300; line-height:1; cursor:pointer; }
+  .focus-opts .btn-wide{ flex:1; }
+  .focus-prev-btn{ margin-left:auto; padding:7px 14px; border-radius:10px; border:1px solid var(--line); background:transparent; color:var(--text); font:inherit; font-size:12px; font-weight:700; }
+  .focus-preview{ display:flex; justify-content:center; }
+  .focus-mini{ position:relative; width:180px; height:330px; overflow:hidden; border-radius:16px; border:1px solid var(--line); pointer-events:none; background:var(--bg-app); }
+  .focus-mini-in{ position:absolute; left:0; top:0; width:393px; transform:scale(0.458); transform-origin:top left; }
+  .focus-app-list{ max-height:300px; overflow-y:auto; scrollbar-width:none; }
+  .focus-app-list::-webkit-scrollbar{ display:none; }
+  .focus-app-ico{ width:30px; height:30px; padding:0; background:transparent; }
   .membership-grid .membership{ flex:1 1 calc(25% - 8px); min-width:64px; cursor:pointer; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .memb-ico{ font-weight:800; }
   .memb-num{ font-size:22px; font-weight:800; letter-spacing:0.06em; text-align:center; margin:6px 0 10px; word-break:break-all; }
@@ -1828,6 +1838,14 @@
   .chart-fs-body{ flex:1; min-width:0; display:flex; align-items:flex-end; gap:4px; padding:10px 16px; overflow:hidden; }
   .chart-fs-controls{ display:flex; flex-direction:column; align-items:center; gap:8px; padding:0 14px 14px; }
   .chart-fs-btnrow{ width:100%; margin:0; }
+  /* Owner: the order (⋯) and SL/TP buttons sit at the SIDE of Buy / lot / Sell, not stacked above them - the chart
+     gets that height, so nothing of ours sits over TradingView's own bottom bar. */
+  .chart-fs-controls{ padding-top:6px; }
+  .chart-fullscreen:not(.landscape) .chart-fs-controls{ padding-right:52px; }   /* clear of Station 3's corner button */
+  .chart-fs-btnrow{ display:flex; align-items:stretch; gap:6px; }
+  .chart-fs-btnrow .fs-side{ flex:0 0 46px; display:flex; flex-direction:column; gap:4px; }
+  .chart-fs-btnrow .fs-side .order-corner-btn, .chart-fs-btnrow .fs-side .tv-sltp-btn{ position:static; width:100%; height:auto; flex:1 1 0; min-height:0; margin:0; padding:2px 0; font-size:10px; line-height:1; transform:none; }
+  .chart-fs-btnrow > .btn{ flex:1 1 0; min-width:0; }
   .chart-orient-btn{
     width:26px; height:26px; border-radius:8px; background:var(--card-2); border:1px solid var(--line);
     color:var(--text); font-size:12px; cursor:pointer; font-family:var(--font-body);
@@ -3944,9 +3962,11 @@ function appPageScreen(key){
 // Landing on an app page opens that app; the Pages go back to the page before it (the nearest STORY page), so the
 // left-edge swipe brings you back there.
 function landOnAppPage(){
-  if(!isAppPage(state.current) || !NATIVE || IN_STATION3_WINDOW || !window.StoryNative.appPageOpen) return false;
+  // Focus made into an app (Custom) works like any app page.
+  const focusApp = state.current === 'trading' && focusAddon().indexOf('app:') === 0;
+  if((!isAppPage(state.current) && !focusApp) || !NATIVE || IN_STATION3_WINDOW || !window.StoryNative.appPageOpen) return false;
   if(state.rowsViewOpen || (state.pageStyleOn && state.pageStyleViewOpen)) return false;
-  const pkg = state.current.slice(4);
+  const pkg = focusApp ? focusAddon().slice(4) : state.current.slice(4);
   let i = PAGES.indexOf(state.current);
   while(i > 0 && isAppPage(PAGES[i])) i--;
   state.current = PAGES[Math.max(0, i)];
@@ -6759,7 +6779,70 @@ function draftFor(side){
   return side === 'buy' ? { sl: lo, tp: hi } : { sl: hi, tp: lo };
 }
 
+// ---- Focus (owner): it comes EMPTY - a + to add something: Built-in add-ons (for now the Trading page, with a
+// picture of it to preview) or Custom (any app on the phone, made into the page). Cancel = Focus stays empty.
+// `story-focus` = 'trading' | 'app:<pkg>' | '' (empty). Phones from before that already had a trading account keep Trading. ----
+const FOCUS_KEY = 'story-focus';
+function focusAddon(){
+  let v = null; try{ v = localStorage.getItem(FOCUS_KEY); }catch(e){}
+  if(v === null){ let had = false; try{ had = (JSON.parse(localStorage.getItem('story-trade-accounts') || '[]') || []).length > 0; }catch(e){} return had ? 'trading' : ''; }
+  return v;
+}
+function focusSet(v){ try{ localStorage.setItem(FOCUS_KEY, v || ''); }catch(e){} }
+const FOCUS_ADDONS = [{ key:'trading', name:'Trading', sub:'TradingView chart + your broker in one page' }];
 function tradingScreen(){
+  const f = focusAddon();
+  if(f === 'trading') return tradingPageScreen();
+  if(f.indexOf('app:') === 0) return appPageScreen(f).replace('page-shell app-page', 'page-shell app-page focus-app');
+  return focusEmptyScreen();
+}
+function focusEmptyScreen(){
+  const st = state.focusAdd || null;
+  return `
+    <div class="page-shell focus-empty">
+    ${topBar('Focus', true)}
+    <div class="focus-empty-body"><button class="focus-plus" data-action="focus-add" aria-label="Add to Focus">+</button></div>
+    </div>
+    ${st ? focusAddSheetHTML(st) : ''}`;
+}
+function focusAddSheetHTML(st){
+  if(st.step === 'choose') return `
+    <div class="modal-overlay" data-action="focus-cancel"><div class="confirm-sheet" onclick="event.stopPropagation()">
+      <div class="confirm-title">Add to Focus</div>
+      <div class="confirm-btn-row focus-opts" style="margin-top:10px;"><button class="btn-wide" style="margin-top:0;" data-action="focus-builtin">Built-in add-ons</button><button class="btn-wide" style="margin-top:0;" data-action="focus-custom">Custom</button></div>
+      <button class="btn-wide" data-action="focus-cancel">Cancel</button>
+    </div></div>`;
+  if(st.step === 'builtin') return `
+    <div class="modal-overlay" data-action="focus-cancel"><div class="confirm-sheet" onclick="event.stopPropagation()">
+      <div class="confirm-title">Built-in add-ons</div>
+      <div class="row-card">${FOCUS_ADDONS.map(a=>`<div class="row"><div><div class="row-name">${escText(a.name)}</div><div class="row-sub">${escText(a.sub)}</div></div><button class="btn-sm focus-prev-btn" data-action="focus-preview" data-v="${a.key}">Preview</button></div>`).join('')}</div>
+      <button class="btn-wide" data-action="focus-cancel">Cancel</button>
+    </div></div>`;
+  if(st.step === 'preview') return `
+    <div class="modal-overlay" data-action="focus-cancel"><div class="confirm-sheet focus-preview-sheet" onclick="event.stopPropagation()">
+      <div class="confirm-title">${escText((FOCUS_ADDONS.find(a=>a.key === st.v) || {}).name || '')}</div>
+      <div class="focus-preview">${focusPreviewHTML(st.v)}</div>
+      <div class="confirm-btn-row" style="margin-top:10px;"><button class="btn-wide" style="margin-top:0;" data-action="focus-cancel">Cancel</button><button class="btn-wide btn-primary" style="margin-top:0;" data-action="focus-add-go" data-v="${st.v}">Add</button></div>
+    </div></div>`;
+  if(st.step === 'custom'){
+    const apps = (state.installedApps || []).filter(a=>a.pkg);
+    return `
+    <div class="modal-overlay" data-action="focus-cancel"><div class="confirm-sheet" onclick="event.stopPropagation()">
+      <div class="confirm-title">Custom</div>
+      <div class="confirm-sub">Pick any app - it becomes your Focus page.</div>
+      <div class="focus-app-list">${apps.length ? apps.map(a=>`<div class="row" data-action="focus-add-go" data-v="app:${escText(a.pkg)}" style="cursor:pointer;"><div class="row-left"><div class="row-icon focus-app-ico">${appIconHTML(a)}</div><div class="row-name">${escText(a.name)}</div></div></div>`).join('') : '<div class="note">Your apps show here in the Lockedintool app.</div>'}</div>
+      <button class="btn-wide" data-action="focus-cancel">Cancel</button>
+    </div></div>`;
+  }
+  return '';
+}
+// A picture of the add-on as it looks (the real page, shrunk).
+function focusPreviewHTML(key){
+  if(key !== 'trading') return '';
+  const html = stripPageTop(tradingPageScreen().replace(/\sid="[^"]*"/g, ''));
+  return '<div class="focus-mini"><div class="focus-mini-in">' + html + '</div></div>';
+}
+function tradingPageScreen(){
   // Real numbers only (owner): your connected account's live balance, positions and prices - "—" until there is one.
   const acc = activeTradeAccount();
   const live = (acc && state.live[acc.id]) || {};
@@ -6978,9 +7061,11 @@ function chartFullscreenTemplate(){
         </div>
         <div class="chart-fs-controls">
           ${isLandscape ? fsOrderHTML() : ''}
-          <button class="order-corner-btn fs-hide-land" data-action="order-panel" title="Order options">⋯</button>
-          <button class="tv-sltp-btn tv-sltp-fs fs-hide-land${state.draftSLTP ? ' on' : ''}" data-action="draft-sltp">SL/TP</button>
           <div class="btn-row chart-fs-btnrow">
+            <div class="fs-side fs-hide-land">
+              <button class="order-corner-btn" data-action="order-panel" title="New order">⋯</button>
+              <button class="tv-sltp-btn tv-sltp-fs${state.draftSLTP ? ' on' : ''}" data-action="draft-sltp">SL/TP</button>
+            </div>
             <button class="btn btn-buy" data-action="trade-buy">Buy</button>
             <div class="lot-setter compact">
               <button class="lot-btn" data-lot="-1">−</button>
@@ -7460,7 +7545,7 @@ function payFind(q){
   const t = q.trim();
   if(t.replace(/^@/, '').length < 2 || !msgAccount()){ state.pay.found = []; payFoundDraw(); return; }
   payFindT = setTimeout(async ()=>{
-    try{ const r = await msgApi('/v1/find?q=' + encodeURIComponent(t)); if(state.pay.q.trim() === t){ state.pay.found = r.people || []; payFoundDraw(); } }
+    try{ const r = await msgApi('/v1/find?q=' + encodeURIComponent(t)); if(state.pay.q.trim() === t){ state.pay.found = (r.people || []).filter(u=>u.id !== (msgAccount() || {}).id); payFoundDraw(); } }
     catch(e){ state.pay.found = []; payFoundDraw(); }
   }, 300);
 }
@@ -8378,7 +8463,7 @@ function informationScreen(){
     ${block('HOW IT WORKS', [
       ['Pages', 'Money, Wallet and Focus sit side by side in a row. Swipe between them; Rows and Page Styles show them in different ways.'],
       ['Station 3', 'The button in the corner. Open it for Messages, Profile, Create, Call history and the dial pad - from anywhere.'],
-      ['Community', 'Public groups anyone can join, and Stories - real people sharing their journey.'],
+      ['Community', 'Public groups anyone can join, and your own community.'],
       ['Notes', 'Notes and drawings, kept on your phone.'],
     ])}
     ${block('EVERYTHING IS REAL', [
@@ -9843,8 +9928,12 @@ async function upFollow(id, btn){
 }
 // Someone's profile (tap a row): picture, name, @username, their numbers, About (for people who don't follow them
 // yet - owner), bio, Follow + Message, and their posts.
+// Your own profile from a search / a post of yours: Station 3's Profile page (the app switches its window over).
+function litOpenOwnProfile(){ if(NATIVE && window.StoryNative.toggleProfile) window.StoryNative.toggleProfile(); else window.storyS3Page('profile'); }
 async function upOpenPerson(id){
   const el = upEl(); if(!el) return;
+  // Yourself (owner: you can find your own profile): it simply opens your Profile, the same for everyone.
+  if(id && id === (msgAccount() || {}).id){ litOpenOwnProfile(); return; }
   const pre = [].concat((UP.data && UP.data.profiles) || [], UP.found || []).find(x=>x.id === id);
   UP.person = Object.assign({ id, loading:true }, pre || {});
   el.querySelector('.pf-updates').hidden = true; const pv = el.querySelector('.pf-person'); pv.hidden = false; pv.scrollTop = 0;
@@ -10576,7 +10665,7 @@ function renderGroupSheet(){
       grpAddView.q = inp.value; clearTimeout(renderGroupSheet.t);
       const t = inp.value.trim();
       if(t.replace(/^@/, '').length < 2){ grpAddView.found = []; renderGroupSheetList(); return; }
-      renderGroupSheet.t = setTimeout(()=>msgApi('/v1/find?q=' + encodeURIComponent(t)).then(r=>{ if(grpAddView.q.trim() === t){ grpAddView.found = r.people || []; renderGroupSheetList(); } }).catch(()=>{}), 300);
+      renderGroupSheet.t = setTimeout(()=>msgApi('/v1/find?q=' + encodeURIComponent(t)).then(r=>{ if(grpAddView.q.trim() === t){ grpAddView.found = (r.people || []).filter(u=>u.id !== (msgAccount() || {}).id); renderGroupSheetList(); } }).catch(()=>{}), 300);
     });
   }
 }
@@ -10713,9 +10802,10 @@ function msgFoundHTML(){
   if(!msgFound.length || msgView.q.trim() !== msgFoundQ) return '';
   return msgFound.filter(u=>!msgChats().some(c=>c.id === u.id)).map(u=>
     '<button class="msg-row msg-found" data-pf="msg-start" data-id="' + escText(u.id) + '"><span class="msg-pic">' + PF_PHOTO_PLACEHOLDER + '</span>' +
-    '<span class="msg-mid"><span class="msg-who">' + escText(u.name || '@' + u.username) + '</span><span class="msg-last">' + (u.name && u.username ? '@' + escText(u.username) : 'On Lockedintool') + '</span></span><span class="msg-end"><span class="msg-time">Message</span></span></button>').join('');
+    '<span class="msg-mid"><span class="msg-who">' + escText(u.name || '@' + u.username) + '</span><span class="msg-last">' + (u.name && u.username ? '@' + escText(u.username) : 'On Lockedintool') + '</span></span><span class="msg-end"><span class="msg-time">' + (u.id === (msgAccount() || {}).id ? 'You' : 'Message') + '</span></span></button>').join('');
 }
 function msgStart(id){
+  if(id && id === (msgAccount() || {}).id){ litOpenOwnProfile(); return; }   // yourself: your Profile
   const u = msgFound.find(x=>x.id === id) || msgPeers()[id] || {};
   const c = chatFor(id, { name:u.name, username:u.username }); c.canCall = u.canCall; saveMsgChats();
   msgFound = []; const s = document.querySelector('#story-profile .pf-msgs .pf-msgs-search input'); if(s) s.value = ''; msgView.q = '';
@@ -11419,7 +11509,7 @@ function communityGuidelinesScreen(){
     <div class="section-title" style="margin-top:16px;">WHAT'S NOT ALLOWED ON LOCKEDINTOOL</div>
     <div class="community-policy-box" style="margin-bottom:10px;">
       Sexual, nudity, or adult content of any kind — including links to adult sites, OnlyFans/Fansly-type
-      pages, or channels sharing that kind of content — is never allowed in Lockedintool's search, groups, or Stories,
+      pages, or channels sharing that kind of content — is never allowed in Lockedintool's search or groups,
       and Lockedintool never shows ads containing it either. The same goes for malware, hacking tools, or links meant
       to compromise a device.
     </div>
@@ -11431,7 +11521,7 @@ function communityGuidelinesScreen(){
     <div class="community-policy-box">
       This only applies inside Lockedintool itself. Lockedintool doesn't control apps like TikTok, Instagram, or Facebook,
       or what you do in them — you're free to have and use those outside Lockedintool. The restriction is on what
-      Lockedintool's own search, groups, and Stories allow.
+      Lockedintool's own search and groups allow.
     </div>
     </div>
   `;
@@ -15695,6 +15785,15 @@ function attachHandlers(){
           if(a && a.pkg) toggleAppPage(a); else showToast('Only apps on your phone can become a page');
           break;
         }
+        case 'focus-add': state.focusAdd = { step:'choose' }; if(NATIVE) loadNativeApps(); break;
+        case 'focus-builtin': state.focusAdd = { step:'builtin' }; break;
+        case 'focus-custom': state.focusAdd = { step:'custom' }; break;
+        case 'focus-preview': state.focusAdd = { step:'preview', v: el.getAttribute('data-v') }; break;
+        case 'focus-cancel': state.focusAdd = null; break;
+        case 'focus-add-go': {
+          const v = el.getAttribute('data-v'); focusSet(v); state.focusAdd = null;
+          showToast(v === 'trading' ? 'Trading added to Focus' : 'Added to Focus');
+          break; }
         case 'app-page-open': {
           const pkg = el.getAttribute('data-pkg');
           if(NATIVE && window.StoryNative.appPageOpen) window.StoryNative.appPageOpen(pkg); else showToast('Opens the app on your phone');
@@ -16662,6 +16761,7 @@ function attachHandlers(){
           break; }
         case 'community-open-group': {
           const id = el.getAttribute('data-groupid');
+          if(id === 'g-stories') break;   // Stories are STORY's now, not Lockedintool's (owner)
           state.communityActiveGroupId = id;
           state.current = 'community-group';
           state.communityGroupSearchOpen = false;
@@ -17903,7 +18003,7 @@ document.addEventListener('input', e=>{
   put(); clearTimeout(teamFindT);
   teamFindT = setTimeout(async ()=>{
     const v = tm.q.trim(); if(v.replace(/^@/, '').length < 2){ tm.searching = false; put(); return; }
-    try{ const r = await msgApi('/v1/find?q=' + encodeURIComponent(v)); if(tm.q.trim() === v){ tm.found = r.people || []; tm.searching = false; put(); } }
+    try{ const r = await msgApi('/v1/find?q=' + encodeURIComponent(v)); if(tm.q.trim() === v){ tm.found = (r.people || []).filter(u=>u.id !== (msgAccount() || {}).id); tm.searching = false; put(); } }
     catch(err){ tm.searching = false; tm.found = []; put(); }
   }, 300);
 });
@@ -17929,7 +18029,6 @@ function communityScreen(){
     <div class="community-stack">
       ${communityTrendingSectionHTML()}
       ${communityGroupsSectionHTML()}
-      ${communityStoriesSectionHTML()}
     </div>
     </div>
     ${state.communityGroupSearchOpen ? groupSearchTemplate() : ''}
@@ -18179,9 +18278,7 @@ function shareSheetTemplate(){
         ${s.type==='drawing'
           ? `<div class="share-sheet-preview-image"><img src="${s.imageDataUrl}" alt="Drawing preview"></div>`
           : `<div class="share-sheet-preview-text">${escText((s.textContent||'').slice(0,180)) || '<span style=\"color:var(--muted);\">(empty note)</span>'}</div>`}
-        ${s.allowCommunity !== false ? `<input id="share-caption-input" class="share-caption-input" placeholder="Add a caption (optional)" maxlength="140">` : ''}
         <div class="plus-menu-list" style="margin-top:8px;">
-          ${s.allowCommunity !== false ? `<div class="plus-menu-list-item" data-action="share-sheet-to-community">Share to Stories</div>` : ''}
         </div>
         ${(()=>{ const apps = sysOn() ? [] : shareTargetsFor(shareSheetType(s)); return apps.length ? `
         <div class="share-apps-title">Share to</div>

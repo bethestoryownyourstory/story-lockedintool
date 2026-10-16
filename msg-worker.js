@@ -333,9 +333,9 @@ export class Hub {
     if (un.length < 2) return json({ people: [] });
     const like = '%' + un.replace(/[%_\\]/g, m => '\\' + m) + '%', start = un.replace(/[%_\\]/g, m => '\\' + m) + '%';
     const rows = this.sql.exec(
-      `SELECT * FROM users WHERE id != ? AND (username LIKE ? ESCAPE '\\' OR (? = 0 AND lower(name) LIKE ? ESCAPE '\\'))
+      `SELECT * FROM users WHERE (username LIKE ? ESCAPE '\\' OR (? = 0 AND lower(name) LIKE ? ESCAPE '\\'))
        ORDER BY (username = ?) DESC, (username LIKE ? ESCAPE '\\') DESC, (lower(name) LIKE ? ESCAPE '\\') DESC, name LIMIT 80`,
-      me.id, like, t.startsWith('@') ? 1 : 0, like, un, start, start).toArray().filter(u => !this.isPrivate(u) && !this.blocked(me.id, u.id)).slice(0, 20);  // a private profile is never found
+      like, t.startsWith('@') ? 1 : 0, like, un, start, start).toArray().filter(u => u.id === me.id || (!this.isPrivate(u) && !this.blocked(me.id, u.id))).slice(0, 20);  // a private profile is never found (except by its owner - owner: you can find yourself)
     return json({ people: rows.map(u => Object.assign(this.pubView(u, me), { isFollowing: this.follows(me.id, u.id) })) });
   }
 
@@ -980,7 +980,9 @@ export class Hub {
     }
     if (op === 'posts') return json({ posts: this.postsOf(g.id, me) });
     if (op === 'post') {
-      if (g.type !== 'public' && g.type !== 'stories') return json({ error: 'public' }, 400);
+      // Stories belong to STORY (its own company now), not Lockedintool (owner): no one can post there any more.
+      if (g.type === 'stories') return json({ error: 'closed' }, 403);
+      if (g.type !== 'public') return json({ error: 'public' }, 400);
       if (g.type === 'public' && this.isPrivate(me)) return json({ error: 'private-account' }, 403);
       const text = str(b.text, 600), image = /^data:image\/(png|jpeg|webp);base64,/.test(String(b.image || '')) && String(b.image).length < 600000 ? String(b.image) : '';
       const files = (Array.isArray(b.files) ? b.files : []).slice(0, 10).map(f => this.fileMeta(f)).filter(f => f && this.mediaDone(f.m, me.id));

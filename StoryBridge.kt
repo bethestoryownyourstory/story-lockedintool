@@ -478,7 +478,7 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
 
     /** Station 3's profile button: Profile opens attached to Station 3 (tap again to close it). */
     @JavascriptInterface
-    fun toggleProfile() { if (station3) host.toggleProfile() }
+    fun toggleProfile() { if (station3 || profile) host.toggleProfile() }   // Profile's window: your own profile from a search
 
     @JavascriptInterface
     fun closeProfile() { if (station3) host.closeProfile() }
