@@ -91,7 +91,7 @@ jobs:
           APP=$(echo "$R" | python3 -c 'import sys,json; d=json.load(sys.stdin); print((d.get("result") or {}).get("uid",""))')
           SEC=$(echo "$R" | python3 -c 'import sys,json; d=json.load(sys.stdin); print((d.get("result") or {}).get("secret",""))')
           if [ -z "$APP" ] || [ -z "$SEC" ]; then
-            echo "### Live video could not be set up: $(echo "$R" | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d.get("errors"))')" >> "$GITHUB_STEP_SUMMARY"
+            echo "Live video could not be set up: $(echo "$R" | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d.get("errors"))')" | tee -a "$GITHUB_STEP_SUMMARY"
             echo "The Cloudflare API token needs the 'Calls' (Realtime) permission: Edit for this account." >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
