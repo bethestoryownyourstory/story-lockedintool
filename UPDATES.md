@@ -40,3 +40,4 @@ commits, pushed as a new update) - nothing else changes.
 | 32 | 2026-10-16 | Subscription: Introduction Welcome price - $48 / $120 crossed out next to $5 / $15, 'Changes to current prices will be announced if made', Terms updated; at launch every user gets one welcome-price message from Lockedintool | 81e2256 |
 | 33 | 2026-10-16 | Group calls: voice and video calls in groups (up to 8 people) - a leader's call rings everyone, public groups anyone can join, private groups 'Ask to join' with Let in, live calls show in Community and the chat | 7ef0fec |
 | 34 | 2026-10-16 | Group calls: fixed 'Couldn't start the call' when a call is started from Community; a call that still can't start now says why | 934ee7d |
+| 35 | 2026-10-16 | Recent searches: every search bar saves your searches - the first tap shows them (no keyboard), the second tap opens the keyboard | 46166a5 |
