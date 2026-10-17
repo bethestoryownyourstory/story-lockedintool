@@ -1486,6 +1486,9 @@
   .realcard-addslide .avatar-circle{ background:var(--card-2); font-size:22px; }
 
   .paycard-dots{ display:flex; justify-content:center; gap:6px; margin-top:10px; }
+  /* Edit (pencil) buttons: Wallet's sits at the right of the card dots, Trading's at the right of the account title. */
+  .paycard-dots .edit-pencil{ position:absolute; right:0; top:50%; transform:translateY(-50%); }
+  .edit-remove{ font:inherit; font-size:12px; font-weight:700; color:var(--red); background:transparent; border:1px solid var(--line); border-radius:999px; padding:5px 12px; cursor:pointer; flex:none; }
   .paycard-dots .dot{ width:6px; height:6px; border-radius:50%; background:var(--card-2); cursor:pointer; }
   .paycard-dots .dot.active{ background:#e8e6e1; }
   .membership-grid{ display:flex; gap:8px; }
@@ -6993,7 +6996,7 @@ function tradingPageScreen(){
       <button class="chart-fs-btn" data-action="chart-fullscreen" title="Full screen">⤢</button>
     </div>
     <div class="live-pl-zone" style="background:${positions.length ? `linear-gradient(180deg, transparent 0%, rgba(${zoneColor},0.09) 26%, rgba(${zoneColor},0.07) 48%, rgba(${zoneColor},0.04) 78%, transparent 100%)` : 'transparent'};">
-    <div class="section-title"><button class="acct-title" data-action="broker-panel-open">${acc ? escText(acc.name) + (acc.env === 'demo' ? (acc.platform === 'alpaca' ? ' · PAPER' : ' · DEMO') : '') : `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Search broker`}<span class="acct-title-caret">⌄</span></button></div>
+    <div class="section-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px;"><button class="acct-title" data-action="broker-panel-open">${acc ? escText(acc.name) + (acc.env === 'demo' ? (acc.platform === 'alpaca' ? ' · PAPER' : ' · DEMO') : '') : `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Search broker`}<span class="acct-title-caret">⌄</span></button><button class="order-corner-btn edit-pencil" data-action="accts-edit" title="Edit accounts" style="${tradeAccounts().length ? '' : 'visibility:hidden;'}">${NW_PENCIL}</button></div>
     <div class="mt5-card-wrap" id="acct-swipe">
       <div class="row-card mt5-card">
         <div class="row"><div class="row-name">Balance</div><div class="row-amt">${val(fmtMoney(live.balance, cur))}</div></div>
@@ -7059,6 +7062,8 @@ function tradingPageScreen(){
     ${state.orderPanelOpen ? orderPanelTemplate() : ''}
     ${state.launchPopup ? launchPopupTemplate() : ''}
     ${state.accountSwitcherOpen ? accountSwitcherTemplate() : ''}
+    ${state.acctsEditOpen ? acctsEditTemplate() : ''}
+    ${state.confirmDialog ? confirmDialogTemplate() : ''}
     ${state.chartFullscreen ? chartFullscreenTemplate() : ''}
     ${state.addAccountOpen ? addAccountTemplate() : ''}
     ${state.symbolPickerOpen ? symbolPickerTemplate() : ''}
@@ -7311,6 +7316,30 @@ function addCardTemplate(){
       </div>
     </div>`;
 }
+// Edit cards (owner: the pencil on Wallet): every card you added, each with Remove (asks first, like holding a card).
+function cardsEditTemplate(){
+  const cards = walletCards();
+  return `
+    <div class="modal-overlay" data-action="cards-edit-close">
+      <div class="modal-sheet" onclick="event.stopPropagation()">
+        <div class="modal-head"><span class="modal-title">Edit cards</span><button class="modal-close" data-action="cards-edit-close">×</button></div>
+        ${cards.length ? cards.map(c=>`<div class="settings-option"><div class="row-left"><div class="row-name">${escText(c.bank || 'Card')} ••${escText(c.last4 || '')}</div><div class="row-sub">${escText(c.exp ? 'Expires ' + c.exp : '')}</div></div><button class="edit-remove" data-action="cards-edit-remove" data-id="${escText(c.id)}">Remove</button></div>`).join('') : `<div class="row-sub" style="padding:10px 4px;">No cards yet.</div>`}
+        <div class="note" style="margin-top:8px;">Removing a card only takes it out of Lockedintool - nothing changes at your bank.</div>
+      </div>
+    </div>`;
+}
+// Edit accounts (owner: the pencil on the Trading page): every saved account, each with Remove (asks first).
+function acctsEditTemplate(){
+  const list = tradeAccounts();
+  return `
+    <div class="modal-overlay" data-action="accts-edit-close">
+      <div class="modal-sheet" onclick="event.stopPropagation()">
+        <div class="modal-head"><span class="modal-title">Edit accounts</span><button class="modal-close" data-action="accts-edit-close">×</button></div>
+        ${list.length ? list.map(a=>`<div class="settings-option"><div class="row-left"><div class="row-name">${escText(a.name)}</div><div class="row-sub">${escText((PLATFORMS[a.platform] || {}).label || '')}${a.env === 'demo' ? ' Demo' : ''}${a.server ? ' · ' + escText(a.server) : ''}</div></div><button class="edit-remove" data-removeacct="${escText(a.id)}">Remove</button></div>`).join('') : `<div class="row-sub" style="padding:10px 4px;">No accounts yet.</div>`}
+        <div class="note" style="margin-top:8px;">Removing an account only takes it out of Lockedintool - nothing changes at your broker.</div>
+      </div>
+    </div>`;
+}
 function cardSheetTemplate(){
   const c = walletCards().find(x=>x.id === state.cardSheetId); if(!c) return '';
   return `
@@ -7514,8 +7543,9 @@ function walletScreen(){
         ${cards.map((c, k)=>cardSlideHTML(c, k + 1).replace('<div class="paycard-slide">', `<div class="paycard-slide" style="width:${100 / nSlides}%;">`)).join('')}
       </div>
     </div>
-    <div class="paycard-dots">
+    <div class="paycard-dots" style="position:relative;">
       ${Array.from({ length:nSlides }, (_, k)=>`<span class="dot${state.walletCardIndex===k?' active':''}" data-cardidx="${k}"></span>`).join('')}
+      <button class="order-corner-btn edit-pencil" data-action="cards-edit" title="Edit cards" style="${cards.length ? '' : 'visibility:hidden;'}">${NW_PENCIL}</button>
     </div>
     ${walletNwOn() ? (()=>{ const l = walletNwList(), cur = moneyMainCur(), tot = l.reduce((x, a)=>x + (a.bal != null && a.cur === cur ? a.bal : 0), 0);
       return `<div class="row-card" style="margin-top:6px;"><div class="row"><div class="row-left"><div class="row-icon">${NW_ICON}</div><div><div class="row-name">Net worth</div><div class="row-sub">${l.length} account${l.length === 1 ? '' : 's'} combined to pay</div></div></div><div class="row-amt">${fmtCur(tot, cur)}</div></div></div>`; })() : ''}
@@ -7566,6 +7596,7 @@ function walletScreen(){
     ${state.membSheet ? membSheetTemplate() : ''}
     ${state.tapPayOpen ? tapPayTemplate() : ''}
     ${state.favoritesOpen ? favoritesPopupTemplate() : ''}
+    ${state.cardsEditOpen ? cardsEditTemplate() : ''}
     ${state.cardSheetId ? cardSheetTemplate() : ''}
     ${state.moneyAllEdit ? moneyAllEditTemplate() : ''}
   `;
@@ -15263,7 +15294,7 @@ function attachHandlers(){
     el.addEventListener('click', e=>{
       e.stopPropagation();
       state.confirmDialog = { message: 'Remove this account from Lockedintool? (Nothing changes on your broker.)', action: 'confirm-remove-account', actionData: el.getAttribute('data-removeacct') };
-      state.accountSwitcherOpen = false;
+      state.accountSwitcherOpen = false; state.acctsEditOpen = false;
       renderDevice();
     });
   });
@@ -16938,6 +16969,11 @@ function attachHandlers(){
           break;
         }
         case 'card-sheet-close': state.cardSheetId = null; break;
+        case 'cards-edit': state.cardsEditOpen = true; break;
+        case 'cards-edit-close': state.cardsEditOpen = false; break;
+        case 'cards-edit-remove': state.cardSheetId = el.getAttribute('data-id'); break;
+        case 'accts-edit': state.acctsEditOpen = true; break;
+        case 'accts-edit-close': state.acctsEditOpen = false; break;
         case 'card-remove': {
           const list = walletCards().filter(c=>c.id !== state.cardSheetId);
           saveWalletCards(list); state.cardSheetId = null;
