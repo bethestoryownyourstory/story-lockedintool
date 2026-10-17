@@ -5176,10 +5176,10 @@ function fxTx(t, to){
 }
 // Owner ("I never lost $800"): ONLY bank / payment apps and bank SMS are money - trading, crypto and market apps put
 // prices and profits in their notifications and those are never payments. Same rule as the app (MoneyLog.kt).
-const MONEY_SMS = ['com.google.android.apps.messaging', 'com.samsung.android.messaging', 'com.android.mms', 'com.android.messaging'];
+const MONEY_SMS = ['com.google.android.apps.messaging', 'com.samsung.android.messaging', 'com.android.mms', 'com.android.messaging', 'com.huawei.message', 'com.hihonor.mms', 'com.oneplus.mms', 'com.coloros.mms', 'com.transsion.message', 'com.android.mms.service'];
 const MONEY_TRADING = /(tradingview|metaquotes|metatrader|deriv|binance|bybit|okx|okex|tradelocker|ctrader|spotware|etoro|plus500|oanda|forex|crypto|coinbase|luno|valr|kraken|alpaca|trading|trader|exness|\.xm\.|hfm|hotforex|icmarkets|pepperstone|avatrade|robinhood|webull|investing|bloomberg|yahoo|stocks|tickmill|fxpro|fxtm|admirals|capital\.com|kucoin|bitget|mexc|gate\.io|fomo)/i;
-const MONEY_PAYMENT = /(bank|pay|wallet|money|financ|cash|card|capitec|fnb|absa|nedbank|standard|investec|tyme|discovery|revolut|wise|monzo|starling|chime|venmo|squareup|mpesa|safaricom|opay|palmpay|kuda|moniepoint|flutterwave|chipper|zapper|snapscan|ozow|payoneer|skrill|neteller|n26|bunq|klarna|afterpay|spay|walletnfcrel|vodapay|ewallet|mukuru|easyequities|old\.?mutual|sanlam|momentum|africanbank|bidvest|access|ecobank|equity|kcb|gtbank|zenith|firstbank|uba|stanbic)/i;
-const MONEY_KNOWN = /(fnb|capitec|absa|nedbank|standardbank|sbsa|tymebank|tyme|discovery\.bank|discoverybank|investec|africanbank|bankzero|paypal|walletnfcrel|samsung\.android\.spay|revolut|transferwise|wise|monzo|starling|chime|venmo|squareup\.cash|mpesa|safaricom|opay|palmpay|kuda|moniepoint|payoneer|n26|bunq|vodapay|snapscan|zapper|ozow|mukuru|ecobank|gtbank|zenith|firstbank|stanbic|equitybank|kcb)/i;
+const MONEY_PAYMENT = /(bank|pay|wallet|money|financ|cash|card|capitec|fnb|absa|nedbank|standard|investec|tyme|discovery|revolut|wise|monzo|starling|chime|venmo|squareup|mpesa|safaricom|opay|palmpay|kuda|moniepoint|flutterwave|chipper|zapper|snapscan|ozow|payoneer|skrill|neteller|n26|bunq|klarna|afterpay|spay|walletnfcrel|vodapay|ewallet|mukuru|easyequities|old\.?mutual|sanlam|momentum|africanbank|bidvest|access|ecobank|equity|kcb|gtbank|zenith|firstbank|uba|stanbic|sbg\.mobile)/i;
+const MONEY_KNOWN = /(fnb|capitec|absa|nedbank|standardbank|sbsa|tymebank|tyme|discovery\.bank|discoverybank|investec|africanbank|bankzero|paypal|walletnfcrel|samsung\.android\.spay|revolut|transferwise|wise|monzo|starling|chime|venmo|squareup\.cash|mpesa|safaricom|opay|palmpay|kuda|moniepoint|payoneer|n26|bunq|vodapay|snapscan|zapper|ozow|mukuru|ecobank|gtbank|zenith|firstbank|stanbic|equitybank|kcb|sbg\.mobile|barclays\.absa)/i;
 function moneyCounts(t){
   const pkg = String(t.pkg || '');
   if(!pkg) return true;   // test data in the browser preview
@@ -7371,11 +7371,26 @@ function cardScanFinish(){
 }
 // Money follows the card showing in Wallet: that card's payments (by its last 4, or from its bank's app).
 // A payment belongs to the card when it names the card's last 4, or (when it names no card) it came from the card's bank.
+// The same bank under its card name (binlist), its app's name / package and its SMS sender name.
+const BANK_IDS = [['fnb', /fnb|firstrand|first national/], ['capitec', /capitec/], ['absa', /absa|barclays/], ['nedbank', /nedbank/],
+  ['standard', /standard ?bank|sbg\.mobile|sbsa|stanbic/], ['tyme', /tyme/], ['discovery', /discovery/], ['investec', /investec/],
+  ['african', /african ?bank/], ['bankzero', /bank ?zero/], ['oldmutual', /old ?mutual/], ['access', /access ?bank/], ['bidvest', /bidvest/]];
+const bankIds = s=>{ s = String(s || '').toLowerCase(); return BANK_IDS.filter(([, re])=>re.test(s)).map(([id])=>id); };
 function cardMatches(c, t){
   if(!c) return true;
-  if(t.card) return t.card === c.last4;
-  const a = String(t.app || '').toLowerCase(), b = String(c.bank || '').toLowerCase().replace(/^firstrand bank/, 'fnb firstrand bank');
-  return !!a && !!b && (b.includes(a) || a.includes(b.split(' ')[0]));
+  if(t.card && t.card === c.last4) return true;
+  // Names another card you added: it's that card's payment.
+  if(t.card && walletCards().some(o=>o.last4 === t.card)) return false;
+  // Names no card, or the account number (banks often name the account, not the card): it's this card's when it
+  // came from this card's bank - its app, or its SMS (the sender's name starts the text).
+  const pkg = String(t.pkg || ''), sms = MONEY_SMS.includes(pkg);
+  const src = pkg + ' ' + (t.app || '') + (sms ? ' ' + String(t.text || '').slice(0, 40) : '');
+  const ids = bankIds(c.bank);
+  if(ids.length) return bankIds(src).some(i=>ids.includes(i));
+  // The card's bank couldn't be looked up: a real bank's own app is yours.
+  if(!c.bank) return !sms && MONEY_KNOWN.test(pkg);
+  const a = String(t.app || '').toLowerCase(), b = String(c.bank || '').toLowerCase();
+  return !!a && (b.includes(a) || a.includes(b.split(' ')[0]));
 }
 // The whole Wallet follows the card that's showing (owner), like Money.
 const walletActivityList = ()=>walletNwOn() ? moneyTx().filter(t=>nwHas(WALLET_NW_KEY, moneyAcctKey(t))).slice(0, 5) : moneyView().slice(0, 5);

@@ -25,13 +25,14 @@ object MoneyLog {
         "com.discord", "com.google.android.gm", "com.microsoft.office.outlook", "com.samsung.android.email.provider",
         "com.google.android.youtube", "com.android.chrome", "com.google.android.apps.photos"
     )
-    private val SMS = setOf("com.google.android.apps.messaging", "com.samsung.android.messaging", "com.android.mms", "com.android.messaging")
+    private val SMS = setOf("com.google.android.apps.messaging", "com.samsung.android.messaging", "com.android.mms", "com.android.messaging",
+        "com.huawei.message", "com.hihonor.mms", "com.oneplus.mms", "com.coloros.mms", "com.transsion.message", "com.android.mms.service")
 
     private const val NUM = "([0-9]{1,3}(?:[ ,][0-9]{3})+(?:\\.[0-9]{1,2})?|[0-9]+(?:\\.[0-9]{1,2})?)"
     private const val CUR = "(ZAR|USD|US\\$|EUR|GBP|NGN|KES|KSh|INR|R|\\$|€|£|₦|₹)"
     private val AMOUNT = Regex("(?<![A-Za-z0-9])([+-]?)\\s?$CUR\\s?$NUM(?![0-9])")
     private val BAL = Regex("(?i)(avail(?:able)?\\.?\\s*(?:bal(?:ance)?\\.?)?|(?:new\\s+|acc(?:ount)?\\s+)?bal(?:ance)?\\.?)\\s*(?:is|of|:)?\\s*$CUR\\s?$NUM", RegexOption.IGNORE_CASE)
-    private val CARD = Regex("(?i)(?:card|acc(?:ount)?|a/c)\\s*(?:no\\.?|number|ending(?:\\s+in)?|ending)?\\s*[x*.•]*\\s*(\\d{4})\\b")
+    private val CARD = Regex("(?i)(?:card|acc(?:ount)?|a/c|visa|mastercard|amex|cheque|savings)\\s*(?:no\\.?|number|ending(?:\\s+in)?|ending)?\\s*[x*.•]*\\s*(\\d{4})\\b")
     private val WHO = Regex("(?:\\b(?:[Aa]t|[Tt]o|[Ff]rom|[Bb]y)|@)\\s+([A-Z0-9@][A-Za-z0-9&'@*\\-]*(?:\\.[A-Za-z0-9]+)*(?:\\s[A-Z0-9][A-Za-z0-9&'\\-]*(?:\\.[A-Za-z0-9]+)*){0,3})")
     private val IN_WORDS = Regex("(?i)\\b(received|receive|deposit(?:ed)?|credited|credit of|paid you|sent you|incoming|refund(?:ed)?|payment from|salary|cash ?back|transfer(?:red)? in|money in|inward)\\b")
     private val OUT_WORDS = Regex("(?i)\\b(purchase[ds]?|paid|spent|debit(?:ed)?|withdraw(?:al|n)?|payment (?:of|to|made)|you sent|sent to|card (?:used|transaction|payment)|used (?:for|at)|pos|transfer(?:red)? to|deducted|charged|debit order|money out|bought)\\b")
@@ -42,10 +43,10 @@ object MoneyLog {
     // Owner ("what are these amounts??"): only BANK / PAYMENT apps and bank SMS are money. Trading, crypto and market
     // apps (prices, positions, profits) are never payments - your trading accounts are counted on their own.
     private val TRADING = Regex("(?i)(tradingview|metaquotes|metatrader|deriv|binance|bybit|okx|okex|tradelocker|ctrader|spotware|etoro|plus500|oanda|forex|crypto|coinbase|luno|valr|kraken|alpaca|trading|trader|exness|\\.xm\\.|hfm|hotforex|icmarkets|pepperstone|avatrade|robinhood|webull|investing|bloomberg|yahoo|stocks|tickmill|fxpro|fxtm|admirals|capital\\.com|kucoin|bitget|mexc|gate\\.io)")
-    private val PAYMENT = Regex("(?i)(bank|pay|wallet|money|financ|cash|card|capitec|fnb|absa|nedbank|standard|investec|tyme|discovery|revolut|wise|monzo|starling|chime|venmo|squareup|mpesa|safaricom|opay|palmpay|kuda|moniepoint|flutterwave|chipper|zapper|snapscan|ozow|payoneer|skrill|neteller|n26|bunq|klarna|afterpay|spay|walletnfcrel|vodapay|ewallet|mukuru|easyequities|old\\.?mutual|sanlam|momentum|africanbank|bidvest|access|ecobank|equity|kcb|gtbank|zenith|firstbank|uba|stanbic)")
+    private val PAYMENT = Regex("(?i)(bank|pay|wallet|money|financ|cash|card|capitec|fnb|absa|nedbank|standard|investec|tyme|discovery|revolut|wise|monzo|starling|chime|venmo|squareup|mpesa|safaricom|opay|palmpay|kuda|moniepoint|flutterwave|chipper|zapper|snapscan|ozow|payoneer|skrill|neteller|n26|bunq|klarna|afterpay|spay|walletnfcrel|vodapay|ewallet|mukuru|easyequities|old\\.?mutual|sanlam|momentum|africanbank|bidvest|access|ecobank|equity|kcb|gtbank|zenith|firstbank|uba|stanbic|sbg\\.mobile)")
     fun allowed(pkg: String): Boolean = pkg in SMS || (!TRADING.containsMatchIn(pkg) && PAYMENT.containsMatchIn(pkg))
     // Real banks / wallets. Any other app (or a bank SMS) only counts when it names your card / account or your balance.
-    private val KNOWN = Regex("(?i)(fnb|capitec|absa|nedbank|standardbank|sbsa|tymebank|tyme|discovery\\.bank|discoverybank|investec|africanbank|bankzero|paypal|walletnfcrel|samsung\\.android\\.spay|revolut|transferwise|wise|monzo|starling|chime|venmo|squareup\\.cash|mpesa|safaricom|opay|palmpay|kuda|moniepoint|payoneer|n26|bunq|vodapay|snapscan|zapper|ozow|mukuru|ecobank|gtbank|zenith|firstbank|stanbic|equitybank|kcb)")
+    private val KNOWN = Regex("(?i)(fnb|capitec|absa|nedbank|standardbank|sbsa|tymebank|tyme|discovery\\.bank|discoverybank|investec|africanbank|bankzero|paypal|walletnfcrel|samsung\\.android\\.spay|revolut|transferwise|wise|monzo|starling|chime|venmo|squareup\\.cash|mpesa|safaricom|opay|palmpay|kuda|moniepoint|payoneer|n26|bunq|vodapay|snapscan|zapper|ozow|mukuru|ecobank|gtbank|zenith|firstbank|stanbic|equitybank|kcb|sbg\\.mobile|barclays\\.absa)")
     fun counts(pkg: String, card: String?, bal: Double?): Boolean = allowed(pkg) && (KNOWN.containsMatchIn(pkg) || card != null || bal != null)
 
     // Anything kept before this rule from an app that isn't a bank / payment app is left out.
