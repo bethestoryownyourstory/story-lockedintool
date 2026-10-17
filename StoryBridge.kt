@@ -34,6 +34,7 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         fun toggleMessages()
         fun setLockDialSize(w: Int, h: Int)
         fun callNumber(number: String)
+        fun callNumberVideo(number: String)
         fun appPageOpen(pkg: String)
         fun openPages(page: String)
         fun newContact(number: String)
@@ -572,6 +573,9 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
      *  pad and Station 3 close the moment the call is placed (owner); the lock screen dial pad always stays. */
     @JavascriptInterface
     fun callNumber(number: String) { if (station3) { host.callNumber(number); if (!lock) host.closeStation3() } }
+    /** Call history > Video call on a phone number: the phone's own video call through the mobile network. */
+    @JavascriptInterface
+    fun callNumberVideo(number: String) { if (station3) { host.callNumberVideo(number); if (!lock) host.closeStation3() } }
     /** Dial pad > New contact (with the number you typed). */
     @JavascriptInterface fun newContact(number: String) { if (station3) host.newContact(number) }
 

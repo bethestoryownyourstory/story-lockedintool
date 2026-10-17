@@ -23,9 +23,9 @@ object CallHistory {
     }
 
     /** A call placed from STORY's dial pad: saved now (start = now), finished later by [finishFromLog]. */
-    fun placed(c: Context, number: String): String {
+    fun placed(c: Context, number: String, video: Boolean = false): String {
         val id = "c" + System.currentTimeMillis()
-        val e = JSONObject().put("id", id).put("number", number).put("kind", "voice").put("dir", "out")
+        val e = JSONObject().put("id", id).put("number", number).put("kind", if (video) "video" else "voice").put("dir", "out")
             .put("start", System.currentTimeMillis()).put("pending", true)
         contactName(c, number)?.let { e.put("name", it) }
         val a = list(c); val out = JSONArray().put(e); for (i in 0 until a.length()) out.put(a.get(i))

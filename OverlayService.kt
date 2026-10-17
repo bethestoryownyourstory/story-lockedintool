@@ -1473,13 +1473,19 @@ class OverlayService : Service(), StoryBridge.Host {
         }
     } }
     /** The dial pad's call button (lock screen and Station 3): calls straight away, even locked. */
-    override fun callNumber(number: String) { ui.post {
+    override fun callNumber(number: String) = placeNumberCall(number, false)
+    // A phone number as a VIDEO call (owner: Call history's Video call): the phone's own network video call (VoLTE /
+    // ViLTE); where the network or phone can't do video, Android places it as a normal voice call.
+    override fun callNumberVideo(number: String) = placeNumberCall(number, true)
+    private fun placeNumberCall(number: String, video: Boolean) { ui.post {
         val n = number.filter { it.isDigit() || it in "+*#" }
         if (n.isEmpty()) return@post
         val uri = android.net.Uri.fromParts("tel", n, null)
-        CallHistory.placed(this, n); tellCalls()  // Call history: every call made from STORY
+        CallHistory.placed(this, n, video); tellCalls()  // Call history: every call made from STORY
         val allowed = checkSelfPermission(android.Manifest.permission.CALL_PHONE) == android.content.pm.PackageManager.PERMISSION_GRANTED
-        val ok = allowed && runCatching { getSystemService(android.telecom.TelecomManager::class.java).placeCall(uri, android.os.Bundle()) }.isSuccess
+        val extras = android.os.Bundle()
+        if (video) extras.putInt(android.telecom.TelecomManager.EXTRA_START_CALL_WITH_VIDEO_STATE, android.telecom.VideoProfile.STATE_BIDIRECTIONAL)
+        val ok = allowed && runCatching { getSystemService(android.telecom.TelecomManager::class.java).placeCall(uri, extras) }.isSuccess
         if (!ok) {
             // Not allowed to call yet: the phone's own dialer with the number in it (and ask once for next time).
             runCatching { startActivity(Intent(Intent.ACTION_DIAL, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }

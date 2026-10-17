@@ -11625,13 +11625,17 @@ function renderCalls(){
   box.querySelector('.pf-calls-empty').hidden = list.length > 0;
   box.querySelector('.pf-calls-empty .pf-msgs-empty-t').textContent = q ? 'No results' : 'No call history yet';
 }
-// Tap a call (owner): a pop-up to call again fast - a number: Call it (straight away, like the dial pad); a
+// Tap a call (owner): a pop-up to call again fast - a number: Voice call / Video call (the phone's own network call,
+// straight away like the dial pad; video where the network supports it); a
 // Lockedintool person: Voice call / Video call / Message; a group: Voice call / Video call.
 let CALLS_SHOWN = [];
 function callRowSheet(c){
   if(!c) return;
   const items = [];
-  if(c.number && !c.peer) items.push({ label:'Call ' + c.number, fn: ()=>{ if(NATIVE && window.StoryNative.callNumber) window.StoryNative.callNumber(c.number); else window.open('tel:' + c.number); } });
+  if(c.number && !c.peer){
+    items.push({ label:'Voice call', fn: ()=>{ if(NATIVE && window.StoryNative.callNumber) window.StoryNative.callNumber(c.number); else window.open('tel:' + c.number); } });
+    items.push({ label:'Video call', fn: ()=>{ if(NATIVE && window.StoryNative.callNumberVideo) window.StoryNative.callNumberVideo(c.number); else if(NATIVE && window.StoryNative.callNumber) window.StoryNative.callNumber(c.number); else window.open('tel:' + c.number); } });
+  }
   else if(c.peer && /^grp/.test(c.peer)){
     items.push({ label:'Voice call', fn: ()=>gcallGo(c.peer, false, false, c.name).catch(()=>{}) });
     items.push({ label:'Video call', fn: ()=>gcallGo(c.peer, true, false, c.name).catch(()=>{}) });
