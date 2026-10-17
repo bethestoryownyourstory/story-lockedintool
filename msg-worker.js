@@ -43,9 +43,54 @@ export default {
   async fetch(req, env) {
     if (req.method === 'OPTIONS') return new Response(null, { headers: JSONH });
     const hub = env.HUB.get(env.HUB.idFromName('story'));
+    // Pictures / videos are served by the file stores themselves - never through the Hub (scale: the Hub only
+    // handles accounts and messages). Files from before the stores are still in the Hub.
+    const p = new URL(req.url).pathname;
+    if (env.STORE && req.method === 'GET' && p.startsWith('/v1/media/') && p !== '/v1/media/put') {
+      const r = await storeOf(env, p.slice(10)).fetch(req);
+      if (r.status !== 404) return r;
+    }
     return hub.fetch(req);
   }
 };
+
+// Files are spread over many file stores (each holds up to 10 GB), picked by the file's id -
+// STORE_SHARDS x 10 GB in all. Never change STORE_SHARDS: every file is found by it.
+const STORE_SHARDS = 256;
+function storeOf(env, id) {
+  let h = 2166136261; for (let k = 0; k < id.length; k++) { h ^= id.charCodeAt(k); h = Math.imul(h, 16777619) >>> 0; }
+  return env.STORE.get(env.STORE.idFromName('m' + (h % STORE_SHARDS)));
+}
+
+// One file store: the bytes of pictures / videos / audio / locked files, in pieces of up to 1.5 MB.
+export class Store {
+  constructor(ctx, env) {
+    this.sql = ctx.storage.sql;
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS parts (id TEXT, i INTEGER, n INTEGER, mime TEXT, data BLOB, PRIMARY KEY (id, i))`);
+  }
+  async fetch(req) {
+    const url = new URL(req.url), id = url.searchParams.get('id') || decodeURIComponent(url.pathname.replace(/^\/v1\/media\//, ''));
+    if (url.pathname === '/put' && req.method === 'POST') {
+      const data = await req.arrayBuffer();
+      this.sql.exec('INSERT OR REPLACE INTO parts (id, i, n, mime, data) VALUES (?, ?, ?, ?, ?)', id, +url.searchParams.get('i'), +url.searchParams.get('n'), url.searchParams.get('mime') || '', data);
+      return new Response('ok');
+    }
+    if (url.pathname === '/del' && req.method === 'POST') { this.sql.exec('DELETE FROM parts WHERE id = ?', id); return new Response('ok'); }
+    return sendParts(this.sql.exec('SELECT i, n, mime, data FROM parts WHERE id = ? ORDER BY i', id).toArray(), req);
+  }
+}
+function sendParts(rows, req) {
+  if (!rows.length || rows.length !== rows[0].n) return new Response('Not found', { status: 404, headers: { 'access-control-allow-origin': '*' } });
+  const parts = rows.map(r => new Uint8Array(r.data)), len = parts.reduce((s, p) => s + p.length, 0), all = new Uint8Array(len);
+  let o = 0; for (const p of parts) { all.set(p, o); o += p.length; }
+  const h = { 'content-type': rows[0].mime, 'cache-control': 'public, max-age=31536000, immutable', 'access-control-allow-origin': '*', 'accept-ranges': 'bytes' };
+  const m = /bytes=(\d*)-(\d*)/.exec(req.headers.get('range') || '');
+  if (m && len) {
+    const s = m[1] ? +m[1] : 0, e = Math.min(m[2] ? +m[2] : len - 1, len - 1);
+    if (s <= e) return new Response(all.slice(s, e + 1), { status: 206, headers: Object.assign(h, { 'content-range': `bytes ${s}-${e}/${len}`, 'content-length': String(e - s + 1) }) });
+  }
+  return new Response(all, { headers: Object.assign(h, { 'content-length': String(len) }) });
+}
 
 export class Hub {
   constructor(ctx, env) {
@@ -328,7 +373,7 @@ export class Hub {
     if (b.photo !== undefined) {
       const ph = String(b.photo || '');
       if (ph && !this.mediaDone(ph, me.id)) return json({ error: 'media' }, 400);
-      if (me.photo && me.photo !== ph) this.sql.exec('DELETE FROM media WHERE id = ?', me.photo);
+      if (me.photo && me.photo !== ph) this.mediaDel('id = ?', me.photo);
       sets.push('photo = ?'); vals.push(ph || null);
     }
     if (sets.length) this.sql.exec('UPDATE users SET ' + sets.join(', ') + ' WHERE id = ?', ...vals, me.id);
@@ -361,21 +406,21 @@ export class Hub {
     const owner = this.one('SELECT uid FROM media WHERE id = ? LIMIT 1', id);
     if (owner && owner.uid !== me.id) return json({ error: 'bad' }, 403);
     if (!data.byteLength || data.byteLength > 1572864) return json({ error: 'size' }, 413);
-    this.sql.exec('INSERT OR REPLACE INTO media (id, i, n, uid, mime, data, at) VALUES (?, ?, ?, ?, ?, ?, ?)', id, i, n, me.id, mime, data, Date.now());
+    // The bytes go to the file store; the Hub keeps only who owns which piece (media rows with no data).
+    if (this.env.STORE) {
+      const r = await storeOf(this.env, id).fetch(`https://store/put?id=${encodeURIComponent(id)}&i=${i}&n=${n}&mime=${encodeURIComponent(mime)}`, { method: 'POST', body: data });
+      if (!r.ok) return json({ error: 'busy' }, 503);
+      this.sql.exec('INSERT OR REPLACE INTO media (id, i, n, uid, mime, data, at) VALUES (?, ?, ?, ?, ?, NULL, ?)', id, i, n, me.id, mime, Date.now());
+    } else this.sql.exec('INSERT OR REPLACE INTO media (id, i, n, uid, mime, data, at) VALUES (?, ?, ?, ?, ?, ?, ?)', id, i, n, me.id, mime, data, Date.now());
     return json({ ok: true, done: this.mediaDone(id, me.id) });
   }
-  mediaGet(id, req) {
-    const rows = this.sql.exec('SELECT i, n, mime, data FROM media WHERE id = ? ORDER BY i', id).toArray();
-    if (!rows.length || rows.length !== rows[0].n) return new Response('Not found', { status: 404, headers: { 'access-control-allow-origin': '*' } });
-    const parts = rows.map(r => new Uint8Array(r.data)), len = parts.reduce((s, p) => s + p.length, 0), all = new Uint8Array(len);
-    let o = 0; for (const p of parts) { all.set(p, o); o += p.length; }
-    const h = { 'content-type': rows[0].mime, 'cache-control': 'public, max-age=31536000, immutable', 'access-control-allow-origin': '*', 'accept-ranges': 'bytes' };
-    const m = /bytes=(\d*)-(\d*)/.exec(req.headers.get('range') || '');
-    if (m && len) {
-      const s = m[1] ? +m[1] : 0, e = Math.min(m[2] ? +m[2] : len - 1, len - 1);
-      if (s <= e) return new Response(all.slice(s, e + 1), { status: 206, headers: Object.assign(h, { 'content-range': `bytes ${s}-${e}/${len}`, 'content-length': String(e - s + 1) }) });
-    }
-    return new Response(all, { headers: Object.assign(h, { 'content-length': String(len) }) });
+  // Files from before the file stores (bytes still in the Hub).
+  mediaGet(id, req) { return sendParts(this.sql.exec('SELECT i, n, mime, data FROM media WHERE id = ? AND data IS NOT NULL ORDER BY i', id).toArray(), req); }
+  // Deletes files (their rows here and their bytes in the file stores).
+  mediaDel(where, ...args) {
+    const ids = this.env.STORE ? this.sql.exec(`SELECT DISTINCT id FROM media WHERE (${where}) AND data IS NULL`, ...args).toArray().map(r => r.id) : [];
+    this.sql.exec(`DELETE FROM media WHERE ${where}`, ...args);
+    for (const id of ids) storeOf(this.env, id).fetch('https://store/del?id=' + encodeURIComponent(id), { method: 'POST' }).catch(() => {});
   }
   follows(a, b) { return !!this.one('SELECT 1 AS x FROM follows WHERE uid = ? AND fid = ?', a, b); }
   canSeeStatus(viewer, owner) {
@@ -386,7 +431,7 @@ export class Hub {
   }
   dropOldStatuses() {
     const old = this.sql.exec("SELECT * FROM uposts WHERE kind = 'status' AND at < ?", Date.now() - 86400000).toArray();
-    for (const p of old) { this.sql.exec('DELETE FROM media WHERE id = ? OR id = ? OR id = ?', p.media, p.thumb || '', this.postMusic(p).media || ''); this.sql.exec('DELETE FROM uposts WHERE id = ?', p.id); this.sql.exec('DELETE FROM ulikes WHERE pid = ?', p.id); this.sql.exec('DELETE FROM ucomments WHERE pid = ?', p.id); }
+    for (const p of old) { this.mediaDel('id = ? OR id = ? OR id = ?', p.media, p.thumb || '', this.postMusic(p).media || ''); this.sql.exec('DELETE FROM uposts WHERE id = ?', p.id); this.sql.exec('DELETE FROM ulikes WHERE pid = ?', p.id); this.sql.exec('DELETE FROM ucomments WHERE pid = ?', p.id); }
   }
   postMusic(p) { try { return JSON.parse(p.music || 'null') || {}; } catch (e) { return {}; } }
   postItems(p) {
@@ -508,9 +553,9 @@ export class Hub {
     if (op === 'delete') {
       const p = this.one('SELECT * FROM uposts WHERE id = ? AND uid = ?', String(b.id || ''), me.id);
       if (!p) return json({ error: 'notfound' }, 404);
-      for (const i of this.postItems(p)) this.sql.exec('DELETE FROM media WHERE id = ? OR id = ?', i.media || '', i.thumb || '');
-      if (this.postMusic(p).media) this.sql.exec('DELETE FROM media WHERE id = ?', this.postMusic(p).media);
-      this.sql.exec('DELETE FROM media WHERE id = ? OR id = ?', p.media, p.thumb || '');
+      for (const i of this.postItems(p)) this.mediaDel('id = ? OR id = ?', i.media || '', i.thumb || '');
+      if (this.postMusic(p).media) this.mediaDel('id = ?', this.postMusic(p).media);
+      this.mediaDel('id = ? OR id = ?', p.media, p.thumb || '');
       this.sql.exec('DELETE FROM uposts WHERE id = ?', p.id);
       this.sql.exec('DELETE FROM ulikes WHERE pid = ?', p.id); this.sql.exec('DELETE FROM ucomments WHERE pid = ?', p.id);
       return json({ ok: true });
@@ -715,7 +760,7 @@ export class Hub {
     const media = String(b.media || ''), iv = String(b.iv || '');
     if (!this.mediaDone(media, me.id) || !/^[A-Za-z0-9+/=]{8,40}$/.test(iv)) return json({ error: 'bad' }, 400);
     const old = me.backup ? JSON.parse(me.backup) : null;
-    if (old && old.media && old.media !== media) this.sql.exec('DELETE FROM media WHERE id = ?', old.media);
+    if (old && old.media && old.media !== media) this.mediaDel('id = ?', old.media);
     this.sql.exec('UPDATE users SET backup = ? WHERE id = ?', JSON.stringify({ media, iv, at: Date.now(), z: b.z ? 1 : 0 }), me.id);
     return json({ ok: true });
   }
@@ -857,9 +902,9 @@ export class Hub {
   removeContent(kind, id) {
     if (kind === 'status' || kind === 'post') {
       const p = this.one('SELECT * FROM uposts WHERE id = ?', id); if (!p) return;
-      for (const i of this.postItems(p)) this.sql.exec('DELETE FROM media WHERE id = ? OR id = ?', i.media || '', i.thumb || '');
-      if (this.postMusic(p).media) this.sql.exec('DELETE FROM media WHERE id = ?', this.postMusic(p).media);
-      this.sql.exec('DELETE FROM media WHERE id = ? OR id = ?', p.media, p.thumb || ''); this.sql.exec('DELETE FROM uposts WHERE id = ?', p.id);
+      for (const i of this.postItems(p)) this.mediaDel('id = ? OR id = ?', i.media || '', i.thumb || '');
+      if (this.postMusic(p).media) this.mediaDel('id = ?', this.postMusic(p).media);
+      this.mediaDel('id = ? OR id = ?', p.media, p.thumb || ''); this.sql.exec('DELETE FROM uposts WHERE id = ?', p.id);
       this.sql.exec('DELETE FROM ulikes WHERE pid = ?', p.id); this.sql.exec('DELETE FROM ucomments WHERE pid = ?', p.id);
     }
     if (kind === 'comment') this.sql.exec('DELETE FROM ucomments WHERE id = ?', id);
@@ -893,7 +938,8 @@ export class Hub {
     for (const p of this.sql.exec('SELECT id FROM uposts WHERE uid = ?', uid).toArray()) { this.sql.exec('DELETE FROM ulikes WHERE pid = ?', p.id); this.sql.exec('DELETE FROM ucomments WHERE pid = ?', p.id); }
     for (const p of this.sql.exec('SELECT id FROM gposts WHERE uid = ?', uid).toArray()) { this.sql.exec('DELETE FROM gcomments WHERE pid = ?', p.id); this.sql.exec('DELETE FROM glikes WHERE pid = ?', p.id); }
     this.sql.exec('UPDATE gposts SET likes = likes - 1 WHERE id IN (SELECT pid FROM glikes WHERE uid = ?)', uid);
-    const del = [['uposts', 'uid'], ['media', 'uid'], ['ulikes', 'uid'], ['ucomments', 'uid'], ['gposts', 'uid'], ['glikes', 'uid'], ['gcomments', 'uid'],
+    this.mediaDel('uid = ?', uid);
+    const del = [['uposts', 'uid'], ['ulikes', 'uid'], ['ucomments', 'uid'], ['gposts', 'uid'], ['glikes', 'uid'], ['gcomments', 'uid'],
       ['follows', 'uid'], ['follows', 'fid'], ['contacts', 'uid'], ['contacts', 'cid'], ['blocks', 'uid'], ['blocks', 'bid'], ['queue', 'uid'],
       ['paybank', 'uid'], ['subs', 'uid'], ['reports', 'uid']];
     for (const [t, c] of del) this.sql.exec(`DELETE FROM ${t} WHERE ${c} = ?`, uid);

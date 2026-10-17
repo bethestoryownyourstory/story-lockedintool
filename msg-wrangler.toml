@@ -7,7 +7,16 @@ compatibility_date = "2025-01-01"
 name = "HUB"
 class_name = "Hub"
 
+# File stores: the bytes of pictures / videos, spread over many stores (msg-worker.js storeOf).
+[[durable_objects.bindings]]
+name = "STORE"
+class_name = "Store"
+
 # SQLite-backed Durable Object (works on Cloudflare's free plan).
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["Hub"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["Store"]
