@@ -1389,8 +1389,6 @@
   .sub-top{ display:flex; justify-content:space-between; align-items:baseline; gap:10px; }
   .sub-name{ font-size:22px; font-weight:800; }
   .sub-price{ font-size:20px; font-weight:800; white-space:nowrap; }
-  .sub-was{ font-size:15px; font-weight:600; color:var(--muted); text-decoration:line-through; margin-right:6px; }
-  .sub-intro{ font-size:11.5px; color:var(--muted); margin-top:4px; }
   .sub-badge{ display:inline-block; margin-top:8px; padding:3px 10px; border-radius:10px; background:rgba(62,207,106,0.14); color:var(--green); font-size:12px; font-weight:700; }
   .sub-tag{ font-size:15px; font-weight:800; margin:10px 0 8px; }
   .sub-text{ font-size:13.5px; line-height:1.5; color:var(--text); }
@@ -7930,8 +7928,6 @@ function subRefresh(force){
   msgApi('/v1/sub/info').then(i=>{ const was = subLocked(); subSave(i); subApplyMode(); if(was !== subLocked() || state.current === 'subscription') renderDevice(); }).catch(()=>{});
 }
 setTimeout(()=>subRefresh(false), 4000);
-// Regular prices (owner): the plans' prices now are the Introduction Welcome price; the regular one shows crossed out beside it.
-const SUB_REGULAR = { basic:48, premium:120 };
 const SUB_PLANS = [
   { key:'basic', name:'Basic', tag:'Your essentials. Stay locked in.', badge:'',
     text:'Get the core LOCKED IN TOOL experience with your three essential pages: Money, Home/Wallet, and Focus. Keep your finances, wallet, and goals in one place, with the freedom to build your daily routine around what matters most.',
@@ -7967,8 +7963,7 @@ function subscriptionScreen(){
     </div>` : ''}
     ${SUB_PLANS.map(p=>{ const pr = plans[p.key] || {}; const mine = active && s.plan === p.key; return `
       <div class="sub-card${p.key === 'premium' ? ' sub-premium' : ''}">
-        <div class="sub-top"><div class="sub-name">${p.name}</div><div class="sub-price">${SUB_REGULAR[p.key] && SUB_REGULAR[p.key] > pr.usd ? `<span class="sub-was">$${SUB_REGULAR[p.key]}</span>` : ''}$${pr.usd}/month</div></div>
-        ${SUB_REGULAR[p.key] && SUB_REGULAR[p.key] > pr.usd ? `<div class="sub-intro">Introduction Welcome price. Changes to current prices will be announced if made.</div>` : ''}
+        <div class="sub-top"><div class="sub-name">${p.name}</div><div class="sub-price">$${pr.usd}/month</div></div>
         ${p.badge ? `<div class="sub-badge">${p.badge}</div>` : ''}
         <div class="sub-tag">${p.tag}</div>
         <div class="sub-text">${p.text}</div>
@@ -8495,7 +8490,7 @@ const LEGAL = {
     ['Automatic updates', [
       'Using Lockedintool means agreeing that it keeps itself up to date: new versions install automatically.' ]],
     ['Subscription', [
-      'Basic is $5 a month and Premium $15 a month - our Introduction Welcome price (regular prices: Basic $48, Premium $120 a month). Changes to current prices will be announced before they apply. Plans are charged in rand (shown before you pay - currently R95 and R285). One payment gives 30 days of your plan; paying the same plan again adds 30 days.',
+      'Basic is $5 a month and Premium $15 a month. Changes to prices will be announced before they apply. Plans are charged in rand (shown before you pay - currently R95 and R285). One payment gives 30 days of your plan; paying the same plan again adds 30 days.',
       'Plans do not renew by themselves yet - you pay each month. Payments are made through Stitch and approved by you on your own bank’s or card’s page.',
       'Before you pay you can cancel or switch plans at any time. Once a payment is made it is not refundable, except where South African law requires a refund.',
       'We may change prices or what a plan includes; you will be told in the app before it affects you.' ]],
@@ -9175,7 +9170,6 @@ window.storyProfileOnly = function(){
           <span class="cr-btn-space"></span>
         </div>
         <div class="cr-modes">
-          <button class="cr-mode" data-pf="cr-mode" data-m="live">Live</button>
           <button class="cr-mode" data-pf="cr-mode" data-m="video">Video</button>
           <button class="cr-mode" data-pf="cr-mode" data-m="profile">Profile</button>
           <button class="cr-mode" data-pf="cr-mode" data-m="highlight">Highlight</button>
@@ -9263,7 +9257,6 @@ window.storyProfileOnly = function(){
     }
     else if(k === 'cr-mode'){
       const m = b.getAttribute('data-m');
-      if(m === 'live'){ liveOpenHost(); return; }
       if(crRecording) return;
       crMode = crMode === m ? null : m; crRender();  // tap a chosen box again: back to the normal camera
     }
@@ -9790,7 +9783,7 @@ function upEl(){ const el = document.getElementById('story-profile'); return el 
 async function upLoad(){
   const el = upEl(); if(!el || UP.loading) return;
   if(!msgAccount()){ msgEnsureAccount(); upRender(); return; }
-  UP.loading = true; upRender(); feedLoad(true); liveListLoad();
+  UP.loading = true; upRender(); feedLoad(true);
   try{
     UP.data = await msgApi('/v1/updates'); actRefreshSoon();
     const me = UP.data.me; if(me) upSaveStats(me);
@@ -10248,7 +10241,7 @@ document.addEventListener('visibilitychange', ()=>{ if(MSG_ENGINE && document.vi
 // Launch welcome (owner): once per phone, a message from Lockedintool about the Introduction Welcome price. Only on the
 // Live screens (users), so it reaches everyone when Lockedintool is launched / published.
 const WELCOME_PRICE_KEY = 'story-welcome-price';
-const WELCOME_PRICE_TEXT = 'Welcome to Lockedintool! You’re getting our Introduction Welcome price: Basic $5 a month (regular price $48) and Premium $15 a month (regular price $120). Changes to current prices will be announced if made.';
+const WELCOME_PRICE_TEXT = 'Welcome to Lockedintool! You’re getting our Introduction Welcome price: Basic $5 a month and Premium $15 a month. Changes to current prices will be announced if made.';
 function litWelcomePrice(){
   if(!MSG_ENGINE || !msgAccount() || STORY_OWNER) return;
   try{ if(localStorage.getItem(WELCOME_PRICE_KEY)) return; localStorage.setItem(WELCOME_PRICE_KEY, String(Date.now())); }catch(e){ return; }
@@ -10726,6 +10719,7 @@ async function msgOnServer(m){
   if(m.t === 'gcall'){ gcallOnMsg(m).catch(()=>{}); return; }
   if(m.t === 'fnote'){   // someone you follow posted (owner: followers are told)
     if(m.seq) msgSend({ t:'ack', seq:m.seq });
+    if(m.kind === 'live') return;   // owner: Live is removed from Lockedintool
     const who = m.name || (m.username ? '@' + m.username : 'Someone');
     const what = m.kind === 'status' ? 'posted a status' : m.kind === 'highlight' ? 'added to a highlight' : m.kind === 'live' ? 'is live now' : 'shared a new post';
     if(NATIVE && window.StoryNative.msgNotify) try{ window.StoryNative.msgNotify(who, who + ' ' + what); }catch(e){}
@@ -10734,7 +10728,6 @@ async function msgOnServer(m){
     return;
   }
   if(m.t === 'glive'){ gliveSet(m.group, m.live); return; }
-  if(m.t === 'live'){ liveOnMsg(m); return; }
 }
 // ---- Groups in Messages: every group you're in (public from Community, private made here) is a chat, kept up to date
 // by the server (t:'group'). Private group messages are locked for each member; public group chat is public. ----
