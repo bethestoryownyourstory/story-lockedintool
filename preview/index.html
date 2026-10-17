@@ -43,7 +43,7 @@
 }catch(e){} })();
 </script>
 <meta charset="UTF-8">
-<title>Lockedintool — Prototype</title>
+<title>Lockedintool</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <script>
 /* Live widget: the page lays out at the Pages' own width (pw, CSS px) and the phone shrinks it to the widget's size,
@@ -3073,9 +3073,9 @@
   body.real-device .stage{
     min-height:100dvh; height:100dvh; padding:0; gap:0; overflow:hidden;
   }
-  body.real-device .stage-head,
-  body.real-device .switcher,
-  body.real-device .below-fold-note{ display:none; }
+  /* Owner: the old "live prototype" heading, its text, the Phone / Laptop switcher and the note under the phone are
+     NEVER shown - not in the app, not on a phone's browser, not on a computer, not even while a window loads. */
+  .stage-head, .switcher, .below-fold-note, #dev-emergency-btn{ display:none !important; }
   body.real-device .device-wrap{ width:100%; height:100dvh; max-width:none; }
   body.real-device .phone-frame{
     width:100%; height:100dvh; max-width:none; aspect-ratio:auto;
@@ -3885,6 +3885,8 @@
 </script>
 </head>
 <body>
+<script>/* Full screen from the very first moment on a phone / in the app - never the computer mock-up, even while loading. */
+if(window.StoryNative || /Android|iPhone|iPad|iPod|Mobi|Windows Phone/i.test(navigator.userAgent || '')) document.body.classList.add('real-device');</script>
 
 <button id="dev-emergency-btn" class="dev-emergency-btn" title="Reset Lockedintool to a clean Dashboard">⎋ Reset Lockedintool</button>
 
@@ -3913,8 +3915,7 @@
 
 <div class="stage">
   <div class="stage-head">
-    <h1>Lockedintool — live prototype</h1>
-    <p>From the dashboard, tap the arrow (top right) to open your pages. Swipe — or click‑drag on desktop — left/right to move between Wallet, Money, and Trading. Tap "‹ Dashboard" (top left) on any page to come back. No bottom nav bar — this is the default way the app behaves.</p>
+    <h1>Lockedintool</h1>
   </div>
 
   <div class="switcher">
@@ -3925,7 +3926,6 @@
   <div class="device-wrap" id="device-wrap"></div>
   <div id="device-dimmer" data-keep-color style="position:fixed;inset:0;background:#000;opacity:0;pointer-events:none;z-index:99999;transition:opacity 0.15s;"></div>
 
-  <div class="below-fold-note">This is a clickable spec, not the final app. You're previewing <b>Lockedintool</b>. Once you're happy with the screens and flow, this becomes the blueprint for the real Android launcher (APK) and the iPhone/Mac/Windows companion apps.</div>
 </div>
 
 <script>
@@ -3935,7 +3935,7 @@
 // (or just closing the tab / hitting your phone's own back or home button, which always
 // works no matter what this app is doing) reloads back to a clean Dashboard. Flip this to
 // false once STORY is finished and ready to go out, and the button disappears on its own.
-const DEV_MODE = true;
+const DEV_MODE = false;   // owner: the prototype's Reset button is never shown
 if(!DEV_MODE){
   const emergencyBtn = document.getElementById('dev-emergency-btn');
   if(emergencyBtn) emergencyBtn.style.display = 'none';
