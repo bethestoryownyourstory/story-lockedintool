@@ -3978,11 +3978,27 @@ let curRow = 1;   // the row the Pages show (1 = Row 1)
 // Rows shows every row. The Pages always show the row you're in (curRow; PAGES = that row's pages).
 const CORE_ITEMS = PAGE_SWITCH_ITEMS.slice(0, CORE_PAGE_COUNT);
 function appItem(a){ return { key:'app:' + a.pkg, label:escText(a.name || ''), app:a }; }
-function rowsList(){
+// Each row's real id (1 = Row 1, then the stored row numbers in order) - Page layout keeps each row's order by it.
+function rowIds(){
   const apps = sysOn() ? [] : appPagesStored();
-  const rows = [CORE_ITEMS.concat(apps.filter(a=>(a.row || 1) <= 1).map(appItem))];
-  [...new Set(apps.map(a=>a.row || 1).filter(r=>r > 1))].sort((x, y)=>x - y).forEach(r=>rows.push(apps.filter(a=>a.row === r).map(appItem)));
-  return rows;
+  return [1].concat([...new Set(apps.map(a=>a.row || 1).filter(r=>r > 1))].sort((x, y)=>x - y));
+}
+// Layouts > Pages > Page layout (owner): your own order of the pages in each row ('story-row-order' {rowId: [keys]}).
+function rowOrders(){ try{ return JSON.parse(localStorage.getItem('story-row-order') || '{}') || {}; }catch(e){ return {}; } }
+function rowsList(){
+  const apps = sysOn() ? [] : appPagesStored(), ord = rowOrders();
+  const sorted = (id, items)=>{ const o = ord[id] || []; const at = k=>{ const i = o.indexOf(k); return i < 0 ? 1e6 : i; };
+    return items.map((it, i)=>[it, i]).sort((a, b)=>(at(a[0].key) - at(b[0].key)) || (a[1] - b[1])).map(x=>x[0]); };
+  return rowIds().map(id=>sorted(id, id === 1 ? CORE_ITEMS.concat(apps.filter(a=>(a.row || 1) <= 1).map(appItem)) : apps.filter(a=>a.row === id).map(appItem)));
+}
+function rowMovePage(rowIndex, key, by){
+  const rows = rowsList(), ids = rowIds(), keys = (rows[rowIndex] || []).map(it=>it.key), i = keys.indexOf(key), j = i + by;
+  if(i < 0 || j < 0 || j >= keys.length) return;
+  keys.splice(j, 0, keys.splice(i, 1)[0]);
+  const o = rowOrders(); o[ids[rowIndex]] = keys;
+  try{ localStorage.setItem('story-row-order', JSON.stringify(o)); }catch(e){}
+  syncAppPages();
+  Object.keys(NEIGHBORS).forEach(k=>{ if(NEIGHBORS[k].host.parentNode) NEIGHBORS[k].host.remove(); delete NEIGHBORS[k]; });
 }
 function rowOfPage(key){ const rows = rowsList(); for(let i = 0; i < rows.length; i++) if(rows[i].some(it=>it.key === key)) return i + 1; return 0; }
 function syncAppPages(){
@@ -8273,6 +8289,9 @@ function layoutsScreen(){
       <div class="row-card" style="cursor:pointer;" data-nav="layouts-homescreen">
         <div class="row"><div class="row-left"><div class="row-name">Home Screen</div></div><span class="chev-right">›</span></div>
       </div>
+      <div class="row-card" style="cursor:pointer;" data-nav="layouts-pagelayout">
+        <div class="row"><div class="row-left"><div class="row-name">Page layout</div><div class="row-sub">The order of the pages in each row</div></div><span class="chev-right">›</span></div>
+      </div>
       <div class="row-card" style="cursor:pointer;" data-nav="layouts-arrangement">
         <div class="row"><div class="row-left"><div class="row-name">Page Fast Access</div><div class="row-sub">${ARRANGEMENT_LABEL[state.pageArrangement]}</div></div><span class="chev-right">›</span></div>
       </div>
@@ -8281,6 +8300,30 @@ function layoutsScreen(){
   `;
 }
 
+// Page layout (owner): every row ('Row 2 · tap to edit'); in a row, move each page left / right to where you want it.
+function layoutsPageLayoutScreen(){
+  const rows = rowsList(), r = state.layoutRowEdit;
+  if(r != null && rows[r]){
+    const items = rows[r];
+    return `
+    <div class="page-shell layouts-shell">
+    ${topBar('Row ' + (r + 1), false, '', 'layouts-pagelayout', '', false, true)}
+    <div class="note">Move each page left or right. The first page is on the left of the row, the last on the right.</div>
+    <div class="row-card">
+      ${items.map((it, i)=>`<div class="row"><div class="row-left"><div class="row-name">${i + 1}. ${it.label}</div><div class="row-sub">${i === 0 ? 'Left' : i === items.length - 1 ? 'Right' : 'Middle'}</div></div>
+        <span style="display:flex;gap:6px;"><button class="order-corner-btn" data-action="row-move" data-k="${escText(it.key)}" data-by="-1" title="Move left"${i === 0 ? ' disabled style="opacity:0.3;"' : ''}>‹</button><button class="order-corner-btn" data-action="row-move" data-k="${escText(it.key)}" data-by="1" title="Move right"${i === items.length - 1 ? ' disabled style="opacity:0.3;"' : ''}>›</button></span></div>`).join('')}
+    </div>
+    </div>`;
+  }
+  return `
+    <div class="page-shell layouts-shell">
+    ${topBar('Page layout', false, '', 'layouts', '', false, true)}
+    <div class="section-title">ROWS</div>
+    ${rows.map((items, i)=>`<div class="row-card" style="cursor:pointer;" data-action="row-edit" data-v="${i}">
+      <div class="row"><div class="row-left"><div class="row-name">Row ${i + 1}</div><div class="row-sub">${items.map(it=>it.label).join(' · ')}</div></div><span class="row-sub" style="white-space:nowrap;">Tap to edit ›</span></div>
+    </div>`).join('')}
+    </div>`;
+}
 function layoutsDashboardScreen(){
   return `
     <div class="page-shell layouts-shell">
@@ -13636,6 +13679,7 @@ function renderScreenContent(){
     case 'subscription': return subscriptionScreen();
     case 'layouts-dashboard': return layoutsDashboardScreen();
     case 'layouts-homescreen': return layoutsHomeScreenScreen();
+    case 'layouts-pagelayout': return layoutsPageLayoutScreen();
     case 'layouts-arrangement': return layoutsArrangementScreen();
     case 'settings': return settingsHubScreen();
     case 'notes': return notesScreen();
@@ -15129,6 +15173,7 @@ function attachHandlers(){
       if(window.__storyWidgetPinned && target !== window.__storyWidget){ try{ window.StoryNative.widgetOpenPages(target); }catch(e){} return; }
       // Pressing Community (not coming back from one of its groups): the choose screen, or Your Community (owner).
       if(target === 'community' && state.current !== 'community-group' && state.current !== 'community') state.communityMode = cmStartMode();
+      if(target === 'layouts-pagelayout') state.layoutRowEdit = null;   // Page layout opens on its list of rows
       state.current = target;
       if(PAGES.includes(target)) state.lastPage = target;
       renderDevice();
@@ -16294,6 +16339,8 @@ function attachHandlers(){
           break; }
         case 'app-row-pick': { const p = state.appRowPick; state.appRowPick = null; if(p){ const v = el.getAttribute('data-v'); toggleAppPage(p, v === 'new' ? 'new' : +v); } break; }
         case 'app-row-close': state.appRowPick = null; break;
+        case 'row-edit': state.layoutRowEdit = +el.getAttribute('data-v'); break;
+        case 'row-move': rowMovePage(state.layoutRowEdit, el.getAttribute('data-k'), +el.getAttribute('data-by')); break;
         case 'app-page-open': {
           const pkg = el.getAttribute('data-pkg');
           if(NATIVE && window.StoryNative.appPageOpen) window.StoryNative.appPageOpen(pkg); else showToast('Opens the app on your phone');
