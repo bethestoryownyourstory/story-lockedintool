@@ -8542,7 +8542,7 @@ const LEGAL = {
     ['How long we keep it', [
       'On your phone: until you delete it or remove the app. On our server: your account until you delete it (Settings > Privacy > Delete account - it’s removed at once); delivered messages are removed; reports are kept while they’re reviewed; payment records as long as the law requires (usually 5 years).' ]],
     ['Your rights', [
-      'You can delete your account yourself at any time: Settings > Privacy > Delete account. You give a reason, confirm with your phone’s fingerprint, face or PIN, and Lockedintool sends a link and a code to your Messages; entering the code on that page and pressing Delete account removes your profile, followers, posts, statuses, comments, chats and your place in groups from our server straight away, and everything Lockedintool keeps on your phone (your Pages, notes, money and wallet history, cards, trading logins and settings). Nothing outside Lockedintool is touched - your bank, payments, broker accounts and phone stay as they are. Why people leave is kept without any name on it. You can also ask to see, correct or delete the information we hold about you by writing to lockedintool@gmail.com. You can also complain to South Africa’s Information Regulator (inforegulator.org.za).' ]],
+      'You can delete your account yourself at any time: Settings > Privacy > Delete account. You give a reason, confirm with your phone’s fingerprint, face or PIN, and Lockedintool sends a link and a code to your Messages; entering the code on that page and pressing Delete account removes your profile, followers, posts, statuses, comments, chats and your place in groups from our server straight away, and everything Lockedintool keeps on your phone (your Pages, notes, money and wallet history, cards, trading logins and settings). Nothing outside Lockedintool is touched - your bank, payments, broker accounts and phone stay as they are. Why people leave is kept without any name on it. You can also ask to see, correct or delete the information we hold about you by writing to lockedintool@gmail.com.' ]],
     ['Children', [
       'Lockedintool is for people 18 and older because it includes trading and payments.' ]],
     ['Changes', [
@@ -8567,6 +8567,7 @@ const LEGAL = {
       'Orders you place in Lockedintool are sent to your broker exactly as you place them. You are responsible for every trade. Trading is risky and you can lose more than you put in.',
       'Prices, charts and balances come from your broker and TradingView and can be late, wrong or unavailable. We are not responsible for losses caused by markets, your broker, TradingView, your connection or app downtime.' ]],
     ['Money and Wallet', [
+      'By using Lockedintool you agree that it reads your bank and card details - your payments, balances and the last 4 digits of your cards and accounts - from your bank’s notifications and messages on your phone and, when you connect your bank, from your bank through Stitch, to show them to you in Money and Wallet.',
       'Money and Wallet are built from your bank’s notifications and messages (or, if you connect your bank, what your bank shares through Stitch), so they can be incomplete or wrong - they are not bank statements. Check with your bank before relying on them.',
       'Tap to Pay uses your phone’s own payment app. When sending money is available it goes from your bank account straight into theirs through our payment partner; Lockedintool never holds your money.' ]],
     ['Messages, groups and calls', [
@@ -8621,6 +8622,7 @@ function informationScreen(){
     ])}
     ${block('EVERYTHING IS REAL', [
       ['Your money', 'Payments come from your own bank\u2019s notifications. Nothing is made up.'],
+      ['Your bank', 'Connect your bank in Money for your real balance and history, straight from your bank.'],
       ['Your trading', 'Your own broker accounts and TradingView\u2019s real chart. Lockedintool is only the gateway - deposits and withdrawals stay with your broker.'],
       ['Your people', 'Real messages, calls and groups between people on Lockedintool.'],
     ])}
@@ -8630,7 +8632,6 @@ function informationScreen(){
       ['Your broker logins', 'Kept in Lockedintool\u2019s private storage on your phone - never your password.'],
     ])}
     ${block('COMING NEXT', [
-      ['Your bank inside Lockedintool', 'Log in to your bank for your full history and live balance.'],
       ['Subscription', 'One subscription that covers everything Lockedintool connects for you.'],
     ])}
     <div class="section-title">LEGAL</div>
