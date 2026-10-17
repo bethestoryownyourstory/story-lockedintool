@@ -2357,7 +2357,7 @@
   #story-profile .pf-chat-send:not(:disabled):active{ opacity:0.6; }
   /* Call history (Station 3's call history button, same window): every call made from STORY. */
   #story-profile .pf-calls-list{ margin-top:20px; }
-  #story-profile .call-row{ display:flex; align-items:center; gap:12px; padding:10px 0; }
+  #story-profile .call-row{ display:flex; align-items:center; gap:12px; padding:10px 0; cursor:pointer; }
   #story-profile .call-dir{ display:inline-flex; vertical-align:-2px; margin-right:4px; }
   #story-profile .call-row.missed .msg-who, #story-profile .call-row.missed .call-dir{ color:#e63946; }
   #story-profile .call-end{ flex-shrink:0; display:flex; flex-direction:column; align-items:flex-end; gap:4px; font-size:12px; font-variant-numeric:tabular-nums; }
@@ -11603,13 +11603,14 @@ function renderCalls(){
   const q = (box.querySelector('.pf-msgs-search input').value || '').trim().toLowerCase(), qd = q.replace(/\D/g, '');
   const list = storyCalls().filter(c=>!q || (c.name || '').toLowerCase().includes(q) || (c.username || '').toLowerCase().includes(q.replace(/^@/, '')) ||
     (c.number || '').toLowerCase().includes(q) || (qd.length >= 2 && callDigitsMatch(c.number, qd)));
-  box.querySelector('.pf-calls-list').innerHTML = list.map(c=>{
+  CALLS_SHOWN = list;
+  box.querySelector('.pf-calls-list').innerHTML = list.map((c, i)=>{
     const dir = CALL_DIR[c.dir] || CALL_DIR.out;
     const who = c.name || (c.username ? '@' + c.username : '') || c.number || '';
     const pic = c.photo ? '<img alt="" src="' + escText(c.photo) + '">' : PF_PHOTO_PLACEHOLDER;
     const kind = c.kind === 'video' ? 'Video' : 'Voice';
     const len = c.dir === 'missed' ? '' : c.end ? ' · ' + callLen(c.duration != null ? c.duration : (c.end - c.start) / 1000) : '';
-    return '<div class="call-row' + (c.dir === 'missed' ? ' missed' : '') + '">' +
+    return '<div class="call-row' + (c.dir === 'missed' ? ' missed' : '') + '" data-ci="' + i + '">' +
       '<span class="msg-pic">' + pic + '</span>' +
       '<span class="msg-mid"><span class="msg-who">' + escText(who) + '</span>' +
         '<span class="msg-last"><span class="call-dir"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">' + dir.svg + '</svg></span>' + dir.t + ' · ' + kind + len + '</span></span>' +
@@ -11619,6 +11620,24 @@ function renderCalls(){
   box.querySelector('.pf-calls-empty').hidden = list.length > 0;
   box.querySelector('.pf-calls-empty .pf-msgs-empty-t').textContent = q ? 'No results' : 'No call history yet';
 }
+// Tap a call (owner): a pop-up to call again fast - a number: Call it (straight away, like the dial pad); a
+// Lockedintool person: Voice call / Video call / Message; a group: Voice call / Video call.
+let CALLS_SHOWN = [];
+function callRowSheet(c){
+  if(!c) return;
+  const items = [];
+  if(c.number && !c.peer) items.push({ label:'Call ' + c.number, fn: ()=>{ if(NATIVE && window.StoryNative.callNumber) window.StoryNative.callNumber(c.number); else window.open('tel:' + c.number); } });
+  else if(c.peer && /^grp/.test(c.peer)){
+    items.push({ label:'Voice call', fn: ()=>gcallGo(c.peer, false, false, c.name).catch(()=>{}) });
+    items.push({ label:'Video call', fn: ()=>gcallGo(c.peer, true, false, c.name).catch(()=>{}) });
+  } else if(c.peer){
+    items.push({ label:'Voice call', fn: ()=>callStart(c.peer, false) });
+    items.push({ label:'Video call', fn: ()=>callStart(c.peer, true) });
+    items.push({ label:'Message', fn: ()=>{ window.storyS3Page && window.storyS3Page('messages'); msgStart(c.peer); } });
+  }
+  if(items.length) litSheet({ title: c.name || (c.username ? '@' + c.username : '') || c.number || '', items });
+}
+document.addEventListener('click', e=>{ const r = e.target.closest && e.target.closest('#story-profile .pf-calls .call-row[data-ci]'); if(r) callRowSheet(CALLS_SHOWN[+r.getAttribute('data-ci')]); });
 window.storyCallsChanged = renderCalls;
 window.addEventListener('storage', e=>{ if(e.key === 'story-calls') renderCalls(); });
 // STORY's own picture grid: the phone's pictures right inside Edit profile, so choosing is instant (no app switch).

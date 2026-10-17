@@ -1332,7 +1332,8 @@ class OverlayService : Service(), StoryBridge.Host {
 
     override fun toggleDialpad() { ui.post {
         val d = dialPane ?: return@post
-        if (d.shown) hideOne(d) else if (s3Pane?.shown == true) { profilePane?.takeIf { it.shown }?.let { hideOne(it) }; setShown(d, true) }
+        // Owner: the dial pad shows ON TOP of whatever is open (Call history, Messages, Profile...) - it never closes it.
+        if (d.shown) hideOne(d) else if (s3Pane?.shown == true) setShown(d, true)
     } }
 
     // ---- System theme (Settings): Black or White. Only black and white swap -- on the Pages, Station 3
@@ -1544,7 +1545,6 @@ class OverlayService : Service(), StoryBridge.Host {
         if (s3Pane?.shown != true) return@post
         s3Page = which
         p.web.evaluateJavascript("window.storyS3Page&&window.storyS3Page('$which')", null)
-        dialPane?.takeIf { it.shown }?.let { hideOne(it) }
         p.web.evaluateJavascript(profileGeometryJs(), null)
         profileGapPane?.web?.evaluateJavascript(profileGeometryJs(), null)
         p.web.evaluateJavascript("window.storyProfileRefresh&&window.storyProfileRefresh();window.storyProfilePhotoChanged&&window.storyProfilePhotoChanged()", null)  // always the latest real numbers and picture
