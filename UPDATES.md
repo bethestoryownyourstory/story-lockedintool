@@ -53,3 +53,4 @@ commits, pushed as a new update) - nothing else changes.
 | 45 | 2026-10-17 | Money / Wallet: your card's payments show when your bank names your account number instead of the card, bank SMS are matched by the bank's name, Standard Bank's app is read, more phones' SMS apps are read | 634c791 |
 | 46 | 2026-10-17 | Server for millions, step 1: every picture, video and file is kept in 256 separate file stores (up to 2.5 TB) and served straight from them, so they no longer fill or slow the main server | 7f576fc |
 | 47 | 2026-10-17 | Live removed (no Live box in Create, no lives in Updates, nobody can go live); Subscription shows just $5 and $15 - no crossed-out regular prices anywhere | 9f043f4 |
+| 48 | 2026-10-17 | Connect your bank (Money > Assets): log in to your own bank through Stitch and Lockedintool shows your REAL balance (even with no payments) and your bank's transactions, replacing what notifications said; read only; Privacy Policy updated | b7e3712 |
