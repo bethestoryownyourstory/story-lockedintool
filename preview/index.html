@@ -10482,8 +10482,9 @@ function mergeCommunityChats(){
     if(!c){ list.push({ id:'cg:' + g.id, kind:'group', groupType:'public', community:true, name:g.name, photo:g.image || '', messages:[] }); changed = true; }
     else if(c.name !== g.name){ c.name = g.name; changed = true; }
   });
-  // Left a group (and never chatted in it): it leaves your chats too.
-  for(let i = list.length - 1; i >= 0; i--) if(list[i].community && !ids.includes(list[i].id) && !(list[i].messages || []).length){ list.splice(i, 1); changed = true; }
+  // Left a group: it leaves your chats too - and an old group that only lived on this phone (not on Lockedintool's
+  // server, so its messages could never send - e.g. the old 'STORY' group) is gone even if you wrote in it.
+  for(let i = list.length - 1; i >= 0; i--) if(list[i].community && !ids.includes(list[i].id)){ list.splice(i, 1); changed = true; }
   if(changed) saveMsgChats();
 }
 // Private groups are made only here in Messages (owner) - never in Community, never shown there.
@@ -11086,7 +11087,8 @@ function callMediaProblem(e){
 }
 async function callMedia(video){
   // Android asks once for the microphone (and camera for video) the first time you call.
-  if(NATIVE && window.StoryNative.callAsk){ const ok = callNative('callAsk', video); if(ok === 'asking') throw Object.assign(new Error('asking'), { code:'asking' }); }
+  if(NATIVE && window.StoryNative.callAsk){ const ok = callNative('callAsk', video); if(ok === 'asking') throw Object.assign(new Error('asking'), { code:'asking' });
+    if(ok === 'wait') await new Promise(r=>setTimeout(r, 900)); }   // Android turns the microphone on for Lockedintool first
   return navigator.mediaDevices.getUserMedia({ audio:{ echoCancellation:true, noiseSuppression:true, autoGainControl:true }, video: video ? { facingMode:call.facing, width:{ ideal:720 }, height:{ ideal:1280 } } : false });
 }
 function callPc(){
@@ -17421,7 +17423,7 @@ function saveCommunity(){
     const joined = state.communityGroups.filter(g=>g.builtin && g.members.includes('You')).map(g=>g.id);
     localStorage.setItem(COMMUNITY_KEY, JSON.stringify({ mine, joined }));
     // Groups on STORY's server reach Messages from the server itself; only STORY's own built-in groups go this way.
-    localStorage.setItem('story-community-chats', JSON.stringify(state.communityGroups.filter(g=>g.members.includes('You') && g.id !== 'g-stories' && !g.server).map(g=>({ id:g.id, name:g.name, image: g.image && String(g.image).length < 200000 ? g.image : null }))));
+    localStorage.setItem('story-community-chats', JSON.stringify(state.communityGroups.filter(g=>g.members.includes('You') && g.builtin && g.id !== 'g-stories' && !g.server).map(g=>({ id:g.id, name:g.name, image: g.image && String(g.image).length < 200000 ? g.image : null }))));
   }catch(e){}
 }
 // ---- Community groups are REAL (owner: creating groups works for everyone): every group you create is made on STORY's
