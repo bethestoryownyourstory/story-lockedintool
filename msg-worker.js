@@ -124,6 +124,8 @@ export class Hub {
     this.sql.exec(`CREATE INDEX IF NOT EXISTS payments_uid ON payments(uid, created)`);
     this.sql.exec(`CREATE INDEX IF NOT EXISTS payments_to ON payments(to_uid, created)`);
     try { this.sql.exec(`ALTER TABLE payments ADD COLUMN kind TEXT`); } catch (e) {}
+    // Your bank, connected through Stitch (open banking): the sign-in it gave us, locked (bankKey), and the last look.
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS banklinks (uid TEXT PRIMARY KEY, refresh TEXT, access TEXT, aexp INTEGER, state TEXT, verifier TEXT, linked INTEGER, cache TEXT, cached INTEGER)`);
     this.sql.exec(`CREATE TABLE IF NOT EXISTS subs (uid TEXT PRIMARY KEY, plan TEXT, until INTEGER, updated INTEGER)`);
     // The option a plan is bought under (owner): 'second' = Lockedintool as your second system, 'only' = your only system.
     try { this.sql.exec(`ALTER TABLE subs ADD COLUMN mode TEXT`); } catch (e) {}
@@ -225,6 +227,7 @@ export class Hub {
         return json({ ok: true, sms: !!(this.env.TWILIO_VERIFY_SID || this.env.TWILIO_FROM), mail: this.mailReady(), resetSms: this.smsLinkReady(), plans: this.subPlans(), pay, subs: this.subReady(), transfers: this.payReady(), live: this.liveReady() });
       }
       if (path === '/v1/pay/return') return new Response('<!doctype html><meta name=viewport content="width=device-width,initial-scale=1"><body style="margin:0;background:#000;color:#fff;font:600 18px system-ui;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center;padding:24px;box-sizing:border-box">Done - go back to Lockedintool to see your payment.</body>', { headers: { 'content-type': 'text/html; charset=utf-8' } });
+      if (path === '/v1/bank/return') return this.bankReturn(url);
       if (path === '/v1/delete') return this.deletePage(req, url);
       if (path === '/v1/login/salt') return this.loginSalt(url.searchParams.get('u') || '');
       if (path === '/v1/reset') return this.resetPage(req, url);
@@ -244,6 +247,7 @@ export class Hub {
       if (path.startsWith('/v1/groups/')) return this.groups(me, path.slice(11), body, url.searchParams);
       if (path.startsWith('/v1/pay/')) return this.pay(me, path.slice(8), body, url);
       if (path.startsWith('/v1/sub/')) return this.sub(me, path.slice(8), body, url);
+      if (path.startsWith('/v1/bank/')) return this.bank(me, path.slice(9), url);
       if (path === '/v1/follow') return this.follow(me, body);
       if (path === '/v1/profile') return this.profile(me, url.searchParams.get('id') || me.id);
       if (path === '/v1/updates') return this.updates(me);
@@ -941,7 +945,7 @@ export class Hub {
     this.mediaDel('uid = ?', uid);
     const del = [['uposts', 'uid'], ['ulikes', 'uid'], ['ucomments', 'uid'], ['gposts', 'uid'], ['glikes', 'uid'], ['gcomments', 'uid'],
       ['follows', 'uid'], ['follows', 'fid'], ['contacts', 'uid'], ['contacts', 'cid'], ['blocks', 'uid'], ['blocks', 'bid'], ['queue', 'uid'],
-      ['paybank', 'uid'], ['subs', 'uid'], ['reports', 'uid']];
+      ['paybank', 'uid'], ['banklinks', 'uid'], ['subs', 'uid'], ['reports', 'uid']];
     for (const [t, c] of del) this.sql.exec(`DELETE FROM ${t} WHERE ${c} = ?`, uid);
     const gone = this.one('SELECT token FROM users WHERE id = ?', uid);
     if (gone && gone.token) this.sql.exec('INSERT OR IGNORE INTO tombs (tok, at, why) VALUES (?, ?, ?)', gone.token, Date.now(), why);   // its phone learns the account is gone
@@ -1250,6 +1254,82 @@ export class Hub {
     const j = await r.json().catch(() => ({}));
     if (!r.ok || j.errors) throw new Error('stitch: ' + ((j.errors && j.errors[0] && j.errors[0].message) || r.status));
     return j.data;
+  }
+  // ---- Connect your bank (owner: your REAL balance and history, like your bank's app) - open banking through
+  // Stitch (the same Enterprise keys; Stitch switches on the scopes accounts / balances / transactions and the return
+  // page <server>/v1/bank/return). You log in to your own bank on Stitch's page; Lockedintool only READS (it can't
+  // move money with this) and keeps the bank's sign-in locked on this server. ----
+  async bankKey() { return crypto.subtle.importKey('raw', await crypto.subtle.digest('SHA-256', enc.encode('bank|' + (this.env.STITCH_ENT_CLIENT_SECRET || ''))), 'AES-GCM', false, ['encrypt', 'decrypt']); }
+  async bankLock(v) { const iv = crypto.getRandomValues(new Uint8Array(12)); return b64u(iv) + '.' + b64u(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await this.bankKey(), enc.encode(v))); }
+  async bankOpen(v) {
+    const [a, b] = String(v || '').split('.'); if (!b) return '';
+    const un = s => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+    try { return new TextDecoder().decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: un(a) }, await this.bankKey(), un(b))); } catch (e) { return ''; }
+  }
+  bankBack(url) { return (this.env.BANK_REDIRECT || (url.origin + '/v1/bank/return')); }
+  async bankTokens(params) {
+    const r = await fetch((this.env.STITCH_BASE || 'https://secure.stitch.money') + '/connect/token', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams(Object.assign({ client_id: this.env.STITCH_ENT_CLIENT_ID, client_secret: this.env.STITCH_ENT_CLIENT_SECRET, audience: 'https://secure.stitch.money/connect/token' }, params)) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.access_token) throw new Error((j.error_description || j.error || ('bank sign-in ' + r.status)));
+    return j;
+  }
+  async bankSave(uid, j) {
+    this.sql.exec('UPDATE banklinks SET access = ?, aexp = ?, refresh = COALESCE(?, refresh), state = NULL, verifier = NULL, linked = COALESCE(linked, ?) WHERE uid = ?',
+      await this.bankLock(j.access_token), Date.now() + (j.expires_in || 900) * 1000, j.refresh_token ? await this.bankLock(j.refresh_token) : null, Date.now(), uid);
+  }
+  async bankReturn(url) {
+    const page = (t, ok) => new Response('<!doctype html><meta name=viewport content="width=device-width,initial-scale=1"><body style="margin:0;background:#000;color:#fff;font:600 18px system-ui;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center;padding:24px;box-sizing:border-box">' + t + '</body>', { status: ok ? 200 : 400, headers: { 'content-type': 'text/html; charset=utf-8' } });
+    const st = url.searchParams.get('state') || '', code = url.searchParams.get('code') || '';
+    const l = st ? this.one('SELECT uid, verifier FROM banklinks WHERE state = ?', st) : null;
+    if (!l) return page('This link has expired - connect your bank again in Lockedintool.');
+    if (!code) { this.sql.exec('UPDATE banklinks SET state = NULL, verifier = NULL WHERE uid = ?', l.uid); return page('Your bank wasn’t connected. You can try again in Lockedintool.'); }
+    try { await this.bankSave(l.uid, await this.bankTokens({ grant_type: 'authorization_code', code, redirect_uri: this.bankBack(url), code_verifier: l.verifier })); }
+    catch (e) { return page('Your bank couldn’t be connected (' + String(e.message || e).replace(/[<>&]/g, '').slice(0, 120) + '). Try again in Lockedintool.'); }
+    this.sendTo(l.uid, { t: 'bank' });
+    return page('Your bank is connected - go back to Lockedintool.', true);
+  }
+  async bankAccess(uid) {
+    const l = this.one('SELECT * FROM banklinks WHERE uid = ?', uid);
+    if (!l || !l.refresh) return '';
+    if (l.access && l.aexp > Date.now() + 30000) return this.bankOpen(l.access);
+    const rt = await this.bankOpen(l.refresh); if (!rt) return '';
+    try { const j = await this.bankTokens({ grant_type: 'refresh_token', refresh_token: rt }); await this.bankSave(uid, j); return j.access_token; }
+    catch (e) { this.sql.exec('UPDATE banklinks SET refresh = NULL, access = NULL WHERE uid = ?', uid); return ''; }   // the bank ended it: connect again
+  }
+  async bank(me, op, url) {
+    if (op === 'info') { const l = this.one('SELECT refresh, linked FROM banklinks WHERE uid = ?', me.id); return json({ ready: this.payReady(), linked: !!(l && l.refresh), at: l && l.linked || 0 }); }
+    if (!this.payReady()) return json({ error: 'not-ready' }, 400);
+    if (op === 'link') {
+      const state = rand(18), verifier = rand(32), challenge = await sha(verifier), nonce = rand(12);
+      this.sql.exec('INSERT INTO banklinks (uid, state, verifier) VALUES (?, ?, ?) ON CONFLICT(uid) DO UPDATE SET state = excluded.state, verifier = excluded.verifier', me.id, state, verifier);
+      const q = new URLSearchParams({ client_id: this.env.STITCH_ENT_CLIENT_ID, scope: 'openid offline_access accounts balances transactions accountholders', response_type: 'code',
+        redirect_uri: this.bankBack(url), nonce, state, code_challenge: challenge, code_challenge_method: 'S256' });
+      return json({ url: (this.env.STITCH_BASE || 'https://secure.stitch.money') + '/connect/authorize?' + q });
+    }
+    if (op === 'unlink') { this.sql.exec('DELETE FROM banklinks WHERE uid = ?', me.id); return json({ ok: true }); }
+    if (op === 'accounts') {
+      const l = this.one('SELECT cache, cached FROM banklinks WHERE uid = ?', me.id);
+      if (l && l.cache && Date.now() - l.cached < 60000) return new Response(l.cache, { headers: JSONH });   // at most one look a minute
+      const tok = await this.bankAccess(me.id);
+      if (!tok) return json({ error: 'not-linked' }, 400);
+      const r = await fetch((this.env.STITCH_BASE || 'https://api.stitch.money') + '/graphql', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + tok },
+        body: JSON.stringify({ query: 'query { user { bankAccounts { id name accountNumber accountType bankId currentBalance availableBalance transactions(first: 100) { edges { node { id amount reference description date runningBalance } } } } } }' }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || j.errors) return json({ error: 'bank', why: String((j.errors && j.errors[0] && j.errors[0].message) || r.status).slice(0, 160) }, 502);
+      const money = m => m && m.quantity != null ? { v: +m.quantity, cur: m.currency || 'ZAR' } : null;
+      const accounts = ((j.data && j.data.user && j.data.user.bankAccounts) || []).map(a => {
+        const cb = money(a.currentBalance), ab = money(a.availableBalance);
+        return { id: a.id, name: a.name || '', last4: String(a.accountNumber || '').replace(/\D/g, '').slice(-4), type: a.accountType || '', bank: a.bankId || '',
+          balance: cb ? cb.v : null, available: ab ? ab.v : null, cur: (cb || ab || {}).cur || 'ZAR',
+          tx: ((a.transactions && a.transactions.edges) || []).map(e => e.node).filter(Boolean).map(t => { const m = money(t.amount), rb = money(t.runningBalance);
+            return m ? { id: t.id, amt: m.v, cur: m.cur, text: [t.description, t.reference].filter(Boolean).join(' · ').slice(0, 200), who: String(t.description || t.reference || '').slice(0, 60), at: Date.parse(t.date) || 0, bal: rb ? rb.v : null } : null; }).filter(Boolean) };
+      });
+      const out = JSON.stringify({ ok: true, at: Date.now(), accounts });
+      this.sql.exec('UPDATE banklinks SET cache = ?, cached = ? WHERE uid = ?', out, Date.now(), me.id);
+      return new Response(out, { headers: JSONH });
+    }
+    return json({ error: 'bad' }, 400);
   }
   bankOk(b) {
     const bank = String(b.bank || ''), acct = String(b.acct || '').replace(/\s+/g, ''), name = String(b.name || '').trim().slice(0, 60);

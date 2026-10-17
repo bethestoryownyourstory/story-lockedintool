@@ -5181,17 +5181,72 @@ const MONEY_KNOWN = /(fnb|capitec|absa|nedbank|standardbank|sbsa|tymebank|tyme|d
 function moneyCounts(t){
   const pkg = String(t.pkg || '');
   if(!pkg) return true;   // test data in the browser preview
+  if(pkg.startsWith('bank:')) return walletCards().some(c=>cardMatches(c, t));   // your connected bank (open banking)
   const ok = MONEY_SMS.includes(pkg) || (!MONEY_TRADING.test(pkg) && !MONEY_TRADING.test(String(t.app || '')) && MONEY_PAYMENT.test(pkg));
   if(!(ok && (MONEY_KNOWN.test(pkg) || !!t.card || t.bal != null))) return false;
   // Owner: Lockedintool only shows money that went OUT of your cards or came IN to them - each payment must belong
   // to a card you added (its last 4, or - when the message names no card - the bank of one of your cards).
   return walletCards().some(c=>cardMatches(c, t));
 }
+// ---- Connect your bank (owner: your REAL balance and history, like your bank's app): open banking through Stitch
+// (msg-worker /v1/bank/info|link|accounts|unlink). You log in to your own bank on Stitch's page; Lockedintool only
+// reads. Kept on the phone in 'story-bank' {linked, ready, at, accounts}; looked at most every 5 minutes, when a
+// money page shows or Lockedintool comes back (no loop). A connected bank's own history replaces what its
+// notifications said (no double payments). ----
+const BANK_KEY = 'story-bank';
+const BANK_NAMES = { absa:'Absa', african_bank:'African Bank', capitec:'Capitec', discovery_bank:'Discovery Bank', fnb:'FNB', investec:'Investec', nedbank:'Nedbank', standard_bank:'Standard Bank', tymebank:'TymeBank', bank_zero:'Bank Zero' };
+function bankData(){ try{ return JSON.parse(localStorage.getItem(BANK_KEY) || '{}') || {}; }catch(e){ return {}; } }
+function bankSave(v){ try{ localStorage.setItem(BANK_KEY, JSON.stringify(v)); }catch(e){} moneyCache = null; }
+const bankLinked = ()=>!!bankData().linked;
+const bankName = id=>BANK_NAMES[id] || String(id || 'Bank').replace(/_/g, ' ').replace(/\b\w/g, c=>c.toUpperCase());
+let bankLooking = false;
+async function bankRefresh(force){
+  if(bankLooking || !litSignedIn()) return;
+  const d = bankData();
+  if(!force && Date.now() - (d.looked || 0) < 300000) return;
+  bankLooking = true;
+  try{
+    const info = await msgApi('/v1/bank/info');
+    const v = { linked: info.linked, ready: info.ready, at: d.at || 0, accounts: d.accounts || [], looked: Date.now() };
+    if(info.linked){ try{ const r = await msgApi('/v1/bank/accounts'); v.accounts = r.accounts || []; v.at = r.at || Date.now(); }catch(e){ if(e.code === 'not-linked') v.linked = false; } }
+    else v.accounts = [];
+    bankSave(v);
+    if(MONEY_PAGES.includes(state.current) && !pageSwipeAnimating) renderDevice();
+  }catch(e){}
+  bankLooking = false;
+}
+async function bankConnect(){
+  if(!litSignedIn()){ showToast('Log in to Lockedintool first'); return; }
+  try{ const r = await msgApi('/v1/bank/link', {}); state.bankWaiting = true; payOpenBank(r.url); }
+  catch(e){ showToast(e.code === 'not-ready' ? 'Connecting your bank switches on once Stitch turns on bank connections for Lockedintool' : 'Couldn’t open your bank - try again'); }
+}
+async function bankUnlink(){
+  try{ await msgApi('/v1/bank/unlink', {}); }catch(e){}
+  bankSave({ linked:false, accounts:[], looked: Date.now() }); showToast('Bank disconnected'); if(MONEY_PAGES.includes(state.current)) renderDevice();
+}
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState === 'visible' && !MSG_ENGINE && litSignedIn()){ const w = state.bankWaiting; state.bankWaiting = false; bankRefresh(w); } });
+window.addEventListener('storage', e=>{ if(e.key === 'story-bank-ping') bankRefresh(true); });
+// Each connected account as payments (pkg 'bank:<bank>', card = the account's last 4 - cardMatches knows it by its bank).
+function bankTx(){
+  const out = [];
+  (bankData().accounts || []).forEach(a=>{ const app = bankName(a.bank), pkg = 'bank:' + a.bank;
+    (a.tx || []).forEach(t=>{ if(!t.amt || !t.at) return; out.push({ id:'b' + t.id, ts:t.at, pkg, app, card:a.last4 || null, amt:+t.amt, cur:t.cur || a.cur || 'ZAR', who:t.who || null, bal:t.bal, text:t.text || '' }); }); });
+  return out;
+}
+// The live balance of each connected account (shows even with no payments).
+function bankBalances(){
+  return (bankData().accounts || []).filter(a=>a.balance != null || a.available != null).map(a=>({ pkg:'bank:' + a.bank, app:bankName(a.bank), card:a.last4 || null,
+    bal: a.available != null ? +a.available : +a.balance, cur:a.cur || 'ZAR', ts: bankData().at || Date.now(), acctName: a.name }));
+}
 let moneyCache = null;
 function moneyTx(){
   if(moneyCache) return moneyCache;
   let list = [];
   try{ list = JSON.parse((NATIVE && window.StoryNative.moneyList) ? window.StoryNative.moneyList() : (localStorage.getItem('story-money-test') || '[]')) || []; }catch(e){}
+  // A connected bank's own history replaces what its notifications / SMS said.
+  const linkedIds = [].concat(...(bankData().accounts || []).map(a=>bankIds(a.bank.replace(/_/g, ' ') + ' ' + bankName(a.bank))));
+  if(linkedIds.length) list = list.filter(t=>!bankIds(String(t.pkg || '') + ' ' + (t.app || '') + (MONEY_SMS.includes(t.pkg) ? ' ' + String(t.text || '').slice(0, 40) : '')).some(i=>linkedIds.includes(i)));
+  list = list.concat(bankTx());
   list = list.filter(t=>t && isFinite(t.amt) && t.amt && t.ts && moneyCounts(t)).sort((a, b)=>b.ts - a.ts);
   const to = accountCur();
   if(to){ if(list.some(t=>t.cur !== to)) fxEnsure(); list = list.map(t=>t.cur === to ? t : fxTx(t, to)); }
@@ -5291,7 +5346,13 @@ function expensesFor(key, cur){
 }
 // Balances your bank says in its messages (newest per account); a negative one is money you owe.
 function moneyBalances(forCard){
-  const seen = {}, out = [];
+  const seen = {}, out = [], to = accountCur(), c = forCard && !moneyAllOn() ? activeCard() : null;
+  bankBalances().forEach(b=>{
+    if(!walletCards().some(x=>cardMatches(x, b)) || (c && !cardMatches(c, b))) return;
+    const k = b.pkg + '|' + (b.card || ''); if(seen[k]) return; seen[k] = 1;
+    const v = to && b.cur !== to ? fxConvert(b.bal, b.cur, to) : null;
+    out.push({ key: moneyAcctKey(b), name: b.app + (b.card ? ' ••' + b.card : ''), bal: v == null ? b.bal : v, cur: v == null ? b.cur : to, ts: b.ts, icon:'🏦' });
+  });
   (forCard ? moneyView() : moneyTx()).forEach(t=>{
     if(t.bal == null) return;
     const k = t.pkg + '|' + (t.card || '');
@@ -5428,10 +5489,14 @@ function paymentCardsHTML(){
       `).join('');
 }
 const moneyRowsEmpty = text=>`<div class="row"><div class="row-left"><div class="row-name" style="color:var(--muted);">${text}</div></div></div>`;
+const BANK_ROW = ()=>NATIVE || litSignedIn() ? (bankLinked()
+  ? `<div class="row" data-action="bank-unlink"><div class="row-left"><div class="row-icon">🏦</div><div><div class="row-name">Bank connected</div><div class="row-sub">Real balance and history · tap to disconnect</div></div></div></div>`
+  : `<div class="row" data-action="bank-connect"><div class="row-left"><div class="row-icon">🏦</div><div><div class="row-name">Connect your bank</div><div class="row-sub">Your real balance and history</div></div></div><div class="row-amt">›</div></div>`) : '';
 function moneyAssetRows(neg){
   const list = moneyAssets().filter(a=>neg ? a.bal < 0 : a.bal >= 0);
-  if(!list.length) return moneyRowsEmpty(neg ? 'Nothing owed' : 'Nothing yet');
-  return list.map(a=>`<div class="row"><div class="row-left"><div class="row-icon">${a.icon}</div><div><div class="row-name">${escText(a.name)}</div><div class="row-sub">${moneyWhen(a.ts)}</div></div></div><div class="row-amt"${neg ? ' style="color:var(--red);"' : ''}>${fmtCur(a.bal, a.cur)}</div></div>`).join('');
+  if(!neg) bankRefresh(false);
+  if(!list.length) return neg ? moneyRowsEmpty('Nothing owed') : (BANK_ROW() || moneyRowsEmpty('Nothing yet'));
+  return list.map(a=>`<div class="row"><div class="row-left"><div class="row-icon">${a.icon}</div><div><div class="row-name">${escText(a.name)}</div><div class="row-sub">${moneyWhen(a.ts)}</div></div></div><div class="row-amt"${neg ? ' style="color:var(--red);"' : ''}>${fmtCur(a.bal, a.cur)}</div></div>`).join('') + (neg ? '' : BANK_ROW());
 }
 
 function moneyScreen(){
@@ -8365,7 +8430,7 @@ function litAccountGone(why){
 }
 function delAccountForget(){
   ['story-msg-account', 'story-msg-peers', MSG_KEY, MSG_OUTBOX, 'story-profile', 'story-profile-stats', PF_LOCKS_KEY, 'story-posts', 'story-highlights', 'story-upost-queue',
-   'story-status-seen', 'story-status-remind', 'story-activity', 'story-calls', 'story-privacy', 'story-blocked', 'story-community', 'story-community-chats', 'story-community-always-mine', 'story-sub', 'story-photo-up', 'story-recovery', 'story-auth-locked', 'story-glive', 'story-recent-messages', 'story-recent-updates', 'story-recent-calls', 'story-recent-web', 'story-recent-groups', 'story-country']
+   'story-status-seen', 'story-status-remind', 'story-activity', 'story-calls', 'story-privacy', 'story-blocked', 'story-community', 'story-community-chats', 'story-community-always-mine', 'story-sub', 'story-photo-up', 'story-recovery', 'story-auth-locked', 'story-glive', 'story-recent-messages', 'story-recent-updates', 'story-recent-calls', 'story-recent-web', 'story-recent-groups', 'story-country', 'story-bank']
     .forEach(k=>{ try{ localStorage.removeItem(k); }catch(e){} });
   msgChatsCache = null;
   if(NATIVE && window.StoryNative.removeProfilePhoto) try{ window.StoryNative.removeProfilePhoto(); }catch(e){}
@@ -8426,7 +8491,7 @@ function privacySettingsHTML(){
 // ---- Privacy Policy + Terms of Service (owner, under Information). Written from how Lockedintool really works; the
 //      owner's details: Lockedintool, lockedintool@gmail.com, no refunds (except where the law requires). Also reachable from the
 //      Subscription page (someone without a plan sees only that page, and must be able to read what they agree to).
-const LEGAL_UPDATED = '16 October 2026';
+const LEGAL_UPDATED = '17 October 2026';
 const LEGAL = {
   'legal-privacy': { title:'Privacy Policy', sections:[
     ['Who we are', [
@@ -8438,6 +8503,7 @@ const LEGAL = {
       'We do not sell your information and Lockedintool shows no ads.' ]],
     ['Kept only on your phone', [
       'Money and Wallet: payments read from the notifications and bank SMS your bank and payment apps put on your phone (amount, who, date, balance, the card or account’s last 4 digits). One-time PINs, chats, email and adverts are skipped.',
+      'Connect your bank (only if you choose to): you log in to your own bank on Stitch’s page (Stitch is a licensed open banking provider). Lockedintool then READS your accounts’ names, last 4 digits, balances and transactions to show them in Money and Wallet - it can’t move money with this. Your bank’s sign-in is kept locked on Lockedintool’s server; disconnect any time (Money > Bank connected) and it is deleted, and it is deleted with your account.',
       'Cards you add: bank name, last 4 digits and expiry. The full card number and CVV are only checked while you add the card and are never kept. Pictures of scanned cards are kept with the long number and CVV covered.',
       'Notes, drawings, pictures and audio you add to notes; highlights you make with Create; your settings.',
       'Trading: the sign-in tokens and API keys of the broker accounts you add, in Lockedintool’s private storage. Your broker password is never kept.',
@@ -8501,7 +8567,7 @@ const LEGAL = {
       'Orders you place in Lockedintool are sent to your broker exactly as you place them. You are responsible for every trade. Trading is risky and you can lose more than you put in.',
       'Prices, charts and balances come from your broker and TradingView and can be late, wrong or unavailable. We are not responsible for losses caused by markets, your broker, TradingView, your connection or app downtime.' ]],
     ['Money and Wallet', [
-      'Money and Wallet are built from your bank’s notifications and messages, so they can be incomplete or wrong - they are not bank statements. Check with your bank before relying on them.',
+      'Money and Wallet are built from your bank’s notifications and messages (or, if you connect your bank, what your bank shares through Stitch), so they can be incomplete or wrong - they are not bank statements. Check with your bank before relying on them.',
       'Tap to Pay uses your phone’s own payment app. When sending money is available it goes from your bank account straight into theirs through our payment partner; Lockedintool never holds your money.' ]],
     ['Messages, groups and calls', [
       'You own what you post. You let us carry and show it so the app can work (for example, posts in public groups are visible to everyone).',
@@ -10716,6 +10782,7 @@ async function msgOnServer(m){
   }
   if(m.t === 'signedout'){ msgSignedOut(); return; }
   if(m.t === 'call'){ callOnSignal(m); return; }
+  if(m.t === 'bank'){ try{ localStorage.setItem('story-bank-ping', String(Date.now())); }catch(e){} return; }   // your bank was just connected: the Pages look
   if(m.t === 'gcall'){ gcallOnMsg(m).catch(()=>{}); return; }
   if(m.t === 'fnote'){   // someone you follow posted (owner: followers are told)
     if(m.seq) msgSend({ t:'ack', seq:m.seq });
@@ -16838,6 +16905,8 @@ function attachHandlers(){
         case 'privacy-calls': { const p = storyPrivacy(); p.calls = el.getAttribute('data-value'); setStoryPrivacy(p); break; }
         case 'privacy-call-person': { const p = storyPrivacy(), id = el.getAttribute('data-value'); const l = p.callPeople || []; p.callPeople = l.includes(id) ? l.filter(x=>x !== id) : l.concat(id); setStoryPrivacy(p); break; }
         case 'cal-open': state.calOpen = true; state.calSel = null; state.calView = null; break;
+        case 'bank-connect': bankConnect(); break;
+        case 'bank-unlink': { if(state.bankUnlinkAsk && Date.now() - state.bankUnlinkAsk < 4000){ state.bankUnlinkAsk = 0; bankUnlink(); } else { state.bankUnlinkAsk = Date.now(); showToast('Tap again to disconnect your bank'); } break; }
         case 'money-all': { const v = moneyAll(); v.on = !v.on; moneyAllSave(v); showToast(v.on ? 'Net worth' : 'Showing your card'); break; }
         case 'money-all-edit': state.moneyAllEdit = MONEY_ALL_KEY; break;
         case 'wallet-nw': { const v = nwGet(WALLET_NW_KEY); v.on = !v.on; nwSave(WALLET_NW_KEY, v); showToast(v.on ? 'Net worth' : 'Showing your card'); break; }

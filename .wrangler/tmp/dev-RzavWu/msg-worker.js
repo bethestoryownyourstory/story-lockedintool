@@ -1,0 +1,2467 @@
+var __defProp = Object.defineProperty;
+var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
+
+// msg-worker.js
+var JSONH = { "content-type": "application/json", "access-control-allow-origin": "*", "access-control-allow-headers": "content-type, authorization", "access-control-allow-methods": "GET, POST, OPTIONS" };
+var json = /* @__PURE__ */ __name((o, status = 200) => new Response(JSON.stringify(o), { status, headers: JSONH }), "json");
+var enc = new TextEncoder();
+var b64u = /* @__PURE__ */ __name((buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""), "b64u");
+var sha = /* @__PURE__ */ __name(async (s) => b64u(await crypto.subtle.digest("SHA-256", enc.encode(s))), "sha");
+var rand = /* @__PURE__ */ __name((n) => b64u(crypto.getRandomValues(new Uint8Array(n))), "rand");
+var PHONE = /^\+[1-9]\d{6,14}$/;
+var REPORT_REASONS = { spam: "spam", scam: "scam or fraud", abuse: "bullying or harassment", hate: "hate speech", violence: "violence or threats", nudity: "nudity or sexual content", other: "breaking the rules" };
+var OFFICIAL_USERNAMES = ["officiallockedintoolprofile"];
+var BRAND = "lockedintool";
+var brandIn = /* @__PURE__ */ __name((s) => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "").includes(BRAND), "brandIn");
+var LIT_ITER = 21e4;
+var NAME_WAIT = 60 * 864e5;
+var USERNAME_WAIT = 100 * 864e5;
+var GCALL_MAX = 8;
+var USERNAME = /^(?!.*\.\.)(?!\.)(?!.*\.$)[a-z0-9_.]{3,30}$/;
+var PAY_BANKS = { absa: "Absa", african_bank: "African Bank", capitec: "Capitec", discovery_bank: "Discovery Bank", fnb: "FNB", investec: "Investec", nedbank: "Nedbank", standard_bank: "Standard Bank", tymebank: "TymeBank" };
+var msg_worker_default = {
+  async fetch(req, env) {
+    if (req.method === "OPTIONS") return new Response(null, { headers: JSONH });
+    const hub = env.HUB.get(env.HUB.idFromName("story"));
+    const p = new URL(req.url).pathname;
+    if (env.STORE && req.method === "GET" && p.startsWith("/v1/media/") && p !== "/v1/media/put") {
+      const r = await storeOf(env, p.slice(10)).fetch(req);
+      if (r.status !== 404) return r;
+    }
+    return hub.fetch(req);
+  }
+};
+var STORE_SHARDS = 256;
+function storeOf(env, id) {
+  let h = 2166136261;
+  for (let k = 0; k < id.length; k++) {
+    h ^= id.charCodeAt(k);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return env.STORE.get(env.STORE.idFromName("m" + h % STORE_SHARDS));
+}
+__name(storeOf, "storeOf");
+var Store = class {
+  static {
+    __name(this, "Store");
+  }
+  constructor(ctx, env) {
+    this.sql = ctx.storage.sql;
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS parts (id TEXT, i INTEGER, n INTEGER, mime TEXT, data BLOB, PRIMARY KEY (id, i))`);
+  }
+  async fetch(req) {
+    const url = new URL(req.url), id = url.searchParams.get("id") || decodeURIComponent(url.pathname.replace(/^\/v1\/media\//, ""));
+    if (url.pathname === "/put" && req.method === "POST") {
+      const data = await req.arrayBuffer();
+      this.sql.exec("INSERT OR REPLACE INTO parts (id, i, n, mime, data) VALUES (?, ?, ?, ?, ?)", id, +url.searchParams.get("i"), +url.searchParams.get("n"), url.searchParams.get("mime") || "", data);
+      return new Response("ok");
+    }
+    if (url.pathname === "/del" && req.method === "POST") {
+      this.sql.exec("DELETE FROM parts WHERE id = ?", id);
+      return new Response("ok");
+    }
+    return sendParts(this.sql.exec("SELECT i, n, mime, data FROM parts WHERE id = ? ORDER BY i", id).toArray(), req);
+  }
+};
+function sendParts(rows, req) {
+  if (!rows.length || rows.length !== rows[0].n) return new Response("Not found", { status: 404, headers: { "access-control-allow-origin": "*" } });
+  const parts = rows.map((r) => new Uint8Array(r.data)), len = parts.reduce((s, p) => s + p.length, 0), all = new Uint8Array(len);
+  let o = 0;
+  for (const p of parts) {
+    all.set(p, o);
+    o += p.length;
+  }
+  const h = { "content-type": rows[0].mime, "cache-control": "public, max-age=31536000, immutable", "access-control-allow-origin": "*", "accept-ranges": "bytes" };
+  const m = /bytes=(\d*)-(\d*)/.exec(req.headers.get("range") || "");
+  if (m && len) {
+    const s = m[1] ? +m[1] : 0, e = Math.min(m[2] ? +m[2] : len - 1, len - 1);
+    if (s <= e) return new Response(all.slice(s, e + 1), { status: 206, headers: Object.assign(h, { "content-range": `bytes ${s}-${e}/${len}`, "content-length": String(e - s + 1) }) });
+  }
+  return new Response(all, { headers: Object.assign(h, { "content-length": String(len) }) });
+}
+__name(sendParts, "sendParts");
+var Hub = class {
+  static {
+    __name(this, "Hub");
+  }
+  constructor(ctx, env) {
+    this.ctx = ctx;
+    this.env = env;
+    this.sql = ctx.storage.sql;
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, phone TEXT UNIQUE, token TEXT, pub TEXT, name TEXT, username TEXT UNIQUE, privacy TEXT, created INTEGER)`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS codes (phone TEXT PRIMARY KEY, code TEXT, exp INTEGER, tries INTEGER, sent INTEGER, hour INTEGER, nhour INTEGER)`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS joins (ip TEXT PRIMARY KEY, hour INTEGER, n INTEGER)`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS queue (seq INTEGER PRIMARY KEY AUTOINCREMENT, uid TEXT, body TEXT, at INTEGER)`);
+    this.sql.exec(`CREATE INDEX IF NOT EXISTS queue_uid ON queue(uid)`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS groups (id TEXT PRIMARY KEY, name TEXT, about TEXT, type TEXT, image TEXT, category TEXT, country TEXT, creator TEXT, calljoin TEXT, created INTEGER)`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS gmembers (gid TEXT, uid TEXT, role TEXT, joined INTEGER, PRIMARY KEY (gid, uid))`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS gcalls (gid TEXT PRIMARY KEY, id TEXT, video INTEGER, starter TEXT, started INTEGER)`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS lives (id TEXT PRIMARY KEY, uid TEXT, sid TEXT, tracks TEXT, title TEXT, started INTEGER, ended INTEGER, hearts INTEGER DEFAULT 0, comments INTEGER DEFAULT 0, peak INTEGER DEFAULT 0)`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS livewatch (lid TEXT, uid TEXT, sid TEXT, at INTEGER, PRIMARY KEY (lid, uid))`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS livecmt (lid TEXT, uid TEXT, text TEXT, at INTEGER)`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS gcparts (gid TEXT, uid TEXT, role TEXT, at INTEGER, PRIMARY KEY (gid, uid))`);
+    this.sql.exec(`CREATE INDEX IF NOT EXISTS gmembers_uid ON gmembers(uid)`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS gposts (id TEXT PRIMARY KEY, gid TEXT, uid TEXT, text TEXT, image TEXT, at INTEGER, likes INTEGER DEFAULT 0, shares INTEGER DEFAULT 0)`);
+    this.sql.exec(`CREATE INDEX IF NOT EXISTS gposts_gid ON gposts(gid, at)`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS glikes (pid TEXT, uid TEXT, PRIMARY KEY (pid, uid))`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS gcomments (id TEXT PRIMARY KEY, pid TEXT, uid TEXT, text TEXT, at INTEGER)`);
+    try {
+      this.sql.exec(`ALTER TABLE groups ADD COLUMN shares INTEGER DEFAULT 0`);
+    } catch (e) {
+    }
+    try {
+      this.sql.exec(`ALTER TABLE groups ADD COLUMN team INTEGER`);
+    } catch (e) {
+    }
+    try {
+      this.sql.exec(`ALTER TABLE gposts ADD COLUMN files TEXT`);
+    } catch (e) {
+    }
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS paybank (uid TEXT PRIMARY KEY, name TEXT, bank TEXT, acct TEXT, updated INTEGER)`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS payments (id TEXT PRIMARY KEY, uid TEXT, to_uid TEXT, to_name TEXT, to_bank TEXT, to_mask TEXT, cents INTEGER, ref TEXT, stitch TEXT, status TEXT, created INTEGER, updated INTEGER)`);
+    this.sql.exec(`CREATE INDEX IF NOT EXISTS payments_uid ON payments(uid, created)`);
+    this.sql.exec(`CREATE INDEX IF NOT EXISTS payments_to ON payments(to_uid, created)`);
+    try {
+      this.sql.exec(`ALTER TABLE payments ADD COLUMN kind TEXT`);
+    } catch (e) {
+    }
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS banklinks (uid TEXT PRIMARY KEY, refresh TEXT, access TEXT, aexp INTEGER, state TEXT, verifier TEXT, linked INTEGER, cache TEXT, cached INTEGER)`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS subs (uid TEXT PRIMARY KEY, plan TEXT, until INTEGER, updated INTEGER)`);
+    try {
+      this.sql.exec(`ALTER TABLE subs ADD COLUMN mode TEXT`);
+    } catch (e) {
+    }
+    try {
+      this.sql.exec(`ALTER TABLE payments ADD COLUMN mode TEXT`);
+    } catch (e) {
+    }
+    try {
+      this.sql.exec(`ALTER TABLE payments ADD COLUMN payfrom TEXT`);
+    } catch (e) {
+    }
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT)`);
+    try {
+      this.sql.exec(`ALTER TABLE users ADD COLUMN about TEXT`);
+    } catch (e) {
+    }
+    try {
+      this.sql.exec(`ALTER TABLE users ADD COLUMN country TEXT`);
+    } catch (e) {
+    }
+    try {
+      this.sql.exec(`ALTER TABLE users ADD COLUMN bio TEXT`);
+    } catch (e) {
+    }
+    try {
+      this.sql.exec(`ALTER TABLE users ADD COLUMN photo TEXT`);
+    } catch (e) {
+    }
+    try {
+      this.sql.exec(`ALTER TABLE users ADD COLUMN name_at INTEGER`);
+    } catch (e) {
+    }
+    try {
+      this.sql.exec(`ALTER TABLE users ADD COLUMN username_at INTEGER`);
+    } catch (e) {
+    }
+    try {
+      this.sql.exec(`ALTER TABLE users ADD COLUMN official INTEGER`);
+    } catch (e) {
+    }
+    for (const c of ["pw TEXT", "pwsalt TEXT", "bksalt TEXT", "keybox TEXT", "backup TEXT"]) {
+      try {
+        this.sql.exec(`ALTER TABLE users ADD COLUMN ${c}`);
+      } catch (e) {
+      }
+    }
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS logins (k TEXT PRIMARY KEY, n INTEGER, until INTEGER)`);
+    for (const c of ["remail TEXT", "rphone TEXT", "mkbox TEXT", "mkspare TEXT", "rewrap INTEGER"]) {
+      try {
+        this.sql.exec(`ALTER TABLE users ADD COLUMN ${c}`);
+      } catch (e) {
+      }
+    }
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS rcodes (uid TEXT, kind TEXT, value TEXT, code TEXT, exp INTEGER, tries INTEGER, sent INTEGER, PRIMARY KEY (uid, kind))`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS resets (token TEXT PRIMARY KEY, uid TEXT, exp INTEGER)`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS rlimit (k TEXT PRIMARY KEY, hour INTEGER, n INTEGER)`);
+    for (const un of OFFICIAL_USERNAMES) this.sql.exec("UPDATE users SET official = 1 WHERE username = ?", un);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS follows (uid TEXT, fid TEXT, at INTEGER, PRIMARY KEY (uid, fid))`);
+    this.sql.exec(`CREATE INDEX IF NOT EXISTS follows_fid ON follows(fid)`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS media (id TEXT, i INTEGER, n INTEGER, uid TEXT, mime TEXT, data BLOB, at INTEGER, PRIMARY KEY (id, i))`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS uposts (id TEXT PRIMARY KEY, uid TEXT, kind TEXT, type TEXT, media TEXT, thumb TEXT, at INTEGER)`);
+    this.sql.exec(`CREATE INDEX IF NOT EXISTS uposts_uid ON uposts(uid, kind, at)`);
+    try {
+      this.sql.exec(`ALTER TABLE uposts ADD COLUMN title TEXT`);
+    } catch (e) {
+    }
+    try {
+      this.sql.exec(`ALTER TABLE uposts ADD COLUMN text TEXT`);
+    } catch (e) {
+    }
+    try {
+      this.sql.exec(`ALTER TABLE uposts ADD COLUMN items TEXT`);
+    } catch (e) {
+    }
+    try {
+      this.sql.exec(`ALTER TABLE uposts ADD COLUMN music TEXT`);
+    } catch (e) {
+    }
+    try {
+      this.sql.exec(`ALTER TABLE uposts ADD COLUMN hl TEXT`);
+    } catch (e) {
+    }
+    try {
+      this.sql.exec(`ALTER TABLE uposts ADD COLUMN hlname TEXT`);
+    } catch (e) {
+    }
+    this.sql.exec(`CREATE INDEX IF NOT EXISTS uposts_feed ON uposts(kind, at)`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS ulikes (pid TEXT, uid TEXT, at INTEGER, PRIMARY KEY (pid, uid))`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS contacts (uid TEXT, cid TEXT, at INTEGER, PRIMARY KEY (uid, cid))`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS blocks (uid TEXT, bid TEXT, at INTEGER, PRIMARY KEY (uid, bid))`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS delreq (token TEXT PRIMARY KEY, uid TEXT, code TEXT, exp INTEGER, tries INTEGER, ok INTEGER, reason TEXT, note TEXT)`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS tombs (tok TEXT PRIMARY KEY, at INTEGER)`);
+    try {
+      this.sql.exec(`ALTER TABLE tombs ADD COLUMN why TEXT`);
+    } catch (e) {
+    }
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS delreasons (reason TEXT, note TEXT, at INTEGER)`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS reports (id TEXT PRIMARY KEY, uid TEXT, kind TEXT, target TEXT, owner TEXT, reason TEXT, text TEXT, at INTEGER, status TEXT)`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS ucomments (id TEXT PRIMARY KEY, pid TEXT, uid TEXT, text TEXT, at INTEGER)`);
+    this.sql.exec(`CREATE INDEX IF NOT EXISTS ucomments_pid ON ucomments(pid, at)`);
+    this.sql.exec(`INSERT OR IGNORE INTO groups (id, name, about, type, image, category, country, creator, calljoin, created) VALUES ('g-stories', 'Stories', 'Real people sharing their life and success stories, and the advice that got them there.', 'stories', '', 'Life', 'Global', 'story', 'open', 0)`);
+  }
+  one(q, ...a) {
+    const r = this.sql.exec(q, ...a).toArray();
+    return r[0] || null;
+  }
+  phoneHash(p) {
+    return sha("story-phone-v1|" + (this.env.PHONE_SALT || "") + "|" + p);
+  }
+  async userByToken(t) {
+    return t ? this.one("SELECT * FROM users WHERE token = ?", await sha("tok|" + t)) : null;
+  }
+  privacy(u) {
+    try {
+      return Object.assign({ messages: "everyone", calls: "everyone", callPeople: [], status: "followers", profile: "public" }, JSON.parse(u.privacy || "{}"));
+    } catch (e) {
+      return { messages: "everyone", calls: "everyone", callPeople: [], status: "followers", profile: "public" };
+    }
+  }
+  // Profile privacy (owner): Public = everyone can see your profile and find it in search. Private = only people
+  // you follow, people you've messaged and people in a group / community with you can see it; no one can find it.
+  isPrivate(u) {
+    return this.privacy(u).profile === "private";
+  }
+  canSeeProfile(viewer, owner) {
+    if (!viewer || viewer.id === owner.id) return true;
+    if (this.blocked(viewer.id, owner.id)) return false;
+    if (!this.isPrivate(owner)) return true;
+    return this.follows(owner.id, viewer.id) || !!this.one("SELECT 1 AS x FROM contacts WHERE uid = ? AND cid = ?", owner.id, viewer.id) || !!this.one("SELECT 1 AS x FROM gmembers a JOIN gmembers b ON a.gid = b.gid WHERE a.uid = ? AND b.uid = ? LIMIT 1", owner.id, viewer.id);
+  }
+  blocked(a, b) {
+    return !!(a && b && a !== b && this.one("SELECT 1 AS x FROM blocks WHERE (uid = ? AND bid = ?) OR (uid = ? AND bid = ?) LIMIT 1", a, b, b, a));
+  }
+  canCall(from, to) {
+    if (this.blocked(from.id, to.id)) return false;
+    const p = this.privacy(to);
+    return p.calls === "everyone" || p.calls === "people" && (p.callPeople || []).includes(from.id);
+  }
+  canMsg(from, to) {
+    if (this.blocked(from.id, to.id)) return false;
+    const p = this.privacy(to);
+    return p.messages !== "none" && p.messages !== "nobody";
+  }
+  pubView(u, me) {
+    const see = this.canSeeProfile(me, u);
+    return { id: u.id, name: u.name || "", username: u.username || "", pub: u.pub, canCall: me ? this.canCall(me, u) : true, canMsg: me ? this.canMsg(me, u) : true, canPay: !!this.one("SELECT uid FROM paybank WHERE uid = ?", u.id), photo: see ? this.mediaUrl(u.photo) : "", about: see ? u.about || "" : "", official: !!u.official, locked: !see };
+  }
+  async fetch(req) {
+    const url = new URL(req.url), path = url.pathname;
+    this.origin = url.origin;
+    try {
+      if (path === "/v1/ws") return this.ws(req, url);
+      if (path.startsWith("/v1/media/") && path !== "/v1/media/put" && req.method === "GET") return this.mediaGet(path.slice(10), req);
+      if (path === "/v1/media/put") {
+        const who = await this.userByToken((req.headers.get("authorization") || "").replace(/^Bearer\s+/i, ""));
+        return who ? this.mediaPut(who, url, req) : json({ error: "signin" }, 401);
+      }
+      if (path === "/v1/release-ping") return this.releasePing();
+      if (path === "/v1/health") {
+        let pay = this.expressReady() ? "keys" : "no-keys";
+        if (url.searchParams.get("pay") === "1" && this.expressReady()) {
+          try {
+            await this.expressToken();
+            pay = "ok";
+          } catch (e) {
+            pay = String(e.message || e).slice(0, 160);
+          }
+        }
+        return json({ ok: true, sms: !!(this.env.TWILIO_VERIFY_SID || this.env.TWILIO_FROM), mail: this.mailReady(), resetSms: this.smsLinkReady(), plans: this.subPlans(), pay, subs: this.subReady(), transfers: this.payReady(), live: this.liveReady() });
+      }
+      if (path === "/v1/pay/return") return new Response('<!doctype html><meta name=viewport content="width=device-width,initial-scale=1"><body style="margin:0;background:#000;color:#fff;font:600 18px system-ui;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center;padding:24px;box-sizing:border-box">Done - go back to Lockedintool to see your payment.</body>', { headers: { "content-type": "text/html; charset=utf-8" } });
+      if (path === "/v1/bank/return") return this.bankReturn(url);
+      if (path === "/v1/delete") return this.deletePage(req, url);
+      if (path === "/v1/login/salt") return this.loginSalt(url.searchParams.get("u") || "");
+      if (path === "/v1/reset") return this.resetPage(req, url);
+      if (path === "/v1/reset/options") return this.resetOptions(url.searchParams.get("u") || "", req.headers.get("cf-connecting-ip") || "");
+      const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
+      if (path === "/v1/register") return this.register(body, req.headers.get("cf-connecting-ip") || "");
+      if (path === "/v1/login") return this.login(body);
+      if (path === "/v1/reset/start") return this.resetStart(body, req.headers.get("cf-connecting-ip") || "");
+      const tok = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
+      const me = await this.userByToken(tok);
+      const tomb = !me && tok ? this.one("SELECT why FROM tombs WHERE tok = ?", await sha("tok|" + tok)) : null;
+      if (!me) return json({ error: tomb ? tomb.why === "banned" ? "banned" : "deleted" : "signin" }, 401);
+      if (path === "/v1/start") return this.start(body);
+      if (path === "/v1/verify") return this.verify(me, body);
+      if (path === "/v1/me") return this.saveMe(me, body);
+      if (path === "/v1/find") return this.find(me, url.searchParams.get("q") || "");
+      if (path.startsWith("/v1/groups/")) return this.groups(me, path.slice(11), body, url.searchParams);
+      if (path.startsWith("/v1/pay/")) return this.pay(me, path.slice(8), body, url);
+      if (path.startsWith("/v1/sub/")) return this.sub(me, path.slice(8), body, url);
+      if (path.startsWith("/v1/bank/")) return this.bank(me, path.slice(9), url);
+      if (path === "/v1/follow") return this.follow(me, body);
+      if (path === "/v1/profile") return this.profile(me, url.searchParams.get("id") || me.id);
+      if (path === "/v1/updates") return this.updates(me);
+      if (path === "/v1/feed") return this.feed(me, +url.searchParams.get("before") || 0);
+      if (path === "/v1/block") return this.block(me, body);
+      if (path === "/v1/blocks") return this.blocksOf(me);
+      if (path === "/v1/report") return this.report(me, body);
+      if (path === "/v1/reports") return this.reportsList(me);
+      if (path === "/v1/reports/act") return this.reportAct(me, body);
+      if (path === "/v1/auth/set") return this.authSet(me, body);
+      if (path === "/v1/auth/mk") return this.authMk(me, body);
+      if (path === "/v1/recovery/get") return json(this.recoveryView(me));
+      if (path === "/v1/recovery/start") return this.recoveryStart(me, body);
+      if (path === "/v1/recovery/verify") return this.recoveryVerify(me, body);
+      if (path === "/v1/recovery/remove") {
+        const k = body.kind === "phone" ? "rphone" : "remail";
+        this.sql.exec(`UPDATE users SET ${k} = NULL WHERE id = ?`, me.id);
+        return json(this.recoveryView(this.one("SELECT * FROM users WHERE id = ?", me.id)));
+      }
+      if (path === "/v1/backup/set") return this.backupSet(me, body);
+      if (path === "/v1/backup/get") return json({ backup: me.backup ? JSON.parse(me.backup) : null, keybox: me.keybox ? JSON.parse(me.keybox) : null, bksalt: me.bksalt || "", mkbox: me.mkbox ? JSON.parse(me.mkbox) : null });
+      if (path === "/v1/logout") {
+        this.sql.exec("UPDATE users SET token = ? WHERE id = ?", await sha("tok|" + rand(32)), me.id);
+        return json({ ok: true });
+      }
+      if (path === "/v1/account/delete-start") return this.deleteStart(me, body);
+      if (path === "/v1/account/delete") return json({ error: "use-link" }, 400);
+      if (path.startsWith("/v1/uposts/")) return this.uposts(me, path.slice(11), body);
+      if (path.startsWith("/v1/live/")) return this.live(me, path.slice(9), body);
+      if (path === "/v1/user") {
+        const u = this.one("SELECT * FROM users WHERE id = ?", url.searchParams.get("id") || "");
+        return u ? json(this.pubView(u, me)) : json({ error: "notfound" }, 404);
+      }
+      return json({ error: "notfound" }, 404);
+    } catch (e) {
+      return json({ error: "server", detail: String(e && e.message || e).slice(0, 200) }, 500);
+    }
+  }
+  // ---- Your account: made by the phone (only its public key comes here) ----
+  async register(b, ip) {
+    const pub = String(b.pub || "");
+    if (!pub || pub.length > 400) return json({ error: "key" }, 400);
+    const hour = Math.floor(Date.now() / 36e5), ipk = await sha("ip|" + ip);
+    const j = this.one("SELECT * FROM joins WHERE ip = ?", ipk), n = j && j.hour === hour ? j.n + 1 : 1;
+    if (n > 20) return json({ error: "too-many" }, 429);
+    this.sql.exec("INSERT OR REPLACE INTO joins (ip, hour, n) VALUES (?, ?, ?)", ipk, hour, n);
+    const id = "u" + rand(9), token = rand(32);
+    this.sql.exec("INSERT INTO users (id, phone, token, pub, name, username, privacy, created) VALUES (?, NULL, ?, ?, NULL, NULL, ?, ?)", id, await sha("tok|" + token), pub, "{}", Date.now());
+    return json({ id, token });
+  }
+  // ---- Verifying a phone number (only when STORY needs to verify something): text code ----
+  async twilio(path, form, host = "https://api.twilio.com") {
+    if (this.env.TWILIO_BASE) host = this.env.TWILIO_BASE;
+    const r = await fetch(host + path, { method: "POST", headers: { authorization: "Basic " + btoa(this.env.TWILIO_ACCOUNT_SID + ":" + this.env.TWILIO_AUTH_TOKEN), "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams(form) });
+    const j = await r.json().catch(() => ({}));
+    return { ok: r.ok, j };
+  }
+  async start(b) {
+    const phone = String(b.phone || "").replace(/[^\d+]/g, "");
+    if (!PHONE.test(phone)) return json({ error: "phone" }, 400);
+    const env = this.env, h = await this.phoneHash(phone), now = Date.now();
+    if (!env.TWILIO_ACCOUNT_SID || !env.TWILIO_AUTH_TOKEN || !(env.TWILIO_VERIFY_SID || env.TWILIO_FROM)) return json({ error: "sms-not-ready" }, 503);
+    const c = this.one("SELECT * FROM codes WHERE phone = ?", h);
+    if (c && now - c.sent < 3e4) return json({ error: "wait", wait: Math.ceil((3e4 - (now - c.sent)) / 1e3) }, 429);
+    const hour = Math.floor(now / 36e5), nhour = c && c.hour === hour ? c.nhour + 1 : 1;
+    if (nhour > 5) return json({ error: "too-many" }, 429);
+    let code = "";
+    if (env.TWILIO_VERIFY_SID) {
+      const r = await this.twilio("/v2/Services/" + env.TWILIO_VERIFY_SID + "/Verifications", { To: phone, Channel: "sms" }, "https://verify.twilio.com");
+      if (!r.ok) return json({ error: "sms-failed", detail: r.j.message || "" }, 502);
+    } else {
+      code = String(crypto.getRandomValues(new Uint32Array(1))[0] % 1e6).padStart(6, "0");
+      const r = await this.twilio("/2010-04-01/Accounts/" + env.TWILIO_ACCOUNT_SID + "/Messages.json", { From: env.TWILIO_FROM, To: phone, Body: "Your Lockedintool code is " + code + ". It works for 10 minutes. Never share it." });
+      if (!r.ok) return json({ error: "sms-failed", detail: r.j.message || "" }, 502);
+    }
+    this.sql.exec("INSERT OR REPLACE INTO codes (phone, code, exp, tries, sent, hour, nhour) VALUES (?, ?, ?, 0, ?, ?, ?)", h, code ? await sha("code|" + h + "|" + code) : "", now + 6e5, now, hour, nhour);
+    return json({ ok: true });
+  }
+  // The code is right -> that number is marked as verified on YOUR account (never used to find you).
+  async verify(me, b) {
+    const phone = String(b.phone || "").replace(/[^\d+]/g, ""), code = String(b.code || "").replace(/\D/g, "");
+    if (!PHONE.test(phone) || code.length !== 6) return json({ error: "code" }, 400);
+    const h = await this.phoneHash(phone), c = this.one("SELECT * FROM codes WHERE phone = ?", h), now = Date.now();
+    if (!c || c.exp < now) return json({ error: "expired" }, 400);
+    if (c.tries >= 5) return json({ error: "too-many" }, 429);
+    this.sql.exec("UPDATE codes SET tries = tries + 1 WHERE phone = ?", h);
+    let good = false;
+    if (this.env.TWILIO_VERIFY_SID && !c.code) {
+      const r = await this.twilio("/v2/Services/" + this.env.TWILIO_VERIFY_SID + "/VerificationCheck", { To: phone, Code: code }, "https://verify.twilio.com");
+      good = r.ok && r.j.status === "approved";
+    } else good = c.code === await sha("code|" + h + "|" + code);
+    if (!good) return json({ error: "wrong", left: Math.max(0, 4 - c.tries) }, 400);
+    this.sql.exec("DELETE FROM codes WHERE phone = ?", h);
+    const other = this.one("SELECT id FROM users WHERE phone = ? AND id != ?", h, me.id);
+    if (other) return json({ error: "phone-used" }, 409);
+    this.sql.exec("UPDATE users SET phone = ? WHERE id = ?", h, me.id);
+    return json({ verified: true });
+  }
+  // ---- Your profile (name, @username, privacy) ----
+  meView(u) {
+    return { id: u.id, name: u.name || "", username: u.username || "", nameAt: u.name_at || 0, usernameAt: u.username_at || 0, official: !!u.official, country: u.country || "" };
+  }
+  saveMe(me, b) {
+    const sets = [], vals = [], now = Date.now();
+    const no = /* @__PURE__ */ __name((error, extra) => json(Object.assign({ error }, this.meView(me), extra || {}), 409), "no");
+    let official = !!me.official || OFFICIAL_USERNAMES.includes(me.username || "");
+    if (official && !me.official) sets.push("official = 1");
+    if (b.username !== void 0) {
+      const un = String(b.username || "").toLowerCase();
+      if (un !== (me.username || "")) {
+        if (un && !USERNAME.test(un)) return json({ error: "username" }, 400);
+        const officialName = OFFICIAL_USERNAMES.includes(un);
+        if (!official && !officialName && brandIn(un)) return no("reserved");
+        if (!official && me.username_at && now - me.username_at < USERNAME_WAIT) return no("username-wait", { until: me.username_at + USERNAME_WAIT });
+        if (un) {
+          const t = this.one("SELECT id FROM users WHERE username = ? AND id != ?", un, me.id);
+          if (t) return json({ error: "username-taken" }, 409);
+        }
+        sets.push("username = ?", "username_at = ?");
+        vals.push(un || null, now);
+        if (officialName) {
+          sets.push("official = 1");
+          official = true;
+        }
+      }
+    }
+    if (b.name !== void 0) {
+      const name = String(b.name || "").slice(0, 60);
+      if (name !== (me.name || "")) {
+        if (!official && brandIn(name)) return no("reserved");
+        if (!official && me.name_at && now - me.name_at < NAME_WAIT) return no("name-wait", { until: me.name_at + NAME_WAIT });
+        sets.push("name = ?", "name_at = ?");
+        vals.push(name || null, now);
+      }
+    }
+    if (b.privacy !== void 0) {
+      const p = b.privacy || {};
+      const clean = { messages: ["everyone", "requests", "nobody"].includes(p.messages) ? p.messages : "everyone", calls: ["everyone", "people", "nobody"].includes(p.calls) ? p.calls : p.calls === "none" ? "nobody" : "everyone", callPeople: (Array.isArray(p.callPeople) ? p.callPeople : []).map(String).slice(0, 500), status: ["everyone", "followers", "nobody"].includes(p.status) ? p.status : "followers", profile: p.profile === "private" ? "private" : "public" };
+      sets.push("privacy = ?");
+      vals.push(JSON.stringify(clean));
+    }
+    if (b.pub !== void 0) {
+      const pub = String(b.pub || "");
+      if (pub && pub.length <= 400) {
+        sets.push("pub = ?");
+        vals.push(pub);
+      }
+    }
+    if (b.about !== void 0) {
+      sets.push("about = ?");
+      vals.push(String(b.about || "").slice(0, 150) || null);
+    }
+    if (b.country !== void 0) {
+      sets.push("country = ?");
+      vals.push(String(b.country || "").slice(0, 60) || null);
+    }
+    if (b.bio !== void 0) {
+      sets.push("bio = ?");
+      vals.push(String(b.bio || "").slice(0, 150) || null);
+    }
+    if (b.photo !== void 0) {
+      const ph = String(b.photo || "");
+      if (ph && !this.mediaDone(ph, me.id)) return json({ error: "media" }, 400);
+      if (me.photo && me.photo !== ph) this.mediaDel("id = ?", me.photo);
+      sets.push("photo = ?");
+      vals.push(ph || null);
+    }
+    if (sets.length) this.sql.exec("UPDATE users SET " + sets.join(", ") + " WHERE id = ?", ...vals, me.id);
+    return json(this.meView(this.one("SELECT * FROM users WHERE id = ?", me.id)));
+  }
+  // Finding people (owner): by their @username or their name - never phone numbers. Exact @username first, then
+  // usernames / names that start with or contain what you typed (up to 20).
+  async find(me, q) {
+    const t = q.trim().slice(0, 40), un = t.replace(/^@/, "").toLowerCase();
+    if (un.length < 2) return json({ people: [] });
+    const like = "%" + un.replace(/[%_\\]/g, (m) => "\\" + m) + "%", start = un.replace(/[%_\\]/g, (m) => "\\" + m) + "%";
+    const rows = this.sql.exec(
+      `SELECT * FROM users WHERE (username LIKE ? ESCAPE '\\' OR (? = 0 AND lower(name) LIKE ? ESCAPE '\\'))
+       ORDER BY (username = ?) DESC, (username LIKE ? ESCAPE '\\') DESC, (lower(name) LIKE ? ESCAPE '\\') DESC, name LIMIT 80`,
+      like,
+      t.startsWith("@") ? 1 : 0,
+      like,
+      un,
+      start,
+      start
+    ).toArray().filter((u) => u.id === me.id || !this.isPrivate(u) && !this.blocked(me.id, u.id)).slice(0, 20);
+    return json({ people: rows.map((u) => Object.assign(this.pubView(u, me), { isFollowing: this.follows(me.id, u.id) })) });
+  }
+  // ---- Updates (owner): follow anyone instantly; profile posts; statuses that last 24 hours, seen by who the
+  //      owner's privacy setting allows (everyone / followers / no one). ----
+  mediaUrl(id) {
+    return id ? (this.origin || "") + "/v1/media/" + id : "";
+  }
+  mediaDone(id, uid) {
+    const r = this.one("SELECT COUNT(*) AS c, MAX(n) AS n, MIN(uid) AS u, MAX(uid) AS u2 FROM media WHERE id = ?", id);
+    return !!(r && r.c && r.c === r.n && r.u === uid && r.u2 === uid);
+  }
+  async mediaPut(me, url, req) {
+    const data = await req.arrayBuffer();
+    const id = url.searchParams.get("id") || "", i = +url.searchParams.get("i"), n = +url.searchParams.get("n"), mime = url.searchParams.get("mime") || "";
+    if (!/^[A-Za-z0-9_-]{16,40}$/.test(id) || !(i >= 0 && i < n && n <= 40 && Number.isInteger(i) && Number.isInteger(n)) || !(["image/jpeg", "video/mp4", "application/octet-stream"].includes(mime) || /^audio\/[a-z0-9.+-]{2,30}$/.test(mime))) return json({ error: "bad" }, 400);
+    const owner = this.one("SELECT uid FROM media WHERE id = ? LIMIT 1", id);
+    if (owner && owner.uid !== me.id) return json({ error: "bad" }, 403);
+    if (!data.byteLength || data.byteLength > 1572864) return json({ error: "size" }, 413);
+    if (this.env.STORE) {
+      const r = await storeOf(this.env, id).fetch(`https://store/put?id=${encodeURIComponent(id)}&i=${i}&n=${n}&mime=${encodeURIComponent(mime)}`, { method: "POST", body: data });
+      if (!r.ok) return json({ error: "busy" }, 503);
+      this.sql.exec("INSERT OR REPLACE INTO media (id, i, n, uid, mime, data, at) VALUES (?, ?, ?, ?, ?, NULL, ?)", id, i, n, me.id, mime, Date.now());
+    } else this.sql.exec("INSERT OR REPLACE INTO media (id, i, n, uid, mime, data, at) VALUES (?, ?, ?, ?, ?, ?, ?)", id, i, n, me.id, mime, data, Date.now());
+    return json({ ok: true, done: this.mediaDone(id, me.id) });
+  }
+  // Files from before the file stores (bytes still in the Hub).
+  mediaGet(id, req) {
+    return sendParts(this.sql.exec("SELECT i, n, mime, data FROM media WHERE id = ? AND data IS NOT NULL ORDER BY i", id).toArray(), req);
+  }
+  // Deletes files (their rows here and their bytes in the file stores).
+  mediaDel(where, ...args) {
+    const ids = this.env.STORE ? this.sql.exec(`SELECT DISTINCT id FROM media WHERE (${where}) AND data IS NULL`, ...args).toArray().map((r) => r.id) : [];
+    this.sql.exec(`DELETE FROM media WHERE ${where}`, ...args);
+    for (const id of ids) storeOf(this.env, id).fetch("https://store/del?id=" + encodeURIComponent(id), { method: "POST" }).catch(() => {
+    });
+  }
+  follows(a, b) {
+    return !!this.one("SELECT 1 AS x FROM follows WHERE uid = ? AND fid = ?", a, b);
+  }
+  canSeeStatus(viewer, owner) {
+    if (viewer.id === owner.id) return true;
+    if (!this.canSeeProfile(viewer, owner)) return false;
+    const s = this.privacy(owner).status;
+    return s === "everyone" || s === "followers" && this.follows(viewer.id, owner.id);
+  }
+  dropOldStatuses() {
+    const old = this.sql.exec("SELECT * FROM uposts WHERE kind = 'status' AND at < ?", Date.now() - 864e5).toArray();
+    for (const p of old) {
+      this.mediaDel("id = ? OR id = ? OR id = ?", p.media, p.thumb || "", this.postMusic(p).media || "");
+      this.sql.exec("DELETE FROM uposts WHERE id = ?", p.id);
+      this.sql.exec("DELETE FROM ulikes WHERE pid = ?", p.id);
+      this.sql.exec("DELETE FROM ucomments WHERE pid = ?", p.id);
+    }
+  }
+  postMusic(p) {
+    try {
+      return JSON.parse(p.music || "null") || {};
+    } catch (e) {
+      return {};
+    }
+  }
+  postItems(p) {
+    let it = [];
+    try {
+      it = JSON.parse(p.items || "[]") || [];
+    } catch (e) {
+    }
+    if (!it.length && p.media) it = [{ type: p.type, media: p.media, thumb: p.thumb }];
+    return it;
+  }
+  postView(p, me) {
+    const items = this.postItems(p).map((i) => ({ type: i.type === "video" ? "video" : "photo", url: this.mediaUrl(i.media), thumb: this.mediaUrl(i.thumb) }));
+    const mu = this.postMusic(p);
+    const v = {
+      id: p.id,
+      kind: p.kind,
+      type: items[0] ? items[0].type : "text",
+      url: items[0] ? items[0].url : "",
+      thumb: items[0] ? items[0].thumb : "",
+      at: p.at,
+      title: p.title || "",
+      text: p.text || "",
+      items,
+      music: mu.media ? { url: this.mediaUrl(mu.media), name: mu.name || "" } : null
+    };
+    if (p.kind === "status" || me) Object.assign(v, {
+      hearts: this.one("SELECT COUNT(*) AS n FROM ulikes WHERE pid = ?", p.id).n,
+      hearted: !!(me && this.one("SELECT 1 AS x FROM ulikes WHERE pid = ? AND uid = ?", p.id, me.id)),
+      comments: this.one("SELECT COUNT(*) AS n FROM ucomments WHERE pid = ?", p.id).n
+    });
+    return v;
+  }
+  personView(u, me) {
+    const n = /* @__PURE__ */ __name((q) => this.one(q, u.id).n, "n");
+    const v = this.pubView(u, me);
+    if (v.locked) return Object.assign(v, { private: true, isFollowing: this.follows(me.id, u.id), me: false });
+    return Object.assign(v, {
+      private: this.isPrivate(u),
+      bio: u.bio || "",
+      followers: n("SELECT COUNT(*) AS n FROM follows WHERE fid = ?"),
+      following: n("SELECT COUNT(*) AS n FROM follows WHERE uid = ?"),
+      posts: n("SELECT COUNT(*) AS n FROM uposts WHERE uid = ? AND kind = 'post'"),
+      isFollowing: u.id !== me.id && this.follows(me.id, u.id),
+      followsYou: u.id !== me.id && this.follows(u.id, me.id),
+      me: u.id === me.id
+    });
+  }
+  // Highlights on a profile (owner): circles, the newest thing in each as its cover; open one to watch it.
+  highlightsOf(u, me) {
+    const rows = this.sql.exec("SELECT * FROM uposts WHERE uid = ? AND kind = 'highlight' ORDER BY at DESC", u.id).toArray();
+    const by = /* @__PURE__ */ new Map();
+    for (const p of rows) {
+      if (!by.has(p.hl)) by.set(p.hl, { id: p.hl, name: p.hlname || "Highlight", items: [] });
+      by.get(p.hl).items.push(this.postView(p, me));
+    }
+    return [...by.values()].map((h) => Object.assign(h, { cover: h.items[0].thumb || h.items[0].url, items: h.items.reverse() }));
+  }
+  // People who follow you hear about a new status, post, highlight or live (owner) - queued for phones that are off.
+  notifyFollowers(me, kind, id) {
+    const fans = this.sql.exec("SELECT uid FROM follows WHERE fid = ? LIMIT 5000", me.id).toArray();
+    for (const f of fans) {
+      if (this.blocked(me.id, f.uid)) continue;
+      if (kind === "status") {
+        const u = this.one("SELECT * FROM users WHERE id = ?", f.uid);
+        if (!u || !this.canSeeStatus(u, me)) continue;
+      }
+      this.deliver(f.uid, { t: "fnote", kind, id, from: me.id, name: me.name || "", username: me.username || "", at: Date.now() });
+    }
+  }
+  statusesOf(u, me) {
+    if (!this.canSeeStatus(me, u)) return [];
+    return this.sql.exec("SELECT * FROM uposts WHERE uid = ? AND kind = 'status' AND at >= ? ORDER BY at", u.id, Date.now() - 864e5).toArray().map((p) => this.postView(p, me));
+  }
+  follow(me, b) {
+    const u = this.one("SELECT * FROM users WHERE id = ?", String(b.id || ""));
+    if (!u || u.id === me.id || this.blocked(me.id, u.id)) return json({ error: "notfound" }, 404);
+    if (b.on === false) this.sql.exec("DELETE FROM follows WHERE uid = ? AND fid = ?", me.id, u.id);
+    else this.sql.exec("INSERT OR IGNORE INTO follows (uid, fid, at) VALUES (?, ?, ?)", me.id, u.id, Date.now());
+    return json(this.personView(u, me));
+  }
+  profile(me, id) {
+    const u = this.one("SELECT * FROM users WHERE id = ?", id);
+    if (!u) return json({ error: "notfound" }, 404);
+    if (!this.canSeeProfile(me, u)) return json(this.personView(u, me));
+    this.dropOldStatuses();
+    const posts = this.sql.exec("SELECT * FROM uposts WHERE uid = ? AND kind = 'post' ORDER BY at DESC LIMIT 90", u.id).toArray().map((p) => this.postView(p, me));
+    return json(Object.assign(this.personView(u, me), { postList: posts, statuses: this.statusesOf(u, me), highlights: this.highlightsOf(u, me) }));
+  }
+  updates(me) {
+    this.dropOldStatuses();
+    const lite = /* @__PURE__ */ __name((u) => {
+      const v = this.pubView(u, me);
+      return { id: v.id, name: v.name, username: v.username, photo: v.photo, about: v.about, official: v.official, isFollowing: this.follows(me.id, u.id), followers: this.one("SELECT COUNT(*) AS n FROM follows WHERE fid = ?", u.id).n };
+    }, "lite");
+    const people = this.sql.exec("SELECT DISTINCT u.* FROM uposts p JOIN users u ON u.id = p.uid WHERE p.kind = 'status' AND p.at >= ? AND (u.id = ? OR u.id IN (SELECT fid FROM follows WHERE uid = ?))", Date.now() - 864e5, me.id, me.id).toArray();
+    const statuses = people.map((u) => ({ user: lite(u), items: this.statusesOf(u, me) })).filter((s) => s.items.length).sort((a, b) => (b.user.id === me.id) - (a.user.id === me.id) || b.items[b.items.length - 1].at - a.items[a.items.length - 1].at);
+    const profiles = this.sql.exec(`SELECT u.*, (SELECT COUNT(*) FROM follows f WHERE f.fid = u.id) AS fc FROM users u
+       WHERE u.id != ? AND (u.name IS NOT NULL OR u.username IS NOT NULL) ORDER BY (u.official = 1) DESC, fc DESC, u.created DESC LIMIT 300`, me.id).toArray().filter((u) => this.canSeeProfile(me, u)).slice(0, 60).map(lite);
+    return json({ me: this.personView(me, me), statuses, profiles });
+  }
+  uposts(me, op, b) {
+    if (op === "create") {
+      const kind = b.kind === "status" ? "status" : b.kind === "highlight" ? "highlight" : "post";
+      const hl = kind === "highlight" ? String(b.hl || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 40) : "";
+      if (kind === "highlight" && !hl) return json({ error: "hl" }, 400);
+      let items = Array.isArray(b.items) ? b.items.slice(0, 20).map((i) => ({ type: i && i.type === "video" ? "video" : "photo", media: String(i && i.media || ""), thumb: String(i && i.thumb || "") })) : [];
+      if (!items.length && b.media) items = [{ type: b.type === "video" ? "video" : "photo", media: String(b.media), thumb: String(b.thumb || "") }];
+      for (const i of items) if (!this.mediaDone(i.media, me.id) || i.thumb && !this.mediaDone(i.thumb, me.id)) return json({ error: "media" }, 400);
+      const title = kind === "post" ? String(b.title || "").trim().slice(0, 100) : "", text = kind === "post" ? String(b.text || "").trim().slice(0, 2e3) : "";
+      if (kind !== "post" ? items.length !== 1 : !items.length && !title && !text) return json({ error: "empty" }, 400);
+      const id = "u" + rand(10), first = items[0] || {};
+      const music = b.music && b.music.media && this.mediaDone(String(b.music.media), me.id) ? JSON.stringify({ media: String(b.music.media), name: String(b.music.name || "").slice(0, 80) }) : null;
+      this.sql.exec(
+        "INSERT INTO uposts (id, uid, kind, type, media, thumb, at, title, text, items, music) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        id,
+        me.id,
+        kind,
+        first.type || "text",
+        first.media || null,
+        first.thumb || null,
+        Date.now(),
+        title || null,
+        text || null,
+        items.length ? JSON.stringify(items) : null,
+        music
+      );
+      if (hl) this.sql.exec("UPDATE uposts SET hl = ?, hlname = ? WHERE id = ?", hl, String(b.hlname || "").trim().slice(0, 40) || "Highlight", id);
+      this.notifyFollowers(me, kind, id);
+      this.dropOldStatuses();
+      return json(this.postView(this.one("SELECT * FROM uposts WHERE id = ?", id), me));
+    }
+    if (op === "get") {
+      const p = this.one("SELECT * FROM uposts WHERE id = ? AND kind = 'post'", String(b.id || ""));
+      const owner = p && this.one("SELECT * FROM users WHERE id = ?", p.uid);
+      if (!p || !owner || !this.canSeeProfile(me, owner)) return json({ error: "notfound" }, 404);
+      return json(Object.assign(this.postView(p, me), { user: this.feedUser(owner, me) }));
+    }
+    if (["heart", "comment", "comments", "uncomment"].includes(op)) {
+      const p = this.one("SELECT * FROM uposts WHERE id = ? AND (kind = 'post' OR (kind = 'status' AND at >= ?))", String(b.id || ""), Date.now() - 864e5);
+      const owner = p && this.one("SELECT * FROM users WHERE id = ?", p.uid);
+      if (!p || !owner || !(p.kind === "status" ? this.canSeeStatus(me, owner) : this.canSeeProfile(me, owner))) return json({ error: "notfound" }, 404);
+      if (op === "heart") {
+        if (b.on === false) this.sql.exec("DELETE FROM ulikes WHERE pid = ? AND uid = ?", p.id, me.id);
+        else this.sql.exec("INSERT OR IGNORE INTO ulikes (pid, uid, at) VALUES (?, ?, ?)", p.id, me.id, Date.now());
+      }
+      if (op === "comment") {
+        const text = String(b.text || "").trim().slice(0, 500);
+        if (!text) return json({ error: "empty" }, 400);
+        this.sql.exec("INSERT INTO ucomments (id, pid, uid, text, at) VALUES (?, ?, ?, ?, ?)", "c" + rand(9), p.id, me.id, text, Date.now());
+      }
+      if (op === "uncomment") this.sql.exec("DELETE FROM ucomments WHERE id = ? AND pid = ? AND (uid = ? OR ? = ?)", String(b.cid || ""), p.id, me.id, p.uid, me.id);
+      const list = this.sql.exec("SELECT c.*, u.name, u.username, u.photo FROM ucomments c LEFT JOIN users u ON u.id = c.uid WHERE c.pid = ? ORDER BY c.at LIMIT 300", p.id).toArray().filter((c) => !this.blocked(me.id, c.uid)).map((c) => ({ id: c.id, text: c.text, at: c.at, mine: c.uid === me.id, canDelete: c.uid === me.id || p.uid === me.id, user: { id: c.uid, name: c.name || "", username: c.username || "", photo: this.mediaUrl(c.photo) } }));
+      return json(Object.assign(this.postView(p, me), { list }));
+    }
+    if (op === "delete") {
+      const p = this.one("SELECT * FROM uposts WHERE id = ? AND uid = ?", String(b.id || ""), me.id);
+      if (!p) return json({ error: "notfound" }, 404);
+      for (const i of this.postItems(p)) this.mediaDel("id = ? OR id = ?", i.media || "", i.thumb || "");
+      if (this.postMusic(p).media) this.mediaDel("id = ?", this.postMusic(p).media);
+      this.mediaDel("id = ? OR id = ?", p.media, p.thumb || "");
+      this.sql.exec("DELETE FROM uposts WHERE id = ?", p.id);
+      this.sql.exec("DELETE FROM ulikes WHERE pid = ?", p.id);
+      this.sql.exec("DELETE FROM ucomments WHERE pid = ?", p.id);
+      return json({ ok: true });
+    }
+    return json({ error: "notfound" }, 404);
+  }
+  // ---- The feed (owner): everything posted on Lockedintool, newest first, that you're allowed to see. ----
+  feedUser(u, me) {
+    const v = this.pubView(u, me);
+    return { id: v.id, name: v.name, username: v.username, photo: v.photo, official: v.official };
+  }
+  feed(me, before) {
+    const out = [], seen = /* @__PURE__ */ new Map();
+    let cursor = before || Date.now() + 1, more = false;
+    for (let round = 0; round < 5 && out.length < 15; round++) {
+      const rows = this.sql.exec("SELECT * FROM uposts WHERE kind = 'post' AND at < ? ORDER BY at DESC LIMIT 60", cursor).toArray();
+      if (!rows.length) break;
+      for (const p of rows) {
+        cursor = p.at;
+        if (!seen.has(p.uid)) {
+          const u2 = this.one("SELECT * FROM users WHERE id = ?", p.uid);
+          seen.set(p.uid, u2 && this.canSeeProfile(me, u2) ? u2 : null);
+        }
+        const u = seen.get(p.uid);
+        if (!u) continue;
+        if (out.length >= 15) {
+          more = true;
+          break;
+        }
+        out.push(Object.assign(this.postView(p, me), { user: this.feedUser(u, me) }));
+      }
+      if (rows.length < 60 && !more) break;
+      if (out.length >= 15) more = true;
+    }
+    return json({ posts: out, more, next: out.length ? out[out.length - 1].at : 0 });
+  }
+  // A file in a chat / group / post (owner): only its description travels - the bytes are in media (locked ones can
+  // only be opened by the people the key was sent to).
+  fileMeta(f) {
+    if (!f || typeof f !== "object" || !/^[A-Za-z0-9_-]{16,40}$/.test(String(f.m || ""))) return null;
+    return {
+      m: String(f.m),
+      name: String(f.name || "file").slice(0, 120),
+      mime: String(f.mime || "application/octet-stream").slice(0, 80),
+      size: Math.max(0, +f.size || 0),
+      kind: ["photo", "video", "doc", "audio"].includes(f.kind) ? f.kind : "doc"
+    };
+  }
+  // ---- Accounts: password, log in, log out, locked backup (owner) ----
+  async fakeSalt(u) {
+    let s = (this.one("SELECT v FROM meta WHERE k = 'fake'") || {}).v;
+    if (!s) {
+      s = rand(24);
+      this.sql.exec("INSERT OR REPLACE INTO meta (k, v) VALUES ('fake', ?)", s);
+    }
+    return (await sha("salt|" + s + "|" + u)).slice(0, 24);
+  }
+  async loginSalt(u) {
+    u = String(u).toLowerCase().replace(/^@/, "").slice(0, 30);
+    const r = u && this.one("SELECT pwsalt FROM users WHERE username = ? AND pw IS NOT NULL", u);
+    return json({ salt: r ? r.pwsalt : await this.fakeSalt(u) });
+  }
+  async login(b) {
+    const u = String(b.username || "").toLowerCase().replace(/^@/, "").slice(0, 30), now = Date.now();
+    const lock = this.one("SELECT * FROM logins WHERE k = ?", u);
+    if (lock && lock.until > now) return json({ error: "locked", until: lock.until }, 429);
+    const me = u && this.one("SELECT * FROM users WHERE username = ? AND pw IS NOT NULL", u);
+    if (!me || await sha("pw|" + String(b.auth || "")) !== me.pw) {
+      const n = (lock && lock.until <= now && lock.until ? 0 : lock ? lock.n : 0) + 1;
+      this.sql.exec("INSERT OR REPLACE INTO logins (k, n, until) VALUES (?, ?, ?)", u, n >= 5 ? 0 : n, n >= 5 ? now + 15 * 6e4 : 0);
+      return json({ error: "wrong" }, 401);
+    }
+    this.sql.exec("DELETE FROM logins WHERE k = ?", u);
+    const token = rand(32);
+    this.sql.exec("UPDATE users SET token = ? WHERE id = ?", await sha("tok|" + token), me.id);
+    for (const ws of this.ctx.getWebSockets(me.id)) {
+      try {
+        ws.close(4002, "signed-in-elsewhere");
+      } catch (e) {
+      }
+    }
+    return json({
+      id: me.id,
+      token,
+      name: me.name || "",
+      username: me.username || "",
+      country: me.country || "",
+      bksalt: me.bksalt || "",
+      keybox: me.keybox ? JSON.parse(me.keybox) : null,
+      backup: me.backup ? JSON.parse(me.backup) : null,
+      mkbox: me.mkbox ? JSON.parse(me.mkbox) : null,
+      mk: me.rewrap && me.mkspare ? me.mkspare : ""
+    });
+  }
+  authSet(me, b) {
+    if (me.pw) return json({ error: "has-password" }, 409);
+    const auth = String(b.auth || ""), pwsalt = String(b.pwsalt || ""), bksalt = String(b.bksalt || "");
+    if (auth.length < 20 || !/^[A-Za-z0-9_-]{16,40}$/.test(pwsalt) || !/^[A-Za-z0-9_-]{16,40}$/.test(bksalt)) return json({ error: "bad" }, 400);
+    const kb = b.keybox && typeof b.keybox === "object" ? JSON.stringify({ box: String(b.keybox.box || "").slice(0, 4e3), iv: String(b.keybox.iv || "").slice(0, 40) }) : null;
+    const mb = this.sealed(b.mkbox), ms = /^[A-Za-z0-9+/=_-]{40,60}$/.test(String(b.mkspare || "")) ? String(b.mkspare) : null;
+    return sha("pw|" + auth).then((h) => {
+      this.sql.exec("UPDATE users SET pw = ?, pwsalt = ?, bksalt = ?, keybox = ?, mkbox = ?, mkspare = ?, rewrap = 0 WHERE id = ?", h, pwsalt, bksalt, kb, mb, ms, me.id);
+      return json({ ok: true });
+    });
+  }
+  sealed(x) {
+    return x && typeof x === "object" && x.box && x.iv ? JSON.stringify({ box: String(x.box).slice(0, 4e3), iv: String(x.iv).slice(0, 40) }) : null;
+  }
+  // The account key locked again with your (new) password; a phone from before this sends its spare and key box too.
+  authMk(me, b) {
+    if (!me.pw) return json({ error: "no-password" }, 409);
+    const mb = this.sealed(b.mkbox);
+    if (!mb) return json({ error: "bad" }, 400);
+    const sets = ["mkbox = ?", "rewrap = 0"], vals = [mb];
+    if (/^[A-Za-z0-9+/=_-]{40,60}$/.test(String(b.mkspare || "")) && !me.mkspare) {
+      sets.push("mkspare = ?");
+      vals.push(String(b.mkspare));
+    }
+    const kb = this.sealed(b.keybox);
+    if (kb) {
+      sets.push("keybox = ?");
+      vals.push(kb);
+    }
+    this.sql.exec("UPDATE users SET " + sets.join(", ") + " WHERE id = ?", ...vals, me.id);
+    return json({ ok: true });
+  }
+  // ---- Private details + password reset (owner) ----
+  // Your email / phone: only for you to see (the server never shows them to anyone else).
+  recoveryView(u) {
+    return { email: u.remail || "", phone: u.rphone || "", emailReady: this.mailReady(), smsReady: this.smsLinkReady() };
+  }
+  mailReady() {
+    return !!(this.env.RESEND_API_KEY && this.env.MAIL_FROM);
+  }
+  smsLinkReady() {
+    return !!(this.env.TWILIO_ACCOUNT_SID && this.env.TWILIO_AUTH_TOKEN && this.env.TWILIO_FROM);
+  }
+  async sendMail(to, subject, text) {
+    if (!this.mailReady()) return false;
+    const html = '<div style="font:15px/1.6 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#111;max-width:480px">' + String(text).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]).replace(/(https:\/\/\S+)/g, '<a href="$1" style="display:inline-block;margin:6px 0;padding:12px 18px;background:#000;color:#fff;border-radius:10px;text-decoration:none;font-weight:700">Open the link</a>').replace(/\n/g, "<br>") + "</div>";
+    const r = await fetch((this.env.RESEND_BASE || "https://api.resend.com") + "/emails", {
+      method: "POST",
+      headers: { authorization: "Bearer " + this.env.RESEND_API_KEY, "content-type": "application/json" },
+      body: JSON.stringify({ from: this.env.MAIL_FROM, to: [to], subject, text, html })
+    }).catch(() => null);
+    return !!(r && r.ok);
+  }
+  async sendText(to, body) {
+    if (!this.smsLinkReady()) return false;
+    const r = await this.twilio("/2010-04-01/Accounts/" + this.env.TWILIO_ACCOUNT_SID + "/Messages.json", { From: this.env.TWILIO_FROM, To: to, Body: body }).catch(() => null);
+    return !!(r && r.ok);
+  }
+  limit(k, max) {
+    const hour = Math.floor(Date.now() / 36e5), r = this.one("SELECT * FROM rlimit WHERE k = ?", k), n = r && r.hour === hour ? r.n + 1 : 1;
+    this.sql.exec("INSERT OR REPLACE INTO rlimit (k, hour, n) VALUES (?, ?, ?)", k, hour, n);
+    return n > max;
+  }
+  // Adding an email / phone: Lockedintool sends a 6-digit code there; it's saved once you type the code back.
+  async recoveryStart(me, b) {
+    const kind = b.kind === "phone" ? "phone" : "email", now = Date.now();
+    let value = String(b.value || "").trim();
+    if (kind === "email") {
+      value = value.toLowerCase();
+      if (!/^[^\s@]{1,64}@[^\s@]{1,190}\.[a-z]{2,24}$/.test(value)) return json({ error: "email" }, 400);
+      if (!this.mailReady()) return json({ error: "mail-not-ready" }, 503);
+    } else {
+      value = value.replace(/[^\d+]/g, "");
+      if (!PHONE.test(value)) return json({ error: "phone" }, 400);
+      if (!this.smsLinkReady()) return json({ error: "sms-not-ready" }, 503);
+    }
+    const c = this.one("SELECT * FROM rcodes WHERE uid = ? AND kind = ?", me.id, kind);
+    if (c && now - c.sent < 3e4) return json({ error: "wait", wait: Math.ceil((3e4 - (now - c.sent)) / 1e3) }, 429);
+    if (this.limit("rc|" + me.id, 8)) return json({ error: "too-many" }, 429);
+    const code = String(1e5 + crypto.getRandomValues(new Uint32Array(1))[0] % 9e5);
+    const msg = "Your Lockedintool code is " + code + ". It works for 10 minutes. Never share it.";
+    const ok = kind === "email" ? await this.sendMail(value, "Your Lockedintool code: " + code, msg + "\nYou asked to add this email to your Lockedintool account. If this wasn\u2019t you, ignore this email.") : await this.sendText(value, msg);
+    if (!ok) return json({ error: "send-failed" }, 502);
+    this.sql.exec("INSERT OR REPLACE INTO rcodes (uid, kind, value, code, exp, tries, sent) VALUES (?, ?, ?, ?, ?, 0, ?)", me.id, kind, value, await sha("rc|" + me.id + "|" + kind + "|" + code), now + 6e5, now);
+    return json({ ok: true });
+  }
+  async recoveryVerify(me, b) {
+    const kind = b.kind === "phone" ? "phone" : "email", code = String(b.code || "").replace(/\D/g, "");
+    const c = this.one("SELECT * FROM rcodes WHERE uid = ? AND kind = ?", me.id, kind);
+    if (!c || c.exp < Date.now()) return json({ error: "expired" }, 400);
+    if (c.tries >= 5) return json({ error: "too-many" }, 429);
+    this.sql.exec("UPDATE rcodes SET tries = tries + 1 WHERE uid = ? AND kind = ?", me.id, kind);
+    if (c.code !== await sha("rc|" + me.id + "|" + kind + "|" + code)) return json({ error: "wrong", left: Math.max(0, 4 - c.tries) }, 400);
+    this.sql.exec("DELETE FROM rcodes WHERE uid = ? AND kind = ?", me.id, kind);
+    this.sql.exec(`UPDATE users SET ${kind === "phone" ? "rphone" : "remail"} = ? WHERE id = ?`, c.value, me.id);
+    return json(this.recoveryView(this.one("SELECT * FROM users WHERE id = ?", me.id)));
+  }
+  maskEmail(e) {
+    const [a, d] = String(e).split("@");
+    return (a.length <= 2 ? a[0] + "\u2022" : a.slice(0, 2) + "\u2022\u2022\u2022") + "@" + d;
+  }
+  maskPhone(p) {
+    return String(p).slice(0, 3) + " \u2022\u2022\u2022 \u2022\u2022" + String(p).slice(-2);
+  }
+  // Forgot password: which ways this account can be reached (hidden, only partly shown).
+  async resetOptions(u, ip) {
+    if (this.limit("ro|" + await sha("ip|" + ip), 30)) return json({ error: "too-many" }, 429);
+    const me = this.one("SELECT * FROM users WHERE username = ? AND pw IS NOT NULL", String(u).toLowerCase().replace(/^@/, "").slice(0, 30));
+    const out = { email: "", phone: "" };
+    if (me && me.remail && this.mailReady()) out.email = this.maskEmail(me.remail);
+    if (me && me.rphone && this.smsLinkReady()) out.phone = this.maskPhone(me.rphone);
+    return json(out);
+  }
+  async resetStart(b, ip) {
+    const now = Date.now(), u = String(b.username || "").toLowerCase().replace(/^@/, "").slice(0, 30);
+    if (this.limit("rs|" + await sha("ip|" + ip), 10) || this.limit("rsu|" + u, 5)) return json({ error: "too-many" }, 429);
+    const me = u && this.one("SELECT * FROM users WHERE username = ? AND pw IS NOT NULL", u);
+    if (!me) return json({ ok: true });
+    const via = ["email", "phone", "both"].includes(b.via) ? b.via : "both";
+    this.sql.exec("DELETE FROM resets WHERE uid = ? OR exp < ?", me.id, now);
+    const token = rand(24);
+    this.sql.exec("INSERT INTO resets (token, uid, exp) VALUES (?, ?, ?)", await sha("rs|" + token), me.id, now + 30 * 6e4);
+    const link = (this.origin || "") + "/v1/reset?t=" + token;
+    const text = "You asked to reset the password of your Lockedintool account @" + me.username + ". To confirm, open this link, put in your new password, confirm it and tap Apply change:\n" + link + "\nThe link works for 30 minutes. If this wasn\u2019t you, ignore this message - your password stays the same.";
+    let sent = 0;
+    if ((via === "email" || via === "both") && me.remail && await this.sendMail(me.remail, "Reset your Lockedintool password", text)) sent++;
+    if ((via === "phone" || via === "both") && me.rphone && await this.sendText(me.rphone, "Lockedintool: reset your password for @" + me.username + " here (30 min): " + link + " - not you? Ignore this.")) sent++;
+    return json({ ok: true, sent });
+  }
+  // The link's page: new password + confirm -> Apply change. The page works out the sign-in key itself (the same way the
+  // app does), so the new password never travels to Lockedintool either.
+  async resetPage(req, url) {
+    const page = /* @__PURE__ */ __name((inner) => new Response(
+      '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Reset password</title><style>:root{color-scheme:dark}body{margin:0;background:#000;color:#fff;font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}main{max-width:420px;margin:0 auto;padding:48px 20px}h1{font-size:22px;margin:0 0 10px}p{color:#bbb;margin:0 0 16px}label{display:block;font-size:13px;font-weight:700;color:#999;margin:14px 0 6px}input{width:100%;box-sizing:border-box;padding:14px;border-radius:12px;border:1px solid #444;background:#000;color:#fff;font-size:16px}button{width:100%;margin-top:18px;padding:15px;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;background:#fff;color:#000}button[disabled]{opacity:.45}.err{color:#ff6b60;min-height:20px;margin-top:10px;font-size:14px}</style></head><body><main>' + inner + "</main></body></html>",
+      { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-frame-options": "DENY", "referrer-policy": "no-referrer" } }
+    ), "page");
+    const esc = /* @__PURE__ */ __name((v) => String(v).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]), "esc");
+    const now = Date.now();
+    if (req.method === "POST") {
+      const b = await req.json().catch(() => ({}));
+      const r2 = this.one("SELECT * FROM resets WHERE token = ?", await sha("rs|" + String(b.t || "").slice(0, 40)));
+      if (!r2 || r2.exp < now) return json({ error: "expired" }, 400);
+      const auth = String(b.auth || ""), pwsalt = String(b.pwsalt || ""), bksalt = String(b.bksalt || "");
+      if (auth.length < 20 || !/^[A-Za-z0-9_-]{16,40}$/.test(pwsalt) || !/^[A-Za-z0-9_-]{16,40}$/.test(bksalt)) return json({ error: "bad" }, 400);
+      const me2 = this.one("SELECT * FROM users WHERE id = ?", r2.uid);
+      if (!me2) return json({ error: "expired" }, 400);
+      this.sql.exec("DELETE FROM resets WHERE uid = ?", me2.id);
+      const keep = !!me2.mkspare;
+      this.sql.exec(
+        "UPDATE users SET pw = ?, pwsalt = ?, bksalt = ?, token = ?, mkbox = NULL, rewrap = ?" + (keep ? "" : ", keybox = NULL, backup = NULL") + " WHERE id = ?",
+        await sha("pw|" + auth),
+        pwsalt,
+        bksalt,
+        await sha("tok|" + rand(32)),
+        keep ? 1 : 0,
+        me2.id
+      );
+      this.sql.exec("DELETE FROM logins WHERE k = ?", me2.username || "");
+      for (const ws of this.ctx.getWebSockets(me2.id)) {
+        try {
+          ws.close(4004, "password-changed");
+        } catch (e) {
+        }
+      }
+      return json({ ok: true, username: me2.username || "" });
+    }
+    const t = String(url.searchParams.get("t") || "").slice(0, 40);
+    const r = t && this.one("SELECT * FROM resets WHERE token = ?", await sha("rs|" + t));
+    const me = r && r.exp >= now && this.one("SELECT username FROM users WHERE id = ?", r.uid);
+    if (!me) return page("<h1>This link has expired</h1><p>Start again in Lockedintool: Log in &gt; Forgot password?</p>");
+    return page('<div id="f"><h1>Reset your password</h1><p>For @' + esc(me.username || "") + '. Put in your new password, confirm it and tap Apply change.</p><label>New password</label><input id="a" type="password" autocomplete="new-password" maxlength="128" placeholder="At least 8 characters"><label>Confirm new password</label><input id="b" type="password" autocomplete="new-password" maxlength="128"><div class="err" id="e"></div><button id="go" disabled>Apply change</button></div><script>(function(){var T=' + JSON.stringify(t) + ",I=" + LIT_ITER + ',a=document.getElementById("a"),b=document.getElementById("b"),e=document.getElementById("e"),go=document.getElementById("go");function chk(){var m="";if(a.value&&a.value.length<8)m="The password needs at least 8 characters.";else if(b.value&&a.value!==b.value)m="The passwords don\u2019t match.";e.textContent=m;go.disabled=!!m||a.value.length<8||a.value!==b.value;}a.oninput=chk;b.oninput=chk;function rnd(n){var u=crypto.getRandomValues(new Uint8Array(n)),s="";for(var i=0;i<u.length;i++)s+=String.fromCharCode(u[i]);return btoa(s).replace(/\\+/g,"-").replace(/\\//g,"_").replace(/=+$/,"");}function b64(buf){var u=new Uint8Array(buf),s="";for(var i=0;i<u.length;i++)s+=String.fromCharCode(u[i]);return btoa(s);}go.onclick=async function(){go.disabled=true;go.textContent="Applying\u2026";try{var ps=rnd(18),bs=rnd(18),base=await crypto.subtle.importKey("raw",new TextEncoder().encode(a.value),"PBKDF2",false,["deriveBits"]);var bits=await crypto.subtle.deriveBits({name:"PBKDF2",hash:"SHA-256",salt:new TextEncoder().encode("lit-auth|"+ps),iterations:I},base,256);var r=await fetch(location.pathname,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({t:T,auth:b64(bits),pwsalt:ps,bksalt:bs})});var j=await r.json().catch(function(){return{}});if(!r.ok)throw new Error(j.error||"x");document.getElementById("f").innerHTML="<h1>Your password is changed</h1><p>Go back to Lockedintool and log in with @"+(j.username||"")+" and your new password. You can close this page.</p>";}catch(x){go.textContent="Apply change";go.disabled=false;e.textContent=x.message==="expired"?"This link has expired - start again in Lockedintool.":"Couldn\u2019t change it - check your connection and try again.";}};})();<\/script>');
+  }
+  backupSet(me, b) {
+    const media = String(b.media || ""), iv = String(b.iv || "");
+    if (!this.mediaDone(media, me.id) || !/^[A-Za-z0-9+/=]{8,40}$/.test(iv)) return json({ error: "bad" }, 400);
+    const old = me.backup ? JSON.parse(me.backup) : null;
+    if (old && old.media && old.media !== media) this.mediaDel("id = ?", old.media);
+    this.sql.exec("UPDATE users SET backup = ? WHERE id = ?", JSON.stringify({ media, iv, at: Date.now(), z: b.z ? 1 : 0 }), me.id);
+    return json({ ok: true });
+  }
+  // ---- Delete account (owner): reason -> warning -> the phone's PIN / biometrics -> Lockedintool sends a message with a
+  //      link and a code -> the link's page: enter the code, Confirm, then Delete account. ----
+  async deleteStart(me, b) {
+    const now = Date.now();
+    const reasons = ["not-using", "notifications", "privacy", "new-account", "not-working", "other"];
+    this.sql.exec("DELETE FROM delreq WHERE uid = ? OR exp < ?", me.id, now);
+    const token = rand(18), code = String(1e5 + crypto.getRandomValues(new Uint32Array(1))[0] % 9e5);
+    this.sql.exec(
+      "INSERT INTO delreq (token, uid, code, exp, tries, ok, reason, note) VALUES (?, ?, ?, ?, 0, 0, ?, ?)",
+      token,
+      me.id,
+      await sha("del|" + token + "|" + code),
+      now + 30 * 6e4,
+      reasons.includes(b.reason) ? b.reason : "other",
+      String(b.note || "").slice(0, 300)
+    );
+    const link = (this.origin || "") + "/v1/delete?t=" + token;
+    const dtext = "You asked to delete your Lockedintool account. To confirm, open this link and enter the code " + code + ":\n" + link + "\nThe link and code work for 30 minutes. If this wasn\u2019t you, ignore this message - your account stays.";
+    this.alert(me.id, dtext);
+    if (me.remail) await this.sendMail(me.remail, "Confirm deleting your Lockedintool account", dtext);
+    if (me.rphone) await this.sendText(me.rphone, "Lockedintool: to delete your account open " + link + " and enter the code " + code + " (30 min). Not you? Ignore this.");
+    return json({ ok: true, exp: now + 30 * 6e4 });
+  }
+  async deletePage(req, url) {
+    const page = /* @__PURE__ */ __name((inner) => new Response(
+      '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Delete account</title><style>:root{color-scheme:dark}body{margin:0;background:#000;color:#fff;font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}main{max-width:420px;margin:0 auto;padding:48px 20px}h1{font-size:22px;margin:0 0 10px}p{color:#bbb;margin:0 0 16px}input{width:100%;box-sizing:border-box;padding:14px;border-radius:12px;border:1px solid #444;background:#000;color:#fff;font-size:22px;letter-spacing:6px;text-align:center}button{width:100%;margin-top:14px;padding:15px;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;background:#fff;color:#000}button.red{background:#ff3b30;color:#fff}.err{color:#ff6b60}ul{color:#bbb;padding-left:20px;margin:0 0 8px}</style></head><body><main>' + inner + "</main></body></html>",
+      { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-frame-options": "DENY" } }
+    ), "page");
+    const esc = /* @__PURE__ */ __name((v) => String(v).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]), "esc");
+    let f = {};
+    if (req.method === "POST") {
+      try {
+        f = Object.fromEntries(new URLSearchParams(await req.text()));
+      } catch (e) {
+      }
+    }
+    const token = String(f.t || url.searchParams.get("t") || "").slice(0, 40);
+    const r = token && this.one("SELECT * FROM delreq WHERE token = ?", token);
+    if (!r || r.exp < Date.now()) return page("<h1>This link has expired</h1><p>Start again in Lockedintool: Settings &gt; Privacy &gt; Delete account.</p>");
+    const form = /* @__PURE__ */ __name((body) => '<form method="post"><input type="hidden" name="t" value="' + esc(token) + '">' + body + "</form>", "form");
+    if (req.method === "POST" && f.step === "delete") {
+      if (!r.ok) return page("<h1>Enter the code first</h1>");
+      const u = this.one("SELECT * FROM users WHERE id = ?", r.uid);
+      if (u) this.deleteUser(u.id);
+      this.sql.exec("INSERT INTO delreasons (reason, note, at) VALUES (?, ?, ?)", r.reason || "other", r.note || "", Date.now());
+      this.sql.exec("DELETE FROM delreq WHERE token = ?", token);
+      return page("<h1>Your account is deleted</h1><p>Everything that came with Lockedintool is gone - Lockedintool on your phone starts fresh. Nothing outside Lockedintool was touched. You can close this page.</p>");
+    }
+    if (req.method === "POST" && f.step === "code") {
+      if (r.tries >= 5) return page("<h1>Too many tries</h1><p>Start again in Lockedintool: Settings &gt; Privacy &gt; Delete account.</p>");
+      if (await sha("del|" + token + "|" + String(f.code || "").replace(/\D/g, "")) === r.code) {
+        this.sql.exec("UPDATE delreq SET ok = 1 WHERE token = ?", token);
+        return page("<h1>Code confirmed</h1><p>Deleting your account can\u2019t be undone. Everything that comes with Lockedintool goes:</p><ul><li>your profile, name and @username</li><li>your followers and who you follow</li><li>your posts, statuses and comments</li><li>your chats and your community</li><li>your Pages, notes, money and wallet history, cards, trading accounts and settings on your phone</li><li>your Lockedintool plan - payments can\u2019t be refunded</li></ul><p>Nothing outside Lockedintool is touched - your bank, payments, broker accounts and phone stay exactly as they are. It\u2019s like deleting an app.</p>" + form('<input type="hidden" name="step" value="delete"><button class="red" type="submit">Delete account</button>'));
+      }
+      this.sql.exec("UPDATE delreq SET tries = tries + 1 WHERE token = ?", token);
+      const left = 4 - r.tries;
+      return page('<h1>Delete your account</h1><p class="err">That code isn\u2019t right' + (left > 0 ? " - " + left + (left === 1 ? " try" : " tries") + " left." : ".") + "</p>" + form('<input type="hidden" name="step" value="code"><input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000" autofocus><button type="submit">Confirm</button>'));
+    }
+    if (r.ok) return page("<h1>Code confirmed</h1><p>This deletes your account and everything that comes with Lockedintool. It can\u2019t be undone. Nothing outside Lockedintool is touched.</p>" + form('<input type="hidden" name="step" value="delete"><button class="red" type="submit">Delete account</button>'));
+    return page("<h1>Delete your account</h1><p>Enter the 6-digit code Lockedintool sent you in Messages.</p>" + form('<input type="hidden" name="step" value="code"><input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000" autofocus><button type="submit">Confirm</button>'));
+  }
+  // ---- Block, report, delete account (owner) ----
+  block(me, b) {
+    const u = this.one("SELECT id FROM users WHERE id = ?", String(b.id || ""));
+    if (!u || u.id === me.id) return json({ error: "notfound" }, 404);
+    if (b.on === false) this.sql.exec("DELETE FROM blocks WHERE uid = ? AND bid = ?", me.id, u.id);
+    else {
+      this.sql.exec("INSERT OR IGNORE INTO blocks (uid, bid, at) VALUES (?, ?, ?)", me.id, u.id, Date.now());
+      this.sql.exec("DELETE FROM follows WHERE (uid = ? AND fid = ?) OR (uid = ? AND fid = ?)", me.id, u.id, u.id, me.id);
+    }
+    return json({ ok: true, blocked: b.on !== false });
+  }
+  blocksOf(me) {
+    const rows = this.sql.exec("SELECT b.bid, b.at, u.name, u.username FROM blocks b LEFT JOIN users u ON u.id = b.bid WHERE b.uid = ? ORDER BY b.at DESC", me.id).toArray();
+    return json({ people: rows.map((r) => ({ id: r.bid, name: r.name || "", username: r.username || "", at: r.at })) });
+  }
+  // What a report points at: who it belongs to and a short look at it (the official profile sees this).
+  reportTarget(kind, id) {
+    if (kind === "profile" || kind === "chat") {
+      const u = this.one("SELECT * FROM users WHERE id = ?", id);
+      return u ? { owner: u.id, look: (u.name || "") + (u.username ? " @" + u.username : "") + (u.bio ? " - " + u.bio : "") } : null;
+    }
+    if (kind === "status" || kind === "post") {
+      const p = this.one("SELECT * FROM uposts WHERE id = ?", id);
+      return p ? { owner: p.uid, look: [p.title, p.text].filter(Boolean).join(" - ") || p.kind + " (" + p.type + ")", media: this.mediaUrl(p.type === "video" ? p.thumb || p.media : p.media) } : null;
+    }
+    if (kind === "comment") {
+      const c = this.one("SELECT * FROM ucomments WHERE id = ?", id);
+      return c ? { owner: c.uid, look: c.text } : null;
+    }
+    if (kind === "gpost") {
+      const p = this.one("SELECT * FROM gposts WHERE id = ?", id);
+      return p ? { owner: p.uid, look: p.text || "(picture)" } : null;
+    }
+    if (kind === "gcomment") {
+      const c = this.one("SELECT * FROM gcomments WHERE id = ?", id);
+      return c ? { owner: c.uid, look: c.text } : null;
+    }
+    if (kind === "group") {
+      const g = this.one("SELECT * FROM groups WHERE id = ? AND type = 'public'", id);
+      return g ? { owner: g.creator, look: g.name + (g.about ? " - " + g.about : "") } : null;
+    }
+    return null;
+  }
+  report(me, b) {
+    const kind = String(b.kind || ""), id = String(b.id || "").slice(0, 60);
+    const t = this.reportTarget(kind, id);
+    if (!t) return json({ error: "notfound" }, 404);
+    const recent = this.one("SELECT COUNT(*) AS n FROM reports WHERE uid = ? AND at > ?", me.id, Date.now() - 36e5).n;
+    if (recent >= 20) return json({ error: "slow" }, 429);
+    const reason = ["spam", "abuse", "nudity", "violence", "scam", "hate", "other"].includes(b.reason) ? b.reason : "other";
+    this.sql.exec(
+      "INSERT INTO reports (id, uid, kind, target, owner, reason, text, at, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "r" + rand(9),
+      me.id,
+      kind,
+      id,
+      t.owner,
+      reason,
+      String(b.text || "").slice(0, 2e3),
+      Date.now(),
+      "open"
+    );
+    const n = this.one("SELECT COUNT(*) AS n FROM reports WHERE kind = ? AND target = ?", kind, id).n;
+    if ([1, 3, 5, 10, 20].includes(n) && t.owner) this.alert(t.owner, "Your " + this.reportWhat(kind, id) + " has been reported " + (n === 1 ? "once" : n + " times") + " for " + REPORT_REASONS[reason] + ". Please keep to Lockedintool\u2019s rules - accounts that keep breaking them can be removed.");
+    return json({ ok: true });
+  }
+  alert(uid, text) {
+    this.deliver(uid, { t: "alert", text, at: Date.now() });
+  }
+  reportWhat(kind, id) {
+    const cut = /* @__PURE__ */ __name((x, n) => {
+      x = String(x || "").trim();
+      return x.length > n ? x.slice(0, n) + "\u2026" : x;
+    }, "cut");
+    if (kind === "profile") return "profile";
+    if (kind === "chat") return "messages";
+    if (kind === "status") return "status";
+    if (kind === "post") {
+      const p = this.one("SELECT title, text FROM uposts WHERE id = ?", id) || {};
+      const s = cut(p.title || p.text, 40);
+      return "post" + (s ? " \u201C" + s + "\u201D" : "");
+    }
+    if (kind === "comment" || kind === "gcomment") {
+      const c = this.one(`SELECT text FROM ${kind === "comment" ? "ucomments" : "gcomments"} WHERE id = ?`, id) || {};
+      return "comment" + (c.text ? " \u201C" + cut(c.text, 40) + "\u201D" : "");
+    }
+    if (kind === "gpost") {
+      const p = this.one("SELECT text FROM gposts WHERE id = ?", id) || {};
+      return "group post" + (p.text ? " \u201C" + cut(p.text, 40) + "\u201D" : "");
+    }
+    if (kind === "group") {
+      const g = this.one("SELECT name FROM groups WHERE id = ?", id) || {};
+      return "group" + (g.name ? " \u201C" + cut(g.name, 40) + "\u201D" : "");
+    }
+    return kind;
+  }
+  reportsList(me) {
+    if (!me.official) return json({ error: "official" }, 403);
+    const who = /* @__PURE__ */ __name((id) => {
+      const u = this.one("SELECT name, username FROM users WHERE id = ?", id);
+      return u ? (u.name || "") + (u.username ? " @" + u.username : "") : "(deleted)";
+    }, "who");
+    const rows = this.sql.exec("SELECT * FROM reports WHERE status = 'open' ORDER BY at DESC LIMIT 1000").toArray(), cards = /* @__PURE__ */ new Map();
+    for (const r of rows) {
+      const k = r.kind + "|" + r.target;
+      if (!cards.has(k)) {
+        const t = this.reportTarget(r.kind, r.target) || {};
+        cards.set(k, { id: r.id, kind: r.kind, at: r.at, count: 0, reasons: {}, text: "", owner: r.owner, ownerName: who(r.owner), look: t.look || "(already gone)", media: t.media || "", gone: !t.owner });
+      }
+      const c = cards.get(k);
+      c.count++;
+      c.reasons[r.reason] = (c.reasons[r.reason] || 0) + 1;
+      if (!c.text && r.text) c.text = r.text;
+    }
+    return json({ reports: [...cards.values()].slice(0, 200) });
+  }
+  reportAct(me, b) {
+    if (!me.official) return json({ error: "official" }, 403);
+    const r = this.one("SELECT * FROM reports WHERE id = ?", String(b.id || ""));
+    if (!r) return json({ error: "notfound" }, 404);
+    const act = b.action;
+    if (act === "remove") {
+      const what = this.reportWhat(r.kind, r.target);
+      const top = this.one("SELECT reason, COUNT(*) AS n FROM reports WHERE kind = ? AND target = ? GROUP BY reason ORDER BY n DESC LIMIT 1", r.kind, r.target);
+      this.removeContent(r.kind, r.target);
+      if (r.owner && ["status", "post", "comment", "gpost", "gcomment", "group"].includes(r.kind)) this.alert(r.owner, "Your " + what + " was removed by Lockedintool after reports for " + REPORT_REASONS[(top || {}).reason || "other"] + ".");
+    }
+    if (act === "ban" && r.owner) {
+      const o = this.one("SELECT official FROM users WHERE id = ?", r.owner);
+      if (o && !o.official) this.deleteUser(r.owner, "banned");
+    }
+    this.sql.exec("UPDATE reports SET status = ? WHERE kind = ? AND target = ? AND status = 'open'", act === "dismiss" ? "dismissed" : "done", r.kind, r.target);
+    if (act === "ban") this.sql.exec("UPDATE reports SET status = 'done' WHERE owner = ? AND status = 'open'", r.owner);
+    return this.reportsList(me);
+  }
+  removeContent(kind, id) {
+    if (kind === "status" || kind === "post") {
+      const p = this.one("SELECT * FROM uposts WHERE id = ?", id);
+      if (!p) return;
+      for (const i of this.postItems(p)) this.mediaDel("id = ? OR id = ?", i.media || "", i.thumb || "");
+      if (this.postMusic(p).media) this.mediaDel("id = ?", this.postMusic(p).media);
+      this.mediaDel("id = ? OR id = ?", p.media, p.thumb || "");
+      this.sql.exec("DELETE FROM uposts WHERE id = ?", p.id);
+      this.sql.exec("DELETE FROM ulikes WHERE pid = ?", p.id);
+      this.sql.exec("DELETE FROM ucomments WHERE pid = ?", p.id);
+    }
+    if (kind === "comment") this.sql.exec("DELETE FROM ucomments WHERE id = ?", id);
+    if (kind === "gpost") {
+      this.sql.exec("DELETE FROM gcomments WHERE pid = ?", id);
+      this.sql.exec("DELETE FROM glikes WHERE pid = ?", id);
+      this.sql.exec("DELETE FROM gposts WHERE id = ?", id);
+    }
+    if (kind === "gcomment") this.sql.exec("DELETE FROM gcomments WHERE id = ?", id);
+    if (kind === "group") {
+      const g = this.one("SELECT * FROM groups WHERE id = ? AND type = 'public'", id);
+      if (!g) return;
+      const ids = this.memberIds(g.id);
+      for (const p of this.sql.exec("SELECT id FROM gposts WHERE gid = ?", g.id).toArray()) {
+        this.sql.exec("DELETE FROM gcomments WHERE pid = ?", p.id);
+        this.sql.exec("DELETE FROM glikes WHERE pid = ?", p.id);
+      }
+      this.sql.exec("DELETE FROM gposts WHERE gid = ?", g.id);
+      this.sql.exec("DELETE FROM gmembers WHERE gid = ?", g.id);
+      this.sql.exec("DELETE FROM groups WHERE id = ?", g.id);
+      for (const uid of ids) this.deliver(uid, { t: "group", g: { id: g.id, gone: true } });
+    }
+  }
+  // Delete account (owner; POPIA): everything Lockedintool's server keeps about you goes. Payment records stay, as
+  // the law requires (they never hold your card or bank login).
+  deleteUser(uid, why = "deleted") {
+    for (const r of this.sql.exec("SELECT gid FROM gcparts WHERE uid = ?", uid).toArray()) this.gcallLeave(r.gid, uid);
+    for (const l of this.sql.exec("SELECT * FROM lives WHERE uid = ? AND ended IS NULL", uid).toArray()) this.liveEnd(l);
+    this.sql.exec("DELETE FROM livewatch WHERE uid = ?", uid);
+    this.sql.exec("DELETE FROM livecmt WHERE uid = ?", uid);
+    this.sql.exec("DELETE FROM rcodes WHERE uid = ?", uid);
+    this.sql.exec("DELETE FROM resets WHERE uid = ?", uid);
+    for (const m of this.sql.exec("SELECT gid FROM gmembers WHERE uid = ?", uid).toArray()) {
+      this.sql.exec("DELETE FROM gmembers WHERE gid = ? AND uid = ?", m.gid, uid);
+      const left = this.memberIds(m.gid);
+      if (!left.length) {
+        for (const p of this.sql.exec("SELECT id FROM gposts WHERE gid = ?", m.gid).toArray()) {
+          this.sql.exec("DELETE FROM gcomments WHERE pid = ?", p.id);
+          this.sql.exec("DELETE FROM glikes WHERE pid = ?", p.id);
+        }
+        this.sql.exec("DELETE FROM gposts WHERE gid = ?", m.gid);
+        this.sql.exec("DELETE FROM groups WHERE id = ? AND type != 'stories'", m.gid);
+        continue;
+      }
+      if (!this.one("SELECT uid FROM gmembers WHERE gid = ? AND role = 'leader'", m.gid)) {
+        const next = this.one("SELECT uid FROM gmembers WHERE gid = ? ORDER BY joined LIMIT 1", m.gid);
+        this.sql.exec("UPDATE gmembers SET role = 'leader' WHERE gid = ? AND uid = ?", m.gid, next.uid);
+      }
+      this.groupTell(m.gid);
+    }
+    for (const p of this.sql.exec("SELECT id FROM uposts WHERE uid = ?", uid).toArray()) {
+      this.sql.exec("DELETE FROM ulikes WHERE pid = ?", p.id);
+      this.sql.exec("DELETE FROM ucomments WHERE pid = ?", p.id);
+    }
+    for (const p of this.sql.exec("SELECT id FROM gposts WHERE uid = ?", uid).toArray()) {
+      this.sql.exec("DELETE FROM gcomments WHERE pid = ?", p.id);
+      this.sql.exec("DELETE FROM glikes WHERE pid = ?", p.id);
+    }
+    this.sql.exec("UPDATE gposts SET likes = likes - 1 WHERE id IN (SELECT pid FROM glikes WHERE uid = ?)", uid);
+    this.mediaDel("uid = ?", uid);
+    const del = [
+      ["uposts", "uid"],
+      ["ulikes", "uid"],
+      ["ucomments", "uid"],
+      ["gposts", "uid"],
+      ["glikes", "uid"],
+      ["gcomments", "uid"],
+      ["follows", "uid"],
+      ["follows", "fid"],
+      ["contacts", "uid"],
+      ["contacts", "cid"],
+      ["blocks", "uid"],
+      ["blocks", "bid"],
+      ["queue", "uid"],
+      ["paybank", "uid"],
+      ["banklinks", "uid"],
+      ["subs", "uid"],
+      ["reports", "uid"]
+    ];
+    for (const [t, c] of del) this.sql.exec(`DELETE FROM ${t} WHERE ${c} = ?`, uid);
+    const gone = this.one("SELECT token FROM users WHERE id = ?", uid);
+    if (gone && gone.token) this.sql.exec("INSERT OR IGNORE INTO tombs (tok, at, why) VALUES (?, ?, ?)", gone.token, Date.now(), why);
+    this.sql.exec("DELETE FROM users WHERE id = ?", uid);
+    for (const ws of this.ctx.getWebSockets(uid)) {
+      try {
+        ws.close(why === "banned" ? 4003 : 4001, why);
+      } catch (e) {
+      }
+    }
+  }
+  // ---- Groups ----
+  member(gid, uid) {
+    return this.one("SELECT role FROM gmembers WHERE gid = ? AND uid = ?", gid, uid);
+  }
+  memberIds(gid) {
+    return this.sql.exec("SELECT uid FROM gmembers WHERE gid = ?", gid).toArray().map((r) => r.uid);
+  }
+  groupView(g, me, full) {
+    const count = this.one("SELECT COUNT(*) AS n FROM gmembers WHERE gid = ?", g.id).n;
+    const mine = me ? this.member(g.id, me.id) : null;
+    const v = {
+      id: g.id,
+      name: g.name,
+      about: g.about || "",
+      type: g.type,
+      image: g.image || "",
+      category: g.category || "Community",
+      country: g.country || "Global",
+      creator: g.creator,
+      callJoin: g.calljoin || "open",
+      created: g.created,
+      count,
+      team: !!g.team,
+      member: !!mine,
+      leader: !!mine && mine.role === "leader",
+      live: this.gcallLive(g.id),
+      // Real numbers for Trending: members, times the group was shared, likes and comments on its posts.
+      shares: g.shares || 0,
+      likes: this.one("SELECT COALESCE(SUM(likes), 0) AS n FROM gposts WHERE gid = ?", g.id).n,
+      comments: this.one("SELECT COUNT(*) AS n FROM gcomments c JOIN gposts p ON p.id = c.pid WHERE p.gid = ?", g.id).n
+    };
+    if (full) v.members = this.sql.exec("SELECT m.uid, m.role, u.name, u.username, u.pub FROM gmembers m JOIN users u ON u.id = m.uid WHERE m.gid = ? ORDER BY m.role = 'leader' DESC, m.joined LIMIT 500", g.id).toArray().map((r) => ({ id: r.uid, role: r.role, name: r.name || "", username: r.username || "", pub: g.type === "private" ? r.pub : void 0 }));
+    return v;
+  }
+  // Tell everyone in the group (and anyone just added / removed) what the group looks like now.
+  groupTell(gid, extra = []) {
+    const g = this.one("SELECT * FROM groups WHERE id = ?", gid);
+    const ids = new Set(this.memberIds(gid).concat(extra));
+    for (const uid of ids) {
+      const u = this.one("SELECT * FROM users WHERE id = ?", uid);
+      if (!u) continue;
+      this.deliver(uid, { t: "group", g: g ? this.groupView(g, u, true) : { id: gid, gone: true } });
+    }
+  }
+  async groups(me, op, b, q) {
+    const now = Date.now();
+    const str = /* @__PURE__ */ __name((v, n) => String(v || "").trim().slice(0, n), "str");
+    const get = /* @__PURE__ */ __name((id) => this.one("SELECT * FROM groups WHERE id = ?", String(id || "")), "get");
+    if (op === "create") {
+      const team = !!b.team, name = str(b.name, 60), type = team || b.type === "private" ? "private" : "public";
+      if (!name) return json({ error: "name" }, 400);
+      if (team) {
+        const had = this.one("SELECT * FROM groups WHERE creator = ? AND team = 1", me.id);
+        if (had && this.member(had.id, me.id)) return json(this.groupView(had, me, true));
+      }
+      if (type === "public" && this.isPrivate(me)) return json({ error: "private-account" }, 403);
+      const image = String(b.image || "");
+      const id = "grp" + rand(9);
+      this.sql.exec(
+        "INSERT INTO groups (id, name, about, type, image, category, country, creator, calljoin, created) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        id,
+        name,
+        str(b.about, 500),
+        type,
+        image.length < 3e5 ? image : "",
+        str(b.category, 30) || "Community",
+        str(b.country, 40) || "Global",
+        me.id,
+        "open",
+        now
+      );
+      if (team) this.sql.exec("UPDATE groups SET team = 1 WHERE id = ?", id);
+      this.sql.exec("INSERT INTO gmembers (gid, uid, role, joined) VALUES (?, ?, ?, ?)", id, me.id, "leader", now);
+      for (const uid of (Array.isArray(b.members) ? b.members : []).map(String).slice(0, 255))
+        if (uid !== me.id && this.one("SELECT id FROM users WHERE id = ?", uid)) this.sql.exec("INSERT OR IGNORE INTO gmembers (gid, uid, role, joined) VALUES (?, ?, ?, ?)", id, uid, "member", now);
+      this.groupTell(id);
+      return json(this.groupView(get(id), me, true));
+    }
+    if (op === "mine") {
+      const rows = this.sql.exec("SELECT g.* FROM groups g JOIN gmembers m ON m.gid = g.id WHERE m.uid = ? AND g.type != 'stories' ORDER BY g.created DESC", me.id).toArray();
+      return json({ groups: rows.map((g2) => this.groupView(g2, me, g2.type === "private")) });
+    }
+    if (op === "public") {
+      const t = str(q.get("q"), 40).toLowerCase(), like = "%" + t.replace(/[%_\\]/g, (m) => "\\" + m) + "%";
+      const rows = this.sql.exec(`SELECT g.*, (SELECT COUNT(*) FROM gmembers m WHERE m.gid = g.id) AS n FROM groups g WHERE g.type = 'public' AND (? = '' OR lower(g.name) LIKE ? ESCAPE '') ORDER BY n DESC, g.created DESC LIMIT 200`, t, like).toArray();
+      return json({ groups: rows.map((g2) => this.groupView(g2, me, false)) });
+    }
+    const g = get(b.id || q.get("id"));
+    if (!g) return json({ error: "notfound" }, 404);
+    if (g.type === "stories" && !this.member(g.id, me.id) && ["post", "like", "comment", "share"].includes(op)) this.sql.exec("INSERT OR IGNORE INTO gmembers (gid, uid, role, joined) VALUES (?, ?, ?, ?)", g.id, me.id, "member", now);
+    if (g.type === "stories" && op === "posts") return json({ posts: this.postsOf(g.id, me) });
+    if (op === "share-group") {
+      if (g.type === "public") this.sql.exec("UPDATE groups SET shares = COALESCE(shares, 0) + 1 WHERE id = ?", g.id);
+      return json({ ok: true });
+    }
+    const mine = this.member(g.id, me.id);
+    if (g.type === "private" && !mine) return json({ error: "notfound" }, 404);
+    if (op === "get") return json(this.groupView(g, me, true));
+    if (op === "join") {
+      if (g.type !== "public") return json({ error: "private" }, 403);
+      if (this.isPrivate(me)) return json({ error: "private-account" }, 403);
+      if (!mine) {
+        this.sql.exec("INSERT INTO gmembers (gid, uid, role, joined) VALUES (?, ?, ?, ?)", g.id, me.id, "member", now);
+        this.groupTell(g.id);
+      }
+      return json(this.groupView(g, me, true));
+    }
+    if (!mine) return json({ error: "member" }, 403);
+    if (op === "leave") {
+      if (g.type === "private") this.gcallLeave(g.id, me.id);
+      this.sql.exec("DELETE FROM gmembers WHERE gid = ? AND uid = ?", g.id, me.id);
+      const left = this.memberIds(g.id);
+      if (!left.length) {
+        this.sql.exec("DELETE FROM groups WHERE id = ?", g.id);
+        this.sql.exec("DELETE FROM gposts WHERE gid = ?", g.id);
+      } else if (!this.one("SELECT uid FROM gmembers WHERE gid = ? AND role = 'leader'", g.id)) {
+        const next = this.one("SELECT uid FROM gmembers WHERE gid = ? ORDER BY joined LIMIT 1", g.id);
+        this.sql.exec("UPDATE gmembers SET role = 'leader' WHERE gid = ? AND uid = ?", g.id, next.uid);
+      }
+      this.groupTell(g.id, [me.id]);
+      return json({ ok: true });
+    }
+    if (op === "add") {
+      if (g.type === "private" && mine.role !== "leader") return json({ error: "leader" }, 403);
+      if (g.team && g.creator !== me.id) return json({ error: "leader" }, 403);
+      const added = [];
+      for (const uid of (Array.isArray(b.members) ? b.members : []).map(String).slice(0, 255))
+        if (this.one("SELECT id FROM users WHERE id = ?", uid) && !this.member(g.id, uid)) {
+          this.sql.exec("INSERT INTO gmembers (gid, uid, role, joined) VALUES (?, ?, ?, ?)", g.id, uid, "member", now);
+          added.push(uid);
+        }
+      this.groupTell(g.id);
+      return json(this.groupView(g, me, true));
+    }
+    if (op === "update") {
+      if (mine.role !== "leader") return json({ error: "leader" }, 403);
+      if (b.name !== void 0 && str(b.name, 60)) this.sql.exec("UPDATE groups SET name = ? WHERE id = ?", str(b.name, 60), g.id);
+      if (b.about !== void 0) this.sql.exec("UPDATE groups SET about = ? WHERE id = ?", str(b.about, 500), g.id);
+      if (b.callJoin === "open" || b.callJoin === "ask") this.sql.exec("UPDATE groups SET calljoin = ? WHERE id = ?", b.callJoin, g.id);
+      if (b.leader && this.member(g.id, String(b.leader))) this.sql.exec("UPDATE gmembers SET role = 'leader' WHERE gid = ? AND uid = ?", g.id, String(b.leader));
+      this.groupTell(g.id);
+      return json(this.groupView(get(g.id), me, true));
+    }
+    if (op === "posts") return json({ posts: this.postsOf(g.id, me) });
+    if (op === "post") {
+      if (g.type === "stories") return json({ error: "closed" }, 403);
+      if (g.type !== "public") return json({ error: "public" }, 400);
+      if (g.type === "public" && this.isPrivate(me)) return json({ error: "private-account" }, 403);
+      const text = str(b.text, 600), image = /^data:image\/(png|jpeg|webp);base64,/.test(String(b.image || "")) && String(b.image).length < 6e5 ? String(b.image) : "";
+      const files = (Array.isArray(b.files) ? b.files : []).slice(0, 10).map((f) => this.fileMeta(f)).filter((f) => f && this.mediaDone(f.m, me.id));
+      if (!text && !image && !files.length) return json({ error: "empty" }, 400);
+      this.sql.exec("INSERT INTO gposts (id, gid, uid, text, image, at, files) VALUES (?, ?, ?, ?, ?, ?, ?)", "p" + rand(9), g.id, me.id, text, image, now, files.length ? JSON.stringify(files) : null);
+      return json({ posts: this.postsOf(g.id, me) });
+    }
+    if (op === "like") {
+      const pid = String(b.post || "");
+      if (!this.one("SELECT id FROM gposts WHERE id = ? AND gid = ?", pid, g.id)) return json({ error: "notfound" }, 404);
+      if (this.one("SELECT pid FROM glikes WHERE pid = ? AND uid = ?", pid, me.id)) {
+        this.sql.exec("DELETE FROM glikes WHERE pid = ? AND uid = ?", pid, me.id);
+        this.sql.exec("UPDATE gposts SET likes = likes - 1 WHERE id = ?", pid);
+      } else {
+        this.sql.exec("INSERT INTO glikes (pid, uid) VALUES (?, ?)", pid, me.id);
+        this.sql.exec("UPDATE gposts SET likes = likes + 1 WHERE id = ?", pid);
+      }
+      return json({ posts: this.postsOf(g.id, me) });
+    }
+    if (op === "share") {
+      const pid = String(b.post || "");
+      this.sql.exec("UPDATE gposts SET shares = COALESCE(shares, 0) + 1 WHERE id = ? AND gid = ?", pid, g.id);
+      return json({ posts: this.postsOf(g.id, me) });
+    }
+    if (op === "comment") {
+      const pid = String(b.post || ""), text = str(b.text, 400);
+      if (!text || !this.one("SELECT id FROM gposts WHERE id = ? AND gid = ?", pid, g.id)) return json({ error: "notfound" }, 404);
+      this.sql.exec("INSERT INTO gcomments (id, pid, uid, text, at) VALUES (?, ?, ?, ?, ?)", "c" + rand(9), pid, me.id, text, now);
+      return json({ posts: this.postsOf(g.id, me) });
+    }
+    return json({ error: "notfound" }, 404);
+  }
+  postsOf(gid, me) {
+    const who = /* @__PURE__ */ __name((uid) => {
+      const u = this.one("SELECT name, username FROM users WHERE id = ?", uid);
+      return u ? u.name || (u.username ? "@" + u.username : "Someone") : "Someone";
+    }, "who");
+    return this.sql.exec("SELECT * FROM gposts WHERE gid = ? ORDER BY at DESC LIMIT 100", gid).toArray().filter((p) => !this.blocked(me.id, p.uid)).map((p) => ({
+      id: p.id,
+      author: p.uid === me.id ? "You" : who(p.uid),
+      mine: p.uid === me.id,
+      text: p.text,
+      image: p.image || "",
+      at: p.at,
+      likes: p.likes,
+      shares: p.shares || 0,
+      files: (() => {
+        try {
+          return (JSON.parse(p.files || "[]") || []).map((f) => Object.assign({}, f, { url: this.mediaUrl(f.m) }));
+        } catch (e) {
+          return [];
+        }
+      })(),
+      liked: !!this.one("SELECT pid FROM glikes WHERE pid = ? AND uid = ?", p.id, me.id),
+      comments: this.sql.exec("SELECT * FROM gcomments WHERE pid = ? ORDER BY at LIMIT 200", p.id).toArray().filter((c) => !this.blocked(me.id, c.uid)).map((c) => ({ id: c.id, author: c.uid === me.id ? "You" : who(c.uid), mine: c.uid === me.id, text: c.text, at: c.at }))
+    }));
+  }
+  // ---- Live connection ----
+  // ---- Everything fast (owner): the moment a new version is live, every connected phone is told (t:'release') and
+  //      picks it up at once, instead of waiting for its next look. Anyone may call this - the server checks the truth
+  //      itself (the live screens' source.txt + the live app's version.json) and only tells phones when it changed. ----
+  async releasePing() {
+    const now = Date.now(), last = +(this.one("SELECT v FROM meta WHERE k = 'ping_at'") || {}).v || 0;
+    if (now - last < 4e3) return json({ ok: true, wait: true });
+    this.sql.exec("INSERT OR REPLACE INTO meta (k, v) VALUES ('ping_at', ?)", String(now));
+    const get = /* @__PURE__ */ __name(async (u) => {
+      try {
+        const r = await fetch(u + "?t=" + now, { cf: { cacheTtl: 0 } });
+        return r.ok ? (await r.text()).trim().slice(0, 200) : "";
+      } catch (e) {
+        return "";
+      }
+    }, "get");
+    const [screens, app] = await Promise.all([get("https://bethestoryownyourstory.github.io/story-lockedintool/live-source.txt"), get("https://github.com/bethestoryownyourstory/story-lockedintool/releases/download/live/version.json")]);
+    const v = screens + "|" + app, before = (this.one("SELECT v FROM meta WHERE k = 'release'") || {}).v || "";
+    if (!screens && !app) return json({ ok: false });
+    if (v === before) return json({ ok: true, changed: false });
+    this.sql.exec("INSERT OR REPLACE INTO meta (k, v) VALUES ('release', ?)", v);
+    let n = 0;
+    const msg = JSON.stringify({ t: "release", screens, app });
+    for (const ws of this.ctx.getWebSockets()) {
+      try {
+        ws.send(msg);
+        n++;
+      } catch (e) {
+      }
+    }
+    return json({ ok: true, changed: true, told: n });
+  }
+  async ws(req, url) {
+    if (req.headers.get("upgrade") !== "websocket") return json({ error: "websocket" }, 426);
+    const me = await this.userByToken(url.searchParams.get("token") || "");
+    if (!me) return json({ error: "signin" }, 401);
+    const pair = new WebSocketPair();
+    this.ctx.acceptWebSocket(pair[1], [me.id]);
+    pair[1].serializeAttachment({ uid: me.id });
+    const rows = this.sql.exec("SELECT seq, body FROM queue WHERE uid = ? ORDER BY seq LIMIT 500", me.id).toArray();
+    for (const r of rows) pair[1].send(JSON.stringify(Object.assign(JSON.parse(r.body), { seq: r.seq })));
+    pair[1].send(JSON.stringify({ t: "hello", id: me.id }));
+    for (const r of this.sql.exec("SELECT c.gid FROM gcalls c JOIN gmembers m ON m.gid = c.gid WHERE m.uid = ?", me.id).toArray()) pair[1].send(JSON.stringify({ t: "glive", group: r.gid, live: this.gcallLive(r.gid) }));
+    return new Response(null, { status: 101, webSocket: pair[0] });
+  }
+  // ---- LOCKED IN TOOL subscription (owner: Basic $5 / Premium $15 a month - raised from $1 / $5 so each user's costs are covered; no plan = STORY doesn't open). Paid through
+  //      Stitch EXPRESS (the owner's Stitch account - STITCH_CLIENT_ID / STITCH_CLIENT_SECRET): a payment link (card,
+  //      Capitec, Apple / Google Pay...) into LOCKED IN TOOL's Express balance, withdrawn to the owner's verified bank.
+  //      Each payment = 30 days. Prices in rand (Express is rand only): SUB_BASIC_ZAR / SUB_PREMIUM_ZAR. ----
+  subPlans() {
+    return { basic: { usd: 5, zar: Number(this.env.SUB_BASIC_ZAR || 95) }, premium: { usd: 15, zar: Number(this.env.SUB_PREMIUM_ZAR || 285) } };
+  }
+  subReady() {
+    return this.expressReady();
+  }
+  subView(me) {
+    const r = this.one("SELECT * FROM subs WHERE uid = ?", me.id), now = Date.now();
+    const active = !!(r && r.until > now);
+    return { connected: this.subReady(), enforced: this.env.SUB_ENFORCE === "1", plan: active ? r.plan : null, mode: active ? r.mode || "second" : null, until: r ? r.until : 0, active, plans: this.subPlans() };
+  }
+  // Stitch Express REST API (express.stitch.money/api/v1, its own OpenAPI spec): a 15-minute token from clientId +
+  // clientSecret, then payment links. Amounts are in cents.
+  expressReady() {
+    return !!(this.env.STITCH_CLIENT_ID && this.env.STITCH_CLIENT_SECRET);
+  }
+  expressBase() {
+    return this.env.STITCH_EXPRESS_BASE || "https://express.stitch.money";
+  }
+  // (local tests: a stand-in)
+  async expressToken() {
+    if (this.exTok && this.exTok.exp > Date.now() + 6e4) return this.exTok.v;
+    const r = await fetch(this.expressBase() + "/api/v1/token", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ clientId: this.env.STITCH_CLIENT_ID, clientSecret: this.env.STITCH_CLIENT_SECRET, scope: "client_paymentrequest" })
+    });
+    const j = await r.json().catch(() => ({}));
+    const tok = j && j.data && j.data.accessToken;
+    if (!r.ok || !tok) throw new Error("stitch-signin: " + (r.status === 400 ? "invalid credentials (the secret changes every time it is viewed in the dashboard)" : (j.generalErrors || [])[0] || r.status));
+    this.exTok = { v: tok, exp: Date.now() + 14 * 6e4 };
+    return tok;
+  }
+  async express(method, path, body) {
+    const go = /* @__PURE__ */ __name(async () => fetch(this.expressBase() + path, { method, headers: { "content-type": "application/json", authorization: "Bearer " + await this.expressToken() }, body: body ? JSON.stringify(body) : void 0 }), "go");
+    let r = await go();
+    if (r.status === 401) {
+      this.exTok = null;
+      r = await go();
+    }
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || j.success === false) throw new Error("stitch: " + ((j.generalErrors || [])[0] || JSON.stringify(j.fieldErrors || {}) || r.status));
+    return j.data || {};
+  }
+  // Where your bank / card page sends you back to (registered with Express once; it allows up to 5).
+  async expressBack(url) {
+    const back = this.env.STITCH_REDIRECT || url.origin + "/v1/pay/return";
+    if (!this.exBackDone) {
+      try {
+        await this.express("POST", "/api/v1/redirect-urls", { redirectUrl: back });
+      } catch (e) {
+      }
+      this.exBackDone = true;
+    }
+    return back;
+  }
+  // A plan payment's state at Stitch; paid = 30 days of that plan (same plan adds on, a different plan starts now).
+  async subCheck(me, p) {
+    if (p.status !== "pending" || !this.expressReady()) return p.status;
+    const now = Date.now();
+    const d = await this.express("GET", "/api/v1/payment-links/" + encodeURIComponent(p.stitch));
+    const ls = d.payment && d.payment.status || "PENDING";
+    const st = ls === "PAID" ? "paid" : ls === "CANCELLED" ? "cancelled" : ls === "EXPIRED" || ls === "FAILED" ? "expired" : "pending";
+    if (st !== "pending") {
+      this.sql.exec("UPDATE payments SET status = ?, updated = ? WHERE id = ?", st, now, p.id);
+      p.status = st;
+      if (st === "paid") {
+        const plan = p.kind.slice(4), cur = this.one("SELECT * FROM subs WHERE uid = ?", me.id);
+        const from = cur && cur.plan === plan && cur.until > now ? cur.until : now;
+        this.sql.exec("INSERT OR REPLACE INTO subs (uid, plan, until, updated, mode) VALUES (?, ?, ?, ?, ?)", me.id, plan, from + 30 * 864e5, now, p.mode === "only" ? "only" : "second");
+      }
+    }
+    return p.status;
+  }
+  // Cancel a plan payment that isn't paid yet (Stitch: POST payment-links/{id}/cancel - the link can't be paid any more).
+  // If Stitch says it's already paid / going through, the real state is read instead (paid still counts).
+  async subCancel(me, p) {
+    if (p.status !== "pending") return p.status;
+    if (this.expressReady()) {
+      try {
+        await this.express("POST", "/api/v1/payment-links/" + encodeURIComponent(p.stitch) + "/cancel");
+      } catch (e) {
+        try {
+          await this.subCheck(me, p);
+        } catch (e2) {
+        }
+        return p.status;
+      }
+    }
+    this.sql.exec("UPDATE payments SET status = ?, updated = ? WHERE id = ?", "cancelled", Date.now(), p.id);
+    p.status = "cancelled";
+    return p.status;
+  }
+  async sub(me, op, b, url) {
+    const now = Date.now();
+    if (op === "info") return json(this.subView(me));
+    if (op === "buy") {
+      const plans = this.subPlans(), plan = String(b.plan || "");
+      if (!plans[plan]) return json({ error: "plan" }, 400);
+      if (!this.subReady()) return json({ error: "not-connected" }, 503);
+      for (const old of this.sql.exec("SELECT * FROM payments WHERE uid = ? AND kind LIKE 'sub:%' AND status = 'pending'", me.id).toArray()) await this.subCancel(me, old);
+      const cents = Math.round(plans[plan].zar * 100), id = "p" + rand(9);
+      const who = String(me.name || (me.username ? "@" + me.username : "") || "LOCKED IN member").replace(/[^\p{L}\p{N} .@'_-]/gu, "").trim();
+      const d = await this.express("POST", "/api/v1/payment-links", {
+        amount: cents,
+        payerName: (who.length >= 3 ? who : "LOCKED IN member").slice(0, 40),
+        merchantReference: ("LIT-" + plan + "-" + me.id + "-" + id).replace(/[^A-Za-z0-9 -]/g, "").slice(0, 50)
+      });
+      const link = d.payment || {};
+      if (!link.id || !link.link) throw new Error("stitch: no payment link");
+      this.sql.exec(
+        "INSERT INTO payments (id, uid, to_uid, to_name, to_bank, to_mask, cents, ref, stitch, status, created, updated, kind, mode) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        id,
+        me.id,
+        "LOCKED IN TOOL " + plan,
+        "",
+        "",
+        cents,
+        "LIT " + plan.toUpperCase(),
+        link.id,
+        "pending",
+        now,
+        now,
+        "sub:" + plan,
+        b.mode === "only" ? "only" : "second"
+      );
+      const back = await this.expressBack(url);
+      return json({ id, url: link.link + (link.link.includes("?") ? "&" : "?") + "redirect_url=" + encodeURIComponent(back) });
+    }
+    if (op === "status" || op === "cancel") {
+      const p = this.one("SELECT * FROM payments WHERE id = ? AND uid = ? AND kind LIKE 'sub:%'", (op === "cancel" ? b.id : url.searchParams.get("id")) || "", me.id);
+      if (!p) return json({ error: "notfound" }, 404);
+      if (op === "cancel") await this.subCancel(me, p);
+      else await this.subCheck(me, p);
+      return json(Object.assign({ status: p.status }, this.subView(me)));
+    }
+    return json({ error: "notfound" }, 404);
+  }
+  // ---- Money transfer (Stitch) ----
+  // Sending money to OTHER people needs a payout partner: Stitch Express only takes payments into LOCKED IN TOOL and
+  // withdraws to the owner's own bank. This uses Stitch's Enterprise API (its own keys STITCH_ENT_CLIENT_ID /
+  // STITCH_ENT_CLIENT_SECRET) - until those exist, Send says it connects once a payout partner is set up.
+  // (STITCH_BASE: local tests only - a stand-in Stitch, like TWILIO_BASE)
+  payReady() {
+    return !!(this.env.STITCH_ENT_CLIENT_ID && this.env.STITCH_ENT_CLIENT_SECRET);
+  }
+  async stitchToken() {
+    if (this.stitchTok && this.stitchTok.exp > Date.now() + 6e4) return this.stitchTok.v;
+    const r = await fetch((this.env.STITCH_BASE || "https://secure.stitch.money") + "/connect/token", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "client_credentials",
+        client_id: this.env.STITCH_ENT_CLIENT_ID,
+        client_secret: this.env.STITCH_ENT_CLIENT_SECRET,
+        scope: "client_paymentrequest",
+        audience: "https://secure.stitch.money/connect/token"
+      })
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.access_token) throw new Error("stitch-signin: " + (j.error_description || j.error || r.status));
+    this.stitchTok = { v: j.access_token, exp: Date.now() + (j.expires_in || 3600) * 1e3 };
+    return j.access_token;
+  }
+  async stitch(query, variables) {
+    const r = await fetch((this.env.STITCH_BASE || "https://api.stitch.money") + "/graphql", { method: "POST", headers: { "content-type": "application/json", authorization: "Bearer " + await this.stitchToken() }, body: JSON.stringify({ query, variables }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || j.errors) throw new Error("stitch: " + (j.errors && j.errors[0] && j.errors[0].message || r.status));
+    return j.data;
+  }
+  // ---- Connect your bank (owner: your REAL balance and history, like your bank's app) - open banking through
+  // Stitch (the same Enterprise keys; Stitch switches on the scopes accounts / balances / transactions and the return
+  // page <server>/v1/bank/return). You log in to your own bank on Stitch's page; Lockedintool only READS (it can't
+  // move money with this) and keeps the bank's sign-in locked on this server. ----
+  async bankKey() {
+    return crypto.subtle.importKey("raw", await crypto.subtle.digest("SHA-256", enc.encode("bank|" + (this.env.STITCH_ENT_CLIENT_SECRET || ""))), "AES-GCM", false, ["encrypt", "decrypt"]);
+  }
+  async bankLock(v) {
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    return b64u(iv) + "." + b64u(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, await this.bankKey(), enc.encode(v)));
+  }
+  async bankOpen(v) {
+    const [a, b] = String(v || "").split(".");
+    if (!b) return "";
+    const un = /* @__PURE__ */ __name((s) => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0)), "un");
+    try {
+      return new TextDecoder().decode(await crypto.subtle.decrypt({ name: "AES-GCM", iv: un(a) }, await this.bankKey(), un(b)));
+    } catch (e) {
+      return "";
+    }
+  }
+  bankBack(url) {
+    return this.env.BANK_REDIRECT || url.origin + "/v1/bank/return";
+  }
+  async bankTokens(params) {
+    const r = await fetch((this.env.STITCH_BASE || "https://secure.stitch.money") + "/connect/token", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams(Object.assign({ client_id: this.env.STITCH_ENT_CLIENT_ID, client_secret: this.env.STITCH_ENT_CLIENT_SECRET, audience: "https://secure.stitch.money/connect/token" }, params))
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.access_token) throw new Error(j.error_description || j.error || "bank sign-in " + r.status);
+    return j;
+  }
+  async bankSave(uid, j) {
+    this.sql.exec(
+      "UPDATE banklinks SET access = ?, aexp = ?, refresh = COALESCE(?, refresh), state = NULL, verifier = NULL, linked = COALESCE(linked, ?) WHERE uid = ?",
+      await this.bankLock(j.access_token),
+      Date.now() + (j.expires_in || 900) * 1e3,
+      j.refresh_token ? await this.bankLock(j.refresh_token) : null,
+      Date.now(),
+      uid
+    );
+  }
+  async bankReturn(url) {
+    const page = /* @__PURE__ */ __name((t, ok) => new Response('<!doctype html><meta name=viewport content="width=device-width,initial-scale=1"><body style="margin:0;background:#000;color:#fff;font:600 18px system-ui;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center;padding:24px;box-sizing:border-box">' + t + "</body>", { status: ok ? 200 : 400, headers: { "content-type": "text/html; charset=utf-8" } }), "page");
+    const st = url.searchParams.get("state") || "", code = url.searchParams.get("code") || "";
+    const l = st ? this.one("SELECT uid, verifier FROM banklinks WHERE state = ?", st) : null;
+    if (!l) return page("This link has expired - connect your bank again in Lockedintool.");
+    if (!code) {
+      this.sql.exec("UPDATE banklinks SET state = NULL, verifier = NULL WHERE uid = ?", l.uid);
+      return page("Your bank wasn\u2019t connected. You can try again in Lockedintool.");
+    }
+    try {
+      await this.bankSave(l.uid, await this.bankTokens({ grant_type: "authorization_code", code, redirect_uri: this.bankBack(url), code_verifier: l.verifier }));
+    } catch (e) {
+      return page("Your bank couldn\u2019t be connected (" + String(e.message || e).replace(/[<>&]/g, "").slice(0, 120) + "). Try again in Lockedintool.");
+    }
+    this.sendTo(l.uid, { t: "bank" });
+    return page("Your bank is connected - go back to Lockedintool.", true);
+  }
+  async bankAccess(uid) {
+    const l = this.one("SELECT * FROM banklinks WHERE uid = ?", uid);
+    if (!l || !l.refresh) return "";
+    if (l.access && l.aexp > Date.now() + 3e4) return this.bankOpen(l.access);
+    const rt = await this.bankOpen(l.refresh);
+    if (!rt) return "";
+    try {
+      const j = await this.bankTokens({ grant_type: "refresh_token", refresh_token: rt });
+      await this.bankSave(uid, j);
+      return j.access_token;
+    } catch (e) {
+      this.sql.exec("UPDATE banklinks SET refresh = NULL, access = NULL WHERE uid = ?", uid);
+      return "";
+    }
+  }
+  async bank(me, op, url) {
+    if (op === "info") {
+      const l = this.one("SELECT refresh, linked FROM banklinks WHERE uid = ?", me.id);
+      return json({ ready: this.payReady(), linked: !!(l && l.refresh), at: l && l.linked || 0 });
+    }
+    if (!this.payReady()) return json({ error: "not-ready" }, 400);
+    if (op === "link") {
+      const state = rand(18), verifier = rand(32), challenge = await sha(verifier), nonce = rand(12);
+      this.sql.exec("INSERT INTO banklinks (uid, state, verifier) VALUES (?, ?, ?) ON CONFLICT(uid) DO UPDATE SET state = excluded.state, verifier = excluded.verifier", me.id, state, verifier);
+      const q = new URLSearchParams({
+        client_id: this.env.STITCH_ENT_CLIENT_ID,
+        scope: "openid offline_access accounts balances transactions accountholders",
+        response_type: "code",
+        redirect_uri: this.bankBack(url),
+        nonce,
+        state,
+        code_challenge: challenge,
+        code_challenge_method: "S256"
+      });
+      return json({ url: (this.env.STITCH_BASE || "https://secure.stitch.money") + "/connect/authorize?" + q });
+    }
+    if (op === "unlink") {
+      this.sql.exec("DELETE FROM banklinks WHERE uid = ?", me.id);
+      return json({ ok: true });
+    }
+    if (op === "accounts") {
+      const l = this.one("SELECT cache, cached FROM banklinks WHERE uid = ?", me.id);
+      if (l && l.cache && Date.now() - l.cached < 6e4) return new Response(l.cache, { headers: JSONH });
+      const tok = await this.bankAccess(me.id);
+      if (!tok) return json({ error: "not-linked" }, 400);
+      const r = await fetch((this.env.STITCH_BASE || "https://api.stitch.money") + "/graphql", {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: "Bearer " + tok },
+        body: JSON.stringify({ query: "query { user { bankAccounts { id name accountNumber accountType bankId currentBalance availableBalance transactions(first: 100) { edges { node { id amount reference description date runningBalance } } } } } }" })
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || j.errors) return json({ error: "bank", why: String(j.errors && j.errors[0] && j.errors[0].message || r.status).slice(0, 160) }, 502);
+      const money = /* @__PURE__ */ __name((m) => m && m.quantity != null ? { v: +m.quantity, cur: m.currency || "ZAR" } : null, "money");
+      const accounts = (j.data && j.data.user && j.data.user.bankAccounts || []).map((a) => {
+        const cb = money(a.currentBalance), ab = money(a.availableBalance);
+        return {
+          id: a.id,
+          name: a.name || "",
+          last4: String(a.accountNumber || "").replace(/\D/g, "").slice(-4),
+          type: a.accountType || "",
+          bank: a.bankId || "",
+          balance: cb ? cb.v : null,
+          available: ab ? ab.v : null,
+          cur: (cb || ab || {}).cur || "ZAR",
+          tx: (a.transactions && a.transactions.edges || []).map((e) => e.node).filter(Boolean).map((t) => {
+            const m = money(t.amount), rb = money(t.runningBalance);
+            return m ? { id: t.id, amt: m.v, cur: m.cur, text: [t.description, t.reference].filter(Boolean).join(" \xB7 ").slice(0, 200), who: String(t.description || t.reference || "").slice(0, 60), at: Date.parse(t.date) || 0, bal: rb ? rb.v : null } : null;
+          }).filter(Boolean)
+        };
+      });
+      const out = JSON.stringify({ ok: true, at: Date.now(), accounts });
+      this.sql.exec("UPDATE banklinks SET cache = ?, cached = ? WHERE uid = ?", out, Date.now(), me.id);
+      return new Response(out, { headers: JSONH });
+    }
+    return json({ error: "bad" }, 400);
+  }
+  bankOk(b) {
+    const bank = String(b.bank || ""), acct = String(b.acct || "").replace(/\s+/g, ""), name = String(b.name || "").trim().slice(0, 60);
+    if (!PAY_BANKS[bank] || !/^\d{6,16}$/.test(acct) || name.length < 2) return null;
+    return { bank, acct, name };
+  }
+  payView(p, me) {
+    const out = p.uid === me.id;
+    const other = out ? p.to_uid ? this.one("SELECT name, username FROM users WHERE id = ?", p.to_uid) : null : this.one("SELECT name, username FROM users WHERE id = ?", p.uid);
+    return {
+      id: p.id,
+      dir: out ? "out" : "in",
+      amount: p.cents / 100,
+      currency: "ZAR",
+      ref: p.ref || "",
+      status: p.status,
+      at: p.created,
+      who: out ? other ? other.name || "@" + other.username : p.to_name : other ? other.name || "@" + (other.username || "") : "Someone",
+      bank: out && !p.to_uid ? (PAY_BANKS[p.to_bank] || "") + (p.to_mask ? " \u2022\u2022" + p.to_mask : "") : "",
+      from: out ? p.payfrom || "" : "",
+      // a STORY profile's bank is never shown
+      uid: out ? p.to_uid || "" : p.uid,
+      username: other ? other.username || "" : ""
+    };
+  }
+  async pay(me, op, b, url) {
+    const now = Date.now();
+    if (op === "info") {
+      const mine = this.one("SELECT * FROM paybank WHERE uid = ?", me.id);
+      return json({ connected: this.payReady(), banks: PAY_BANKS, bank: mine ? { name: mine.name, bank: mine.bank, mask: mine.acct.slice(-3) } : null });
+    }
+    if (op === "bank") {
+      if (b.remove) {
+        this.sql.exec("DELETE FROM paybank WHERE uid = ?", me.id);
+        return json({ ok: true, bank: null });
+      }
+      const k = this.bankOk(b);
+      if (!k) return json({ error: "bank-details" }, 400);
+      this.sql.exec("INSERT OR REPLACE INTO paybank (uid, name, bank, acct, updated) VALUES (?, ?, ?, ?, ?)", me.id, k.name, k.bank, k.acct, now);
+      return json({ ok: true, bank: { name: k.name, bank: k.bank, mask: k.acct.slice(-3) } });
+    }
+    if (op === "history") {
+      const rows = this.sql.exec("SELECT * FROM payments WHERE (kind IS NULL OR kind NOT LIKE 'sub:%') AND (uid = ? OR (to_uid = ? AND status = ?)) ORDER BY created DESC LIMIT 100", me.id, me.id, "paid").toArray();
+      return json({ payments: rows.map((p) => this.payView(p, me)) });
+    }
+    if (op === "send") {
+      const cents = Math.round(Number(b.amount) * 100);
+      if (!(cents >= 100 && cents <= 5e6)) return json({ error: "amount" }, 400);
+      let to = null, toUid = null;
+      if (b.to) {
+        const u = this.one("SELECT * FROM users WHERE id = ?", String(b.to));
+        if (!u) return json({ error: "notfound" }, 404);
+        if (u.id === me.id) return json({ error: "self" }, 400);
+        const pb = this.one("SELECT * FROM paybank WHERE uid = ?", u.id);
+        if (!pb) return json({ error: "no-bank" }, 409);
+        to = { name: pb.name, bank: pb.bank, acct: pb.acct };
+        toUid = u.id;
+      } else {
+        to = this.bankOk(b.bank || {});
+        if (!to) return json({ error: "bank-details" }, 400);
+      }
+      if (!this.payReady()) return json({ error: "not-connected" }, 503);
+      const ref = String(b.ref || "").replace(/[^A-Za-z0-9 .\-]/g, "").trim().slice(0, 20) || "Lockedintool";
+      const id = "p" + rand(9);
+      const d = await this.stitch(
+        `mutation Pay($amount: MoneyInput!, $payerReference: String!, $beneficiaryReference: String!, $externalReference: String, $name: String!, $bankId: BankBeneficiaryBankId!, $acct: String!) {
+        clientPaymentInitiationRequestCreate(input: { amount: $amount, payerReference: $payerReference, beneficiaryReference: $beneficiaryReference, externalReference: $externalReference,
+          beneficiary: { bankAccount: { name: $name, bankId: $bankId, accountNumber: $acct } } }) { paymentInitiationRequest { id url } } }`,
+        { amount: { quantity: (cents / 100).toFixed(2), currency: "ZAR" }, payerReference: ref.slice(0, 12), beneficiaryReference: ref, externalReference: id, name: to.name, bankId: to.bank, acct: to.acct }
+      );
+      const pr = d.clientPaymentInitiationRequestCreate.paymentInitiationRequest;
+      this.sql.exec(
+        "INSERT INTO payments (id, uid, to_uid, to_name, to_bank, to_mask, cents, ref, stitch, status, created, updated, payfrom) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        id,
+        me.id,
+        toUid,
+        toUid ? null : to.name,
+        to.bank,
+        toUid ? "" : to.acct.slice(-3),
+        cents,
+        ref,
+        pr.id,
+        "pending",
+        now,
+        now,
+        String(b.from || "").replace(/[^\p{L}\p{N} .•'&-]/gu, "").slice(0, 40) || null
+      );
+      const back = this.env.STITCH_REDIRECT || url.origin + "/v1/pay/return";
+      return json({ id, url: pr.url + (pr.url.includes("?") ? "&" : "?") + "redirect_uri=" + encodeURIComponent(back) });
+    }
+    if (op === "status") {
+      const p = this.one("SELECT * FROM payments WHERE id = ? AND uid = ? AND (kind IS NULL OR kind NOT LIKE 'sub:%')", url.searchParams.get("id") || "", me.id);
+      if (!p) return json({ error: "notfound" }, 404);
+      if (p.status === "pending" && this.payReady()) {
+        const d = await this.stitch(`query St($id: ID!) { node(id: $id) { ... on PaymentInitiationRequest { status { __typename } } } }`, { id: p.stitch });
+        const tn = d && d.node && d.node.status && d.node.status.__typename || "";
+        const st = /Completed/.test(tn) ? "paid" : /Cancelled/.test(tn) ? "cancelled" : /Expired/.test(tn) ? "expired" : "pending";
+        if (st !== "pending") {
+          this.sql.exec("UPDATE payments SET status = ?, updated = ? WHERE id = ?", st, now, p.id);
+          p.status = st;
+          if (st === "paid" && p.to_uid) this.deliver(p.to_uid, { t: "paid", id: p.id, amount: p.cents / 100, currency: "ZAR", ref: p.ref || "", from: me.id, name: me.name || "", username: me.username || "", at: now });
+        }
+      }
+      return json(this.payView(p, me));
+    }
+    return json({ error: "notfound" }, 404);
+  }
+  sendTo(uid, o) {
+    let n = 0;
+    for (const ws of this.ctx.getWebSockets(uid)) {
+      try {
+        ws.send(JSON.stringify(o));
+        n++;
+      } catch (e) {
+      }
+    }
+    return n;
+  }
+  // Kept until the phone says it has it (ack), so nothing is lost if the connection drops.
+  deliver(uid, o) {
+    this.sql.exec("INSERT INTO queue (uid, body, at) VALUES (?, ?, ?)", uid, JSON.stringify(o), Date.now());
+    const seq = this.one("SELECT last_insert_rowid() AS s").s;
+    this.sendTo(uid, Object.assign({}, o, { seq }));
+    this.sql.exec("DELETE FROM queue WHERE at < ?", Date.now() - 30 * 864e5);
+  }
+  async webSocketMessage(ws, data) {
+    const a = ws.deserializeAttachment() || {};
+    const uid = a.uid;
+    if (!uid) return;
+    let m;
+    try {
+      m = JSON.parse(typeof data === "string" ? data : new TextDecoder().decode(data));
+    } catch (e) {
+      return;
+    }
+    const me = this.one("SELECT * FROM users WHERE id = ?", uid);
+    if (!me) return;
+    const to = m.to ? this.one("SELECT * FROM users WHERE id = ?", String(m.to)) : null;
+    const now = Date.now();
+    switch (m.t) {
+      case "ping":
+        ws.send(JSON.stringify({ t: "pong" }));
+        return;
+      case "ack": {
+        const s = +m.seq;
+        const row = this.one("SELECT body FROM queue WHERE seq = ? AND uid = ?", s, uid);
+        if (row) {
+          this.sql.exec("DELETE FROM queue WHERE seq = ?", s);
+          const b = JSON.parse(row.body);
+          if (b.t === "msg") this.deliver(b.from, { t: "status", chat: b.group || uid, id: b.id, status: "delivered", at: now });
+        }
+        return;
+      }
+      case "msg": {
+        if (!to) return ws.send(JSON.stringify({ t: "fail", id: m.id, error: "notfound" }));
+        if (!this.canMsg(me, to)) return ws.send(JSON.stringify({ t: "fail", id: m.id, error: "blocked" }));
+        if (String(m.box || "").length > 64e3) return ws.send(JSON.stringify({ t: "fail", id: m.id, error: "big" }));
+        this.sql.exec("INSERT OR IGNORE INTO contacts (uid, cid, at) VALUES (?, ?, ?)", uid, to.id, now);
+        this.deliver(to.id, { t: "msg", from: uid, id: String(m.id).slice(0, 40), box: String(m.box), iv: String(m.iv || ""), at: now, name: me.name || "", username: me.username || "" });
+        ws.send(JSON.stringify({ t: "sent", id: m.id, at: now }));
+        return;
+      }
+      case "seen":
+      case "read":
+        if (to && !this.blocked(uid, to.id)) this.deliver(to.id, { t: "status", chat: uid, status: m.t, at: now });
+        return;
+      case "typing":
+        if (m.group) {
+          const g = this.one("SELECT id FROM groups WHERE id = ?", String(m.group));
+          if (g && this.member(g.id, uid)) {
+            for (const id of this.memberIds(g.id)) if (id !== uid) this.sendTo(id, { t: "typing", chat: g.id, who: me.name || (me.username ? "@" + me.username : ""), at: now });
+          }
+          return;
+        }
+        if (to && !this.blocked(uid, to.id)) this.sendTo(to.id, { t: "typing", chat: uid, at: now });
+        return;
+      case "gmsg": {
+        const g = this.one("SELECT * FROM groups WHERE id = ?", String(m.group || ""));
+        if (!g || !this.member(g.id, uid)) return ws.send(JSON.stringify({ t: "fail", id: m.id, error: "member" }));
+        const id = String(m.id).slice(0, 40), boxes = m.boxes || {};
+        for (const mid of this.memberIds(g.id)) {
+          if (mid === uid) continue;
+          if (g.type === "private") {
+            const bx = boxes[mid];
+            if (!bx || String(bx.box || "").length > 64e3) continue;
+            this.deliver(mid, { t: "msg", group: g.id, from: uid, id, box: String(bx.box), iv: String(bx.iv || ""), at: now, name: me.name || "", username: me.username || "" });
+          } else this.deliver(mid, { t: "msg", group: g.id, from: uid, id, text: String(m.text || "").slice(0, 4e3), file: this.fileMeta(m.file), at: now, name: me.name || "", username: me.username || "" });
+        }
+        ws.send(JSON.stringify({ t: "sent", id: m.id, at: now }));
+        return;
+      }
+      case "gcall":
+        return this.gcallMsg(ws, me, m, now);
+      case "call": {
+        if (!to) return ws.send(JSON.stringify({ t: "call", kind: "unavailable", callId: m.callId, from: m.to }));
+        if (m.kind === "offer") {
+          if (!this.canCall(me, to)) return ws.send(JSON.stringify({ t: "call", kind: "blocked", callId: m.callId, from: to.id }));
+          if (!this.ctx.getWebSockets(to.id).length) return ws.send(JSON.stringify({ t: "call", kind: "unavailable", callId: m.callId, from: to.id }));
+        }
+        this.sendTo(to.id, { t: "call", kind: String(m.kind), callId: String(m.callId || ""), video: !!m.video, sdp: m.sdp, cand: m.cand, from: uid, name: me.name || "", username: me.username || "", at: now });
+        return;
+      }
+    }
+  }
+  // ---- Group calls (owner's rules): public groups - members start, anyone can join, a leader's call rings every member;
+  // private groups - members only; leaders choose "Everyone can join" or "Ask to join" (others listen until let in).
+  // Phone to phone: each new phone links to every phone already in the call, so up to GCALL_MAX people. ----
+  gcallLive(gid) {
+    const c = this.one("SELECT * FROM gcalls WHERE gid = ?", gid);
+    if (!c) return null;
+    const n = this.one("SELECT COUNT(*) AS n FROM gcparts WHERE gid = ?", gid).n;
+    return n ? { id: c.id, count: n, video: !!c.video, started: c.started } : null;
+  }
+  gcallParts(gid) {
+    return this.sql.exec("SELECT p.uid, p.role, u.name, u.username FROM gcparts p JOIN users u ON u.id = p.uid WHERE p.gid = ? ORDER BY p.at", gid).toArray().map((r) => ({ id: r.uid, role: r.role, name: r.name || "", username: r.username || "" }));
+  }
+  gcallTellLive(gid) {
+    const live = this.gcallLive(gid), seen = /* @__PURE__ */ new Set();
+    for (const id of this.memberIds(gid).concat(this.gcallParts(gid).map((p) => p.id))) {
+      if (seen.has(id)) continue;
+      seen.add(id);
+      this.sendTo(id, { t: "glive", group: gid, live });
+    }
+  }
+  gcallLeave(gid, uid) {
+    if (!this.one("SELECT 1 AS x FROM gcparts WHERE gid = ? AND uid = ?", gid, uid)) return;
+    this.sql.exec("DELETE FROM gcparts WHERE gid = ? AND uid = ?", gid, uid);
+    const left = this.gcallParts(gid);
+    for (const p of left) this.sendTo(p.id, { t: "gcall", kind: "gone", group: gid, id: uid });
+    if (!left.length) {
+      this.sql.exec("DELETE FROM gcalls WHERE gid = ?", gid);
+      for (const id of this.memberIds(gid)) this.sendTo(id, { t: "gcall", kind: "over", group: gid });
+    }
+    this.gcallTellLive(gid);
+  }
+  gcallMsg(ws, me, m, now) {
+    const uid = me.id, gid = String(m.group || "");
+    const g = this.one("SELECT * FROM groups WHERE id = ?", gid);
+    const say = /* @__PURE__ */ __name((o) => ws.send(JSON.stringify(Object.assign({ t: "gcall", group: gid }, o))), "say");
+    if (!g || g.type === "stories") return say({ kind: "error", error: "notfound" });
+    const mine = this.member(gid, uid), leader = !!mine && mine.role === "leader";
+    const part = this.one("SELECT role FROM gcparts WHERE gid = ? AND uid = ?", gid, uid);
+    if (m.kind === "start" || m.kind === "join") {
+      if (g.type === "private" && !mine) return say({ kind: "error", error: "member" });
+      if (g.type === "public" && this.isPrivate(me)) return say({ kind: "error", error: "private-account" });
+      let c = this.one("SELECT * FROM gcalls WHERE gid = ?", gid);
+      if (c && !this.one("SELECT 1 AS x FROM gcparts WHERE gid = ?", gid)) {
+        this.sql.exec("DELETE FROM gcalls WHERE gid = ?", gid);
+        c = null;
+      }
+      if (!c && m.kind === "join") return say({ kind: "error", error: "over" });
+      if (!c && !mine) return say({ kind: "error", error: "member" });
+      const fresh = !c;
+      if (fresh) {
+        this.sql.exec("INSERT OR REPLACE INTO gcalls (gid, id, video, starter, started) VALUES (?, ?, ?, ?, ?)", gid, "gc" + now + rand(4), m.video ? 1 : 0, uid, now);
+        c = this.one("SELECT * FROM gcalls WHERE gid = ?", gid);
+      }
+      if (!part && this.one("SELECT COUNT(*) AS n FROM gcparts WHERE gid = ?", gid).n >= GCALL_MAX) return say({ kind: "error", error: "full" });
+      const role = part ? part.role : g.type === "private" && (g.calljoin || "open") === "ask" && !leader && !fresh ? "ask" : "in";
+      const others = this.gcallParts(gid).filter((p) => p.id !== uid);
+      this.sql.exec("INSERT OR REPLACE INTO gcparts (gid, uid, role, at) VALUES (?, ?, ?, ?)", gid, uid, role, now);
+      say({ kind: "joined", callId: c.id, video: !!c.video, role, leader, name: g.name, callJoin: g.calljoin || "open", parts: others });
+      for (const p of others) this.sendTo(p.id, { t: "gcall", kind: "peer", group: gid, id: uid, role, name: me.name || "", username: me.username || "" });
+      if (fresh && leader) {
+        for (const id of this.memberIds(gid)) if (id !== uid && !this.blocked(uid, id)) this.sendTo(id, { t: "gcall", kind: "ring", group: gid, callId: c.id, video: !!c.video, gname: g.name, gtype: g.type, from: uid, name: me.name || "", username: me.username || "", at: now });
+      }
+      this.gcallTellLive(gid);
+      return;
+    }
+    if (!part) return;
+    if (m.kind === "signal") {
+      const to = String(m.to || "");
+      if (!this.one("SELECT 1 AS x FROM gcparts WHERE gid = ? AND uid = ?", gid, to)) return;
+      this.sendTo(to, { t: "gcall", kind: "signal", group: gid, from: uid, sdp: m.sdp, sdpType: m.sdpType, cand: m.cand });
+      return;
+    }
+    if (m.kind === "leave") return this.gcallLeave(gid, uid);
+    if (m.kind === "admit") {
+      if (!leader) return;
+      const id = String(m.id || "");
+      if (!this.one("SELECT 1 AS x FROM gcparts WHERE gid = ? AND uid = ? AND role = 'ask'", gid, id)) return;
+      this.sql.exec("UPDATE gcparts SET role = 'in' WHERE gid = ? AND uid = ?", gid, id);
+      for (const p of this.gcallParts(gid)) this.sendTo(p.id, { t: "gcall", kind: "role", group: gid, id, role: "in" });
+    }
+  }
+  // ---- Live (owner): go live from Create; your followers are told; anyone allowed to see your profile can watch,
+  // heart and comment; it shows in everyone's Updates feed once it has engagement (followers always see it). ----
+  liveReady() {
+    return !!(this.env.REALTIME_APP_ID && this.env.REALTIME_APP_SECRET);
+  }
+  async rt(method, path, body) {
+    const base = (this.env.REALTIME_BASE || "https://rtc.live.cloudflare.com/v1") + "/apps/" + this.env.REALTIME_APP_ID;
+    const r = await fetch(base + path, { method, headers: { authorization: "Bearer " + this.env.REALTIME_APP_SECRET, "content-type": "application/json" }, body: body ? JSON.stringify(body) : void 0 });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || j.errorCode) throw new Error("rt " + r.status + " " + (j.errorDescription || j.errorCode || ""));
+    return j;
+  }
+  liveWatchers(lid) {
+    return this.one("SELECT COUNT(*) AS n FROM livewatch WHERE lid = ?", lid).n;
+  }
+  liveTell(l, o) {
+    const msg = Object.assign({ t: "live", id: l.id }, o);
+    this.sendTo(l.uid, msg);
+    for (const w of this.sql.exec("SELECT uid FROM livewatch WHERE lid = ?", l.id).toArray()) this.sendTo(w.uid, msg);
+  }
+  liveRecent(lid) {
+    return this.sql.exec("SELECT c.text, c.at, u.name, u.username FROM livecmt c JOIN users u ON u.id = c.uid WHERE c.lid = ? ORDER BY c.at DESC LIMIT 30", lid).toArray().reverse();
+  }
+  liveView(l, me) {
+    const u = this.one("SELECT * FROM users WHERE id = ?", l.uid);
+    return { id: l.id, title: l.title || "", started: l.started, live: !l.ended, viewers: this.liveWatchers(l.id), hearts: l.hearts || 0, comments: l.comments || 0, user: u ? this.feedUser(u, me) : null };
+  }
+  liveEnd(l) {
+    if (!l || l.ended) return;
+    this.sql.exec("UPDATE lives SET ended = ? WHERE id = ?", Date.now(), l.id);
+    this.liveTell(l, { kind: "ended" });
+    this.sql.exec("DELETE FROM livewatch WHERE lid = ?", l.id);
+  }
+  async live(me, op, b) {
+    if (op === "list") return json({ lives: [] });
+    if (op === "start" || op === "publish") return json({ error: "closed" }, 400);
+    const now = Date.now(), id = String(b.id || "");
+    const l = id ? this.one("SELECT * FROM lives WHERE id = ?", id) : null;
+    if (op === "list") {
+      const rows = this.sql.exec("SELECT * FROM lives WHERE ended IS NULL AND started > ? ORDER BY started DESC LIMIT 50", now - 12 * 36e5).toArray();
+      const out = [];
+      for (const r of rows) {
+        if (r.tracks === "[]") continue;
+        const u = this.one("SELECT * FROM users WHERE id = ?", r.uid);
+        if (!u || u.id === me.id || !this.canSeeProfile(me, u) || this.blocked(me.id, u.id)) continue;
+        const v = this.liveView(r, me), fol = this.follows(me.id, u.id);
+        if (fol || v.viewers >= 3 || v.hearts + v.comments >= 10) out.push(Object.assign(v, { following: fol }));
+      }
+      return json({ lives: out, ready: this.liveReady() });
+    }
+    if (!this.liveReady()) return json({ error: "not-ready" }, 503);
+    if (op === "start") {
+      for (const old of this.sql.exec("SELECT * FROM lives WHERE uid = ? AND ended IS NULL", me.id).toArray()) this.liveEnd(old);
+      const ses = await this.rt("POST", "/sessions/new");
+      const lid = "lv" + rand(9);
+      this.sql.exec("INSERT INTO lives (id, uid, sid, tracks, title, started) VALUES (?, ?, ?, ?, ?, ?)", lid, me.id, ses.sessionId, "[]", String(b.title || "").slice(0, 80), now);
+      return json({ id: lid, sid: ses.sessionId });
+    }
+    if (!l) return json({ error: "notfound" }, 404);
+    const mine = l.uid === me.id;
+    if (op === "publish") {
+      if (!mine || l.ended) return json({ error: "notfound" }, 404);
+      const tracks = (Array.isArray(b.tracks) ? b.tracks : []).slice(0, 2).map((t) => ({ location: "local", mid: String(t.mid), trackName: String(t.trackName).slice(0, 60) }));
+      const r = await this.rt("POST", "/sessions/" + l.sid + "/tracks/new", { sessionDescription: { type: "offer", sdp: String(b.sdp || "") }, tracks });
+      const first = l.tracks === "[]";
+      this.sql.exec("UPDATE lives SET tracks = ? WHERE id = ?", JSON.stringify(tracks.map((t) => t.trackName)), l.id);
+      if (first) this.notifyFollowers(me, "live", l.id);
+      return json({ sdp: r.sessionDescription && r.sessionDescription.sdp });
+    }
+    if (op === "end") {
+      if (mine) this.liveEnd(l);
+      return json({ ok: true });
+    }
+    const owner = this.one("SELECT * FROM users WHERE id = ?", l.uid);
+    if (!owner || !this.canSeeProfile(me, owner) || this.blocked(me.id, owner.id)) return json({ error: "notfound" }, 404);
+    if (op === "get") return json(Object.assign(this.liveView(l, me), { recent: this.liveRecent(l.id) }));
+    if (l.ended) return json({ error: "ended" }, 410);
+    if (op === "watch") {
+      const names = JSON.parse(l.tracks || "[]");
+      if (!names.length) return json({ error: "starting" }, 409);
+      const ses = await this.rt("POST", "/sessions/new");
+      const r = await this.rt("POST", "/sessions/" + ses.sessionId + "/tracks/new", { tracks: names.map((n2) => ({ location: "remote", sessionId: l.sid, trackName: n2 })) });
+      this.sql.exec("INSERT OR REPLACE INTO livewatch (lid, uid, sid, at) VALUES (?, ?, ?, ?)", l.id, me.id, ses.sessionId, now);
+      const n = this.liveWatchers(l.id);
+      if (n > (l.peak || 0)) this.sql.exec("UPDATE lives SET peak = ? WHERE id = ?", n, l.id);
+      this.liveTell(l, { kind: "viewers", n });
+      return json(Object.assign(this.liveView(l, me), { sid: ses.sessionId, sdp: r.sessionDescription && r.sessionDescription.sdp, type: r.sessionDescription && r.sessionDescription.type, recent: this.liveRecent(l.id) }));
+    }
+    if (op === "answer") {
+      const w = this.one("SELECT sid FROM livewatch WHERE lid = ? AND uid = ?", l.id, me.id);
+      if (!w) return json({ error: "notfound" }, 404);
+      await this.rt("PUT", "/sessions/" + w.sid + "/renegotiate", { sessionDescription: { type: "answer", sdp: String(b.sdp || "") } });
+      return json({ ok: true });
+    }
+    if (op === "leave") {
+      this.sql.exec("DELETE FROM livewatch WHERE lid = ? AND uid = ?", l.id, me.id);
+      this.liveTell(l, { kind: "viewers", n: this.liveWatchers(l.id) });
+      return json({ ok: true });
+    }
+    if (op === "heart") {
+      this.sql.exec("UPDATE lives SET hearts = hearts + 1 WHERE id = ?", l.id);
+      this.liveTell(l, { kind: "heart", name: me.name || "" });
+      return json({ ok: true });
+    }
+    if (op === "comment") {
+      const text = String(b.text || "").trim().slice(0, 200);
+      if (!text) return json({ error: "empty" }, 400);
+      this.sql.exec("INSERT INTO livecmt (lid, uid, text, at) VALUES (?, ?, ?, ?)", l.id, me.id, text, now);
+      this.sql.exec("UPDATE lives SET comments = comments + 1 WHERE id = ?", l.id);
+      this.liveTell(l, { kind: "comment", text, name: me.name || "", username: me.username || "", at: now });
+      return json({ ok: true });
+    }
+    return json({ error: "op" }, 404);
+  }
+  webSocketClose(ws) {
+    try {
+      const uid = (ws.deserializeAttachment() || {}).uid;
+      if (uid && !this.ctx.getWebSockets(uid).some((x) => x !== ws && x.readyState === 1)) {
+        for (const r of this.sql.exec("SELECT gid FROM gcparts WHERE uid = ?", uid).toArray()) this.gcallLeave(r.gid, uid);
+        for (const l of this.sql.exec("SELECT * FROM lives WHERE uid = ? AND ended IS NULL", uid).toArray()) this.liveEnd(l);
+        for (const w of this.sql.exec("SELECT lid FROM livewatch WHERE uid = ?", uid).toArray()) {
+          this.sql.exec("DELETE FROM livewatch WHERE lid = ? AND uid = ?", w.lid, uid);
+          const l = this.one("SELECT * FROM lives WHERE id = ?", w.lid);
+          if (l) this.liveTell(l, { kind: "viewers", n: this.liveWatchers(l.id) });
+        }
+      }
+    } catch (e) {
+    }
+    try {
+      ws.close();
+    } catch (e) {
+    }
+  }
+  webSocketError(ws) {
+    try {
+      ws.close();
+    } catch (e) {
+    }
+  }
+};
+
+// ../../../root/.npm/_npx/32026684e21afda6/node_modules/wrangler/templates/middleware/middleware-ensure-req-body-drained.ts
+var drainBody = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx) => {
+  try {
+    return await middlewareCtx.next(request, env);
+  } finally {
+    try {
+      if (request.body !== null && !request.bodyUsed) {
+        const reader = request.body.getReader();
+        while (!(await reader.read()).done) {
+        }
+      }
+    } catch (e) {
+      console.error("Failed to drain the unused request body.", e);
+    }
+  }
+}, "drainBody");
+var middleware_ensure_req_body_drained_default = drainBody;
+
+// ../../../root/.npm/_npx/32026684e21afda6/node_modules/wrangler/templates/middleware/middleware-miniflare3-json-error.ts
+function reduceError(e) {
+  return {
+    name: e?.name,
+    message: e?.message ?? String(e),
+    stack: e?.stack,
+    cause: e?.cause === void 0 ? void 0 : reduceError(e.cause)
+  };
+}
+__name(reduceError, "reduceError");
+var jsonError = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx) => {
+  try {
+    return await middlewareCtx.next(request, env);
+  } catch (e) {
+    const error = reduceError(e);
+    const body = JSON.stringify(error);
+    const headers = {
+      "Content-Type": "application/json",
+      "MF-Experimental-Error-Stack": "true"
+    };
+    const encoded = encodeURIComponent(body);
+    if (encoded.length <= 8192) {
+      headers["MF-Experimental-Error-Stack-Payload"] = encoded;
+    }
+    return new Response(body, { status: 500, headers });
+  }
+}, "jsonError");
+var middleware_miniflare3_json_error_default = jsonError;
+
+// .wrangler/tmp/bundle-BBRijp/middleware-insertion-facade.js
+var __INTERNAL_WRANGLER_MIDDLEWARE__ = [
+  middleware_ensure_req_body_drained_default,
+  middleware_miniflare3_json_error_default
+];
+var middleware_insertion_facade_default = msg_worker_default;
+
+// ../../../root/.npm/_npx/32026684e21afda6/node_modules/wrangler/templates/middleware/common.ts
+var __facade_middleware__ = [];
+function __facade_register__(...args) {
+  __facade_middleware__.push(...args.flat());
+}
+__name(__facade_register__, "__facade_register__");
+function __facade_invokeChain__(request, env, ctx, dispatch, middlewareChain) {
+  const [head, ...tail] = middlewareChain;
+  const middlewareCtx = {
+    dispatch,
+    next(newRequest, newEnv) {
+      return __facade_invokeChain__(newRequest, newEnv, ctx, dispatch, tail);
+    }
+  };
+  return head(request, env, ctx, middlewareCtx);
+}
+__name(__facade_invokeChain__, "__facade_invokeChain__");
+function __facade_invoke__(request, env, ctx, dispatch, finalMiddleware) {
+  return __facade_invokeChain__(request, env, ctx, dispatch, [
+    ...__facade_middleware__,
+    finalMiddleware
+  ]);
+}
+__name(__facade_invoke__, "__facade_invoke__");
+
+// .wrangler/tmp/bundle-BBRijp/middleware-loader.entry.ts
+var __Facade_ScheduledController__ = class ___Facade_ScheduledController__ {
+  constructor(scheduledTime, cron, noRetry) {
+    this.scheduledTime = scheduledTime;
+    this.cron = cron;
+    this.#noRetry = noRetry;
+  }
+  scheduledTime;
+  cron;
+  static {
+    __name(this, "__Facade_ScheduledController__");
+  }
+  #noRetry;
+  noRetry() {
+    if (!(this instanceof ___Facade_ScheduledController__)) {
+      throw new TypeError("Illegal invocation");
+    }
+    this.#noRetry();
+  }
+};
+function wrapExportedHandler(worker) {
+  if (__INTERNAL_WRANGLER_MIDDLEWARE__ === void 0 || __INTERNAL_WRANGLER_MIDDLEWARE__.length === 0) {
+    return worker;
+  }
+  for (const middleware of __INTERNAL_WRANGLER_MIDDLEWARE__) {
+    __facade_register__(middleware);
+  }
+  const fetchDispatcher = /* @__PURE__ */ __name(function(request, env, ctx) {
+    if (worker.fetch === void 0) {
+      throw new Error("Handler does not export a fetch() function.");
+    }
+    return worker.fetch(request, env, ctx);
+  }, "fetchDispatcher");
+  return {
+    ...worker,
+    fetch(request, env, ctx) {
+      const dispatcher = /* @__PURE__ */ __name(function(type, init) {
+        if (type === "scheduled" && worker.scheduled !== void 0) {
+          const controller = new __Facade_ScheduledController__(
+            Date.now(),
+            init.cron ?? "",
+            () => {
+            }
+          );
+          return worker.scheduled(controller, env, ctx);
+        }
+      }, "dispatcher");
+      return __facade_invoke__(request, env, ctx, dispatcher, fetchDispatcher);
+    }
+  };
+}
+__name(wrapExportedHandler, "wrapExportedHandler");
+function wrapWorkerEntrypoint(klass) {
+  if (__INTERNAL_WRANGLER_MIDDLEWARE__ === void 0 || __INTERNAL_WRANGLER_MIDDLEWARE__.length === 0) {
+    return klass;
+  }
+  for (const middleware of __INTERNAL_WRANGLER_MIDDLEWARE__) {
+    __facade_register__(middleware);
+  }
+  return class extends klass {
+    #fetchDispatcher = /* @__PURE__ */ __name((request, env, ctx) => {
+      this.env = env;
+      this.ctx = ctx;
+      if (super.fetch === void 0) {
+        throw new Error("Entrypoint class does not define a fetch() function.");
+      }
+      return super.fetch(request);
+    }, "#fetchDispatcher");
+    #dispatcher = /* @__PURE__ */ __name((type, init) => {
+      if (type === "scheduled" && super.scheduled !== void 0) {
+        const controller = new __Facade_ScheduledController__(
+          Date.now(),
+          init.cron ?? "",
+          () => {
+          }
+        );
+        return super.scheduled(controller);
+      }
+    }, "#dispatcher");
+    fetch(request) {
+      return __facade_invoke__(
+        request,
+        this.env,
+        this.ctx,
+        this.#dispatcher,
+        this.#fetchDispatcher
+      );
+    }
+  };
+}
+__name(wrapWorkerEntrypoint, "wrapWorkerEntrypoint");
+var WRAPPED_ENTRY;
+if (typeof middleware_insertion_facade_default === "object") {
+  WRAPPED_ENTRY = wrapExportedHandler(middleware_insertion_facade_default);
+} else if (typeof middleware_insertion_facade_default === "function") {
+  WRAPPED_ENTRY = wrapWorkerEntrypoint(middleware_insertion_facade_default);
+}
+var middleware_loader_entry_default = WRAPPED_ENTRY;
+export {
+  Hub,
+  Store,
+  __INTERNAL_WRANGLER_MIDDLEWARE__,
+  middleware_loader_entry_default as default
+};
+//# sourceMappingURL=msg-worker.js.map
