@@ -52,3 +52,4 @@ commits, pushed as a new update) - nothing else changes.
 | 44 | 2026-10-16 | Screens always up to date: a window that loaded the built-in copy (no signal when the phone started) or older screens now switches to the newest screens by itself within a minute | 09f4ac1 |
 | 45 | 2026-10-17 | Money / Wallet: your card's payments show when your bank names your account number instead of the card, bank SMS are matched by the bank's name, Standard Bank's app is read, more phones' SMS apps are read | 634c791 |
 | 46 | 2026-10-17 | Server for millions, step 1: every picture, video and file is kept in 256 separate file stores (up to 2.5 TB) and served straight from them, so they no longer fill or slow the main server | 7f576fc |
+| 47 | 2026-10-17 | Live removed (no Live box in Create, no lives in Updates, nobody can go live); Subscription shows just $5 and $15 - no crossed-out regular prices anywhere | 9f043f4 |
