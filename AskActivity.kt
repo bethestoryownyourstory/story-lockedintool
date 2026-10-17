@@ -9,6 +9,9 @@ class AskActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (savedInstanceState != null) return
+        // A call: turn on the microphone (/ camera) for Lockedintool's service while this see-through screen shows.
+        val fg = intent.getIntExtra(EXTRA_CALL_FG, 0)
+        if (fg > 0) { OverlayService.instance?.callFg(true, fg == 2); finish(); overridePendingTransition(0, 0); return }
         val all = intent.getStringArrayExtra(EXTRA_PERMS)?.toList()
         // force: ask even if allowed (Android 14 "selected photos" - choose more pictures)
         val perms = if (intent.getBooleanExtra(EXTRA_FORCE, false)) all else all?.filter { checkSelfPermission(it) != android.content.pm.PackageManager.PERMISSION_GRANTED }
@@ -32,5 +35,5 @@ class AskActivity : Activity() {
         super.onDestroy()
     }
 
-    companion object { const val EXTRA_PERMS = "perms"; const val EXTRA_FORCE = "force" }
+    companion object { const val EXTRA_PERMS = "perms"; const val EXTRA_FORCE = "force"; const val EXTRA_CALL_FG = "callfg" }
 }

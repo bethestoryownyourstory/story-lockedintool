@@ -215,8 +215,22 @@ class OverlayService : Service(), StoryBridge.Host {
         val openApp = android.app.PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), android.app.PendingIntent.FLAG_IMMUTABLE)
         val n = Notification.Builder(this, "story").setContentTitle("Lockedintool is on").setContentText("Stays on until you tap Stop Lockedintool")
             .setSmallIcon(android.R.drawable.ic_menu_view).setContentIntent(openApp).setOngoing(true).build()
+        fgNote = n
         if (Build.VERSION.SDK_INT >= 34) startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE) else startForeground(1, n)
         running = true
+    }
+    private var fgNote: Notification? = null
+    /** Calls (Messages / groups): Android only lets an app use the microphone / camera from the background while its
+     *  foreground service says so (type microphone / camera) - without it the call's microphone fails ('busy').
+     *  On for a call, back to the normal type when the call ends. False = Android refused (no screen of ours showing). */
+    fun callFg(on: Boolean, video: Boolean): Boolean {
+        val n = fgNote ?: return false
+        if (Build.VERSION.SDK_INT < 30) return true
+        val ok = android.content.pm.PackageManager.PERMISSION_GRANTED
+        var t = if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE else 0
+        if (on && checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == ok) t = t or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+        if (on && video && checkSelfPermission(android.Manifest.permission.CAMERA) == ok) t = t or ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA
+        return runCatching { if (t == 0) startForeground(1, n) else startForeground(1, n, t); true }.getOrDefault(false)
     }
 
     /** Live screens for everyone; the owner and reviewer phones (Test channel) get the newest copy from /preview/. */
@@ -1792,6 +1806,7 @@ class OverlayService : Service(), StoryBridge.Host {
     override fun callUi(on: Boolean) { ui.post {
         val p = profilePane ?: return@post
         callActive = on
+        if (!on) callFg(false, false)
         if (on) runCatching { p.web.onResume() } else if (!p.shown) runCatching { p.web.onPause() }
         if (on) {
             if (!p.shown) {
@@ -1849,7 +1864,13 @@ class OverlayService : Service(), StoryBridge.Host {
     override fun callAsk(video: Boolean): String {
         val ok = android.content.pm.PackageManager.PERMISSION_GRANTED
         val need = listOfNotNull(android.Manifest.permission.RECORD_AUDIO, if (video) android.Manifest.permission.CAMERA else null).filter { checkSelfPermission(it) != ok }
-        if (need.isEmpty()) return "ok"
+        if (need.isEmpty()) {
+            if (callFg(true, video)) return "ok"
+            // Android only allows it while a screen of ours is showing: a see-through one opens for a moment and does it.
+            ui.post { runCatching { startActivity(Intent(this, AskActivity::class.java).putExtra(AskActivity.EXTRA_CALL_FG, if (video) 2 else 1)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)) } }
+            return "wait"
+        }
         ui.post { callAsking = true; askPermissions(need.toTypedArray()) }
         return "asking"
     }
