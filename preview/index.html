@@ -3972,12 +3972,39 @@ function appPagesStored(){
 // Lockedintool as your only system (owner): the Apps button and anything involving your apps (Apps, app pages,
 // Open <platform>, sharing to apps, the Apps | Pages picker) aren't there. Asked from the app (SystemMode).
 function sysOn(){ try{ return !!(window.StoryNative && window.StoryNative.systemModeState && String(window.StoryNative.systemModeState()).indexOf('on|') === 0); }catch(e){ return false; } }
+let curRow = 1;   // the row the Pages show (1 = Row 1)
+// Rows (owner): Row 1 = Money, Home / Wallet, Focus + the apps added to Row 1; Row 2, 3... = the apps added there
+// (each app page keeps its row in story-app-pages .row). Swipe up / down on the Pages to go to the row under / above;
+// Rows shows every row. The Pages always show the row you're in (curRow; PAGES = that row's pages).
+const CORE_ITEMS = PAGE_SWITCH_ITEMS.slice(0, CORE_PAGE_COUNT);
+function appItem(a){ return { key:'app:' + a.pkg, label:escText(a.name || ''), app:a }; }
+function rowsList(){
+  const apps = sysOn() ? [] : appPagesStored();
+  const rows = [CORE_ITEMS.concat(apps.filter(a=>(a.row || 1) <= 1).map(appItem))];
+  [...new Set(apps.map(a=>a.row || 1).filter(r=>r > 1))].sort((x, y)=>x - y).forEach(r=>rows.push(apps.filter(a=>a.row === r).map(appItem)));
+  return rows;
+}
+function rowOfPage(key){ const rows = rowsList(); for(let i = 0; i < rows.length; i++) if(rows[i].some(it=>it.key === key)) return i + 1; return 0; }
 function syncAppPages(){
-  PAGES.length = CORE_PAGE_COUNT; PAGE_SWITCH_ITEMS.length = CORE_PAGE_COUNT;
-  if(sysOn()) return;
-  appPagesStored().forEach(a=>{ PAGES.push('app:' + a.pkg); PAGE_SWITCH_ITEMS.push({key:'app:' + a.pkg, label:escText(a.name || ''), app:a}); });
+  const rows = rowsList();
+  if(!curRow || curRow > rows.length) curRow = 1;
+  const items = rows[curRow - 1];
+  PAGES.length = 0; PAGE_SWITCH_ITEMS.length = 0;
+  items.forEach(it=>{ PAGES.push(it.key); PAGE_SWITCH_ITEMS.push(it); });
 }
 syncAppPages();
+// Go to another row (swipe up / down, or a page in Rows): lands on that row's first page (Row 1: where you were).
+function goToRow(n, key){
+  const rows = rowsList();
+  if(n < 1 || n > rows.length) return false;
+  if(curRow === 1 && PAGES.includes(state.current)) state.row1Page = state.current;
+  curRow = n; syncAppPages();
+  Object.keys(NEIGHBORS).forEach(k=>{ if(NEIGHBORS[k].host.parentNode) NEIGHBORS[k].host.remove(); delete NEIGHBORS[k]; });
+  state.current = key && PAGES.includes(key) ? key : n === 1 && PAGES.includes(state.row1Page) ? state.row1Page : PAGES[0];
+  state.lastPage = state.current;
+  renderDevice();
+  return true;
+}
 function appPageInfo(key){
   const pkg = key.slice(4);
   const live = (state.installedApps || []).find(x=>x.pkg === pkg);
@@ -3994,7 +4021,7 @@ function appPageScreen(key){
     <div class="page-shell app-page">
     ${topBar(escText(info.name), true)}
     <div class="app-page-body">
-      <div class="app-page-icon">${appPageIconHTML(info)}</div>
+      <div class="app-page-icon" data-action="app-page-open" data-pkg="${escText(info.pkg)}">${appPageIconHTML(info)}</div>
       <div class="app-page-name">${escText(info.name)}</div>
       <button class="app-page-open" data-action="app-page-open" data-pkg="${escText(info.pkg)}">Open</button>
     </div>
@@ -4007,6 +4034,7 @@ function landOnAppPage(){
   const focusApp = state.current === 'trading' && focusAddon().indexOf('app:') === 0;
   if((!isAppPage(state.current) && !focusApp) || !NATIVE || IN_STATION3_WINDOW || !window.StoryNative.appPageOpen) return false;
   if(state.rowsViewOpen || (state.pageStyleOn && state.pageStyleViewOpen)) return false;
+  if(!focusApp && curRow > 1) return false;   // Row 2+ (owner): the app's card shows - tap it to open the app
   const pkg = focusApp ? focusAddon().slice(4) : state.current.slice(4);
   let i = PAGES.indexOf(state.current);
   while(i > 0 && isAppPage(PAGES[i])) i--;
@@ -4015,18 +4043,25 @@ function landOnAppPage(){
   try{ window.StoryNative.appPageOpen(pkg); }catch(e){}
   return true;
 }
-function toggleAppPage(a){
+function toggleAppPage(a, row){
   const list = appPagesStored();
   const at = list.findIndex(x=>x.pkg === a.pkg);
   if(at >= 0){
     list.splice(at, 1);
     if(state.current === 'app:' + a.pkg) state.current = 'trading';
     if(state.lastPage === 'app:' + a.pkg) state.lastPage = 'trading';
-  } else list.push({pkg:a.pkg, name:a.name});
+  } else {
+    // row: a row number from rowsList (1 = Row 1) or 'new' = a new row under the last one.
+    const used = [...new Set(list.map(x=>x.row || 1).filter(r=>r > 1))].sort((x, y)=>x - y);
+    const real = row === 'new' ? Math.max(1, ...list.map(x=>x.row || 1)) + 1 : row > 1 ? used[row - 2] : 1;
+    list.push({ pkg:a.pkg, name:a.name, row: real });
+    row = row === 'new' ? used.length + 2 : row;
+  }
   try{ localStorage.setItem('story-app-pages', JSON.stringify(list)); }catch(e){}
   syncAppPages();
-  Object.keys(NEIGHBORS).forEach(k=>{ if(isAppPage(k) && !PAGES.includes(k)){ if(NEIGHBORS[k].host.parentNode) NEIGHBORS[k].host.remove(); delete NEIGHBORS[k]; } });
-  showToast(at >= 0 ? a.name + ' is no longer a page' : a.name + ' is now a page in Row 1');
+  if(!PAGES.includes(state.current) && isAppPage(state.current)) state.current = PAGES[0];
+  Object.keys(NEIGHBORS).forEach(k=>{ if(NEIGHBORS[k].host.parentNode) NEIGHBORS[k].host.remove(); delete NEIGHBORS[k]; });
+  showToast(at >= 0 ? a.name + ' is no longer a page' : a.name + ' is now a page in Row ' + row);
 }
 function pageSwitchTileIconSVG(key){
   const s = 'stroke="rgba(243,242,238,0.85)" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round"';
@@ -4324,12 +4359,12 @@ function pswitchBodyHTML(style, navAttr){
 function pageSwitcherRowsGridHTML(){
   return `
     <div class="pswitch-rows-grid">
-      <div class="pswitch-rows-row">
-        <div class="pswitch-rows-row-label">Row 1</div>
-        <div class="pswitch-rows-tiles${PAGE_SWITCH_ITEMS.length > 3 ? ' many' : ''}" style="--cols:${PAGE_SWITCH_ITEMS.length};">
-          ${PAGE_SWITCH_ITEMS.map(item=>pswitchTileHTML(item, 'pswitch-nav')).join('')}
+      ${rowsList().map((items, i)=>`<div class="pswitch-rows-row">
+        <div class="pswitch-rows-row-label">Row ${i + 1}</div>
+        <div class="pswitch-rows-tiles${items.length > 3 ? ' many' : ''}" style="--cols:${Math.max(3, items.length)};">
+          ${items.map(item=>pswitchTileHTML(item, 'pswitch-nav')).join('')}
         </div>
-      </div>
+      </div>`).join('')}
     </div>
   `;
 }
@@ -11920,7 +11955,20 @@ function appsScreen(){
     <div class="note" style="margin-top:12px;text-align:center;">Hold an app for more options</div>
     </div>
     ${state.appMenuId ? appMenuTemplate() : ''}
+    ${state.appRowPick ? appRowPickTemplate() : ''}
   `;
+}
+// Create into a page (owner): pick its row - every row with the pages already in it (Add to row N), or a new row.
+function appRowPickTemplate(){
+  const p = state.appRowPick;
+  return `
+    <div class="modal-overlay" data-action="app-row-close">
+      <div class="modal-sheet page-edit-sheet" onclick="event.stopPropagation()">
+        <div class="modal-head"><span class="modal-title">${escText(p.name)}</span><button class="modal-close" data-action="app-row-close">×</button></div>
+        ${rowsList().map((items, i)=>`<div class="settings-option"><div class="row-left"><div class="row-name">Row ${i + 1}</div><div class="row-sub">${items.map(it=>it.label).join(', ')}</div></div><button class="edit-remove edit-add" data-action="app-row-pick" data-v="${i + 1}">Add to row ${i + 1}</button></div>`).join('')}
+        <button class="btn-wide btn-primary" style="margin-top:12px;" data-action="app-row-pick" data-v="new">Create and add to new row</button>
+      </div>
+    </div>`;
 }
 // Long-press menu for an app on the Apps screen.
 function appMenuTemplate(){
@@ -14325,6 +14373,7 @@ function setupCircleAndWheelDrag(){
   };
   const runNav = (info)=>{
     if(!info) return;
+    if(info.kind==='pswitch'){ const r = rowOfPage(info.key); if(r && r !== curRow){ state.rowsViewOpen = false; goToRow(r, info.key); return; } }
     state.current = info.key;
     if(info.kind==='pswitch'){
       if(PAGES.includes(info.key)) state.lastPage = info.key;
@@ -15167,9 +15216,11 @@ function attachHandlers(){
     el.addEventListener('click', (e)=>{
       e.stopPropagation();
       const target = el.getAttribute('data-pswitch-nav');
+      state.rowsViewOpen = false;
+      const r = rowOfPage(target);
+      if(r && r !== curRow){ goToRow(r, target); return; }
       state.current = target;
       if(PAGES.includes(target)) state.lastPage = target;
-      state.rowsViewOpen = false;
       renderDevice();
     });
   });
@@ -16228,7 +16279,8 @@ function attachHandlers(){
           const a = state.installedApps.find(x=>x.id===state.appMenuId);
           state.appMenuId = null;
           if(a && a.pkg && !appPagesStored().some(x=>x.pkg === a.pkg) && !subPremium()){ showToast('More pages come with Premium'); state.current = 'subscription'; break; }
-          if(a && a.pkg) toggleAppPage(a); else showToast('Only apps on your phone can become a page');
+          if(a && a.pkg){ if(appPagesStored().some(x=>x.pkg === a.pkg)) toggleAppPage(a); else state.appRowPick = { pkg:a.pkg, name:a.name }; }
+          else showToast('Only apps on your phone can become a page');
           break;
         }
         case 'focus-add': state.focusAdd = { step:'choose' }; if(NATIVE) loadNativeApps(); break;
@@ -16240,6 +16292,8 @@ function attachHandlers(){
           const v = el.getAttribute('data-v'); focusSet(v); state.focusAdd = null;
           showToast(v === 'trading' ? 'Trading Page added to Focus' : 'Added to Focus');
           break; }
+        case 'app-row-pick': { const p = state.appRowPick; state.appRowPick = null; if(p){ const v = el.getAttribute('data-v'); toggleAppPage(p, v === 'new' ? 'new' : +v); } break; }
+        case 'app-row-close': state.appRowPick = null; break;
         case 'app-page-open': {
           const pkg = el.getAttribute('data-pkg');
           if(NATIVE && window.StoryNative.appPageOpen) window.StoryNative.appPageOpen(pkg); else showToast('Opens the app on your phone');
@@ -19054,7 +19108,7 @@ function adoptSlidFrame(sl){
     updateScrollbarThumb();
   }catch(e){ renderDevice(); return; }
   // Swiped onto an app page: the app opens and the Pages quietly go back to the page before it while they're away.
-  if(isAppPage(state.current) && NATIVE && window.StoryNative.appPageOpen){ setTimeout(renderDevice, 350); return; }
+  if(isAppPage(state.current) && curRow <= 1 && NATIVE && window.StoryNative.appPageOpen){ setTimeout(renderDevice, 350); return; }
   refreshNeighbors();
 }
 let currentSlide = null;
@@ -19214,6 +19268,21 @@ function attachSwipe(){
   if(state.device !== 'phone') return;
   const shell = document.querySelector('.page-shell');
   if(!shell || !PAGES.includes(state.current)) return;
+  // Rows (owner): swipe UP past the bottom of a page for the row under it, DOWN past the top for the row above
+  // (a page that scrolls has to be at its end first, so normal scrolling never changes row).
+  if(rowsList().length > 1){
+    const area = document.getElementById('content-area');
+    let t0 = null;
+    const atTop = ()=>!area || area.scrollTop <= 1, atBottom = ()=>!area || area.scrollTop + area.clientHeight >= area.scrollHeight - 2;
+    shell.addEventListener('touchstart', e=>{ if(e.touches.length !== 1){ t0 = null; return; } const t = e.touches[0]; t0 = { x:t.clientX, y:t.clientY, top:atTop(), bottom:atBottom(), at:Date.now() }; }, { passive:true });
+    shell.addEventListener('touchend', e=>{
+      if(!t0 || pageSwipeAnimating || (state.current === 'trading' && state.chartFullscreen)) return;
+      const t = e.changedTouches[0], dx = t.clientX - t0.x, dy = t.clientY - t0.y, s0 = t0; t0 = null;
+      if(Math.abs(dy) < 90 || Math.abs(dy) < Math.abs(dx) * 2 || Date.now() - s0.at > 900) return;
+      if(dy < 0 && s0.bottom && atBottom()) goToRow(curRow + 1);
+      else if(dy > 0 && s0.top && atTop()) goToRow(curRow - 1);
+    }, { passive:true });
+  }
   // The pages follow the finger: drag left for the page on the right, right for the page on the left.
   // Let go past a quarter of the screen (or with a quick flick) and it finishes; otherwise it slides back.
   shell.addEventListener('pointerdown', e=>{
