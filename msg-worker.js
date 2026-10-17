@@ -1478,6 +1478,9 @@ export class Hub {
     this.sql.exec('DELETE FROM livewatch WHERE lid = ?', l.id);
   }
   async live(me, op, b) {
+    // Owner: Live is removed from Lockedintool - nobody can go live; lists are empty.
+    if (op === 'list') return json({ lives: [] });
+    if (op === 'start' || op === 'publish') return json({ error: 'closed' }, 400);
     const now = Date.now(), id = String(b.id || '');
     const l = id ? this.one('SELECT * FROM lives WHERE id = ?', id) : null;
     if (op === 'list') {
