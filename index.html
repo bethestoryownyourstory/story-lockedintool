@@ -11315,7 +11315,7 @@ async function gcallGo(gid, video, join, gname){
     catch(e){ err = e; if(e && e.code === 'asking') break; await new Promise(r=>setTimeout(r, 700)); }
   }
   if(gcall.state !== 'joining'){ try{ gcall.local && gcall.local.getTracks().forEach(t=>t.stop()); }catch(e){} return; }
-  if(!gcall.local){ gcallEnd(callMediaProblem(err)); return; }
+  if(!gcall.local){ gcallEnd(callMediaProblem(err), null, true); return; }   // never started: not a call in Call history
   gcallApplyTracks();
   gcallSend({ kind: join || live ? 'join' : 'start', video:vid });
 }
@@ -11330,7 +11330,7 @@ async function gcallOnMsg(m){
   }
   if(m.kind === 'over' && gcall.gid === m.group && gcall.state === 'incoming') return gcallEnd('The call ended', 'missed');
   if(m.group !== gcall.gid || gcall.state === 'idle' || gcall.state === 'incoming') return;
-  if(m.kind === 'error'){ return gcallEnd(m.error === 'full' ? 'The call is full (8 people)' : m.error === 'over' ? 'The call already ended' : m.error === 'private-account' ? 'Private accounts can’t join public group calls' : m.error === 'member' ? 'Only members can start a call here' : m.error === 'notfound' ? 'This group isn’t on Lockedintool’s server' : 'Couldn’t join the call'); }
+  if(m.kind === 'error'){ return gcallEnd(m.error === 'full' ? 'The call is full (8 people)' : m.error === 'over' ? 'The call already ended' : m.error === 'private-account' ? 'Private accounts can’t join public group calls' : m.error === 'member' ? 'Only members can start a call here' : m.error === 'notfound' ? 'This group isn’t on Lockedintool’s server' : 'Couldn’t join the call', null, !gcall.joinedAt); }
   if(m.kind === 'joined'){
     Object.assign(gcall, { id:m.callId, role:m.role, leader:!!m.leader, callJoin:m.callJoin, name:m.name || gcall.name, video:!!m.video });
     gcallApplyTracks();
@@ -11358,14 +11358,14 @@ async function gcallOnMsg(m){
 }
 function gcallAccept(){ if(gcall.state !== 'incoming') return; callNative('callRing', false); clearTimeout(gcall.ringT); const g = gcall.gid, v = gcall.video; gcall.state = 'idle'; gcallGo(g, v, true); }
 function gcallDecline(){ if(gcall.state !== 'incoming') return; gcallEnd('Declined', 'missed'); }
-function gcallEnd(text, dir){
+function gcallEnd(text, dir, nosave){
   if(gcall.state === 'idle') return;
   const wasIn = gcall.state === 'live' || gcall.state === 'joining';
   if(wasIn) gcallSend({ kind:'leave' });
   clearTimeout(gcall.ringT); clearInterval(gcall.timer);
   callNative('callRing', false); callNative('callAudio', false, false);
   const answered = !!gcall.joinedAt;
-  callSave({ peer:gcall.gid, name:gcall.name, video:gcall.video, dir: dir || (gcall.state === 'incoming' ? 'missed' : answered ? (gcall.from ? 'in' : 'out') : 'out'), start:gcall.start, end: answered ? Date.now() : 0, duration: answered ? (Date.now() - gcall.joinedAt) / 1000 : 0 });
+  if(!nosave) callSave({ peer:gcall.gid, name:gcall.name, video:gcall.video, dir: dir || (gcall.state === 'incoming' ? 'missed' : answered ? (gcall.from ? 'in' : 'out') : 'out'), start:gcall.start, end: answered ? Date.now() : 0, duration: answered ? (Date.now() - gcall.joinedAt) / 1000 : 0 });
   Object.values(gcall.parts).forEach(p=>{ try{ p.pc && p.pc.close(); }catch(e){} });
   try{ gcall.local && gcall.local.getTracks().forEach(t=>t.stop()); }catch(e){}
   gcall.parts = {}; gcall.local = null;
@@ -11567,6 +11567,11 @@ if(MSG_ENGINE){
 // and video calls once they're built (localStorage 'story-calls'). Each: who, voice / video, made / got / missed, how
 // long it lasted, when it started and when it ended. Entry: { id, number, name, photo, kind:'voice'|'video',
 // dir:'out'|'in'|'missed', start, end, duration (seconds) }. ----
+// Once: calls that never started (the microphone problem, the old phone-only 'STORY' group) leave Call history.
+(function(){ try{ if(localStorage.getItem('story-calls-clean1')) return; localStorage.setItem('story-calls-clean1', '1');
+  const l = JSON.parse(localStorage.getItem('story-calls') || '[]') || [], cut = new Date(2026, 9, 17, 12).getTime();
+  const keep = l.filter(c=>!(c.peer && (/^cg:/.test(c.peer) || (/^grp/.test(c.peer) && c.dir === 'out' && !c.end && (c.start || 0) < cut))));
+  if(keep.length !== l.length) localStorage.setItem('story-calls', JSON.stringify(keep)); }catch(e){} })();
 function storyCalls(){
   let a = [], b = [];
   try{ if(NATIVE && window.StoryNative.getCalls) a = JSON.parse(window.StoryNative.getCalls() || '[]') || []; }catch(e){}
