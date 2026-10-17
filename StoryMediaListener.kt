@@ -42,9 +42,9 @@ class StoryMediaListener : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         if (sbn != null) runCatching { MoneyLog.handle(this, sbn) }
-        OverlayService.instance?.evalPages("window.storyNotifsChanged&&window.storyNotifsChanged()")
+        OverlayService.instance?.evalPages("window.storyNotifsChanged&&window.storyNotifsChanged();window.storyMusicChanged&&window.storyMusicChanged()")
     }
     override fun onNotificationRemoved(sbn: StatusBarNotification?) {
-        OverlayService.instance?.evalPages("window.storyNotifsChanged&&window.storyNotifsChanged()")
+        OverlayService.instance?.evalPages("window.storyNotifsChanged&&window.storyNotifsChanged();window.storyMusicChanged&&window.storyMusicChanged()")
     }
 }

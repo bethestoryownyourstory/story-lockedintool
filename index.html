@@ -3253,6 +3253,9 @@
   .brightness-slider{ flex:1; accent-color:#e8e6e1; }
   .spotify-title{ display:flex; align-items:center; gap:7px; font-size:12.5px; font-weight:700; margin-bottom:10px; }
   .spotify-title .dot{ font-size:8px; }
+  .music-card .spotify-title{ padding-right:22px; min-width:0; }
+  .music-now{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+  .music-card .spotify-controls span{ cursor:pointer; }
   .spotify-controls{ display:flex; align-items:center; justify-content:center; gap:22px; font-size:14px; }
   .spotify-controls .play{
     background:#e8e6e1; color:#000; width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:10px;
@@ -4978,15 +4981,15 @@ function dashboardScreen(){
           <input type="range" class="brightness-slider" id="brightness-slider" min="0" max="100" value="${state.brightnessValue}">
           <button class="brightness-arrow" data-action="brightness-menu-toggle" title="Brightness mode">▲</button>
         </div>
-        <div class="spotify-card" style="position:relative;">
-          <div class="spotify-title"><span class="dot">●</span> Spotify</div>
+        ${(m=>`<div class="spotify-card music-card" style="position:relative;">
+          <div class="spotify-title"><span class="dot">●</span><span class="music-now">${escText(m.title ? m.title + (m.artist ? ' · ' + m.artist : '') : m.app || m.chosenName || 'Music')}</span></div>
           <div class="spotify-controls">
-            <span>⟨</span>
-            <span class="play" data-action="spotify-toggle">${state.spotifyPlaying?'❚❚':'▶'}</span>
-            <span>⟩</span>
+            <span data-action="music-prev">⟨</span>
+            <span class="play" data-action="music-toggle">${m.playing?'❚❚':'▶'}</span>
+            <span data-action="music-next">⟩</span>
           </div>
-          ${state.spotifyPlaying ? `<div class="spotify-visualizer">${[1,2,3,4,5].map(i=>`<span style="animation-delay:${i*0.11}s;"></span>`).join('')}</div>` : ''}
-        </div>
+          ${m.playing ? `<div class="spotify-visualizer">${[1,2,3,4,5].map(i=>`<span style="animation-delay:${i*0.11}s;"></span>`).join('')}</div>` : ''}
+        </div>`)(musicNow())}
         <div class="controls-card">
           <div class="controls-toggles">
             <div class="controls-toggles-scroll">
@@ -8282,8 +8285,10 @@ function layoutsScreen(){
       <div class="layouts-tab${state.layoutsTab==='pages'?' active':''}" data-layouttab="pages">Pages</div>
     </div>
     ${state.layoutsTab==='dashboard' ? `
-      <div class="section-title">DASHBOARD LAYOUT</div>
-      <div class="note">Layout options for the Dashboard's own design will go here.</div>
+      <div class="section-title">DASHBOARD</div>
+      <div class="row-card" style="cursor:pointer;" data-nav="layouts-music">
+        <div class="row"><div class="row-left"><div class="row-name">Music player</div><div class="row-sub">${escText(musicNow().chosenName || 'Whatever is playing')}</div></div><span class="chev-right">›</span></div>
+      </div>
     ` : `
       <div class="section-title">PAGES</div>
       <div class="row-card" style="cursor:pointer;" data-nav="layouts-homescreen">
@@ -8322,6 +8327,43 @@ function layoutsPageLayoutScreen(){
     ${rows.map((items, i)=>`<div class="row-card" style="cursor:pointer;" data-action="row-edit" data-v="${i}">
       <div class="row"><div class="row-left"><div class="row-name">Row ${i + 1}</div><div class="row-sub">${items.map(it=>it.label).join(' · ')}</div></div><span class="row-sub" style="white-space:nowrap;">Tap to edit ›</span></div>
     </div>`).join('')}
+    </div>`;
+}
+// The Dashboard's music card (owner): whatever music player you use (Layouts > Dashboard > Music player) - what's
+// playing and its controls, straight from the phone (StoryNative.musicState; the app tells the page when it changes:
+// window.storyMusicChanged - no loop). Hold the card: your music player opens.
+let musicCache = null;
+function musicNow(){
+  if(!(NATIVE && window.StoryNative.musicState)) return { playing: !!state.spotifyPlaying, access:true };
+  if(!musicCache){ try{ musicCache = JSON.parse(window.StoryNative.musicState() || '{}') || {}; }catch(e){ musicCache = {}; } }
+  return musicCache;
+}
+window.storyMusicChanged = function(){
+  const was = JSON.stringify(musicCache || {}); musicCache = null;
+  if(state.current === 'dashboard' && !pageSwipeAnimating && JSON.stringify(musicNow()) !== was){
+    const card = document.querySelector('.music-card');
+    if(card){ const tmp = document.createElement('div'); tmp.innerHTML = (()=>{ const m = musicNow(); return `<div class="spotify-card music-card" style="position:relative;"><div class="spotify-title"><span class="dot">●</span><span class="music-now">${escText(m.title ? m.title + (m.artist ? ' · ' + m.artist : '') : m.app || m.chosenName || 'Music')}</span></div><div class="spotify-controls"><span data-action="music-prev">⟨</span><span class="play" data-action="music-toggle">${m.playing?'❚❚':'▶'}</span><span data-action="music-next">⟩</span></div>${m.playing ? `<div class="spotify-visualizer">${[1,2,3,4,5].map(i=>`<span style="animation-delay:${i*0.11}s;"></span>`).join('')}</div>` : ''}</div>`; })();
+      card.replaceWith(tmp.firstElementChild); }
+  }
+};
+(function(){ let t = null, held = false, x0 = 0, y0 = 0;
+  document.addEventListener('pointerdown', e=>{ const c = e.target.closest && e.target.closest('.music-card'); if(!c) return; held = false; x0 = e.clientX; y0 = e.clientY; clearTimeout(t); t = setTimeout(()=>{ held = true; if(NATIVE && window.StoryNative.musicOpen) window.StoryNative.musicOpen(); else showToast('Opens your music player'); }, 550); }, true);
+  ['pointerup', 'pointercancel'].forEach(ev=>document.addEventListener(ev, ()=>clearTimeout(t), true));
+  document.addEventListener('pointermove', e=>{ if(Math.abs(e.clientX - x0) > 10 || Math.abs(e.clientY - y0) > 10) clearTimeout(t); }, true);
+  document.addEventListener('click', e=>{ if(held && e.target.closest && e.target.closest('.music-card')){ e.stopPropagation(); e.preventDefault(); held = false; } }, true);
+})();
+// Layouts > Dashboard > Music player: every music player on the phone; or 'Whatever is playing'.
+function layoutsMusicScreen(){
+  let list = []; try{ list = NATIVE && window.StoryNative.musicPlayers ? JSON.parse(window.StoryNative.musicPlayers() || '[]') : []; }catch(e){}
+  const cur = musicNow().chosen || '';
+  const opt = (pkg, name, sub)=>`<div class="settings-option${cur === pkg ? ' selected' : ''}" data-action="music-pick" data-v="${escText(pkg)}"><div class="row-left"><div class="row-name">${escText(name)}</div>${sub ? `<div class="row-sub">${sub}</div>` : ''}</div><div class="radio-dot"></div></div>`;
+  return `
+    <div class="page-shell layouts-shell">
+    ${topBar('Music player', false, '', 'layouts', '', false, true)}
+    <div class="note">The music card on the Dashboard shows what's playing in the player you pick and controls it. Hold the card to open the player.</div>
+    <div class="section-title">MUSIC PLAYERS ON YOUR PHONE</div>
+    ${opt('', 'Whatever is playing', 'Follows any player that is playing')}
+    ${list.length ? list.map(p=>opt(p.pkg, p.name, '')).join('') : `<div class="row-sub" style="padding:10px 4px;">${NATIVE ? 'No music players found on your phone.' : 'Your phone’s music players show here in the Lockedintool app.'}</div>`}
     </div>`;
 }
 function layoutsDashboardScreen(){
@@ -13680,6 +13722,7 @@ function renderScreenContent(){
     case 'layouts-dashboard': return layoutsDashboardScreen();
     case 'layouts-homescreen': return layoutsHomeScreenScreen();
     case 'layouts-pagelayout': return layoutsPageLayoutScreen();
+    case 'layouts-music': return layoutsMusicScreen();
     case 'layouts-arrangement': return layoutsArrangementScreen();
     case 'settings': return settingsHubScreen();
     case 'notes': return notesScreen();
@@ -16458,6 +16501,17 @@ function attachHandlers(){
         case 'media-output-bg': state.mediaOutputOpen = false; break;
         case 'audio-separate-toggle': state.audioSeparateOn = !state.audioSeparateOn; break;
         case 'spotify-toggle': state.spotifyPlaying = !state.spotifyPlaying; break;
+        case 'music-toggle': case 'music-next': case 'music-prev': {
+          const cmd = action.slice(6);
+          if(NATIVE && window.StoryNative.musicCmd){
+            const m = musicNow();
+            if(!m.access){ showToast('Allow Lockedintool to see your notifications to control your music'); if(window.StoryNative.moneyAccessOpen) window.StoryNative.moneyAccessOpen(); break; }
+            if(!m.pkg && !m.chosen){ showToast('Pick your music player in Layouts > Dashboard'); break; }
+            window.StoryNative.musicCmd(cmd); setTimeout(()=>{ musicCache = null; if(state.current === 'dashboard') renderDevice(); }, 450);
+          } else if(cmd === 'toggle') state.spotifyPlaying = !state.spotifyPlaying;
+          break;
+        }
+        case 'music-pick': { const p = el.getAttribute('data-v'); if(NATIVE && window.StoryNative.musicChoose) window.StoryNative.musicChoose(p); musicCache = null; showToast(p ? 'Music player set' : 'Following whatever is playing'); break; }
 
         // ----- Station 3: the combined floating panel (Rows, Page Styles, create/post,
         // call history, dial pad, messages, profile) opened from the corner arrow. Shown

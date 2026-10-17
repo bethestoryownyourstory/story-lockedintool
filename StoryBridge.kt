@@ -85,6 +85,14 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
     @JavascriptInterface
     fun getApps(): String = appsCache ?: buildApps(ctx).also { appsCache = it }
 
+    /** Dashboard music card (owner): any music player on the phone (MusicPlayer.kt). */
+    @JavascriptInterface fun musicPlayers(): String = MusicPlayer.players(ctx)
+    @JavascriptInterface fun musicState(): String = MusicPlayer.state(ctx)
+    @JavascriptInterface fun musicChoose(pkg: String) { MusicPlayer.choose(ctx, pkg) }
+    @JavascriptInterface fun musicCmd(cmd: String) { MusicPlayer.command(ctx, cmd) }
+    /** Hold the music card: opens the music player app (STORY steps aside like opening any app). */
+    @JavascriptInterface fun musicOpen() { val p = MusicPlayer.appToOpen(ctx); if (p.isNotEmpty()) launchApp(p) }
+
     /** Opens the real app exactly as the phone's own launcher would, and gets STORY out of the way. */
     @JavascriptInterface
     fun launchApp(pkg: String) {
