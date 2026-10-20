@@ -16596,7 +16596,6 @@ function attachHandlers(){
           if(NATIVE && window.StoryNative.musicCmd){
             const m = musicNow();
             if(!m.access){ showToast('Allow Lockedintool to see your notifications to control your music'); if(window.StoryNative.moneyAccessOpen) window.StoryNative.moneyAccessOpen(); break; }
-            if(!m.pkg && !m.chosen){ showToast('Pick your music player in Layouts > Dashboard'); break; }
             window.StoryNative.musicCmd(cmd); setTimeout(()=>{ musicCache = null; if(state.current === 'dashboard') renderDevice(); }, 450);
           } else if(cmd === 'toggle') state.spotifyPlaying = !state.spotifyPlaying;
           break;

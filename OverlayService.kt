@@ -831,12 +831,26 @@ class OverlayService : Service(), StoryBridge.Host {
         } else {
             // Station 3 stays open; Pages opens underneath it.
             val p = pagesPane!!
-            p.web.evaluateJavascript("window.storyShow&&window.storyShow(null,false)", null)
-            if (!p.shown) setShown(p, true)
-
+            showPagesOn(p, "window.storyShow&&window.storyShow(null,false)") { updateBubble(); addBar() }
+            return
         }
         updateBubble()
         addBar() // re-add last so the STORY bar stays on top of everything, including the pages
+    }
+
+    /** Opens the Pages on a screen WITHOUT first flashing the screen they were on (owner: "it glitches and shows where I
+     *  was at first"): the page switches while the window is still hidden, and the window shows once that frame is
+     *  drawn (postVisualStateCallback; at most 300 ms). Already showing: just switch. */
+    private fun showPagesOn(p: Pane, js: String, after: () -> Unit) {
+        if (p.shown) { p.web.evaluateJavascript(js, null); after(); return }
+        runCatching { p.web.onResume() }
+        var done = false
+        val go = Runnable { if (!done) { done = true; if (!p.shown) setShown(p, true); after() } }
+        p.web.evaluateJavascript(js) {
+            runCatching { p.web.postVisualStateCallback(1L, object : WebView.VisualStateCallback() { override fun onComplete(requestId: Long) { ui.post(go) } }) }
+                .onFailure { ui.post(go) }
+        }
+        ui.postDelayed(go, 300)
     }
 
     // ---- Home screen widgets (PageWidgets.kt): tapping one opens its page; each widget's picture is the real page,
@@ -848,10 +862,7 @@ class OverlayService : Service(), StoryBridge.Host {
         hideLiveWidgets()
         warmUp()
         val p = pagesPane ?: return
-        p.web.evaluateJavascript("window.storyShow&&window.storyShow(" + org.json.JSONObject.quote(page) + ",false)", null)
-        if (!p.shown) setShown(p, true)
-        updateBubble()
-        addBar()
+        showPagesOn(p, "window.storyShow&&window.storyShow(" + org.json.JSONObject.quote(page) + ",false)") { updateBubble(); addBar() }
     }
     private val snapQueue = ArrayDeque<String>()
     private var snapping = false
@@ -1124,7 +1135,7 @@ class OverlayService : Service(), StoryBridge.Host {
         hideLiveWidgets()
         // The Dashboard is your home (owner: the Dashboard becomes your home screen): coming back always lands on it. Pages
         // already up (e.g. back from Lockedintool's own picture picker) stay where they are.
-        if (!p.shown) { warmUp(); p.web.evaluateJavascript("window.storyShow&&window.storyShow('dashboard',false)", null); setShown(p, true) }
+        if (!p.shown) { warmUp(); showPagesOn(p, "window.storyShow&&window.storyShow('dashboard',false)") { updateBubble(); addBar() }; return }
         updateBubble(); addBar()
     }
     /** The Pages went away while nothing allowed is in front (the phone's home screen showing): they come back. */

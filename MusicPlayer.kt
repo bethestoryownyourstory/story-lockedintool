@@ -71,7 +71,23 @@ object MusicPlayer {
     /** play / pause / toggle / next / prev on the player. Nothing playing yet: the chosen player is told to play. */
     fun command(c: Context, cmd: String) {
         val s = session(c)
+        // 'Whatever is playing' (no player chosen): the phone's own media keys, exactly like headphone buttons - Android
+        // sends them to the player in use and lets it start playing again (a paused song wouldn't restart otherwise).
+        if (chosen(c).isEmpty()) {
+            val playing = s?.playbackState?.state == PlaybackState.STATE_PLAYING
+            val key = when (cmd) { "next" -> KeyEvent.KEYCODE_MEDIA_NEXT; "prev" -> KeyEvent.KEYCODE_MEDIA_PREVIOUS; "play" -> KeyEvent.KEYCODE_MEDIA_PLAY
+                "pause" -> KeyEvent.KEYCODE_MEDIA_PAUSE; else -> if (playing) KeyEvent.KEYCODE_MEDIA_PAUSE else KeyEvent.KEYCODE_MEDIA_PLAY }
+            if (runCatching { val am = c.getSystemService(android.media.AudioManager::class.java)
+                    for (a in listOf(KeyEvent.ACTION_DOWN, KeyEvent.ACTION_UP)) am.dispatchMediaKeyEvent(KeyEvent(a, key)) }.isSuccess) return
+        }
         if (s != null) {
+            // Sent like a headphone / media button first (owner: tapping play on a paused song did nothing): Android lets
+            // the player start playing again from a media button, while a plain play() from another app is often refused.
+            val playing = s.playbackState?.state == PlaybackState.STATE_PLAYING
+            val key = when (cmd) { "next" -> KeyEvent.KEYCODE_MEDIA_NEXT; "prev" -> KeyEvent.KEYCODE_MEDIA_PREVIOUS; "play" -> KeyEvent.KEYCODE_MEDIA_PLAY
+                "pause" -> KeyEvent.KEYCODE_MEDIA_PAUSE; else -> if (playing) KeyEvent.KEYCODE_MEDIA_PAUSE else KeyEvent.KEYCODE_MEDIA_PLAY }
+            val sent = runCatching { s.dispatchMediaButtonEvent(KeyEvent(KeyEvent.ACTION_DOWN, key)) && s.dispatchMediaButtonEvent(KeyEvent(KeyEvent.ACTION_UP, key)) }.getOrDefault(false)
+            if (sent) return
             val t = s.transportControls
             when (cmd) {
                 "next" -> t.skipToNext()
@@ -82,8 +98,15 @@ object MusicPlayer {
             }
             return
         }
-        val pkg = chosen(c); if (pkg.isEmpty()) return
-        val code = when (cmd) { "next" -> KeyEvent.KEYCODE_MEDIA_NEXT; "prev" -> KeyEvent.KEYCODE_MEDIA_PREVIOUS; else -> KeyEvent.KEYCODE_MEDIA_PLAY }
+        val pkg = chosen(c)
+        val code = when (cmd) { "next" -> KeyEvent.KEYCODE_MEDIA_NEXT; "prev" -> KeyEvent.KEYCODE_MEDIA_PREVIOUS; "pause" -> KeyEvent.KEYCODE_MEDIA_PAUSE; else -> KeyEvent.KEYCODE_MEDIA_PLAY }
+        // No live session (a player paused for a while drops it): the phone's own media key goes to the player that
+        // played last - exactly like pressing play on headphones.
+        if (pkg.isEmpty()) {
+            runCatching { val am = c.getSystemService(android.media.AudioManager::class.java)
+                for (a in listOf(KeyEvent.ACTION_DOWN, KeyEvent.ACTION_UP)) am.dispatchMediaKeyEvent(KeyEvent(a, code)) }
+            return
+        }
         for (a in listOf(KeyEvent.ACTION_DOWN, KeyEvent.ACTION_UP)) runCatching {
             c.sendBroadcast(Intent(Intent.ACTION_MEDIA_BUTTON).setPackage(pkg).putExtra(Intent.EXTRA_KEY_EVENT, KeyEvent(a, code)))
         }
