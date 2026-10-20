@@ -125,8 +125,21 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
     @JavascriptInterface
     fun openAlarms() {
         host.hidePanel()
-        runCatching { ctx.startActivity(Intent(android.provider.AlarmClock.ACTION_SHOW_ALARMS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-            .onFailure { host.showToast("No clock app on this phone") }
+        // Not every Clock app answers "show alarms" (some phones' own clocks don't): then the phone's Clock app itself -
+        // the known ones by name, else any app called Clock / Alarm - and last the "set an alarm" screen.
+        val pm = ctx.packageManager
+        val known = listOf("com.sec.android.app.clockpackage", "com.google.android.deskclock", "com.android.deskclock",
+            "com.oneplus.deskclock", "com.coloros.alarmclock", "com.oplus.alarmclock", "com.huawei.deskclock", "com.hihonor.deskclock",
+            "com.miui.clock", "com.transsion.deskclock", "com.motorola.timeweatherwidget", "com.lge.clock", "com.sonymobile.alarmclock")
+        val named = runCatching {
+            pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
+                .firstOrNull { r -> r.loadLabel(pm).toString().let { it.equals("Clock", true) || it.contains("Alarm", true) } }?.activityInfo?.packageName
+        }.getOrNull()
+        val tries = listOf(Intent(android.provider.AlarmClock.ACTION_SHOW_ALARMS)) +
+            known.mapNotNull { pm.getLaunchIntentForPackage(it) } +
+            listOfNotNull(named?.let { pm.getLaunchIntentForPackage(it) }, Intent(android.provider.AlarmClock.ACTION_SET_ALARM))
+        for (i in tries) { i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); if (runCatching { ctx.startActivity(i) }.isSuccess) return }
+        host.showToast("No clock app on this phone")
     }
     @JavascriptInterface
     fun openGallery() {
