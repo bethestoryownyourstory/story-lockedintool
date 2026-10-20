@@ -1151,21 +1151,37 @@ class OverlayService : Service(), StoryBridge.Host {
      *  otherwise: only on the Pages / only on apps / not at all (Dial pad only), and on the Always On Display
      *  only when its Always On Display is on. Hidden = Station 3 closes. */
     private var lastOnPages: Boolean? = null
+    // Station 3 on the Dashboard (owner's full layout; Settings > QUICK ACCESS): while the Dashboard is on screen
+    // Station 3 is held open at its bottom - no button there (nothing opens / closes it), no Rows / Page Styles.
+    // It closes again when you leave the Dashboard or the Pages step aside.
+    private var dashUp = false
+    private var s3Held = false
+    override fun dashShown(on: Boolean) { ui.post { if (dashUp != on) { dashUp = on; updateBubble() } } }
     private fun updateBubble() {
         val pagesUp = pagesPane?.shown == true
+        val dash = pagesUp && dashUp && QuickAccess.s3Dash(this) && !WidgetMode.on(this) && !aodShowing()
         // On the Pages, Station 3 also has Rows and Page Styles (on top of its button); over apps it doesn't.
-        if (pagesUp != lastOnPages) { lastOnPages = pagesUp; s3Pane?.web?.evaluateJavascript("window.storyOnPages&&window.storyOnPages($pagesUp)", null) }
+        val onPages = pagesUp && !dash
+        if (onPages != lastOnPages) { lastOnPages = onPages; s3Pane?.web?.evaluateJavascript("window.storyOnPages&&window.storyOnPages($onPages)", null) }
+        if (dash) {
+            s3Held = true
+            s3Pane?.let { if (!it.shown) setShown(it, true) }
+        } else if (s3Held) {
+            s3Held = false
+            if (s3Pane?.shown == true) { closeStation3Now(); return }
+        }
         val where = QuickAccess.where(this)
         var on = QuickAccess.station3On(this) && when (where) { "pages" -> pagesUp; "apps" -> !pagesUp; else -> true }
         if (aodShowing() && !QuickAccess.s3Aod(this)) on = false
         if (WidgetMode.on(this)) on = false   // Only use widgets: no Station 3
+        if (dash) on = false                  // the Dashboard's Station 3 has no button
         // Station 3 must stay on top everywhere (owner): it can only sit above the keyboard and every app's screen in
         // the accessibility layer. If that layer came back (the system re-connected Lockedintool system actions) while
         // Station 3 was still in the normal layer, move everything up at once.
         if (StoryAccessibilityService.instance != null && layerType != WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY && !relayerPending) {
             relayerPending = true; ui.post { relayerPending = false; rebuildLayer() }
         }
-        if (!on && s3Pane?.shown == true) closeStation3Now()
+        if (!on && !dash && s3Pane?.shown == true) closeStation3Now()
         bubble?.visibility = if (on) View.VISIBLE else View.INVISIBLE
         bubbleLp?.let { lp ->
             val nt = WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE

@@ -10,7 +10,8 @@ import org.json.JSONObject
  *  where     = Station 3 shows on "pages", "apps" or "both"
  *  aod       = Station 3 on STORY's Always On Display (the same switch the setup screen always had)
  *  lockDial  = the dial pad on the lock screen (always open, flush to the bottom) - separate / dial pad only
- *  dialAod   = the dial pad on the Always On Display too */
+ *  dialAod   = the dial pad on the Always On Display too
+ *  dash      = Station 3 on the Dashboard: always open at the bottom of the Dashboard, no button there (owner) */
 object QuickAccess {
     private fun p(c: Context) = c.getSharedPreferences("story", Context.MODE_PRIVATE)
     fun mode(c: Context) = p(c).getString("qa_mode", "s3dial") ?: "s3dial"
@@ -19,6 +20,7 @@ object QuickAccess {
     fun lockDial(c: Context) = mode(c) != "s3dial" && p(c).getBoolean("qa_lockdial", false)
     fun dialAod(c: Context) = lockDial(c) && p(c).getBoolean("aod_dial", false)
     fun station3On(c: Context) = mode(c) != "dialonly"
+    fun s3Dash(c: Context) = station3On(c) && p(c).getBoolean("qa_dash", true)
     /** Station 3's dial pad button only in "Station 3 with dial pad". */
     fun dialInStation3(c: Context) = mode(c) == "s3dial"
     /** STORY's Always On Display screen runs when anything is meant to show on it. */
@@ -27,6 +29,7 @@ object QuickAccess {
     fun json(c: Context): String = JSONObject()
         .put("mode", mode(c)).put("where", where(c)).put("s3Aod", s3Aod(c))
         .put("lockDial", p(c).getBoolean("qa_lockdial", false)).put("dialAod", p(c).getBoolean("aod_dial", false))
+        .put("dash", p(c).getBoolean("qa_dash", true))
         .toString()
 
     fun save(c: Context, s: String) {
@@ -37,6 +40,7 @@ object QuickAccess {
         if (j.has("s3Aod")) e.putBoolean("aod", j.optBoolean("s3Aod"))
         if (j.has("lockDial")) e.putBoolean("qa_lockdial", j.optBoolean("lockDial"))
         if (j.has("dialAod")) e.putBoolean("aod_dial", j.optBoolean("dialAod"))
+        if (j.has("dash")) e.putBoolean("qa_dash", j.optBoolean("dash"))
         e.apply()
     }
 }

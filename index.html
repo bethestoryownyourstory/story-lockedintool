@@ -2607,6 +2607,8 @@
   /* While pages slide under the finger, nothing gets text-selected. */
   body.page-sliding, body.page-sliding *{ -webkit-user-select:none !important; user-select:none !important; }
   html.native:not(.s3-early) .story-screen{ margin-top:0 !important; margin-bottom:0 !important; padding-bottom:0 !important; }
+  /* Station 3 on the Dashboard (Settings > QUICK ACCESS): its bar sits at the very bottom, everything else above it. */
+  html.native:not(.s3-early) .story-screen.s3-dash{ padding-bottom:46px !important; }
   /* Solid white fill plugging the gaps between the lifted Rows/Page Styles row, the bar
      card, and the corner arrow, so the whole silhouette reads as one continuous flush
      white shape with no bare strip of background showing through anywhere. Pure fill --
@@ -4958,7 +4960,7 @@ function pageArrows(){
 /* ---------- SCREEN TEMPLATES ---------- */
 function dashboardScreen(){
   return `
-    <div class="story-screen" id="dashboard-swipe-zone">
+    <div class="story-screen${dashS3On() ? ' s3-dash' : ''}" id="dashboard-swipe-zone">
       <div class="notif-pull" id="notif-pull" style="pointer-events:none;">▾</div>
       <div class="story-topbar">
         <div class="story-title-row">
@@ -8475,7 +8477,7 @@ function quickAccessSettingsHTML(){
         ${[['pages','Pages'],['apps','Apps'],['both','Both']].map(([v,t])=>`<button class="theme-opt${q.where===v?' on':''}" data-action="qa-where" data-v="${v}">${t}</button>`).join('')}
       </div>
     </div>`;
-  const s3Opts = where + toggle('s3Aod', 'Always On Display');
+  const s3Opts = where + toggle('s3Aod', 'Always On Display') + toggle('dash', 'Station 3 on the Dashboard', 'Always open at the bottom of the Dashboard');
   let body = '';
   if(q.mode === 's3dial') body = s3Opts;
   else if(q.mode === 'separate') body = `
@@ -13810,7 +13812,23 @@ function station3CornerArrowHTML(){
 function quickAccess(){
   let q = {};
   try{ q = JSON.parse((window.StoryNative && window.StoryNative.getQuickAccess) ? window.StoryNative.getQuickAccess() : (localStorage.getItem('story-quick-access') || '{}')) || {}; }catch(e){}
-  return Object.assign({ mode:'s3dial', where:'both', s3Aod:false, lockDial:false, dialAod:false }, q);
+  return Object.assign({ mode:'s3dial', where:'both', s3Aod:false, lockDial:false, dialAod:false, dash:true }, q);
+}
+// Station 3 on the Dashboard (owner's full layout): held open at the bottom of the Dashboard by the app, with no
+// button there and no Rows / Page Styles; the Dashboard keeps its bottom free for it. The Pages tell the app when
+// the Dashboard is on screen (StoryNative.dashShown).
+function dashS3On(){
+  if(!NATIVE || document.documentElement.classList.contains('story-widget')) return false;
+  const q = quickAccess();
+  return q.mode !== 'dialonly' && q.dash !== false && !wgOn();
+}
+let dashToldNative = null;
+function dashTellNative(){
+  if(!NATIVE || IN_STATION3_WINDOW || document.documentElement.classList.contains('story-widget') || !window.StoryNative.dashShown) return;
+  const on = state.current === 'dashboard' && !state.rowsViewOpen && !(state.pageStyleOn && state.pageStyleViewOpen);
+  if(on === dashToldNative) return;
+  dashToldNative = on;
+  try{ window.StoryNative.dashShown(on); }catch(e){}
 }
 window.storyQuickAccessChanged = function(){ renderDevice(); };
 // The app says when the phone locks / unlocks (Station 3's dial pad button follows it).
@@ -14913,6 +14931,7 @@ function renderDevice(){
   const fsLive = document.getElementById('content-area');
   if(fsLive){ const lock = state.current === 'trading' && state.chartFullscreen; fsLive.classList.toggle('fs-lock', lock); if(lock) fsLive.scrollTop = 0; }
   positionStation3();
+  dashTellNative();
   attachPayScroll();
   refreshNeighbors();
   if(typeof updatePhoneStatusClock === 'function') updatePhoneStatusClock();
@@ -19026,7 +19045,7 @@ function fitPageToScreen(area, el, pageKey){
   const topBarEl = el.querySelector(':scope > .page-top');
   const frame = area.closest('.phone-screen, .laptop-screen') || document;
   const dock = frame.querySelector('.wallet-float-dock');
-  const key = page + '|' + area.clientWidth + 'x' + area.clientHeight + '|' + (dock ? 1 : 0);
+  const key = page + '|' + area.clientWidth + 'x' + area.clientHeight + '|' + (dock ? 1 : 0) + (page === 'dashboard' && dashS3On() ? '|s3' : '');
   const applyZoom = z=>{
     el.style.zoom = z === 1 ? '' : z.toFixed(4);
     // Keep the header (back button, title, dots) at its natural size and position so it lines
@@ -19036,6 +19055,8 @@ function fitPageToScreen(area, el, pageKey){
   };
   const measure = ()=>{
     const r = el.getBoundingClientRect();
+    // The Dashboard's bottom space kept for Station 3 counts as filled (it would otherwise zoom the Dashboard in).
+    if(el.classList.contains('s3-dash')) return { top: r.top, bottom: r.bottom };
     let cb = r.top;
     Array.from(el.children).forEach(c=>{
       const b = c.getBoundingClientRect().bottom + (parseFloat(getComputedStyle(c).marginBottom) || 0);

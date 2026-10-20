@@ -43,6 +43,7 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         fun toggleCalls()
         fun toggleUpdates()
         fun pagesAction(action: String)
+        fun dashShown(on: Boolean)
         fun getCalls(): String
         fun createShutter()
         fun createVideo(on: Boolean)
@@ -539,6 +540,9 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
     /** Station 3's Rows / Page Styles buttons (on the Pages): do it on the Pages. */
     @JavascriptInterface
     fun pagesAction(action: String) { if (station3) host.pagesAction(action) }
+    /** The Pages say whether the Dashboard is on screen (Station 3 stays open at its bottom - Settings > QUICK ACCESS). */
+    @JavascriptInterface
+    fun dashShown(on: Boolean) { if (!station3 && !widget) host.dashShown(on) }
 
     @JavascriptInterface
     fun getCalls(): String = if (profile) host.getCalls() else "[]"
