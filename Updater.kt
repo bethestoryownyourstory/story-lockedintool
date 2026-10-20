@@ -74,13 +74,15 @@ object Updater {
     }
 
     /** force = you opened STORY yourself: always ask again, even if an install prompt was just shown and missed. */
-    fun check(ctx: Context, force: Boolean = false) {
+    fun check(ctx: Context, force: Boolean = false, now: Boolean = false) {
         if (busy || (!force && System.currentTimeMillis() - lastCheck < 15_000)) return
-        Thread { checkNow(ctx.applicationContext, force) }.start()
+        Thread { checkNow(ctx.applicationContext, force, now) }.start()
     }
 
     /** Blocking version (UpdateWorker runs this). */
-    fun checkNow(ctx: Context, force: Boolean = false) {
+    /** now = "Check for updates now" on the setup screen: you're there, so it installs straight away and, if Android
+     *  wants its one tap, shows Android's own prompt (a quiet update that needed a tap used to give up for good). */
+    fun checkNow(ctx: Context, force: Boolean = false, now: Boolean = false) {
         if (busy) return
         busy = true; lastCheck = System.currentTimeMillis()
         try {
@@ -104,7 +106,8 @@ object Updater {
             // Seamless (owner): installing restarts Lockedintool for a moment, so it waits for the screen to go off
             // (nobody using the phone, no call) - OverlayService's screen-off calls installWaiting.
             val pm = ctx.getSystemService(android.os.PowerManager::class.java)
-            if (pm.isInteractive || OverlayService.instance?.inCall() == true) {
+            if (now) ctx.getSharedPreferences("story", Context.MODE_PRIVATE).edit().putBoolean("session_confirm_tried", false).apply()
+            if (!now && (pm.isInteractive || OverlayService.instance?.inCall() == true)) {
                 ctx.getSharedPreferences("story", Context.MODE_PRIVATE).edit().putLong("upd_waiting", latest).apply()
                 setStatus(ctx, "Build $latest is ready - it installs by itself when the screen is off")
                 return

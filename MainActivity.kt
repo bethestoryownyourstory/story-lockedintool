@@ -93,7 +93,7 @@ class MainActivity : Activity() {
         // Loading bar while an update downloads / installs.
         updateBar = android.widget.ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply { max = 100; visibility = android.view.View.GONE; setPadding(0, 0, 0, pad / 2) }
         col.addView(updateBar)
-        col.addView(btn("Check for updates now") { Updater.setStatus(this, "Checking…"); showUpdateStatus(); Updater.check(applicationContext, force = true) })
+        col.addView(btn("Check for updates now") { Updater.setStatus(this, "Checking…"); showUpdateStatus(); Updater.check(applicationContext, force = true, now = true) })
         // Owner only: you see the newest version (Test channel) and can publish it to everyone.
         if (Release.isOwner(this)) {
             col.addView(title("Owner - Test channel: you always get the newest version first.", 15f).apply { setTextColor(Color.parseColor("#FFE8B23D")); setPadding(0, pad, 0, pad / 2) })
