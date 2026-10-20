@@ -79,7 +79,10 @@ class OverlayService : Service(), StoryBridge.Host {
     // (if switched on). Pressing power while it's up turns the screen truly off.
     private val screenOff = object : android.content.BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) { screenOffAt = System.currentTimeMillis(); ui.post { hideLiveWidgets() }; lockDialAway = false; lockDialPeek = false; lockDialBackAt = 0L; onScreenOff(); ui.post { syncLockDial() }
-            if (!callActive) Updater.installWaiting(applicationContext) }   // updates install while nobody's using the phone (owner)
+            if (!callActive) Updater.installWaiting(applicationContext)    // updates install while nobody's using the phone (owner)
+            // New screens reach the Pages when they hide - but someone whose home is the Dashboard may never hide them.
+            // The screen going off is also a moment nobody is looking: bring the Pages up to date then.
+            ui.post { pagesPane?.takeIf { it.shown && it.stale && !callActive }?.let { reload(it) } } }
     }
     // Screen on: the lock screen may be showing -> the lock screen dial pad (Settings > QUICK ACCESS).
     private val screenOn = object : android.content.BroadcastReceiver() {
