@@ -3984,13 +3984,13 @@ const CORE_ITEMS = PAGE_SWITCH_ITEMS.slice(0, CORE_PAGE_COUNT);
 function appItem(a){ return { key:'app:' + a.pkg, label:escText(a.name || ''), app:a }; }
 // Each row's real id (1 = Row 1, then the stored row numbers in order) - Page layout keeps each row's order by it.
 function rowIds(){
-  const apps = sysOn() ? [] : appPagesStored();
+  const apps = sysOn() || planBasicOnly() ? [] : appPagesStored();
   return [1].concat([...new Set(apps.map(a=>a.row || 1).filter(r=>r > 1))].sort((x, y)=>x - y));
 }
 // Layouts > Pages > Page layout (owner): your own order of the pages in each row ('story-row-order' {rowId: [keys]}).
 function rowOrders(){ try{ return JSON.parse(localStorage.getItem('story-row-order') || '{}') || {}; }catch(e){ return {}; } }
 function rowsList(){
-  const apps = sysOn() ? [] : appPagesStored(), ord = rowOrders();
+  const apps = sysOn() || planBasicOnly() ? [] : appPagesStored(), ord = rowOrders();
   const sorted = (id, items)=>{ const o = ord[id] || []; const at = k=>{ const i = o.indexOf(k); return i < 0 ? 1e6 : i; };
     return items.map((it, i)=>[it, i]).sort((a, b)=>(at(a[0].key) - at(b[0].key)) || (a[1] - b[1])).map(x=>x[0]); };
   const hid = hiddenPages();
@@ -4968,7 +4968,7 @@ function dashboardScreen(){
           <button class="layouts-btn" data-nav="layouts">LAYOUTS</button>
         </div>
         <div class="story-status-right">
-          <button class="arrow-btn" data-nav="${state.lastPage}">→</button>
+          <button class="arrow-btn" data-nav="${state.lastPage}"${planFree() ? ' style="visibility:hidden;pointer-events:none;"' : ''}>→</button>
         </div>
       </div>
       <div class="story-hr"></div>
@@ -8122,11 +8122,23 @@ function subActive(){ const s = subState(); return !!(s && s.plan && s.until > D
 // The paywall only shows once the owner switches it on (server secret SUB_ENFORCE=1, with live Stitch keys - owner).
 function subLocked(){ const s = subState(); return !!(s && s.connected && s.enforced) && !subActive() && !STORY_OWNER; }
 function subPremium(){ const s = subState(); return STORY_OWNER || !(s && s.connected) || (subActive() && s.plan === 'premium'); }
+// Plans (owner's 'Full layout of Lockedintool'): FREE (no plan) = the Dashboard only - the Pages are hidden; BASIC =
+// the Dashboard + Money, Wallet and Focus only (Focus can be Trading Page or one app) - no app pages, no rows;
+// PREMIUM = everything. Only once subscriptions are really on (enforced), never on the owner's phone.
+function planFree(){ return subLocked(); }
+// Free has no Pages (so no Rows / Page Styles); Basic has its 3 pages but no Rows (owner). Returns true when stopped.
+function planGateRows(a){
+  if(planFree()){ showToast('The Pages come with a plan'); state.current = 'subscription'; return true; }
+  if(a === 'page-quick-rows' && planBasicOnly()){ showToast('Rows come with Premium'); state.current = 'subscription'; return true; }
+  return false;
+}
+function planBasicOnly(){ const s = subState(); if(!(s && s.connected && s.enforced && subActive() && s.plan !== 'premium')) return false; try{ return !STORY_OWNER; }catch(e){ return true; } }   // (rows are worked out before STORY_OWNER exists)
+function isPagesScreen(k){ return PAGES.includes(k) || ['money', 'wallet', 'trading', 'money-summary', 'wallet-overview', 'tx-history', 'send-money', 'receive-money', 'layouts-pagelayout'].includes(k) || isAppPage(k); }
 function subRefresh(force){
   if(!msgAccount() || IN_STATION3_WINDOW) return;
   const s = subState();
   if(!force && s && Date.now() - (s.checked || 0) < 3 * 3600000) return;
-  msgApi('/v1/sub/info').then(i=>{ const was = subLocked(); subSave(i); subApplyMode(); if(was !== subLocked() || state.current === 'subscription') renderDevice(); }).catch(()=>{});
+  msgApi('/v1/sub/info').then(i=>{ const was = subLocked(); subSave(i); subApplyMode(); syncAppPages(); if(was !== subLocked() || state.current === 'subscription') renderDevice(); }).catch(()=>{});
 }
 setTimeout(()=>subRefresh(false), 4000);
 const SUB_PLANS = [
@@ -8146,12 +8158,12 @@ function subscriptionScreen(){
   const until = s.until ? new Date(s.until).toLocaleDateString('en-ZA', { day:'numeric', month:'short', year:'numeric' }) : '';
   const w = state.sub.waiting;
   const status = active ? 'Your plan: ' + (s.plan === 'premium' ? 'Premium' : 'Basic') + ' · ' + subOptName(s.mode) + ' · paid until ' + until
-    : s.connected ? 'Choose a plan to use LOCKED IN TOOL.' : 'Subscriptions open once LOCKED IN TOOL’s payments are set up.';
+    : s.connected ? (locked ? 'Free: the Dashboard. Choose a plan for the Pages.' : 'Choose a plan to use LOCKED IN TOOL.') : 'Subscriptions open once LOCKED IN TOOL’s payments are set up.';
   if(state.sub.optView) return subOptionScreen(locked);
   const mode = subMode();
   return `
     <div class="page-shell sub-page">
-    ${topBar('Subscription', false, '', 'dashboard', '', locked)}
+    ${topBar('Subscription', false, '', 'dashboard', '', false)}
     <div class="sub-head">LOCKED IN TOOL</div>
     <div class="sub-opts">${SUB_OPTIONS.map(o=>`<button class="sub-opt${mode === o.key ? ' on' : ''}" data-action="sub-opt" data-v="${o.key}"><span class="sub-opt-mark">${mode === o.key ? '✓' : ''}</span>${o.name}<span class="sub-opt-tip"><b>${o.name}</b>${o.short}</span></button>`).join('')}</div>
     <div class="sub-status">${escText(status)}</div>
@@ -8698,7 +8710,7 @@ function privacySettingsHTML(){
 // privacy, the vision and what's coming (owner: "just story information"; the words are the owner's to change). ----
 // ---- Privacy Policy + Terms of Service (owner, under Information). Written from how Lockedintool really works; the
 //      owner's details: Lockedintool, lockedintool@gmail.com, no refunds (except where the law requires). Also reachable from the
-//      Subscription page (someone without a plan sees only that page, and must be able to read what they agree to).
+//      Subscription page (must be readable by someone without a plan, before they agree to it).
 const LEGAL_UPDATED = '17 October 2026';
 const LEGAL = {
   'legal-privacy': { title:'Privacy Policy', sections:[
@@ -8764,6 +8776,7 @@ const LEGAL = {
     ['Automatic updates', [
       'Using Lockedintool means agreeing that it keeps itself up to date: new versions install automatically.' ]],
     ['Subscription', [
+      'Without a plan you can use the Dashboard for free. Basic adds the Money, Wallet and Focus pages; Premium adds everything else (more pages and rows).',
       'Basic is $5 a month and Premium $15 a month. Changes to prices will be announced before they apply. Plans are charged in rand (shown before you pay - currently R95 and R285). One payment gives 30 days of your plan; paying the same plan again adds 30 days.',
       'Plans do not renew by themselves yet - you pay each month. Payments are made through Stitch and approved by you on your own bank’s or card’s page.',
       'Before you pay you can cancel or switch plans at any time. Once a payment is made it is not refundable, except where South African law requires a refund.',
@@ -8801,7 +8814,7 @@ function legalScreen(key){
   const L = LEGAL[key];
   return `
     <div class="page-shell set2 info-page legal-page">
-    ${topBar(L.title, false, '', state.legalFrom || 'information', '', subLocked() && state.legalFrom !== 'subscription')}
+    ${topBar(L.title, false, '', state.legalFrom || 'information', '', false)}
     <div class="legal-date">Last updated ${LEGAL_UPDATED}</div>
     ${L.sections.map(([h, ps])=>`<div class="section-title">${h.toUpperCase()}</div><div class="set2-card legal-card">${ps.map(p=>`<p>${escText(p)}</p>`).join('')}</div>`).join('')}
     <div class="info-foot">Lockedintool</div>
@@ -8981,6 +8994,7 @@ document.addEventListener('click', (e)=>{
 // on the Pages and Station 3 closes, as always.
 window.storyOnPages = function(on){ document.body.classList.toggle('s3-pages', !!on); if(document.body.classList.contains('s3-only')) renderDevice(); };
 window.storyPagesAction = function(a){
+  if(planGateRows(a)){ state.station3Open = false; renderDevice(); return; }
   if(a === 'page-quick-rows') state.rowsViewOpen = true;
   else if(a === 'page-quick-style'){ state.pageStyleOn = true; state.pageStyleViewOpen = true; state.vstackPick = null; state.vstackSpread = 0; }
   else return;
@@ -14782,8 +14796,8 @@ notesDb().then(db=>new Promise(res=>{
 document.addEventListener('visibilitychange', ()=>{ if(document.hidden){ if(noteLiveSaveT){ clearTimeout(noteLiveSaveT); noteLiveSaveT = null; } persistNotesNow(); } });
 function renderDevice(){
   if(CORE_ITEMS.some(it=>it.key === state.current) && hiddenPages().includes(state.current) && PAGES.length) state.current = PAGES[0];   // a removed page (Page layout) never shows
-  // No plan (once subscriptions are really on) = LOCKED IN TOOL shows only its Subscription page (owner).
-  if(subLocked() && state.current !== 'subscription' && !/^legal-/.test(state.current) && !IN_STATION3_WINDOW){ state.current = 'subscription'; state.rowsViewOpen = false; state.pageStyleViewOpen = false; }
+  // No plan (once subscriptions are really on) = Free: the Dashboard only, the Pages hidden (owner's full layout).
+  if(planFree() && isPagesScreen(state.current) && !IN_STATION3_WINDOW){ state.current = 'dashboard'; state.rowsViewOpen = false; state.pageStyleViewOpen = false; }
   // A live home screen widget never leaves its page (owner: the Money widget stays on Money, the Dashboard widget on
   // the Dashboard): anything that would go to another page opens STORY full screen on it instead.
   if(window.__storyWidgetPinned && state.current !== window.__storyWidget){
@@ -16572,9 +16586,9 @@ function attachHandlers(){
         // activate their real screen -- each is closed from inside that screen (its own
         // back button, or tapping a page to jump to it), never by pressing the same
         // quick button again.
-        case 'page-quick-rows': state.rowsViewOpen = true; state.station3Open = false; break;
+        case 'page-quick-rows': if(planGateRows('page-quick-rows')){ state.station3Open = false; break; } state.rowsViewOpen = true; state.station3Open = false; break;
         case 'rows-view-close': state.rowsViewOpen = false; break;
-        case 'page-quick-style': state.pageStyleOn = true; state.pageStyleViewOpen = true; state.vstackPick = null; state.vstackSpread = 0; state.station3Open = false; break;
+        case 'page-quick-style': if(planGateRows('page-quick-style')){ state.station3Open = false; break; } state.pageStyleOn = true; state.pageStyleViewOpen = true; state.vstackPick = null; state.vstackSpread = 0; state.station3Open = false; break;
         case 'page-style-close': state.pageStyleOn = false; state.pageStyleViewOpen = false; state.vstackPick = null; break;
         case 'station3-dial-digit': {
           const d = el.getAttribute('data-digit') || '';
