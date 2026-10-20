@@ -3251,7 +3251,7 @@
   .quotes-title{ font-family:var(--font-display); font-weight:700; font-size:12.5px; letter-spacing:0.5px; margin-bottom:8px; }
   .quote-text{ font-size:12.5px; line-height:1.35; margin:0 0 6px; font-family:var(--font-body); }
   .quote-author{ font-size:10.5px; color:var(--muted); }
-  .story-bottom{ display:grid; grid-template-columns:1.4fr 1fr; gap:7px; margin-top:6px; flex-shrink:0; }
+  .story-bottom{ display:grid; grid-template-columns:minmax(0, 1.4fr) 1fr; gap:7px; margin-top:6px; flex-shrink:0; }
   .media-card, .brightness-card, .spotify-card, .controls-card{
     background:var(--card); border-radius:13px; padding:8px 11px; box-shadow:var(--lev1);
   }
@@ -3264,7 +3264,10 @@
   .spotify-title .dot{ font-size:8px; }
   .music-card .spotify-title{ padding-right:22px; min-width:0; }
   .music-now{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+  .music-card{ min-width:0; overflow:hidden; }   /* a long song name never widens the card (it pushed brightness / Controls off screen) */
   .music-card .spotify-controls span{ cursor:pointer; }
+  /* Bigger finger targets for ⟨ ⟩ without moving anything: padding taken back by the same negative margin. */
+  .music-card .spotify-controls span:not(.play){ padding:10px 12px; margin:-10px -12px; }
   .spotify-controls{ display:flex; align-items:center; justify-content:center; gap:22px; font-size:14px; }
   .spotify-controls .play{
     background:#e8e6e1; color:#000; width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:10px;
@@ -8385,7 +8388,10 @@ function musicNow(){
   if(!musicCache){ try{ musicCache = JSON.parse(window.StoryNative.musicState() || '{}') || {}; }catch(e){ musicCache = {}; } }
   return musicCache;
 }
+let musicPressing = false, musicChangedLater = false;
 window.storyMusicChanged = function(){
+  // Never swap the card under a finger - the tap on ⟨ ▶ ⟩ would be lost (players update often: progress, ads).
+  if(musicPressing){ musicChangedLater = true; return; }
   const was = JSON.stringify(musicCache || {}); musicCache = null;
   if(state.current === 'dashboard' && !pageSwipeAnimating && JSON.stringify(musicNow()) !== was){
     const card = document.querySelector('.music-card');
@@ -8394,8 +8400,9 @@ window.storyMusicChanged = function(){
   }
 };
 (function(){ let t = null, held = false, x0 = 0, y0 = 0;
-  document.addEventListener('pointerdown', e=>{ const c = e.target.closest && e.target.closest('.music-card'); if(!c) return; held = false; x0 = e.clientX; y0 = e.clientY; clearTimeout(t); t = setTimeout(()=>{ held = true; if(NATIVE && window.StoryNative.musicOpen) window.StoryNative.musicOpen(); else showToast('Opens your music player'); }, 550); }, true);
-  ['pointerup', 'pointercancel'].forEach(ev=>document.addEventListener(ev, ()=>clearTimeout(t), true));
+  document.addEventListener('pointerdown', e=>{ const c = e.target.closest && e.target.closest('.music-card'); if(!c) return; musicPressing = true; held = false; x0 = e.clientX; y0 = e.clientY; clearTimeout(t); t = setTimeout(()=>{ held = true; if(NATIVE && window.StoryNative.musicOpen) window.StoryNative.musicOpen(); else showToast('Opens your music player'); }, 550); }, true);
+  ['pointerup', 'pointercancel'].forEach(ev=>document.addEventListener(ev, ()=>{ clearTimeout(t);
+    if(musicPressing){ musicPressing = false; if(musicChangedLater){ musicChangedLater = false; setTimeout(()=>window.storyMusicChanged(), 60); } } }, true));
   document.addEventListener('pointermove', e=>{ if(Math.abs(e.clientX - x0) > 10 || Math.abs(e.clientY - y0) > 10) clearTimeout(t); }, true);
   document.addEventListener('click', e=>{ if(held && e.target.closest && e.target.closest('.music-card')){ e.stopPropagation(); e.preventDefault(); held = false; } }, true);
 })();
