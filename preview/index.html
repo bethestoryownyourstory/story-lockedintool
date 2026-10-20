@@ -681,6 +681,12 @@
   .highlight-swatch.selected{ border-color:#e8e6e1; }
   .note-hint{ font-size:10.5px; color:var(--muted); margin-bottom:10px; line-height:1.4; }
   #notes-editor-shell{ display:flex; flex-direction:column; min-height:100%; }
+  /* The note's top station (back, name, search, full screen, read, +, ⋮) stays pinned at the top while you scroll
+     through the note's pages - owner: it scrolled away and had to be fetched. */
+  #notes-editor-shell > .notes-editor-head{ position:sticky; top:0; z-index:30; background:#000; }
+  #notes-editor-shell > .notes-editor-head::before, #notes-editor-shell > .notes-editor-head::after{ content:''; position:absolute; left:0; right:0; height:10px; background:#000; pointer-events:none; }
+  #notes-editor-shell > .notes-editor-head::before{ bottom:100%; }
+  #notes-editor-shell > .notes-editor-head::after{ top:100%; }
   #notes-editor-shell > .canvas-mode-tabs,
   #notes-editor-shell > .notes-editor-head,
   #notes-editor-shell > .highlighter-bar,
