@@ -3992,7 +3992,28 @@ function rowsList(){
   const apps = sysOn() ? [] : appPagesStored(), ord = rowOrders();
   const sorted = (id, items)=>{ const o = ord[id] || []; const at = k=>{ const i = o.indexOf(k); return i < 0 ? 1e6 : i; };
     return items.map((it, i)=>[it, i]).sort((a, b)=>(at(a[0].key) - at(b[0].key)) || (a[1] - b[1])).map(x=>x[0]); };
-  return rowIds().map(id=>sorted(id, id === 1 ? CORE_ITEMS.concat(apps.filter(a=>(a.row || 1) <= 1).map(appItem)) : apps.filter(a=>a.row === id).map(appItem)));
+  const hid = hiddenPages();
+  return rowIds().map(id=>sorted(id, id === 1 ? CORE_ITEMS.filter(it=>!hid.includes(it.key)).concat(apps.filter(a=>(a.row || 1) <= 1).map(appItem)) : apps.filter(a=>a.row === id).map(appItem)));
+}
+// Page layout > Remove (owner: remove any page): Money / Home / Wallet / Focus are hidden ('story-hidden-pages') and
+// can be added back from Page layout; an app page is taken out (add it again from Apps). Row 1 keeps at least one page.
+function hiddenPages(){ try{ const a = JSON.parse(localStorage.getItem('story-hidden-pages') || '[]'); return Array.isArray(a) ? a : []; }catch(e){ return []; } }
+function rowRemovePage(rowIndex, key){
+  const rows = rowsList();
+  if(rowIndex === 0 && rows[0].length <= 1){ showToast('Row 1 needs at least one page'); return; }
+  if(isAppPage(key)){ const a = appPagesStored().find(x=>'app:' + x.pkg === key); if(a) toggleAppPage(a); }
+  else { const h = hiddenPages(); if(!h.includes(key)) h.push(key); try{ localStorage.setItem('story-hidden-pages', JSON.stringify(h)); }catch(e){} showToast((CORE_ITEMS.find(it=>it.key === key) || {}).label + ' removed'); }
+  rowPagesChanged();
+}
+function rowAddBack(key){
+  try{ localStorage.setItem('story-hidden-pages', JSON.stringify(hiddenPages().filter(k=>k !== key))); }catch(e){}
+  showToast((CORE_ITEMS.find(it=>it.key === key) || {}).label + ' is back in Row 1');
+  rowPagesChanged();
+}
+function rowPagesChanged(){
+  syncAppPages();
+  if(!PAGES.includes(state.lastPage)) state.lastPage = PAGES[0];
+  Object.keys(NEIGHBORS).forEach(k=>{ if(NEIGHBORS[k].host.parentNode) NEIGHBORS[k].host.remove(); delete NEIGHBORS[k]; });
 }
 function rowMovePage(rowIndex, key, by){
   const rows = rowsList(), ids = rowIds(), keys = (rows[rowIndex] || []).map(it=>it.key), i = keys.indexOf(key), j = i + by;
@@ -8316,7 +8337,7 @@ function layoutsPageLayoutScreen(){
     <div class="note">Move each page left or right. The first page is on the left of the row, the last on the right.</div>
     <div class="row-card">
       ${items.map((it, i)=>`<div class="row"><div class="row-left"><div class="row-name">${i + 1}. ${it.label}</div><div class="row-sub">${i === 0 ? 'Left' : i === items.length - 1 ? 'Right' : 'Middle'}</div></div>
-        <span style="display:flex;gap:6px;"><button class="order-corner-btn" data-action="row-move" data-k="${escText(it.key)}" data-by="-1" title="Move left"${i === 0 ? ' disabled style="opacity:0.3;"' : ''}>‹</button><button class="order-corner-btn" data-action="row-move" data-k="${escText(it.key)}" data-by="1" title="Move right"${i === items.length - 1 ? ' disabled style="opacity:0.3;"' : ''}>›</button></span></div>`).join('')}
+        <span style="display:flex;gap:6px;"><button class="edit-remove" data-action="row-remove" data-k="${escText(it.key)}">Remove</button><button class="order-corner-btn" data-action="row-move" data-k="${escText(it.key)}" data-by="-1" title="Move left"${i === 0 ? ' disabled style="opacity:0.3;"' : ''}>‹</button><button class="order-corner-btn" data-action="row-move" data-k="${escText(it.key)}" data-by="1" title="Move right"${i === items.length - 1 ? ' disabled style="opacity:0.3;"' : ''}>›</button></span></div>`).join('')}
     </div>
     </div>`;
   }
@@ -8327,6 +8348,7 @@ function layoutsPageLayoutScreen(){
     ${rows.map((items, i)=>`<div class="row-card" style="cursor:pointer;" data-action="row-edit" data-v="${i}">
       <div class="row"><div class="row-left"><div class="row-name">Row ${i + 1}</div><div class="row-sub">${items.map(it=>it.label).join(' · ')}</div></div><span class="row-sub" style="white-space:nowrap;">Tap to edit ›</span></div>
     </div>`).join('')}
+    ${hiddenPages().length ? `<div class="section-title">REMOVED PAGES</div><div class="row-card">${CORE_ITEMS.filter(it=>hiddenPages().includes(it.key)).map(it=>`<div class="row"><div class="row-left"><div class="row-name">${it.label}</div></div><button class="edit-remove edit-add" data-action="row-addback" data-k="${it.key}">Add back</button></div>`).join('')}</div>` : ''}
     </div>`;
 }
 // The Dashboard's music card (owner): whatever music player you use (Layouts > Dashboard > Music player) - what's
@@ -14750,6 +14772,7 @@ notesDb().then(db=>new Promise(res=>{
 }).catch(()=>{ notesLoaded = true; });
 document.addEventListener('visibilitychange', ()=>{ if(document.hidden){ if(noteLiveSaveT){ clearTimeout(noteLiveSaveT); noteLiveSaveT = null; } persistNotesNow(); } });
 function renderDevice(){
+  if(CORE_ITEMS.some(it=>it.key === state.current) && hiddenPages().includes(state.current) && PAGES.length) state.current = PAGES[0];   // a removed page (Page layout) never shows
   // No plan (once subscriptions are really on) = LOCKED IN TOOL shows only its Subscription page (owner).
   if(subLocked() && state.current !== 'subscription' && !/^legal-/.test(state.current) && !IN_STATION3_WINDOW){ state.current = 'subscription'; state.rowsViewOpen = false; state.pageStyleViewOpen = false; }
   // A live home screen widget never leaves its page (owner: the Money widget stays on Money, the Dashboard widget on
@@ -16383,6 +16406,8 @@ function attachHandlers(){
         case 'app-row-pick': { const p = state.appRowPick; state.appRowPick = null; if(p){ const v = el.getAttribute('data-v'); toggleAppPage(p, v === 'new' ? 'new' : +v); } break; }
         case 'app-row-close': state.appRowPick = null; break;
         case 'row-edit': state.layoutRowEdit = +el.getAttribute('data-v'); break;
+        case 'row-remove': { rowRemovePage(state.layoutRowEdit, el.getAttribute('data-k')); if(!rowsList()[state.layoutRowEdit]) state.layoutRowEdit = null; break; }
+        case 'row-addback': rowAddBack(el.getAttribute('data-k')); break;
         case 'row-move': rowMovePage(state.layoutRowEdit, el.getAttribute('data-k'), +el.getAttribute('data-by')); break;
         case 'app-page-open': {
           const pkg = el.getAttribute('data-pkg');
