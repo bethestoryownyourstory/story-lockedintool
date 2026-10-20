@@ -3153,6 +3153,7 @@
     border:none; outline:none; resize:none; overflow:hidden; padding:0; margin:0; font-family:var(--font-body);
     flex:1; min-width:0; line-height:1.3;
   }
+  .search-value-input:not(:placeholder-shown){ text-align:left; }   /* owner: what you type starts on the left */
   .search-value-input::placeholder{ color:var(--text); font-weight:700; opacity:1; }
   .dash-search-note{
     font-size:10.5px; color:var(--muted); background:var(--card); border-radius:10px;
@@ -4981,12 +4982,13 @@ function dashboardScreen(){
       <div class="story-body">
         <div class="story-sidebar">
           <div class="sidebar-item" data-nav="notes">NOTES</div>
-          <div class="sidebar-item" data-nav="community">COMMUNITY</div>
+          ${dashCommunityOn() ? '<div class="sidebar-item" data-nav="community">COMMUNITY</div>' : ''}
           <div class="sidebar-item" data-nav="settings">SETTINGS</div>
           <div class="sidebar-item" data-nav="subscription">SUBSCRIPTIONS</div>
           <div class="sidebar-item" data-nav="information">INFORMATION</div>
           <div class="sidebar-item" data-dash="camera">CAMERA</div>
           <div class="sidebar-item" data-dash="gallery">GALLERY</div>
+          <div class="sidebar-item" data-dash="alarm">ALARM</div>
           ${sysOn() ? '' : '<div class="sidebar-item" data-nav="apps">APPS</div>'}
         </div>
         <div class="quotes-card">
@@ -8307,6 +8309,9 @@ function layoutsScreen(){
     </div>
     ${state.layoutsTab==='dashboard' ? `
       <div class="section-title">DASHBOARD</div>
+      <div class="row-card" style="cursor:pointer;" data-action="dash-community">
+        <div class="row"><div class="row-left"><div class="row-name">Enable Community</div><div class="row-sub">Community on the Dashboard menu</div></div><span class="ctl-switch${dashCommunityOn() ? ' on' : ''}" style="font-weight:700;color:${dashCommunityOn() ? 'var(--green)' : 'var(--muted)'};">${dashCommunityOn() ? 'On' : 'Off'}</span></div>
+      </div>
       <div class="row-card" style="cursor:pointer;" data-nav="layouts-music">
         <div class="row"><div class="row-left"><div class="row-name">Music player</div><div class="row-sub">${escText(musicNow().chosenName || 'Whatever is playing')}</div></div><span class="chev-right">›</span></div>
       </div>
@@ -8374,6 +8379,8 @@ window.storyMusicChanged = function(){
   document.addEventListener('pointermove', e=>{ if(Math.abs(e.clientX - x0) > 10 || Math.abs(e.clientY - y0) > 10) clearTimeout(t); }, true);
   document.addEventListener('click', e=>{ if(held && e.target.closest && e.target.closest('.music-card')){ e.stopPropagation(); e.preventDefault(); held = false; } }, true);
 })();
+// Layouts > Dashboard > Enable Community (owner): Community can be taken off the Dashboard menu ('story-dash-community').
+function dashCommunityOn(){ try{ return localStorage.getItem('story-dash-community') !== 'off'; }catch(e){ return true; } }
 // Layouts > Dashboard > Music player: every music player on the phone; or 'Whatever is playing'.
 function layoutsMusicScreen(){
   let list = []; try{ list = NATIVE && window.StoryNative.musicPlayers ? JSON.parse(window.StoryNative.musicPlayers() || '[]') : []; }catch(e){}
@@ -9020,7 +9027,7 @@ window.storyAppsChanged = function(){
 };
 // Anything that isn't built yet tells you so when tapped ("... — coming soon"), everywhere in STORY.
 const COMING_SOON = [
-  ['[data-dash]:not([data-dash="camera"]):not([data-dash="gallery"])', el=>el.textContent.trim()],
+  ['[data-dash]:not([data-dash="camera"]):not([data-dash="gallery"]):not([data-dash="alarm"])', el=>el.textContent.trim()],
   ['[data-action="notes-unavailable"]', el=>el.textContent.trim()],
   ['.app-row:not([data-native-pkg]):not([data-nav]):not([data-app-launchpopup]):not([data-app-locked]):not([data-app-toast])', el=>(el.querySelector('.row-name')||el).textContent.trim()],
 ];
@@ -12016,11 +12023,13 @@ window.storyProfileGeom = function(){
 })();
 // Camera and Gallery (Dashboard sidebar and Apps): the phone's own Camera app and Gallery app (owner: the real ones).
 function storyOpenPhone(which){
+  // ALARM (owner): the phone's own alarms (its Clock app).
+  if(which === 'alarm'){ if(NATIVE && window.StoryNative.openAlarms) window.StoryNative.openAlarms(); else showToast('Opens your phone\u2019s alarms in the app'); return; }
   if(NATIVE && window.StoryNative[which === 'camera' ? 'openCamera' : 'openGallery']) window.StoryNative[which === 'camera' ? 'openCamera' : 'openGallery']();
   else showToast(which === 'camera' ? 'Opens your phone\u2019s camera in the app' : 'Opens your phone\u2019s gallery in the app');
 }
 document.addEventListener('click', (e)=>{
-  const el = e.target.closest && e.target.closest('[data-dash="camera"], [data-dash="gallery"], [data-app-id="camera"], [data-app-id="gallery"]');
+  const el = e.target.closest && e.target.closest('[data-dash="camera"], [data-dash="gallery"], [data-dash="alarm"], [data-app-id="camera"], [data-app-id="gallery"]');
   if(!el) return;
   if(el.hasAttribute('data-app-id') && (Date.now() - appMenuOpenedAt < 450 || state.appMenuId)) return;   // a held app row opens its menu
   e.stopPropagation(); e.preventDefault();
@@ -15033,7 +15042,17 @@ function initCanvas(canvasId, isOverlay){
     for(let i = 1; i < pts.length; i++) lctx.lineTo(pts[i].x, pts[i].y);
     lctx.stroke();
   };
+  // Scrolling while the pencil is on (owner): TWO fingers scroll the note / page; one finger draws.
+  let fingers = 0, lastMidY = null;
+  const scroller = ()=>{ let el = canvas.parentNode; while(el && el !== document.body){ const cs = getComputedStyle(el); if(/(auto|scroll)/.test(cs.overflowY) && el.scrollHeight > el.clientHeight + 1) return el; el = el.parentNode; } return document.scrollingElement; };
+  canvas.addEventListener('touchstart', e=>{ fingers = e.touches.length; if(fingers >= 2){
+    drawing = false; activePointer = null; if(layer){ layer.remove(); layer = null; lctx = null; }
+    lastMidY = (e.touches[0].clientY + e.touches[1].clientY) / 2; } }, { passive:true });
+  canvas.addEventListener('touchmove', e=>{ if(e.touches.length < 2 || lastMidY == null) return;
+    const mid = (e.touches[0].clientY + e.touches[1].clientY) / 2, sc = scroller(); if(sc) sc.scrollTop -= mid - lastMidY; lastMidY = mid; }, { passive:true });
+  canvas.addEventListener('touchend', e=>{ fingers = e.touches.length; if(fingers < 2) lastMidY = null; }, { passive:true });
   canvas.addEventListener('pointerdown', e=>{
+    if(fingers >= 2 || (drawing && activePointer != null && e.pointerId !== activePointer)) return;   // a second finger: scrolling, not drawing
     // One undo step per stroke: snapshot the canvas as it looked right before this stroke starts,
     // the same way a text-typing burst snapshots the pre-burst HTML. The scratch space keeps its
     // own separate undo stack (it has no note to share the note undo stack with).
@@ -16536,6 +16555,7 @@ function attachHandlers(){
           } else if(cmd === 'toggle') state.spotifyPlaying = !state.spotifyPlaying;
           break;
         }
+        case 'dash-community': { const on = !dashCommunityOn(); try{ localStorage.setItem('story-dash-community', on ? 'on' : 'off'); }catch(e){} showToast(on ? 'Community is on the Dashboard' : 'Community is off the Dashboard'); break; }
         case 'music-pick': { const p = el.getAttribute('data-v'); if(NATIVE && window.StoryNative.musicChoose) window.StoryNative.musicChoose(p); musicCache = null; showToast(p ? 'Music player set' : 'Following whatever is playing'); break; }
 
         // ----- Station 3: the combined floating panel (Rows, Page Styles, create/post,

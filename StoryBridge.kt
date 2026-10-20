@@ -120,6 +120,13 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         host.hidePanel()
         runCatching { ctx.startActivity(i) }.onFailure { runCatching { ctx.startActivity(Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.onFailure { host.showToast("No camera app on this phone") } }
     }
+    /** Dashboard > ALARM (owner): the phone's own alarms (its Clock app); STORY steps aside like opening any app. */
+    @JavascriptInterface
+    fun openAlarms() {
+        host.hidePanel()
+        runCatching { ctx.startActivity(Intent(android.provider.AlarmClock.ACTION_SHOW_ALARMS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            .onFailure { host.showToast("No clock app on this phone") }
+    }
     @JavascriptInterface
     fun openGallery() {
         host.hidePanel()
