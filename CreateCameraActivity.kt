@@ -49,7 +49,7 @@ class CreateCameraActivity : AppCompatActivity() {
         // Same area as Create's window above it (which stops at Station 3's band), so the camera, a video and a
         // picture all sit in exactly the same box.
         val dp = resources.displayMetrics.density
-        val band = (40 * dp).toInt() + Math.round(2 * dp)
+        val band = (40 * dp).toInt() + Math.round(2 * dp) + (OverlayService.instance?.s3BandYPx() ?: 0)   // above Station 3 (higher on the Dashboard)
         setContentView(FrameLayout(this).apply {
             setBackgroundColor(Color.BLACK)
             addView(FrameLayout(this@CreateCameraActivity).apply {

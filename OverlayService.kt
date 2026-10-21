@@ -312,6 +312,7 @@ class OverlayService : Service(), StoryBridge.Host {
     }
     private fun tearDownPanes() {
         removePanelNow()
+        dashGeom = false; s3Held = false; s3Opening = false; lastOnPages = null; lastOnDash = null
         bubble?.let { runCatching { (bubbleWm ?: wm).removeView(it) } }; bubble = null
         removeBarBg()
         s3Pane?.let { runCatching { it.wm.removeView(it.frame) }; it.web.destroy() }; s3Pane = null
@@ -431,6 +432,7 @@ class OverlayService : Service(), StoryBridge.Host {
         bar?.let { runCatching { (barWm ?: wm).removeView(it) } }
         // Only system (owner): the bottom line that switches Apps | Pages (and swipes to the home screen / recent apps)
         // doesn't exist at all - not shown, not in the background, nowhere.
+        pagesPane?.web?.evaluateJavascript(dashPadJs(), null)   // with or without the line, the Dashboard keeps the right room
         if (SystemMode.on(this) || WidgetMode.on(this)) { bar = null; barLine = null; hidePicker(); return }   // ... and with Only use widgets
         val hasLine = phoneHasGestureLine()
         val w = (150 * dp).toInt(); val h = (26 * dp).toInt()
@@ -476,7 +478,7 @@ class OverlayService : Service(), StoryBridge.Host {
     // While Station 3 is open its own buttons come first: the bottom line's tap area (which sits under
     // Station 3's bar) stops catching taps, so a tap on Station 3 is only ever Station 3's.
     private fun barFlags(f: Int): Int {
-        val s3Open = s3Pane?.shown == true
+        val s3Open = s3Pane?.shown == true && !dashGeom
         return if (s3Open) f or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE else f and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
     }
     private fun syncBarTouch() {
@@ -520,7 +522,7 @@ class OverlayService : Service(), StoryBridge.Host {
         row.addView(TextView(this).apply { text = "|"; setTextColor(th(Color.parseColor("#66FFFFFF"))); textSize = 18f })
         row.addView(word("Pages") { showPanel(station3Only = false) })  // the only way into STORY itself
         picker = row; pickerWm = layerWm
-        layerWm.addView(row, overlayParams(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL, 0, (64 * dp).toInt() + (if (phoneHasGestureLine()) 0 else navBarHeightPx())).also { it.type = layerType })
+        layerWm.addView(row, overlayParams(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL, 0, if (dashGeom) dashBandYPx() + (48 * dp).toInt() else (64 * dp).toInt() + (if (phoneHasGestureLine()) 0 else navBarHeightPx())).also { it.type = layerType })
         ui.postDelayed({ hidePicker() }, 4000)
     }
 
@@ -552,7 +554,8 @@ class OverlayService : Service(), StoryBridge.Host {
     private var profileStripWm: WindowManager? = null
     /** The bottom band Profile leaves to the gap: Station 3's 40dp bar plus the 2dp line along its top. */
     private fun profileBandPx() = (40 * dp).toInt() + Math.round(2 * dp)
-    private fun profileGapWPx() = (barBgLp?.width ?: getSharedPreferences("story", MODE_PRIVATE).getInt("bar_w", (220 * dp).toInt())) + Math.round(2 * dp)
+    private fun profileGapWPx() = if (dashGeom) resources.displayMetrics.widthPixels
+        else (barBgLp?.width ?: getSharedPreferences("story", MODE_PRIVATE).getInt("bar_w", (220 * dp).toInt())) + Math.round(2 * dp)
 
     private fun flagsFor(small: Boolean, shown: Boolean): Int {
         val base = WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
@@ -635,9 +638,12 @@ class OverlayService : Service(), StoryBridge.Host {
                     ui.postDelayed({ paneRef?.let { it.loading = false; if (it.shown) it.frame.alpha = 1f }; syncBarBg() }, 200)
                 } else if (small) {
                     v.evaluateJavascript(exactGeometryJs(), null)
-                    v.evaluateJavascript("window.__storyLocked=${keyguardLocked()};window.__storyOnPages=${pagesPane?.shown == true};window.storyStation3Only&&window.storyStation3Only()", null); v.evaluateJavascript(S3_JS, null)
+                    v.evaluateJavascript("window.__storyLocked=${keyguardLocked()};window.__storyOnPages=${lastOnPages ?: (pagesPane?.shown == true)};window.__storyOnDash=${lastOnDash == true};window.storyStation3Only&&window.storyStation3Only()", null); v.evaluateJavascript(S3_JS, null)
                     // Show it again once Station 3 has actually drawn (a moment after the page is ready).
                     ui.postDelayed({ paneRef?.let { it.loading = false; if (it.shown) it.frame.alpha = 1f }; syncBarBg() }, 200)
+                } else {
+                    // The Pages: the room the Dashboard keeps at its bottom for Station 3 (and the bottom line under it).
+                    v.evaluateJavascript(dashPadJs(), null)
                 }
             }
         }
@@ -790,6 +796,8 @@ class OverlayService : Service(), StoryBridge.Host {
         runCatching { am.adjustStreamVolume(android.media.AudioManager.STREAM_MUSIC, if (on) android.media.AudioManager.ADJUST_MUTE else android.media.AudioManager.ADJUST_UNMUTE, 0) }
         prefs.edit().putBoolean("muted_by_story", on).apply()
     }
+    /** The music card asked to play: let go of the quiet put on the phone's sound when the Pages opened (music must play). */
+    fun musicWanted() { ui.post { quietApps(false) } }
     private fun quietApps(on: Boolean) {
         val am = getSystemService(android.media.AudioManager::class.java) ?: return
         if (!on) {
@@ -1113,7 +1121,9 @@ class OverlayService : Service(), StoryBridge.Host {
     }
     private fun removeAppEdge() { appEdge?.let { runCatching { layerWm.removeView(it) } }; appEdge = null }
     /** The app on screen changed (accessibility): leaving the app page's app takes the strip away. */
-    fun foregroundChanged(pkg: String) { widgetLiveEvent(pkg != homePkg()); ui.post { if (appPagePkg != null && pkg != appPagePkg && pkg != packageName) { appPagePkg = null; removeAppEdge() }; systemEnforce(pkg) } }
+    fun foregroundChanged(pkg: String) { widgetLiveEvent(pkg != homePkg()); ui.post {
+        openingPkg?.let { w -> if (w.isNotEmpty() && pkg == w) { ui.removeCallbacks(openingHide); openingHide.run() } }   // the app just opened is in front
+        if (appPagePkg != null && pkg != appPagePkg && pkg != packageName) { appPagePkg = null; removeAppEdge() }; systemEnforce(pkg) } }
 
     // ---- Lockedintool as your system (SystemMode.kt): no other app, nor the phone's home screen / recent apps - they're
     //      sent away and you land on the Dashboard - your home. Calls, emergency, the lock screen and what
@@ -1170,19 +1180,95 @@ class OverlayService : Service(), StoryBridge.Host {
     // It closes again when you leave the Dashboard or the Pages step aside.
     private var dashUp = false
     private var s3Held = false
+    // Owner: on the Dashboard Station 3 runs the whole bottom, side to side, just above the bottom line (the Apps | Pages
+    // switch / the phone's own gesture line), which stays visible and working under it. dashGeom = Station 3's windows
+    // (its page, the white bar, the dial pad, Profile's gap) are in that Dashboard place; they change only while hidden.
+    private var dashGeom = false
+    private var lastOnDash: Boolean? = null
+    private var s3Opening = false
     override fun dashShown(on: Boolean) { ui.post { if (dashUp != on) { dashUp = on; updateBubble() } } }
+    /** The Pages stepped aside for a moment for Lockedintool's own screens (Create's camera, a system picker): the
+     *  Dashboard's Station 3 stays where it is. */
+    private fun pagesAside() = pagesHiddenForCreate || pickerHid.any { it === pagesPane }
+    /** The phone's own navigation area at the bottom (gesture line / buttons), in px. */
+    private fun navInsetPx(): Int = if (Build.VERSION.SDK_INT >= 30)
+        runCatching { wm.currentWindowMetrics.windowInsets.getInsetsIgnoringVisibility(android.view.WindowInsets.Type.navigationBars()).bottom }.getOrDefault(0)
+        else if (phoneHasGestureLine()) 0 else navBarHeightPx()
+    /** How far above the screen's bottom edge the Dashboard's Station 3 sits: right above the bottom line's area. */
+    private fun dashBandYPx(): Int {
+        val line = if (SystemMode.on(this) || WidgetMode.on(this)) 0
+            else (if (phoneHasGestureLine()) 0 else navBarHeightPx() + (6 * dp).toInt()) + (26 * dp).toInt()
+        return maxOf(line, navInsetPx())
+    }
+    /** Station 3's bottom edge above the screen's bottom: 0 (the corner) everywhere but the Dashboard. */
+    fun s3BandYPx(): Int = if (dashGeom) dashBandYPx() else 0
+    /** The room (CSS px) the Dashboard keeps at its bottom: the bottom line's area, Station 3's 40dp band and 6dp. */
+    private fun dashPadJs(): String {
+        val pagesBottom = if (phoneHasGestureLine()) 0 else navBarHeightPx()   // the Pages stop above 3-button navigation
+        val pad = Math.round((maxOf(0, dashBandYPx() - pagesBottom) + 46 * dp) / dp)
+        return "window.__s3DashPad=$pad;window.storyDashPad&&window.storyDashPad($pad)"
+    }
+    /** Tells Station 3's page where it is: on the Pages (Rows / Page Styles column) and / or on the Dashboard (full width). */
+    private fun tellS3(onPages: Boolean, onDash: Boolean) {
+        if (onPages == lastOnPages && onDash == lastOnDash) return
+        lastOnPages = onPages; lastOnDash = onDash
+        s3Pane?.web?.evaluateJavascript("window.__storyOnPages=$onPages;window.__storyOnDash=$onDash;" +
+            "if(window.storyS3Context)window.storyS3Context($onPages,$onDash);else if(window.storyOnPages)window.storyOnPages($onPages)", null)
+    }
+    /** Moves Station 3's windows to the Dashboard's place (or back to the corner). Only while they're hidden. */
+    private fun applyS3Geom(dash: Boolean) {
+        if (dashGeom == dash) return
+        dashGeom = dash
+        val y = s3BandYPx()
+        s3Pane?.let { p -> p.lp.y = y - (10 * dp).toInt(); runCatching { p.wm.updateViewLayout(p.frame, p.lp) } }
+        barBg?.let { v -> barBgLp?.let { lp ->
+            lp.y = y
+            lp.width = if (dash) resources.displayMetrics.widthPixels else getSharedPreferences("story", MODE_PRIVATE).getInt("bar_w", (220 * dp).toInt())
+            (v.background as? GradientDrawable)?.cornerRadii = if (dash) FloatArray(8) else floatArrayOf(20 * dp, 20 * dp, 0f, 0f, 0f, 0f, 0f, 0f)
+            runCatching { (barBgWm ?: wm).updateViewLayout(v, lp) }
+        } }
+        dialPane?.let { p -> p.lp.y = y + (52 * dp).toInt(); runCatching { p.wm.updateViewLayout(p.frame, p.lp) } }
+        fitProfileGap()
+        syncBarTouch()
+    }
+    /** Opens the Dashboard's Station 3 only once its page has drawn the Dashboard layout (owner: Rows / Page Styles
+     *  flashed for a moment): the page switches while the window is still see-through, then the window shows. */
+    private fun openHeldS3(p: Pane) {
+        if (s3Opening) return
+        s3Opening = true
+        if (!p.loading) p.frame.alpha = 1f   // draws, but the window itself is still fully see-through
+        var done = false
+        val go = Runnable {
+            if (done) return@Runnable; done = true
+            if (!s3Opening) return@Runnable
+            s3Opening = false
+            if (s3Held && !p.shown) setShown(p, true)
+        }
+        p.web.evaluateJavascript("0") {
+            runCatching { p.web.postVisualStateCallback(2L, object : WebView.VisualStateCallback() { override fun onComplete(requestId: Long) { ui.post(go) } }) }
+                .onFailure { ui.post(go) }
+        }
+        ui.postDelayed(go, 300)
+    }
     private fun updateBubble() {
         val pagesUp = pagesPane?.shown == true
-        val dash = pagesUp && dashUp && QuickAccess.s3Dash(this) && !WidgetMode.on(this) && !aodShowing()
-        // On the Pages, Station 3 also has Rows and Page Styles (on top of its button); over apps it doesn't.
-        val onPages = pagesUp && !dash
-        if (onPages != lastOnPages) { lastOnPages = onPages; s3Pane?.web?.evaluateJavascript("window.storyOnPages&&window.storyOnPages($onPages)", null) }
+        val dash = (pagesUp || (s3Held && pagesAside())) && dashUp && QuickAccess.s3Dash(this) && !WidgetMode.on(this) && !aodShowing()
         if (dash) {
             s3Held = true
-            s3Pane?.let { if (!it.shown) setShown(it, true) }
-        } else if (s3Held) {
-            s3Held = false
-            if (s3Pane?.shown == true) { closeStation3Now(); return }
+            val p = s3Pane
+            // Already open in the corner (opened on another page): put it away first, then it opens in the Dashboard's place.
+            if (p != null && p.shown && !dashGeom) { dialPane?.takeIf { it.shown }?.let { hideOne(it) }; hideOne(p) }
+            tellS3(onPages = false, onDash = true)
+            applyS3Geom(true)
+            if (p != null && !p.shown) openHeldS3(p)
+        } else {
+            if (s3Held) {
+                s3Held = false; s3Opening = false
+                s3Pane?.let { p -> dialPane?.takeIf { it.shown }?.let { hideOne(it) }; if (p.shown) hideOne(p); if (!p.shown && !p.loading) p.frame.alpha = 0f }
+            }
+            // Station 3 is hidden now: back to the corner, and on the Pages it has Rows and Page Styles again.
+            if (s3Pane?.shown != true) applyS3Geom(false)
+            tellS3(onPages = pagesUp, onDash = false)
         }
         val where = QuickAccess.where(this)
         var on = QuickAccess.station3On(this) && when (where) { "pages" -> pagesUp; "apps" -> !pagesUp; else -> true }
@@ -1195,7 +1281,7 @@ class OverlayService : Service(), StoryBridge.Host {
         if (StoryAccessibilityService.instance != null && layerType != WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY && !relayerPending) {
             relayerPending = true; ui.post { relayerPending = false; rebuildLayer() }
         }
-        if (!on && !dash && s3Pane?.shown == true) closeStation3Now()
+        if (!on && !dash && s3Pane?.shown == true) { closeStation3Now(); return }
         bubble?.visibility = if (on) View.VISIBLE else View.INVISIBLE
         bubbleLp?.let { lp ->
             val nt = WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
@@ -1265,6 +1351,7 @@ class OverlayService : Service(), StoryBridge.Host {
     override fun setBarWidth(w: Double) {
         ui.post {
             val v = barBg ?: return@post; val lp = barBgLp ?: return@post
+            if (dashGeom) return@post   // the Dashboard's Station 3: always the whole width
             val px = Math.round(w * dp).toInt()
             if (px <= 0 || lp.width == px) return@post
             lp.width = px
@@ -1354,6 +1441,18 @@ class OverlayService : Service(), StoryBridge.Host {
 
     override fun hidePanel() { ui.post { pagesPane?.takeIf { it.shown }?.let { hideOne(it) }; updateBubble() } }
 
+    /** One of the phone's apps was opened from the Pages (an app, ALARM, CAMERA, GALLERY): it opens UNDER the Pages, and
+     *  the Pages step aside the moment it is in front - never a flash of whatever was underneath while it starts (owner).
+     *  At most 1.5 s (0.4 s when Lockedintool can't see which app is in front). */
+    private var openingPkg: String? = null
+    private val openingHide = Runnable { if (openingPkg != null) { openingPkg = null; pagesPane?.takeIf { it.shown }?.let { hideOne(it) }; updateBubble() } }
+    override fun hidePanelFor(pkg: String?) { ui.post {
+        ui.removeCallbacks(openingHide)
+        if (pagesPane?.shown != true) { openingPkg = null; updateBubble(); return@post }
+        openingPkg = pkg ?: ""
+        ui.postDelayed(openingHide, if (pkg.isNullOrEmpty() || StoryAccessibilityService.instance == null) 400L else 1500L)
+    } }
+
     /** Station 3's corner arrow was tapped: the one way Station 3 closes. */
     override fun closeStation3() { ui.post { closeStation3Now() } }
 
@@ -1397,8 +1496,9 @@ class OverlayService : Service(), StoryBridge.Host {
         runCatching { layerWm.addView(v, lp) }
     }
     private fun removeProfileStrip() { profileStrip?.let { runCatching { (profileStripWm ?: layerWm).removeView(it) } }; profileStrip = null; profileStripLp = null; profileStripWm = null }
-    private fun showProfileStrip(on: Boolean) {
+    private fun showProfileStrip(on0: Boolean) {
         val v = profileStrip ?: return; val lp = profileStripLp ?: return
+        val on = on0 && !dashGeom   // the Dashboard's Station 3 is the whole width: no strip beside its gap
         v.visibility = if (on) View.VISIBLE else View.INVISIBLE
         lp.alpha = if (on) 1f else 0f
         lp.flags = if (on) lp.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv() else lp.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
@@ -1406,9 +1506,12 @@ class OverlayService : Service(), StoryBridge.Host {
     }
     /** Station 3's bar changed width: the gap window and the strip follow it exactly. */
     private fun fitProfileGap() {
-        val gw = profileGapWPx()
-        profileGapPane?.let { g -> if (g.lp.width != gw) { g.lp.width = gw; g.openW = gw; runCatching { g.wm.updateViewLayout(g.frame, g.lp) } } }
-        profileStripLp?.let { lp -> val sw = resources.displayMetrics.widthPixels - gw; if (lp.width != sw) { lp.width = sw; runCatching { (profileStripWm ?: layerWm).updateViewLayout(profileStrip, lp) } } }
+        val gw = profileGapWPx(); val y = s3BandYPx()
+        profileGapPane?.let { g -> if (g.lp.width != gw || g.lp.y != y) { g.lp.width = gw; g.openW = gw; g.lp.y = y; runCatching { g.wm.updateViewLayout(g.frame, g.lp) } } }
+        profileStripLp?.let { lp -> val sw = maxOf(1, resources.displayMetrics.widthPixels - gw); if (lp.width != sw || lp.y != y) { lp.width = sw; lp.y = y; runCatching { (profileStripWm ?: layerWm).updateViewLayout(profileStrip, lp) } } }
+        showProfileStrip(profilePane?.shown == true)
+        // Profile itself ends just above the gap's line, wherever Station 3 is.
+        profilePane?.let { p -> val h = realHeightPx() - y - profileBandPx(); if (p.lp.height != h) { p.lp.height = h; p.openH = h; runCatching { p.wm.updateViewLayout(p.frame, p.lp) } } }
         for (p in listOfNotNull(profilePane, profileGapPane)) p.web.evaluateJavascript(profileGeometryJs(), null)
     }
 
@@ -2028,10 +2131,10 @@ class OverlayService : Service(), StoryBridge.Host {
 
     /** Where Station 3's white bar is (in the page's px), so Profile's line traces it exactly; plus the status bar. */
     private fun profileGeometryJs(): String {
-        val barW = (barBgLp?.width ?: getSharedPreferences("story", MODE_PRIVATE).getInt("bar_w", (220 * dp).toInt())) / dp
+        val barW = (if (dashGeom) resources.displayMetrics.widthPixels else (barBgLp?.width ?: getSharedPreferences("story", MODE_PRIVATE).getInt("bar_w", (220 * dp).toInt()))) / dp
         val barH = (40 * dp).toInt() / dp
         val top = statusBarHeightPx() / dp
-        return "window.__pfBarW=$barW;window.__pfBarH=$barH;window.__pfTop=$top;window.storyProfileGeom&&window.storyProfileGeom();"
+        return "window.__pfBarW=$barW;window.__pfBarH=$barH;window.__pfTop=$top;window.__pfDash=$dashGeom;window.storyProfileGeom&&window.storyProfileGeom();"
     }
 
     // Android draws the keyboard below STORY's top layer, so while something is being typed in the
@@ -2149,7 +2252,7 @@ class OverlayService : Service(), StoryBridge.Host {
             // Sized once, while still hidden (the page is always kept open), so it never changes on screen.
             val p = s3Pane ?: return@post
             val full = p.web.layoutParams
-            val pad = 16  // room for Station 3's shadow
+            val pad = if (dashGeom) 0 else 16  // room for Station 3's shadow (none on the Dashboard: no shadow, and the Dashboard is right above)
             p.openW = ((w + pad) * dp).toInt().coerceIn((40 * dp).toInt(), full.width)
             p.openH = ((h + pad) * dp).toInt().coerceIn((40 * dp).toInt(), full.height)
             if (p.lp.width != p.openW || p.lp.height != p.openH) {

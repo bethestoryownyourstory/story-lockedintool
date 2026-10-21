@@ -2104,6 +2104,10 @@
   /* Tight in the corner: the bar / dial pad round only their top-left, like the corner button. */
   /* The bar is exactly as tall as the 40px corner button, so it just extends it to the left. */
   body.s3-only .station3-bar-card{ border-radius:20px 0 0 0 !important; height:40px; padding:0 46px 0 10px; box-sizing:border-box; display:flex; align-items:center; }
+  /* On the Dashboard (owner): the whole bottom, side to side, square ends, its buttons spread evenly - no button of its own. */
+  body.s3-only.s3-dash .station3-bar-card{ border-radius:0 !important; padding:0 10px; }
+  body.s3-only.s3-dash .station3-bar{ justify-content:space-evenly; }
+  body.s3-only.s3-dash .station3-quick-row{ display:none !important; }
   body.s3-only .station3-dialpad-card{ border-radius:20px !important; }
   body.s3-dial .station3-corner-arrow, body.s3-dial .station3-bar-card{ display:none !important; }
   /* Over other apps the Station 3 button itself is drawn by the app, always the same, on top -- the page
@@ -2596,6 +2600,8 @@
   #story-profile .pf-gap-clip svg{ filter:drop-shadow(0 0 0.8px var(--pf-bg)) drop-shadow(0 0 0.8px var(--pf-bg)); }
   #story-profile .pf-line{ position:fixed; right:0; bottom:0; box-sizing:border-box; pointer-events:none;
     border-top:2px solid var(--pf-line); border-left:2px solid var(--pf-line); border-top-left-radius:22px; }
+  #story-profile.pf-dash .pf-line{ border-left:none; border-top-left-radius:0; }
+  #story-profile.pf-dash .pf-gap-clip{ border-top-left-radius:0; }
   /* Settings > QUICK ACCESS */
   .qa-radio{ width:18px; height:18px; border-radius:50%; border:2px solid #fff; box-sizing:border-box; flex-shrink:0; }
   .qa-radio.on{ background:#fff; box-shadow:inset 0 0 0 3px #000; }
@@ -2614,7 +2620,7 @@
   body.page-sliding, body.page-sliding *{ -webkit-user-select:none !important; user-select:none !important; }
   html.native:not(.s3-early) .story-screen{ margin-top:0 !important; margin-bottom:0 !important; padding-bottom:0 !important; }
   /* Station 3 on the Dashboard (Settings > QUICK ACCESS): its bar sits at the very bottom, everything else above it. */
-  html.native:not(.s3-early) .story-screen.s3-dash{ padding-bottom:46px !important; }
+  html.native:not(.s3-early) .story-screen.s3-dash{ padding-bottom:var(--s3-dash-pad, 46px) !important; }
   /* Solid white fill plugging the gaps between the lifted Rows/Page Styles row, the bar
      card, and the corner arrow, so the whole silhouette reads as one continuous flush
      white shape with no bare strip of background showing through anywhere. Pure fill --
@@ -5015,12 +5021,12 @@ function dashboardScreen(){
           <input type="range" class="brightness-slider" id="brightness-slider" min="0" max="100" value="${state.brightnessValue}">
           <button class="brightness-arrow" data-action="brightness-menu-toggle" title="Brightness mode">▲</button>
         </div>
-        ${(m=>`<div class="spotify-card music-card" style="position:relative;">
-          <div class="spotify-title"><span class="dot">●</span><span class="music-now">${escText(m.title ? m.title + (m.artist ? ' · ' + m.artist : '') : m.app || m.chosenName || 'Music')}</span></div>
+        ${(m=>`<div class="spotify-card music-card" style="position:relative;" data-pkg="${escText(m.pkg || '')}">
+          <div class="spotify-title"><span class="dot">●</span><span class="music-now">${escText(musicLabel(m))}</span></div>
           <div class="spotify-controls">
-            <span data-action="music-prev">⟨</span>
-            <span class="play" data-action="music-toggle">${m.playing?'❚❚':'▶'}</span>
-            <span data-action="music-next">⟩</span>
+            <span data-music="prev">⟨</span>
+            <span class="play" data-music="toggle">${m.playing?'❚❚':'▶'}</span>
+            <span data-music="next">⟩</span>
           </div>
           ${m.playing ? `<div class="spotify-visualizer">${[1,2,3,4,5].map(i=>`<span style="animation-delay:${i*0.11}s;"></span>`).join('')}</div>` : ''}
         </div>`)(musicNow())}
@@ -8389,16 +8395,42 @@ function musicNow(){
   return musicCache;
 }
 let musicPressing = false, musicChangedLater = false;
+function musicLabel(m){ return m.title ? m.title + (m.artist ? ' · ' + m.artist : '') : m.app || m.chosenName || 'Music'; }
+// The card is updated IN PLACE (owner: play on a paused song did nothing - the card used to be swapped for a new one whose
+// ⟨ ▶ ⟩ had no taps wired, so after the first update of a song every tap was lost).
+function musicPaint(m){
+  document.querySelectorAll('.music-card').forEach(card=>{
+    const n = card.querySelector('.music-now'); if(n && n.textContent !== musicLabel(m)) n.textContent = musicLabel(m);
+    const p = card.querySelector('[data-music="toggle"]'); if(p) p.textContent = m.playing ? '❚❚' : '▶';
+    card.setAttribute('data-pkg', m.pkg || '');
+    let v = card.querySelector('.spotify-visualizer');
+    if(m.playing && !v){ v = document.createElement('div'); v.className = 'spotify-visualizer'; v.innerHTML = [1,2,3,4,5].map(i=>`<span style="animation-delay:${i*0.11}s;"></span>`).join(''); card.appendChild(v); }
+    else if(!m.playing && v) v.remove();
+  });
+}
 window.storyMusicChanged = function(){
-  // Never swap the card under a finger - the tap on ⟨ ▶ ⟩ would be lost (players update often: progress, ads).
+  // Never change the card under a finger (players update often: progress, ads).
   if(musicPressing){ musicChangedLater = true; return; }
   const was = JSON.stringify(musicCache || {}); musicCache = null;
-  if(state.current === 'dashboard' && !pageSwipeAnimating && JSON.stringify(musicNow()) !== was){
-    const card = document.querySelector('.music-card');
-    if(card){ const tmp = document.createElement('div'); tmp.innerHTML = (()=>{ const m = musicNow(); return `<div class="spotify-card music-card" style="position:relative;"><div class="spotify-title"><span class="dot">●</span><span class="music-now">${escText(m.title ? m.title + (m.artist ? ' · ' + m.artist : '') : m.app || m.chosenName || 'Music')}</span></div><div class="spotify-controls"><span data-action="music-prev">⟨</span><span class="play" data-action="music-toggle">${m.playing?'❚❚':'▶'}</span><span data-action="music-next">⟩</span></div>${m.playing ? `<div class="spotify-visualizer">${[1,2,3,4,5].map(i=>`<span style="animation-delay:${i*0.11}s;"></span>`).join('')}</div>` : ''}</div>`; })();
-      card.replaceWith(tmp.firstElementChild); }
-  }
+  if(state.current === 'dashboard' && !pageSwipeAnimating){ const m = musicNow(); if(JSON.stringify(m) !== was) musicPaint(m); }
 };
+// What the player did (the app tries several ways and checks): the card follows, and says so if the player didn't react.
+window.storyMusicResult = function(r){
+  musicCache = null; window.storyMusicChanged();
+  if(r && r.ok === false && r.cmd === 'play') showToast(r.why === 'no-player' ? 'Nothing to play yet - hold the card to open your music player' : (r.app || 'Your music player') + ' didn\u2019t start - hold the card to open it');
+};
+// ⟨ ▶ ⟩: ONE listener for the whole page, so the buttons always work however often the card changes.
+document.addEventListener('click', e=>{
+  const b = e.target.closest && e.target.closest('.music-card [data-music]'); if(!b) return;
+  const cmd = b.getAttribute('data-music');
+  if(!(NATIVE && (window.StoryNative.musicCmdFor || window.StoryNative.musicCmd))){ if(cmd === 'toggle'){ state.spotifyPlaying = !state.spotifyPlaying; renderDevice(); } return; }
+  const m = musicNow();
+  if(!m.access){ showToast('Allow Lockedintool to see your notifications to control your music'); if(window.StoryNative.moneyAccessOpen) window.StoryNative.moneyAccessOpen(); return; }
+  // The card's own player gets the command (never some other app that happens to have a media session).
+  const pkg = b.closest('.music-card').getAttribute('data-pkg') || m.pkg || '';
+  if(window.StoryNative.musicCmdFor) window.StoryNative.musicCmdFor(cmd, pkg);
+  else { window.StoryNative.musicCmd(cmd); setTimeout(()=>{ musicCache = null; window.storyMusicChanged(); }, 450); }
+});
 (function(){ let t = null, held = false, x0 = 0, y0 = 0;
   document.addEventListener('pointerdown', e=>{ const c = e.target.closest && e.target.closest('.music-card'); if(!c) return; musicPressing = true; held = false; x0 = e.clientX; y0 = e.clientY; clearTimeout(t); t = setTimeout(()=>{ held = true; if(NATIVE && window.StoryNative.musicOpen) window.StoryNative.musicOpen(); else showToast('Opens your music player'); }, 550); }, true);
   ['pointerup', 'pointercancel'].forEach(ev=>document.addEventListener(ev, ()=>{ clearTimeout(t);
@@ -8982,6 +9014,7 @@ window.storyShow = function(page, station3){
 window.storyStation3Only = function(){
   document.body.classList.add('s3-only');
   if(window.__storyOnPages) document.body.classList.add('s3-pages');
+  if(window.__storyOnDash) document.body.classList.add('s3-dash');
   state.recentsOpen=false; state.homePickerOpen=false; state.appMenuId=null;
   if(state.current==='dashboard') state.current = state.lastPage || 'wallet';
   state.station3Open = true;
@@ -9008,6 +9041,13 @@ document.addEventListener('click', (e)=>{
 // Station 3 on the Pages: Rows and Page Styles are there too (the app says when the Pages are up). Tapping one does it
 // on the Pages and Station 3 closes, as always.
 window.storyOnPages = function(on){ document.body.classList.toggle('s3-pages', !!on); if(document.body.classList.contains('s3-only')) renderDevice(); };
+// Where Station 3 is, in one go (one redraw): on the Pages (Rows / Page Styles column) and / or on the Dashboard, where it
+// runs the whole bottom, side to side (owner), with no button and no Rows / Page Styles.
+window.storyS3Context = function(onPages, onDash){
+  document.body.classList.toggle('s3-pages', !!onPages);
+  document.body.classList.toggle('s3-dash', !!onDash);
+  if(document.body.classList.contains('s3-only')) renderDevice();
+};
 window.storyPagesAction = function(a){
   if(planGateRows(a)){ state.station3Open = false; renderDevice(); return; }
   if(a === 'page-quick-rows') state.rowsViewOpen = true;
@@ -11928,8 +11968,11 @@ window.storyProfileGeom = function(){
   if(!el) return;
   const barW = window.__pfBarW || 220, barH = window.__pfBarH || 40, top = window.__pfTop || 24;
   const line = el.querySelector('.pf-line');
-  // The line hugs the outside of Station 3's bar: along its top edge and down its rounded left end.
-  line.style.width = (barW + 2) + 'px';
+  const dash = !!window.__pfDash;
+  el.classList.toggle('pf-dash', dash);
+  // The line hugs the outside of Station 3's bar: along its top edge and down its rounded left end
+  // (on the Dashboard Station 3 is the whole width: just a straight line along its top).
+  line.style.width = (dash ? barW : barW + 2) + 'px';
   line.style.height = (barH + 2) + 'px';
   el.querySelectorAll('.pf-scroll').forEach(sc=>{ sc.style.top = (top + 16) + 'px'; sc.style.bottom = '16px'; });
   el.style.setProperty('--pf-top', top + 'px');
@@ -11937,7 +11980,9 @@ window.storyProfileGeom = function(){
   gap.style.width = barW + 'px';
   gap.style.height = barH + 'px';
   const w = window.innerWidth, h = window.innerHeight, r = 20, gx = w - barW, gy = h - barH;
-  if(PF_GAP_WINDOW) el.querySelector('.pf-bg').style.clipPath = `path(evenodd, 'M0 0 H${w} V${h} H0 Z M${gx} ${h} V${gy + r} A${r} ${r} 0 0 1 ${gx + r} ${gy} H${w} V${h} Z')`;
+  if(PF_GAP_WINDOW) el.querySelector('.pf-bg').style.clipPath = dash
+    ? `path(evenodd, 'M0 0 H${w} V${h} H0 Z M0 ${h} V${gy} H${w} V${h} Z')`
+    : `path(evenodd, 'M0 0 H${w} V${h} H0 Z M${gx} ${h} V${gy + r} A${r} ${r} 0 0 1 ${gx + r} ${gy} H${w} V${h} Z')`;
 };
 // Station 3 closed while Profile stays open: its gap stays, and two little men walk up to the Station 3 button,
 // grab it with a rope and try to pull Station 3 back out -- until the boss storms in, angry, points at them (no words),
@@ -13835,6 +13880,15 @@ function dashS3On(){
   const q = quickAccess();
   return q.mode !== 'dialonly' && q.dash !== false && !wgOn();
 }
+// The app says how much room that is: the bottom line's area (it stays visible under Station 3), the 40px band and 6px.
+window.storyDashPad = function(px){
+  px = Math.max(46, Math.round(+px || 46));
+  document.documentElement.style.setProperty('--s3-dash-pad', px + 'px');
+  if(window.__s3DashPadSet === px) return;
+  window.__s3DashPadSet = px; window.__s3DashPad = px;
+  if(state.current === 'dashboard') renderDevice();
+};
+if(window.__s3DashPad) document.documentElement.style.setProperty('--s3-dash-pad', window.__s3DashPad + 'px');
 let dashToldNative = null;
 function dashTellNative(){
   if(!NATIVE || IN_STATION3_WINDOW || document.documentElement.classList.contains('story-widget') || !window.StoryNative.dashShown) return;
@@ -14123,7 +14177,8 @@ function positionStation3(){
     quickRow.style.bottom = (vh - arrowRect.top + quickRowLift) + 'px';
   }
   if(sideCard){
-    sideCard.style.left = 'auto';
+    // On the Dashboard Station 3 starts at the screen's left edge (the window's left edge is the screen's).
+    sideCard.style.left = (s3Only && document.body.classList.contains('s3-dash')) ? '0px' : 'auto';
     sideCard.style.top = 'auto';
     // Shifted OVERLAP px further right than a true flush join, so it laps under the
     // arrow's left edge instead of just touching it.
@@ -16591,15 +16646,6 @@ function attachHandlers(){
         case 'media-output-bg': state.mediaOutputOpen = false; break;
         case 'audio-separate-toggle': state.audioSeparateOn = !state.audioSeparateOn; break;
         case 'spotify-toggle': state.spotifyPlaying = !state.spotifyPlaying; break;
-        case 'music-toggle': case 'music-next': case 'music-prev': {
-          const cmd = action.slice(6);
-          if(NATIVE && window.StoryNative.musicCmd){
-            const m = musicNow();
-            if(!m.access){ showToast('Allow Lockedintool to see your notifications to control your music'); if(window.StoryNative.moneyAccessOpen) window.StoryNative.moneyAccessOpen(); break; }
-            window.StoryNative.musicCmd(cmd); setTimeout(()=>{ musicCache = null; if(state.current === 'dashboard') renderDevice(); }, 450);
-          } else if(cmd === 'toggle') state.spotifyPlaying = !state.spotifyPlaying;
-          break;
-        }
         case 'dash-community': { const on = !dashCommunityOn(); try{ localStorage.setItem('story-dash-community', on ? 'on' : 'off'); }catch(e){} showToast(on ? 'Community is on the Dashboard' : 'Community is off the Dashboard'); break; }
         case 'music-pick': { const p = el.getAttribute('data-v'); if(NATIVE && window.StoryNative.musicChoose) window.StoryNative.musicChoose(p); musicCache = null; showToast(p ? 'Music player set' : 'Following whatever is playing'); break; }
 
@@ -19057,7 +19103,7 @@ function fitPageToScreen(area, el, pageKey){
   const topBarEl = el.querySelector(':scope > .page-top');
   const frame = area.closest('.phone-screen, .laptop-screen') || document;
   const dock = frame.querySelector('.wallet-float-dock');
-  const key = page + '|' + area.clientWidth + 'x' + area.clientHeight + '|' + (dock ? 1 : 0) + (page === 'dashboard' && dashS3On() ? '|s3' : '');
+  const key = page + '|' + area.clientWidth + 'x' + area.clientHeight + '|' + (dock ? 1 : 0) + (page === 'dashboard' && dashS3On() ? '|s3' + (window.__s3DashPad || 46) : '');
   const applyZoom = z=>{
     el.style.zoom = z === 1 ? '' : z.toFixed(4);
     // Keep the header (back button, title, dots) at its natural size and position so it lines

@@ -8,6 +8,17 @@ import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.PlaybackState
 import android.view.KeyEvent
+import android.app.Notification
+import android.media.AudioManager
+import android.media.session.MediaSession
+import android.os.Build
+import android.os.Handler
+import android.os.HandlerThread
+import android.os.Looper
+import android.os.SystemClock
+import android.service.notification.StatusBarNotification
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -41,22 +52,51 @@ object MusicPlayer {
         c.getSystemService(android.media.session.MediaSessionManager::class.java).getActiveSessions(ComponentName(c, StoryMediaListener::class.java))
     }.getOrDefault(emptyList())
 
-    /** The session the card follows: the chosen player's; with none chosen, the one playing (else the newest). */
-    private fun session(c: Context): MediaController? {
-        val all = sessions(c); val want = chosen(c)
-        if (want.isNotEmpty()) return all.firstOrNull { it.packageName == want }
-        return all.firstOrNull { it.playbackState?.state == PlaybackState.STATE_PLAYING } ?: all.firstOrNull()
+    /** Playing (or about to: buffering, skipping...). */
+    private fun on(s: PlaybackState?) = when (s?.state) {
+        PlaybackState.STATE_PLAYING, PlaybackState.STATE_BUFFERING, PlaybackState.STATE_CONNECTING, PlaybackState.STATE_FAST_FORWARDING,
+        PlaybackState.STATE_REWINDING, PlaybackState.STATE_SKIPPING_TO_NEXT, PlaybackState.STATE_SKIPPING_TO_PREVIOUS,
+        PlaybackState.STATE_SKIPPING_TO_QUEUE_ITEM -> true
+        else -> false
     }
+    /** The music app that played last: with nothing playing the card (and its buttons) stay on it - never jump to another app. */
+    private fun remember(c: Context, pkg: String) { if (pkg.isNotEmpty() && pkg != c.packageName && prefs(c).getString("music_last", "") != pkg) prefs(c).edit().putString("music_last", pkg).apply() }
+    private fun last(c: Context) = prefs(c).getString("music_last", "") ?: ""
+    // A player's session from its media notification: still reachable when Android no longer lists it (paused a long time).
+    private val tokens = java.util.concurrent.ConcurrentHashMap<String, MediaSession.Token>()
+    fun noteNotification(c: Context, sbn: StatusBarNotification) {
+        val ex = sbn.notification?.extras ?: return
+        val t = if (Build.VERSION.SDK_INT >= 33) ex.getParcelable(Notification.EXTRA_MEDIA_SESSION, MediaSession.Token::class.java)
+            else @Suppress("DEPRECATION") ex.getParcelable<MediaSession.Token>(Notification.EXTRA_MEDIA_SESSION)
+        if (t != null) { tokens[sbn.packageName] = t; if (on(runCatching { MediaController(c, t).playbackState }.getOrNull())) remember(c, sbn.packageName) }
+    }
+    private fun controllerFor(c: Context, pkg: String): MediaController? {
+        if (pkg.isEmpty()) return null
+        val l = sessions(c).filter { it.packageName == pkg }
+        (l.firstOrNull { on(it.playbackState) } ?: l.firstOrNull { it.metadata != null } ?: l.firstOrNull())?.let { return it }
+        return tokens[pkg]?.let { runCatching { MediaController(c, it) }.getOrNull() }?.takeIf { it.playbackState != null || it.metadata != null }
+    }
+
+    /** The session the card follows: the chosen player's; with none chosen, the one playing, else the last music app that played. */
+    private fun session(c: Context): MediaController? {
+        val want = chosen(c)
+        if (want.isNotEmpty()) return controllerFor(c, want)
+        val all = sessions(c)
+        all.firstOrNull { on(it.playbackState) }?.let { remember(c, it.packageName); return it }
+        return controllerFor(c, last(c)) ?: all.firstOrNull()
+    }
+
+    private fun label(c: Context, pkg: String) = runCatching { c.packageManager.getApplicationLabel(c.packageManager.getApplicationInfo(pkg, 0)).toString() }.getOrDefault(pkg)
 
     fun state(c: Context): String {
         val o = JSONObject().put("access", StoryAccessibilityService.hasMusicAccess(c)).put("chosen", chosen(c))
         val want = chosen(c)
-        if (want.isNotEmpty()) o.put("chosenName", runCatching { c.packageManager.getApplicationLabel(c.packageManager.getApplicationInfo(want, 0)).toString() }.getOrDefault(want))
+        if (want.isNotEmpty()) o.put("chosenName", label(c, want))
         val s = session(c) ?: return o.toString()
         val md = s.metadata
         o.put("pkg", s.packageName)
-            .put("app", runCatching { c.packageManager.getApplicationLabel(c.packageManager.getApplicationInfo(s.packageName, 0)).toString() }.getOrDefault(s.packageName))
-            .put("playing", s.playbackState?.state == PlaybackState.STATE_PLAYING)
+            .put("app", label(c, s.packageName))
+            .put("playing", on(s.playbackState))
             .put("title", md?.getString(MediaMetadata.METADATA_KEY_TITLE) ?: md?.getString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE) ?: "")
             .put("artist", md?.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: md?.getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST) ?: md?.getString(MediaMetadata.METADATA_KEY_DISPLAY_SUBTITLE) ?: "")
         val art = md?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART) ?: md?.getBitmap(MediaMetadata.METADATA_KEY_ART) ?: md?.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
@@ -68,50 +108,83 @@ object MusicPlayer {
         return o.toString()
     }
 
-    /** play / pause / toggle / next / prev on the player. Nothing playing yet: the chosen player is told to play. */
-    fun command(c: Context, cmd: String) {
-        val s = session(c)
-        // 'Whatever is playing' (no player chosen): the phone's own media keys, exactly like headphone buttons - Android
-        // sends them to the player in use and lets it start playing again (a paused song wouldn't restart otherwise).
-        if (chosen(c).isEmpty()) {
-            val playing = s?.playbackState?.state == PlaybackState.STATE_PLAYING
-            val key = when (cmd) { "next" -> KeyEvent.KEYCODE_MEDIA_NEXT; "prev" -> KeyEvent.KEYCODE_MEDIA_PREVIOUS; "play" -> KeyEvent.KEYCODE_MEDIA_PLAY
-                "pause" -> KeyEvent.KEYCODE_MEDIA_PAUSE; else -> if (playing) KeyEvent.KEYCODE_MEDIA_PAUSE else KeyEvent.KEYCODE_MEDIA_PLAY }
-            if (runCatching { val am = c.getSystemService(android.media.AudioManager::class.java)
-                    for (a in listOf(KeyEvent.ACTION_DOWN, KeyEvent.ACTION_UP)) am.dispatchMediaKeyEvent(KeyEvent(a, key)) }.isSuccess) return
-        }
-        if (s != null) {
-            // Sent like a headphone / media button first (owner: tapping play on a paused song did nothing): Android lets
-            // the player start playing again from a media button, while a plain play() from another app is often refused.
-            val playing = s.playbackState?.state == PlaybackState.STATE_PLAYING
-            val key = when (cmd) { "next" -> KeyEvent.KEYCODE_MEDIA_NEXT; "prev" -> KeyEvent.KEYCODE_MEDIA_PREVIOUS; "play" -> KeyEvent.KEYCODE_MEDIA_PLAY
-                "pause" -> KeyEvent.KEYCODE_MEDIA_PAUSE; else -> if (playing) KeyEvent.KEYCODE_MEDIA_PAUSE else KeyEvent.KEYCODE_MEDIA_PLAY }
-            val sent = runCatching { s.dispatchMediaButtonEvent(KeyEvent(KeyEvent.ACTION_DOWN, key)) && s.dispatchMediaButtonEvent(KeyEvent(KeyEvent.ACTION_UP, key)) }.getOrDefault(false)
-            if (sent) return
-            val t = s.transportControls
-            when (cmd) {
-                "next" -> t.skipToNext()
-                "prev" -> t.skipToPrevious()
-                "play" -> t.play()
-                "pause" -> t.pause()
-                else -> if (s.playbackState?.state == PlaybackState.STATE_PLAYING) t.pause() else t.play()
-            }
-            return
-        }
-        val pkg = chosen(c)
-        val code = when (cmd) { "next" -> KeyEvent.KEYCODE_MEDIA_NEXT; "prev" -> KeyEvent.KEYCODE_MEDIA_PREVIOUS; "pause" -> KeyEvent.KEYCODE_MEDIA_PAUSE; else -> KeyEvent.KEYCODE_MEDIA_PLAY }
-        // No live session (a player paused for a while drops it): the phone's own media key goes to the player that
-        // played last - exactly like pressing play on headphones.
-        if (pkg.isEmpty()) {
-            runCatching { val am = c.getSystemService(android.media.AudioManager::class.java)
-                for (a in listOf(KeyEvent.ACTION_DOWN, KeyEvent.ACTION_UP)) am.dispatchMediaKeyEvent(KeyEvent(a, code)) }
-            return
-        }
-        for (a in listOf(KeyEvent.ACTION_DOWN, KeyEvent.ACTION_UP)) runCatching {
-            c.sendBroadcast(Intent(Intent.ACTION_MEDIA_BUTTON).setPackage(pkg).putExtra(Intent.EXTRA_KEY_EVENT, KeyEvent(a, code)))
+    /** Old screens: play / pause / toggle / next / prev, no answer. */
+    fun command(c: Context, cmd: String) = commandFor(c, cmd, "") { }
+
+    // ---- The card's buttons (owner: a paused song wouldn't play again). The command goes to the card's own player and is
+    //      CHECKED: if the player didn't react, the next way is tried (its controls, then a media button like headphones,
+    //      then play/pause). Runs once per tap on its own thread, waits on the player's own callbacks (no loop), at most ~3s;
+    //      a newer tap cancels the rest of an older one. Lockedintool lets go of the sound it quietened under the Pages. ----
+    private val worker by lazy { Handler(HandlerThread("story-music").apply { start() }.looper) }
+    private val main by lazy { Handler(Looper.getMainLooper()) }
+    @Volatile private var gen = 0
+    fun commandFor(c: Context, cmd0: String, cardPkg: String, report: (String) -> Unit) {
+        val my = ++gen
+        worker.post {
+            val r = runCatching { runCmd(c, cmd0, cardPkg) { my != gen } }.getOrElse { JSONObject().put("cmd", cmd0).put("ok", false).put("why", "error") }
+            if (my == gen) report(r.toString())
         }
     }
+    private fun key(code: Int, send: (KeyEvent) -> Unit) {
+        val t = SystemClock.uptimeMillis()
+        send(KeyEvent(t, t, KeyEvent.ACTION_DOWN, code, 0)); send(KeyEvent(t, t + 10, KeyEvent.ACTION_UP, code, 0))
+    }
+    /** Waits (up to ms) for the player to report what we asked for. */
+    private fun await(ctl: MediaController, ms: Long, ok: () -> Boolean): Boolean {
+        if (ok()) return true
+        val latch = CountDownLatch(1)
+        val cb = object : MediaController.Callback() {
+            override fun onPlaybackStateChanged(state: PlaybackState?) { if (ok()) latch.countDown() }
+            override fun onMetadataChanged(metadata: MediaMetadata?) { if (ok()) latch.countDown() }
+            override fun onSessionDestroyed() { latch.countDown() }
+        }
+        runCatching { ctl.registerCallback(cb, main) }
+        try { latch.await(ms, TimeUnit.MILLISECONDS) } finally { runCatching { ctl.unregisterCallback(cb) } }
+        return ok()
+    }
+    private fun runCmd(c: Context, cmd0: String, cardPkg: String, stale: () -> Boolean): JSONObject {
+        val am = c.getSystemService(AudioManager::class.java)
+        val pkg = chosen(c).ifEmpty { cardPkg }.ifEmpty { last(c) }
+        val ctl = controllerFor(c, pkg) ?: (if (chosen(c).isEmpty()) session(c) else null)
+        val target = ctl?.packageName ?: pkg
+        val cmd = if (cmd0 == "toggle") (if (on(ctl?.playbackState)) "pause" else "play") else cmd0
+        val out = JSONObject().put("cmd", cmd).put("pkg", target).put("app", if (target.isEmpty()) "" else label(c, target))
+        if (cmd == "play") OverlayService.instance?.musicWanted()
+        val want: Boolean? = when (cmd) { "play" -> true; "pause" -> false; else -> null }
+        val code = when (cmd) { "play" -> KeyEvent.KEYCODE_MEDIA_PLAY; "pause" -> KeyEvent.KEYCODE_MEDIA_PAUSE; "next" -> KeyEvent.KEYCODE_MEDIA_NEXT; else -> KeyEvent.KEYCODE_MEDIA_PREVIOUS }
+        if (ctl != null) {
+            val t0 = ctl.metadata?.getString(MediaMetadata.METADATA_KEY_TITLE)
+            val ok = { if (want != null) on(ctl.playbackState) == want else ctl.metadata?.getString(MediaMetadata.METADATA_KEY_TITLE) != t0 }
+            // play / pause: its controls, then a media button, then play/pause (each only if the player still isn't there - a slow
+            // player is never toggled back). next / previous: its controls, and a media button only if nothing changed at all.
+            val steps = if (want != null) listOf<Pair<String, () -> Unit>>(
+                "controls" to { val t = ctl.transportControls; if (want) t.play() else t.pause() },
+                "button" to { key(code) { ctl.dispatchMediaButtonEvent(it) } },
+                "playpause" to { if (on(ctl.playbackState) != want) key(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) { ctl.dispatchMediaButtonEvent(it) } })
+            else listOf<Pair<String, () -> Unit>>(
+                "controls" to { val t = ctl.transportControls; if (cmd == "next") t.skipToNext() else t.skipToPrevious() },
+                "button" to { key(code) { ctl.dispatchMediaButtonEvent(it) } })
+            for ((how, act) in steps) {
+                if (stale()) return out.put("ok", false).put("why", "replaced")
+                runCatching { act() }
+                if (await(ctl, if (how == "playpause") 1100L else if (want == null) 1200L else 800L, ok)) {
+                    if (cmd == "play") remember(c, target)
+                    return out.put("ok", true).put("how", how)
+                }
+            }
+            return out.put("ok", false).put("why", "refused")
+        }
+        // No session left at all (the player was closed): the phone's own media key, exactly like a headphone button - Android
+        // gives it to the player that played last and lets it start again.
+        val before = am.isMusicActive
+        runCatching { key(code) { am.dispatchMediaKeyEvent(it) } }
+        if (want == true) { val t = SystemClock.uptimeMillis(); while (!am.isMusicActive && SystemClock.uptimeMillis() - t < 1500) SystemClock.sleep(150) }
+        val now = session(c)
+        now?.packageName?.let { out.put("pkg", it).put("app", label(c, it)) }
+        val worked = if (want == true) am.isMusicActive else if (want == false) !am.isMusicActive || before != am.isMusicActive else true
+        return out.put("ok", worked).put("how", "mediakey").put("why", if (worked) "" else if (now == null && target.isEmpty()) "no-player" else "refused")
+    }
 
-    /** The app the card belongs to: the chosen player, else the one playing. */
-    fun appToOpen(c: Context): String = chosen(c).ifEmpty { session(c)?.packageName ?: "" }
+    /** The app the card belongs to: the chosen player, else the one playing, else the last music app. */
+    fun appToOpen(c: Context): String = chosen(c).ifEmpty { session(c)?.packageName ?: last(c) }
 }

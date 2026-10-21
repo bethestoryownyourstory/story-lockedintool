@@ -42,6 +42,7 @@ class StoryMediaListener : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         if (sbn != null) runCatching { MoneyLog.handle(this, sbn) }
+        if (sbn != null) runCatching { MusicPlayer.noteNotification(this, sbn) }   // the player's session, for the music card
         OverlayService.instance?.evalPages("window.storyNotifsChanged&&window.storyNotifsChanged();window.storyMusicChanged&&window.storyMusicChanged()")
     }
     override fun onNotificationRemoved(sbn: StatusBarNotification?) {

@@ -43,6 +43,7 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         fun toggleCalls()
         fun toggleUpdates()
         fun pagesAction(action: String)
+        fun hidePanelFor(pkg: String?)
         fun dashShown(on: Boolean)
         fun getCalls(): String
         fun createShutter()
@@ -91,6 +92,10 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
     @JavascriptInterface fun musicState(): String = MusicPlayer.state(ctx)
     @JavascriptInterface fun musicChoose(pkg: String) { MusicPlayer.choose(ctx, pkg) }
     @JavascriptInterface fun musicCmd(cmd: String) { MusicPlayer.command(ctx, cmd) }
+    /** The card's button for the card's own player; the answer (did the player react?) comes back to this page. */
+    @JavascriptInterface fun musicCmdFor(cmd: String, pkg: String) {
+        MusicPlayer.commandFor(ctx, cmd, pkg) { res -> val js = "window.storyMusicResult&&window.storyMusicResult($res)"; evalTo?.invoke(js) ?: host.evalPages(js) }
+    }
     /** Hold the music card: opens the music player app (STORY steps aside like opening any app). */
     @JavascriptInterface fun musicOpen() { val p = MusicPlayer.appToOpen(ctx); if (p.isNotEmpty()) launchApp(p) }
 
@@ -99,9 +104,20 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
     fun launchApp(pkg: String) {
         if (SystemMode.refuses(ctx)) return
         val i = ctx.packageManager.getLaunchIntentForPackage(pkg) ?: return
-        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        host.hidePanel()
-        ctx.startActivity(i)
+        openFirst(sequenceOf(i))
+    }
+
+    /** Opens the first of these the phone has. The app opens UNDER the Pages, and the Pages step aside the moment it is
+     *  in front (owner: you saw the background changing while it took long) - the same on every phone. */
+    private fun openFirst(tries: Sequence<Intent>): Boolean {
+        for (i in tries) {
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            if (runCatching { ctx.startActivity(i) }.isSuccess) {
+                host.hidePanelFor(i.component?.packageName ?: runCatching { i.resolveActivity(ctx.packageManager)?.packageName }.getOrNull())
+                return true
+            }
+        }
+        return false
     }
 
     /** Information page: this STORY app's version ("1.0 (build 233)"). */
@@ -117,40 +133,39 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
     @JavascriptInterface
     fun openCamera() {
         val locked = (ctx.getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager).isKeyguardLocked
-        val i = Intent(if (locked) android.provider.MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA_SECURE else android.provider.MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        host.hidePanel()
-        runCatching { ctx.startActivity(i) }.onFailure { runCatching { ctx.startActivity(Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.onFailure { host.showToast("No camera app on this phone") } }
+        val i = Intent(if (locked) android.provider.MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA_SECURE else android.provider.MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA)
+        if (!openFirst(sequenceOf(i, Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE)))) host.showToast("No camera app on this phone")
     }
     /** Dashboard > ALARM (owner): the phone's own alarms (its Clock app); STORY steps aside like opening any app. */
     @JavascriptInterface
     fun openAlarms() {
-        host.hidePanel()
         // Not every Clock app answers "show alarms" (some phones' own clocks don't): then the phone's Clock app itself -
-        // the known ones by name, else any app called Clock / Alarm - and last the "set an alarm" screen.
+        // the known ones by name, else any app called Clock / Alarm - and last the "set an alarm" screen. Each is only
+        // looked up if the one before isn't there (looking through every app first made it slow).
         val pm = ctx.packageManager
         val known = listOf("com.sec.android.app.clockpackage", "com.google.android.deskclock", "com.android.deskclock",
             "com.oneplus.deskclock", "com.coloros.alarmclock", "com.oplus.alarmclock", "com.huawei.deskclock", "com.hihonor.deskclock",
             "com.miui.clock", "com.transsion.deskclock", "com.motorola.timeweatherwidget", "com.lge.clock", "com.sonymobile.alarmclock")
-        val named = runCatching {
-            pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
-                .firstOrNull { r -> r.loadLabel(pm).toString().let { it.equals("Clock", true) || it.contains("Alarm", true) } }?.activityInfo?.packageName
-        }.getOrNull()
-        val tries = listOf(Intent(android.provider.AlarmClock.ACTION_SHOW_ALARMS)) +
-            known.mapNotNull { pm.getLaunchIntentForPackage(it) } +
-            listOfNotNull(named?.let { pm.getLaunchIntentForPackage(it) }, Intent(android.provider.AlarmClock.ACTION_SET_ALARM))
-        for (i in tries) { i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); if (runCatching { ctx.startActivity(i) }.isSuccess) return }
-        host.showToast("No clock app on this phone")
+        val tries = sequence {
+            val show = Intent(android.provider.AlarmClock.ACTION_SHOW_ALARMS)
+            if (runCatching { show.resolveActivity(pm) }.getOrNull() != null) yield(show)
+            for (k in known) pm.getLaunchIntentForPackage(k)?.let { yield(it) }
+            runCatching {
+                pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
+                    .firstOrNull { r -> r.loadLabel(pm).toString().let { it.equals("Clock", true) || it.contains("Alarm", true) } }?.activityInfo?.packageName
+            }.getOrNull()?.let { pm.getLaunchIntentForPackage(it) }?.let { yield(it) }
+            yield(Intent(android.provider.AlarmClock.ACTION_SET_ALARM))
+        }
+        if (!openFirst(tries)) host.showToast("No clock app on this phone")
     }
     @JavascriptInterface
     fun openGallery() {
-        host.hidePanel()
-        val tries = listOf(
-            Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, Intent.CATEGORY_APP_GALLERY),
-            Intent(Intent.ACTION_VIEW).setDataAndType(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, "image/*"),
-            ctx.packageManager.getLaunchIntentForPackage("com.google.android.apps.photos")
-        )
-        for (i in tries) { if (i == null) continue; i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); if (runCatching { ctx.startActivity(i) }.isSuccess) return }
-        host.showToast("No gallery app on this phone")
+        val tries = sequence {
+            yield(Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, Intent.CATEGORY_APP_GALLERY))
+            yield(Intent(Intent.ACTION_VIEW).setDataAndType(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, "image/*"))
+            ctx.packageManager.getLaunchIntentForPackage("com.google.android.apps.photos")?.let { yield(it) }
+        }
+        if (!openFirst(tries)) host.showToast("No gallery app on this phone")
     }
 
     /** An app made into a page: landing on its page opens the REAL app (STORY steps aside), with a thin strip on the
