@@ -681,7 +681,8 @@ export class Hub {
       else {
         // Marked fixed, but it happened again on a version newer than the fix: it isn't fixed - open it again.
         const build = v => parseInt(String(v || '').split('.').pop(), 10) || 0;
-        const back = old.fixed && (!old.fixapp || build(app) > build(old.fixapp));
+        // (6 hours after a fix every phone has the fixed screens: then it happening again on the fixed version reopens it too.)
+        const back = old.fixed && (!old.fixapp || build(app) > build(old.fixapp) || (now - old.fixed > 6 * 3600000 && build(app) >= build(old.fixapp)));
         this.sql.exec('UPDATE problems SET n = n + ?, last = ?, app = ?, scr = ?, device = ?, msg = ?, place = ?, fixed = ? WHERE sig = ?', n, now, app, scr, device, msg, place, back ? 0 : old.fixed, sig);
       }
       if (pid) this.sql.exec('INSERT OR IGNORE INTO problemphones (sig, pid) VALUES (?, ?)', sig, pid);

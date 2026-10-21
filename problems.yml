@@ -1,9 +1,17 @@
 name: Lockedintool problem reports
 # What went wrong on phones (errors, crashes, windows that broke, slow app opens, music / camera / update failures) -
-# reported by every phone with nothing personal in it (ProblemLog.kt, msg-worker.js /v1/problems). The hourly check-up
-# runs this to read them, fixes what it can for every phone, and runs it again with action 'fixed' to mark what it fixed
-# (a problem that comes back on a newer version opens again by itself).
+# reported by every phone with nothing personal in it (ProblemLog.kt, msg-worker.js /v1/problems).
+#   every hour (free, on GitHub): the open problems are written to the branch problems-report (report.txt) - the hourly
+#     check-up reads that one file and stops when it says "open: 0".
+#   a push to main that changes problems-fixed.json ({"sigs": [...], "note": "#N"}): those problems are marked fixed on the
+#     server, with the app version that has the fix (a problem that comes back on a newer version opens again by itself).
+#   Run workflow: list / all / fixed by hand.
 on:
+  schedule:
+    - cron: '41 * * * *'
+  push:
+    branches: [main]
+    paths: ['problems-fixed.json']
   workflow_dispatch:
     inputs:
       action:
@@ -24,29 +32,58 @@ on:
         description: 'fixed: what was done (update number)'
         required: false
         default: ''
+permissions:
+  contents: write
+  actions: read
+concurrency: { group: problems, cancel-in-progress: false }
 jobs:
   problems:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - name: Read / mark problems
         env:
           T: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
           ACTION: ${{ inputs.action }}
           SIGS: ${{ inputs.sigs }}
           APPV: ${{ inputs.app }}
           NOTE: ${{ inputs.note }}
+          SHA: ${{ github.sha }}
+          REPO: ${{ github.repository }}
         run: |
           if [ -z "$T" ]; then echo "No CLOUDFLARE_API_TOKEN secret"; exit 1; fi
           KEY=$(printf 'lit-problems:%s' "$T" | sha256sum | cut -c1-48)
           U=https://story-msg.percyjuniormaseko0.workers.dev
-          if [ "$ACTION" = "fixed" ]; then
-            jq -n --arg key "$KEY" --argjson sigs "$SIGS" --arg app "$APPV" --arg note "$NOTE" '{key:$key,sigs:$sigs,app:$app,note:$note}' \
-              | curl -sS -X POST -H 'content-type: application/json' --data @- "$U/v1/problems/fixed"
-          else
-            ALL=false; [ "$ACTION" = "all" ] && ALL=true
-            jq -n --arg key "$KEY" --argjson all $ALL '{key:$key,all:$all}' \
-              | curl -sS -X POST -H 'content-type: application/json' --data @- "$U/v1/problems/list" > p.json
-            echo "===== PROBLEMS ====="
-            jq -r '"open: \(.open)", (.problems[] | "---\nsig: \(.sig)\nkind: \(.kind) | \(.n) times | \(.phones) phones | fixed: \(.fixed) \(.fixapp // "")\nwhere: \(.place)\nwhat: \(.msg)\nlatest: app \(.app) / screens \(.scr) / \(.device)\nfirst: \(.first/1000|todate) last: \(.last/1000|todate)")' p.json || cat p.json
-            echo "===== END ====="
+          mark() {  # $1 = JSON array of sigs, $2 = app version, $3 = note
+            jq -n --arg key "$KEY" --argjson sigs "$1" --arg app "$2" --arg note "$3" '{key:$key,sigs:$sigs,app:$app,note:$note}' \
+              | curl -sS -X POST -H 'content-type: application/json' --data @- "$U/v1/problems/fixed"; echo
+          }
+          if [ "$EVENT" = "push" ]; then
+            # The fix's app version: the APK built from this very commit (when it changed the app), else the newest one.
+            N=""
+            for i in $(seq 1 40); do
+              N=$(gh api "repos/$REPO/actions/workflows/android.yml/runs?head_sha=$SHA&per_page=1" --jq '.workflow_runs[0].run_number // empty' 2>/dev/null || true)
+              [ -n "$N" ] && break; [ $i -ge 6 ] && break; sleep 10
+            done
+            [ -z "$N" ] && N=$(gh api "repos/$REPO/actions/workflows/android.yml/runs?branch=main&status=success&per_page=1" --jq '.workflow_runs[0].run_number' 2>/dev/null || echo 0)
+            mark "$(jq -c '.sigs // []' problems-fixed.json)" "1.$N" "$(jq -r '.note // ""' problems-fixed.json)"
+            ACTION=list
+          fi
+          if [ "$ACTION" = "fixed" ]; then mark "$SIGS" "$APPV" "$NOTE"; exit 0; fi
+          ALL=false; [ "$ACTION" = "all" ] && ALL=true
+          jq -n --arg key "$KEY" --argjson all $ALL '{key:$key,all:$all}' \
+            | curl -sS -X POST -H 'content-type: application/json' --data @- "$U/v1/problems/list" > p.json
+          jq -r '"open: \(.open)", (.problems[] | "---\nsig: \(.sig)\nkind: \(.kind) | \(.n) times | \(.phones) phones | fixed: \(.fixed) \(.fixapp // "")\nwhere: \(.place)\nwhat: \(.msg)\nlatest: app \(.app) / screens \(.scr) / \(.device)\nfirst: \(.first/1000|todate) last: \(.last/1000|todate)")' p.json > report.txt || { cat p.json; exit 1; }
+          echo "===== PROBLEMS ====="; cat report.txt; echo "===== END ====="
+          # The open problems, for the hourly check-up: one small file on its own branch (only rewritten when it changed).
+          if [ "$ACTION" = "list" ]; then
+            OLD=$(git fetch -q origin problems-report 2>/dev/null && git show origin/problems-report:report.txt 2>/dev/null || true)
+            if [ "$OLD" != "$(cat report.txt)" ]; then
+              cp report.txt /tmp/report.txt; git checkout -q --orphan problems-report-new; git rm -rfq . >/dev/null 2>&1 || true
+              cp /tmp/report.txt report.txt; git add report.txt
+              git -c user.name=lockedintool-bot -c user.email=bot@users.noreply.github.com commit -qm "Open problems $(date -u +%FT%TZ)"
+              git push -qf origin HEAD:refs/heads/problems-report && echo "problems-report updated"
+            fi
           fi
