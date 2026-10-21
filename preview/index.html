@@ -1294,8 +1294,14 @@
     background:#ffffff; color:#000000; display:flex; align-items:center; justify-content:center; overflow:hidden; cursor:pointer; visibility:hidden; }
   .allcards-btn span{ writing-mode:vertical-rl; font-size:10px; font-weight:800; letter-spacing:0.6px; white-space:nowrap; line-height:1; }
   .allcards-btn:active{ opacity:0.7; }
-  .allcards-sheet{ max-height:82%; overflow-y:auto; scrollbar-width:none; }
-  .allcards-sheet::-webkit-scrollbar{ display:none; }
+  .allcards-sheet{ max-height:82%; display:flex; flex-direction:column; overflow:hidden; }
+  .allcards-body{ position:relative; flex:1; min-height:0; display:flex; }
+  .allcards-list{ flex:1; min-height:0; overflow-y:auto; scrollbar-width:none; padding-bottom:6px; }
+  .allcards-list::-webkit-scrollbar{ display:none; }
+  .allcards-more{ position:absolute; right:2px; top:10px; bottom:10px; width:16px; display:none; flex-direction:column; align-items:center;
+    justify-content:center; gap:5px; border-radius:10px; background:#ffffff; color:#000000; cursor:pointer; }
+  .allcards-more span{ writing-mode:vertical-rl; font-size:10px; font-weight:800; letter-spacing:0.6px; white-space:nowrap; line-height:1; }
+  .allcards-sheet.more .allcards-more{ display:flex; }
   .allcards-item{ position:relative; margin:10px auto 0; width:82%; cursor:pointer; }
   .allcards-item .realcard{ width:100%; flex:none; }
   .allcards-item.on .realcard{ outline:2px solid #ffffff; outline-offset:3px; }
@@ -7469,16 +7475,24 @@ function pageSecSet(page, key, on){ const a = pageSecs(); a[page] = Object.assig
 // Show all cards (owner's drawing): a tall button down the right of the card, its words turned sideways, always the
 // opposite of the system theme (white in Black, black in White - the theme swap flips it). Tap -> every card you added,
 // as it really looks; tap one to go to it (the same as swiping to it).
+// More cards than fit at once (owner's drawing): down arrows and 'Scroll to see more' on the right, the same side and the
+// same sideways way as the Show all cards button, the same colours; only when the list really is longer than the pop-up.
+const ALLCARDS_DOWN = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>';
 function allCardsTemplate(){
   const cards = walletCards();
   return `
     <div class="modal-overlay" data-action="allcards-close">
       <div class="modal-sheet page-edit-sheet allcards-sheet" onclick="event.stopPropagation()">
         <div class="modal-head"><span class="modal-title">All cards</span><button class="modal-close" data-action="allcards-close">×</button></div>
-        ${cards.map((c, k)=>`<div class="allcards-item${state.walletCardIndex === k + 1 ? ' on' : ''}" data-action="allcards-pick" data-i="${k + 1}">
-          <div class="realcard${c.photo ? ' realcard-isphoto' : ''}" data-keep-color style="background:#000000;border:1px solid rgba(255,255,255,0.08);">${cardFaceHTML(c)}</div>
-          ${state.walletCardIndex === k + 1 ? '<div class="allcards-showing">Showing</div>' : ''}
-        </div>`).join('')}
+        <div class="allcards-body">
+          <div class="allcards-list">
+          ${cards.map((c, k)=>`<div class="allcards-item${state.walletCardIndex === k + 1 ? ' on' : ''}" data-action="allcards-pick" data-i="${k + 1}">
+            <div class="realcard${c.photo ? ' realcard-isphoto' : ''}" data-keep-color style="background:#000000;border:1px solid rgba(255,255,255,0.08);">${cardFaceHTML(c)}</div>
+            ${state.walletCardIndex === k + 1 ? '<div class="allcards-showing">Currently using</div>' : ''}
+          </div>`).join('')}
+          </div>
+          <div class="allcards-more" onclick="event.stopPropagation(); const l = this.parentElement.querySelector('.allcards-list'); l.scrollBy({ top: l.clientHeight * 0.8, behavior: 'smooth' });">${ALLCARDS_DOWN}${ALLCARDS_DOWN}<span>Scroll to see more</span>${ALLCARDS_DOWN}${ALLCARDS_DOWN}</div>
+        </div>
       </div>
     </div>`;
 }
@@ -7495,6 +7509,8 @@ function placeAllCardsBtn(){
   b.style.left = left + 'px'; b.style.width = Math.max(12, right - left) + 'px';
   b.style.top = car.offsetTop + 'px'; b.style.height = card.offsetHeight + 'px';
   b.style.visibility = 'visible';   // hidden until it's in its place (page previews never show it out of place)
+  const list = document.querySelector('.allcards-list');
+  if(list) list.closest('.allcards-sheet').classList.toggle('more', list.scrollHeight > list.clientHeight + 4);
 }
 function pageEditTemplate(page){
   const cards = walletCards();
