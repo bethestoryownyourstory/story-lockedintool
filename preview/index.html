@@ -7784,12 +7784,22 @@ function payHistoryEnsure(){
     msgApi('/v1/pay/history').then(r=>{ state.pay.history = r.payments || []; if(MONEY_PAGES.includes(state.current)) renderDevice(); }).catch(()=>{});
   }
 }
+// Where each Send was made (owner: Wallet shows 'money sent when in the wallet page' - a Send started from Money's
+// Transfer Money shows only on Money): 'story-send-origin' {paymentId: 'wallet' | 'money'}, kept on the phone.
+const SEND_ORIGIN_KEY = 'story-send-origin';
+function sendOrigins(){ try{ return JSON.parse(localStorage.getItem(SEND_ORIGIN_KEY) || '{}') || {}; }catch(e){ return {}; } }
+function sendOriginSet(id, where){
+  if(!id) return; const o = sendOrigins(); o[id] = where;
+  const keys = Object.keys(o); if(keys.length > 300) keys.slice(0, keys.length - 300).forEach(k=>delete o[k]);
+  try{ localStorage.setItem(SEND_ORIGIN_KEY, JSON.stringify(o)); }catch(e){}
+}
 function walletPayments(){
   const base = walletNwOn() ? moneyTx().filter(t=>nwHas(WALLET_NW_KEY, moneyAcctKey(t))) : moneyView();
   const taps = base.filter(t=>t.amt < 0 && tapPaid(t.ts)).map(t=>Object.assign({}, t, { via:'Tap to Pay' }));
   payHistoryEnsure();
   const c = !walletNwOn() && activeCard(), cur = moneyMainCur();
-  const sends = ((state.pay && state.pay.history) || []).filter(p=>p.dir !== 'in' && p.status === 'paid' && (!c || !p.from || String(p.from).includes(c.last4)))
+  const origin = sendOrigins();
+  const sends = ((state.pay && state.pay.history) || []).filter(p=>p.dir !== 'in' && p.status === 'paid' && origin[p.id] !== 'money' && (!c || !p.from || String(p.from).includes(c.last4)))
     .map(p=>{ const v = fxConvert(+p.amount || 0, 'ZAR', cur);
       return { id:'send:' + (p.id || p.at), ts:+p.at || 0, amt:-(v == null ? +p.amount || 0 : v), cur: v == null ? 'ZAR' : cur, who:p.who || '', app:'Lockedintool', via:'Send money', from:p.from || '', ref:p.ref || '' }; });
   return taps.concat(sends).sort((x, y)=>y.ts - x.ts);
@@ -8099,7 +8109,7 @@ function payFavToggle(){
 }
 // Send money to a favorite / recent person: Send Money opens with them already chosen.
 function paySendTo(f){
-  const p = state.pay; state.current = 'send-money'; p.info = null; p.loading = false; p.msg = ''; p.found = []; p.q = '';
+  const p = state.pay; p.origin = state.current === 'money' ? 'money' : 'wallet'; state.current = 'send-money'; p.info = null; p.loading = false; p.msg = ''; p.found = []; p.q = '';
   if(f.kind === 'bank'){ p.mode = 'bank'; p.name = f.name || ''; p.bank = f.bank || ''; p.acct = f.acct || ''; p.to = null; }
   else { p.mode = 'story'; p.to = { id: f.id || f.uid, name: f.name || '', username: f.username || '', canPay: true }; }
 }
@@ -8303,6 +8313,7 @@ function payStartPart(i){
   p.busy = true; p.msg = ''; part.status = 'starting'; payShow();
   msgApi('/v1/pay/send', body).then(r=>{
     p.busy = false; part.status = 'pending';
+    sendOriginSet(r.id, p.origin || 'wallet');   // where it was sent from: only the Wallet's own sends show on Wallet (owner)
     p.waiting = { id:r.id, url:r.url, amount:part.amount, who:d.who, from:part.from, part:i, of:parts.length, status:'pending', started:Date.now() };
     payOpenBank(r.url); payShow(); payPollT = setTimeout(payPoll, 4000);
   }).catch(e=>{ p.busy = false; part.status = 'failed'; p.msg = PAY_ERRORS[e.code] || 'Couldn’t start the payment - try again.'; if(i > 0) p.msg += ' ' + payMoney(parts.slice(0, i).reduce((x, q)=>x + q.amount, 0)) + ' was already paid.'; p.parts = null; payShow(); });
@@ -17445,7 +17456,7 @@ function attachHandlers(){
           state.drawToolsPopoverOpen = false;
           break;
         }
-        case 'send-open': state.current = 'send-money'; state.pay.info = null; state.pay.loading = false; break;
+        case 'send-open': state.pay.origin = state.current === 'money' ? 'money' : 'wallet'; state.current = 'send-money'; state.pay.info = null; state.pay.loading = false; break;
         case 'receive-open': state.current = 'receive-money'; state.pay.info = null; state.pay.loading = false; break;
         case 'sub-buy': subBuy(el.getAttribute('data-plan')); break;
         case 'widgets-only': widgetsOnlyAsk(); break;
