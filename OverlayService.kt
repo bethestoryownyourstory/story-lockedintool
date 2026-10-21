@@ -1092,19 +1092,20 @@ class OverlayService : Service(), StoryBridge.Host {
         return lw
     }
 
-    // ---- App pages (owner: "make any app into a page"): landing on an app's page opens the real app full screen; a thin
-    //      see-through strip on the LEFT edge (middle part only, so the phone's own back gesture still works above and
-    //      below it) swipes your pages back. It goes away once the Pages show or you leave that app. ----
+    // ---- App pages (owner: "make any app into a page"): landing on an app's page shows its card (owner: it never opens
+    //      by itself); tapping it / Open opens the real app full screen - like any app opened from Lockedintool, the app
+    //      starts under the Pages and they step aside once it's in front (hidePanelFor, no flash). A thin see-through strip
+    //      on the LEFT edge (middle part only, so the phone's own back gesture still works above and below it) swipes your
+    //      pages back. It goes away once the Pages show or you leave that app. ----
     private var appPagePkg: String? = null
     private var appEdge: View? = null
     override fun appPageOpen(pkg: String) { ui.post {
         if (SystemMode.refuses(this)) return@post
         val i = packageManager.getLaunchIntentForPackage(pkg) ?: run { showToast("That app isn't on this phone any more"); return@post }
         i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        pagesPane?.takeIf { it.shown }?.let { hideOne(it) }
         s3Pane?.takeIf { it.shown }?.let { closeStation3Now() }
-        updateBubble()
         runCatching { startActivity(i) }.onFailure { showToast("Couldn't open that app"); return@post }
+        hidePanelFor(pkg, "an app page")
         appPagePkg = pkg
         addAppEdge()
     } }

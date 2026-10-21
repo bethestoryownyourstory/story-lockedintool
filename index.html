@@ -4033,8 +4033,9 @@ const PAGE_SWITCH_ITEMS = [
   {key:'trading', label:'Focus'},
 ];
 // App pages (owner): hold an app in Apps > Create into a page -> it joins the row after Focus (kept in
-// localStorage `story-app-pages` = [{pkg, name}]). Landing on one opens the REAL app full screen (Android can't put
-// another app's screen inside STORY); a swipe in from the left edge brings the Pages back (OverlayService appPageOpen).
+// localStorage `story-app-pages` = [{pkg, name}]). Landing on one shows the app's card (owner: it never opens by itself);
+// tap it / Open -> the REAL app full screen (Android can't put another app's screen inside STORY); a swipe in from the
+// left edge brings the Pages back (OverlayService appPageOpen).
 const CORE_PAGE_COUNT = PAGES.length;
 function isAppPage(key){ return typeof key === 'string' && key.indexOf('app:') === 0; }
 function appPagesStored(){
@@ -4134,22 +4135,6 @@ function appPageScreen(key){
       <button class="app-page-open" data-action="app-page-open" data-pkg="${escText(info.pkg)}">Open</button>
     </div>
     </div>`;
-}
-// Landing on an app page opens that app; the Pages go back to the page before it (the nearest STORY page), so the
-// left-edge swipe brings you back there.
-function landOnAppPage(){
-  // Focus made into an app (Custom) works like any app page.
-  const focusApp = state.current === 'trading' && focusAddon().indexOf('app:') === 0;
-  if((!isAppPage(state.current) && !focusApp) || !NATIVE || IN_STATION3_WINDOW || !window.StoryNative.appPageOpen) return false;
-  if(state.rowsViewOpen || (state.pageStyleOn && state.pageStyleViewOpen)) return false;
-  if(!focusApp && curRow > 1) return false;   // Row 2+ (owner): the app's card shows - tap it to open the app
-  const pkg = focusApp ? focusAddon().slice(4) : state.current.slice(4);
-  let i = PAGES.indexOf(state.current);
-  while(i > 0 && isAppPage(PAGES[i])) i--;
-  state.current = PAGES[Math.max(0, i)];
-  state.lastPage = state.current;
-  try{ window.StoryNative.appPageOpen(pkg); }catch(e){}
-  return true;
 }
 function toggleAppPage(a, row){
   const list = appPagesStored();
@@ -14999,7 +14984,6 @@ function renderDevice(){
     // (while it's still starting up it's simply put on its page - only a real tap opens STORY)
     if(window.__storyWidgetReady) try{ window.StoryNative.widgetOpenPages(go); }catch(e){}
   }
-  landOnAppPage();
   trackRecent();
   // Either the full Draw page's canvas or the in-notes inline drawing overlay canvas -- never
   // both at once (the overlay only exists in write mode, the full canvas only in draw mode) --
@@ -19459,8 +19443,6 @@ function adoptSlidFrame(sl){
     updateScrollHint();
     updateScrollbarThumb();
   }catch(e){ renderDevice(); return; }
-  // Swiped onto an app page: the app opens and the Pages quietly go back to the page before it while they're away.
-  if(isAppPage(state.current) && curRow <= 1 && NATIVE && window.StoryNative.appPageOpen){ setTimeout(renderDevice, 350); return; }
   refreshNeighbors();
 }
 let currentSlide = null;
