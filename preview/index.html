@@ -2670,6 +2670,10 @@
   html.s3-dash-on .modal-overlay, html.s3-dash-on .notes-popover-overlay, html.s3-dash-on .lit-sheet-bg{ bottom:calc(var(--s3-dash-pad, 46px) - 6px) !important; }
   /* Brightness Control's close X (owner): top right of the pop-up. */
   .confirm-sheet.has-x{ position:relative; }
+  /* A payment's / notification's real icon at the top of its details (owner: real icons). */
+  .pay-detail-ico{ width:44px; height:44px; margin:0 auto 8px; display:flex; align-items:center; justify-content:center; font-size:28px; }
+  /* Notifications Panel: up to 3 lines of the message show on the card; tap it for all of it. */
+  .notif-label.notif-label-more{ white-space:normal; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; }
   .confirm-sheet .sheet-x{ position:absolute; top:12px; right:12px; display:flex; align-items:center; justify-content:center; padding:0; }
   /* Solid white fill plugging the gaps between the lifted Rows/Page Styles row, the bar
      card, and the corner arrow, so the whole silhouette reads as one continuous flush
@@ -5482,8 +5486,50 @@ function moneyWhen(ts){
   return new Date(ts).toLocaleDateString(undefined, { day:'numeric', month:'short' });
 }
 const moneyDate = ts=>new Date(ts).toLocaleString(undefined, { day:'numeric', month:'short', year:'numeric', hour:'numeric', minute:'2-digit' });
-const moneyWho = t=>t.who || (t.amt < 0 ? 'Money out' : 'Money in');
+// Who a payment was with (owner: real names - it said 'MAIN ACCOUNT' and never showed from what): read from the bank's
+// own message. Your own account / card names ('Main Account', 'Savings', 'Wallet account'...) are never the payee;
+// money out prefers 'at / to X', money in 'from X' (MoneyLog.kt picks it the same way for new payments).
+const PAYEE_RX = /(?:\b([Aa]t|[Tt]o|[Ff]rom|[Bb]y)|(@))\s+([A-Z0-9@][A-Za-z0-9&'@*\-]*(?:\.[A-Za-z0-9]+)*(?:\s[A-Z0-9][A-Za-z0-9&'\-]*(?:\.[A-Za-z0-9]+)*){0,3})/g;
+const PAYEE_OWN = /\b(account|acc|acct|a\/c|cheque|savings|current|transmission|credit card|debit card|card|wallet)\b/i;
+const payeeCache = new Map();
+function payeeOf(t){
+  const txt = String(t.text || ''), key = (t.id || '') + '|' + txt.length + '|' + (t.amt < 0 ? 1 : 0);
+  if(payeeCache.has(key)) return payeeCache.get(key);
+  const c = []; let m; PAYEE_RX.lastIndex = 0;
+  while((m = PAYEE_RX.exec(txt))){
+    const w = m[3].replace(/\s+(avail|available|bal|balance|on|ref|for|from|using|with|via)\b.*$/i, '').trim().replace(/[.,]+$/, '');
+    if(w.length < 2 || /^(R|ZAR|USD|\$)?\s?[0-9]/i.test(w) || /^(your|you|the|card|account|acc|a\/c)\b/i.test(w) || PAYEE_OWN.test(w)) continue;
+    c.push({ p: (m[1] || '@').toLowerCase(), w });
+  }
+  let who = '';
+  for(const p of (t.amt < 0 ? ['at', 'to', '@', 'by', 'from'] : ['from', 'by', '@', 'at', 'to'])){ const f = c.find(x=>x.p === p); if(f){ who = f.w; break; } }
+  if(!who && t.who && !PAYEE_OWN.test(t.who)) who = t.who;
+  payeeCache.set(key, who);
+  return who;
+}
+const moneyWho = t=>(t.text ? payeeOf(t) : t.who) || (t.amt < 0 ? 'Money out' : 'Money in');   // no message (a connected bank, a Send): its own name
 const moneyIcon = t=>t.amt < 0 ? '↗️' : '↙️';
+// A payment's REAL icon (owner: real icons): the app that told Lockedintool about it (your bank's app, or the SMS app a
+// bank text came through - its bank's app when you have it), a connected bank's app, Lockedintool's own for a Send.
+const LIT_ICON_HTML = '<img src="icon-192.png" alt="" style="width:100%;height:100%;object-fit:contain;border-radius:8px;" onerror="this.style.visibility=\'hidden\'">';
+function appByPkg(pkg){ return (state.installedApps || []).find(a=>a.pkg === pkg && (a.iconUrl || a.iconData)); }
+function bankAppFor(s){ const ids = bankIds(s); return ids.length ? (state.installedApps || []).find(a=>a.pkg && (a.iconUrl || a.iconData) && bankIds(a.pkg + ' ' + a.name).some(i=>ids.includes(i))) : null; }
+function payIconHTML(t){
+  if(t.via === 'Send money') return LIT_ICON_HTML;
+  const pkg = String(t.pkg || '');
+  const own = appByPkg(pkg);
+  if(pkg.indexOf('bank:') === 0 || (own && !bankIds(pkg + ' ' + own.name).length)){ const b = bankAppFor(pkg.indexOf('bank:') === 0 ? pkg.slice(5) : String(t.text || '').slice(0, 60)); if(b) return appIconHTML(b); }
+  if(own) return appIconHTML(own);
+  const img = realAppIcon(pkg);
+  return img || moneyIcon(t);
+}
+// Any app's real icon straight from the phone (also apps that aren't in the app list) - asked once per app.
+const realIcons = {};
+function realAppIcon(pkg){
+  if(!pkg || pkg.indexOf('bank:') === 0 || !NATIVE || !window.StoryNative.appIcon) return '';
+  if(!(pkg in realIcons)){ let d = ''; try{ d = window.StoryNative.appIcon(pkg) || ''; }catch(e){} realIcons[pkg] = d; }
+  return realIcons[pkg] ? '<img src="data:image/png;base64,' + realIcons[pkg] + '" alt="" style="width:100%;height:100%;object-fit:contain;border-radius:10px;">' : '';
+}
 const monthKey = ts=>{ const d = new Date(ts); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); };
 const monthBack = (key, back)=>{ const [y, m] = key.split('-').map(Number); return monthKey(new Date(y, m - 1 - back, 1).getTime()); };
 const monthShort = key=>{ const [y, m] = key.split('-').map(Number); return new Date(y, m - 1, 1).toLocaleString('en-US', { month:'short' }); };
@@ -5641,7 +5687,7 @@ function paymentCardsHTML(){
   if(!list.length) return `<div class="notif-card notif-empty"><div class="notif-icon-wrap">💳</div><div class="notif-mid"><div class="notif-source">${moneyView().length ? 'No payments in this time' : 'No payments yet'}</div><div class="notif-label">They show as your bank apps send them</div></div><div class="notif-right"><div class="notif-amt">&nbsp;</div><div class="notif-time">&nbsp;</div></div></div>`;
   return list.map(t=>`
         <div class="notif-card" data-notif="${escText(t.id)}">
-          <div class="notif-icon-wrap">${moneyIcon(t)}</div>
+          <div class="notif-icon-wrap">${payIconHTML(t)}</div>
           <div class="notif-mid">
             <div class="notif-source">${escText(t.app || '')}</div>
             <div class="notif-label">${escText(moneyWho(t))}</div>
@@ -5904,13 +5950,17 @@ function calPopupTemplate(){
 }
 
 function notifDetailTemplate(){
-  const t = moneyTx().find(x=>x.id===state.notifPopupId);
+  const id = state.notifPopupId;
+  const onWallet = String(id).indexOf('send:') === 0 || ['wallet', 'wallet-overview', 'tx-history'].includes(state.current);
+  const t = (onWallet && walletPayments().find(x=>x.id===id)) || moneyTx().find(x=>x.id===id);
   if(!t) return '';
+  const via = t.via === 'Send money' ? 'Sent with Lockedintool' + (t.from ? ' · from ' + escText(t.from) : '') + (t.ref ? ' · ' + escText(t.ref) : '') : t.via === 'Tap to Pay' ? 'Paid with Tap to Pay' : '';
   return `
     <div class="modal-overlay" data-action="notif-popup-bg">
       <div class="confirm-sheet" onclick="event.stopPropagation()">
+        <div class="pay-detail-ico">${payIconHTML(t)}</div>
         <div class="confirm-title">${escText(moneyWho(t))} — ${fmtCur(t.amt, t.cur, true)}</div>
-        <div class="confirm-sub">${escText(t.app || '')} · ${moneyDate(t.ts)}${t.bal != null ? '<br>Balance after: ' + fmtCur(t.bal, t.cur) : ''}${t.card ? '<br>Card / account ••' + escText(t.card) : ''}<br><span style="opacity:0.7;">${escText(t.text || '')}</span></div>
+        <div class="confirm-sub">${escText(t.app || '')} · ${moneyDate(t.ts)}${via ? '<br>' + via : ''}${t.bal != null ? '<br>Balance after: ' + fmtCur(t.bal, t.cur) : ''}${t.card ? '<br>Card / account ••' + escText(t.card) : ''}${t.text ? '<br><span style="opacity:0.7;">' + escText(t.text) + '</span>' : ''}</div>
         <div class="confirm-btn-row">
           <button class="btn-wide btn-primary" style="margin-top:0;" data-action="notif-popup-close">Close</button>
         </div>
@@ -7741,7 +7791,7 @@ function walletPayments(){
   const c = !walletNwOn() && activeCard(), cur = moneyMainCur();
   const sends = ((state.pay && state.pay.history) || []).filter(p=>p.dir !== 'in' && p.status === 'paid' && (!c || !p.from || String(p.from).includes(c.last4)))
     .map(p=>{ const v = fxConvert(+p.amount || 0, 'ZAR', cur);
-      return { id:'send:' + (p.id || p.at), ts:+p.at || 0, amt:-(v == null ? +p.amount || 0 : v), cur: v == null ? 'ZAR' : cur, who:p.who || '', app:'Send money', via:'Send money' }; });
+      return { id:'send:' + (p.id || p.at), ts:+p.at || 0, amt:-(v == null ? +p.amount || 0 : v), cur: v == null ? 'ZAR' : cur, who:p.who || '', app:'Lockedintool', via:'Send money', from:p.from || '', ref:p.ref || '' }; });
   return taps.concat(sends).sort((x, y)=>y.ts - x.ts);
 }
 const walletActivityList = ()=>walletPayments().slice(0, 5);
@@ -7769,8 +7819,8 @@ function walletActivityRowsHTML(){
   const list = walletActivityList();
   if(!list.length) return moneyRowsEmpty('Nothing paid with Wallet yet');
   const hide = walletHidden('activity');
-  return list.map(t=>({ icon: moneyIcon(t), name: escText(moneyWho(t)), sub: t.via + ' · ' + moneyWhen(t.ts), amt: t.amt, ts: t.ts, cur: t.cur })).map(t=>`
-    <div class="row"><div class="row-left"><div class="row-icon">${t.icon}</div><div><div class="row-name">${t.name}</div><div class="row-sub">${walletActivitySubLabel(t)}</div></div></div><div class="row-amt" style="color:${hide ? 'var(--text)' : walletActivityColor(t.amt, t.ts)};">${hide ? HIDDEN_AMT : fmtCur(t.amt, t.cur, true)}</div></div>
+  return list.map(t=>({ id: t.id, icon: payIconHTML(t), name: escText(moneyWho(t)), sub: t.via + ' · ' + moneyWhen(t.ts), amt: t.amt, ts: t.ts, cur: t.cur })).map(t=>`
+    <div class="row" data-notif="${escText(t.id)}" style="cursor:pointer;"><div class="row-left"><div class="row-icon">${t.icon}</div><div><div class="row-name">${t.name}</div><div class="row-sub">${walletActivitySubLabel(t)}</div></div></div><div class="row-amt" style="color:${hide ? 'var(--text)' : walletActivityColor(t.amt, t.ts)};">${hide ? HIDDEN_AMT : fmtCur(t.amt, t.cur, true)}</div></div>
   `).join('');
 }
 // Hide (owner): an eye at the right of Wallet Activity, Memberships and Subscriptions - tap it and what that part shows
@@ -7873,6 +7923,7 @@ function walletScreen(){
     ${state.favoritesOpen ? favoritesPopupTemplate() : ''}
     ${state.pageEdit === 'wallet' ? pageEditTemplate('wallet') : ''}
     ${state.allCardsOpen ? allCardsTemplate() : ''}
+    ${state.notifPopupId ? notifDetailTemplate() : ''}
     ${state.cardSheetId ? cardSheetTemplate() : ''}
     ${state.moneyAllEdit ? moneyAllEditTemplate() : ''}
   `;
@@ -7950,10 +8001,11 @@ function walletOverviewScreen(){
     </div>
     <div class="row-card">
       ${(l=>l.length ? l.map(t=>`
-        <div class="row"><div class="row-left"><div class="row-icon">${moneyIcon(t)}</div><div><div class="row-name">${escText(moneyWho(t))}</div><div class="row-sub">${escText(t.via)} · ${moneyDate(t.ts)}</div></div></div><div class="row-amt" style="color:var(--red);">${fmtCur(t.amt, t.cur, true)}</div></div>
+        <div class="row" data-notif="${escText(t.id)}" style="cursor:pointer;"><div class="row-left"><div class="row-icon">${payIconHTML(t)}</div><div><div class="row-name">${escText(moneyWho(t))}</div><div class="row-sub">${escText(t.via)} · ${moneyDate(t.ts)}</div></div></div><div class="row-amt" style="color:var(--red);">${fmtCur(t.amt, t.cur, true)}</div></div>
       `).join('') : moneyRowsEmpty('Nothing paid with Wallet yet'))(walletPayments().slice(0, 4))}
     </div>
     </div>
+    ${state.notifPopupId ? notifDetailTemplate() : ''}
   `;
 }
 
@@ -8475,10 +8527,11 @@ function txHistoryScreen(){
     <div class="section-title">TRANSACTION HISTORY</div>
     <div class="row-card">
       ${(l=>l.length ? l.map(t=>`
-        <div class="row"><div class="row-left"><div class="row-icon">${moneyIcon(t)}</div><div><div class="row-name">${escText(moneyWho(t))}</div><div class="row-sub">${escText(t.via)} · ${moneyDate(t.ts)}</div></div></div><div class="row-amt" style="color:var(--red);">${fmtCur(t.amt, t.cur, true)}</div></div>
+        <div class="row" data-notif="${escText(t.id)}" style="cursor:pointer;"><div class="row-left"><div class="row-icon">${payIconHTML(t)}</div><div><div class="row-name">${escText(moneyWho(t))}</div><div class="row-sub">${escText(t.via)} · ${moneyDate(t.ts)}</div></div></div><div class="row-amt" style="color:var(--red);">${fmtCur(t.amt, t.cur, true)}</div></div>
       `).join('') : moneyRowsEmpty('Nothing paid with Wallet yet'))(walletPayments().slice(0, 200))}
     </div>
     </div>
+    ${state.notifPopupId ? notifDetailTemplate() : ''}
   `;
 }
 
@@ -8974,7 +9027,7 @@ const LEGAL = {
     ['Automatic updates', [
       'Using Lockedintool means agreeing that it keeps itself up to date: new versions install automatically.' ]],
     ['Subscription', [
-      'Without a plan you can use the Dashboard for free. Basic adds the Money, Wallet and Focus pages; Premium adds everything else (more pages and rows).',
+      'Without a plan you can use the Dashboard for free. Basic adds the Money, Wallet and Focus pages and Lockedintool calls (voice, video and group calls); Premium adds everything else (more pages and rows). Calls aren’t part of the free plan - phone calls from the dial pad are your phone’s own and always work.',
       'Basic is $5 a month and Premium $15 a month. Changes to prices will be announced before they apply. Plans are charged in rand (shown before you pay - currently R95 and R285). One payment gives 30 days of your plan; paying the same plan again adds 30 days.',
       'Plans do not renew by themselves yet - you pay each month. Payments are made through Stitch and approved by you on your own bank’s or card’s page.',
       'Before you pay you can cancel or switch plans at any time. Once a payment is made it is not refundable, except where South African law requires a refund.',
@@ -11500,7 +11553,11 @@ function callPc(){
   };
   return pc;
 }
+// Calls cost Lockedintool (owner: 'they won't be available on free plan'): Lockedintool calls need Basic or Premium - only
+// once subscriptions are switched on, never on the owner's phone (planFree). The server checks it too (callPlanOk).
+const CALL_PLAN_TEXT = 'Calls come with Basic or Premium';
 async function callStart(peerId, video){
+  if(planFree()){ showToast(CALL_PLAN_TEXT); return; }
   if(gcallBusy()){ showToast('You’re already on a call'); return; }
   if(!msgAccount()){ showToast('No connection to Lockedintool right now'); msgEnsureAccount(); return; }
   const c = msgChats().find(x=>x.id === peerId) || {};
@@ -11519,6 +11576,8 @@ async function callStart(peerId, video){
 }
 async function callOnSignal(m){
   if(m.kind === 'offer'){
+    // On the free plan a call doesn't ring: the caller hears 'Not available right now', you see it as missed.
+    if(planFree()){ msgSend({ t:'call', to:m.from, kind:'unavailable', callId:m.callId }); callSave({ peer:m.from, name:m.name, username:m.username, video:m.video, dir:'missed', start:m.at || Date.now() }); return; }
     if(gcallBusy()){ msgSend({ t:'call', to:m.from, kind:'busy', callId:m.callId }); callSave({ peer:m.from, name:m.name, username:m.username, video:m.video, dir:'missed', start:m.at || Date.now() }); return; }
     chatFor(m.from, { name:m.name, username:m.username, incoming:true }); saveMsgChats();
     Object.assign(call, { state:'incoming', id:m.callId, peer:m.from, name:m.name || '', username:m.username || '', video:!!m.video, dir:'in', offer:m.sdp, pendingIce:[], start:Date.now(), answeredAt:0, muted:false, speaker:!!m.video, camOff:false, remote:null, local:null, endText:'' });
@@ -11535,6 +11594,7 @@ async function callOnSignal(m){
   if(m.kind === 'decline') return callEnd('Declined', true);
   if(m.kind === 'busy') return callEnd('On another call', true);
   if(m.kind === 'unavailable') return callEnd('Not available right now', true);
+  if(m.kind === 'plan') return callEnd(CALL_PLAN_TEXT, true);
   if(m.kind === 'blocked') return callEnd('They don’t take calls from you', true);
 }
 async function callAccept(){
@@ -11699,6 +11759,7 @@ function gcallReset(o){
 }
 // Start a call in a group, or join the one that's live.
 async function gcallGo(gid, video, join, gname){
+  if(planFree()){ showToast(CALL_PLAN_TEXT); return; }
   if(gcallBusy()){ if(gcall.gid === gid && gcall.state !== 'idle') return; showToast('You’re already on a call'); return; }
   if(!msgAccount() || !msgWsOpen){ showToast('No connection to Lockedintool right now'); msgConnect(); return; }
   const c = msgChats().find(x=>x.id === gid) || {}, live = gliveAll()[gid];
@@ -11720,7 +11781,7 @@ async function gcallGo(gid, video, join, gname){
 }
 async function gcallOnMsg(m){
   if(m.kind === 'ring'){
-    if(gcallBusy()) return;   // already on a call (the server never rings people who blocked each other)
+    if(gcallBusy() || planFree()) return;   // already on a call / the free plan has no calls (the server never rings people who blocked each other)
     chatFor(m.group, { name:m.gname });
     gcallReset({ state:'incoming', gid:m.group, id:m.callId, name:m.gname || 'Group call', video:!!m.video, from:m.name || (m.username ? '@' + m.username : '') });
     callNative('callUi', true); callNative('callRing', true, gcall.name, !!m.video); gcallRender();
@@ -11729,7 +11790,7 @@ async function gcallOnMsg(m){
   }
   if(m.kind === 'over' && gcall.gid === m.group && gcall.state === 'incoming') return gcallEnd('The call ended', 'missed');
   if(m.group !== gcall.gid || gcall.state === 'idle' || gcall.state === 'incoming') return;
-  if(m.kind === 'error'){ return gcallEnd(m.error === 'full' ? 'The call is full (8 people)' : m.error === 'over' ? 'The call already ended' : m.error === 'private-account' ? 'Private accounts can’t join public group calls' : m.error === 'member' ? 'Only members can start a call here' : m.error === 'notfound' ? 'This group isn’t on Lockedintool’s server' : 'Couldn’t join the call', null, !gcall.joinedAt); }
+  if(m.kind === 'error'){ return gcallEnd(m.error === 'full' ? 'The call is full (8 people)' : m.error === 'over' ? 'The call already ended' : m.error === 'private-account' ? 'Private accounts can’t join public group calls' : m.error === 'plan' ? CALL_PLAN_TEXT : m.error === 'member' ? 'Only members can start a call here' : m.error === 'notfound' ? 'This group isn’t on Lockedintool’s server' : 'Couldn’t join the call', null, !gcall.joinedAt); }
   if(m.kind === 'joined'){
     Object.assign(gcall, { id:m.callId, role:m.role, leader:!!m.leader, callJoin:m.callJoin, name:m.name || gcall.name, video:!!m.video });
     gcallApplyTracks();
@@ -13903,27 +13964,47 @@ function realNotifs(){
 const NOTIF_BELL = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>';
 function notifAppIcon(pkg){
   const a = state.installedApps.find(x=>x.pkg === pkg);
-  return a && (a.iconUrl || a.iconData) ? appIconHTML(a) : NOTIF_BELL;
+  return a && (a.iconUrl || a.iconData) ? appIconHTML(a) : (realAppIcon(pkg) || NOTIF_BELL);   // owner: every icon real
+}
+// Tap a notification -> all of it (owner: 'when I tap it it doesn't show the full details'): its app, title, the whole
+// message and when; Open = what tapping it in the phone's own panel does (StoryNative.notifOpen).
+function notifFullTemplate(){
+  const n = (state.notifList || []).find(x=>x.key === state.notifOpenKey);
+  if(!n) return '';
+  return `
+    <div class="modal-overlay" data-action="notif-full-close">
+      <div class="confirm-sheet has-x" onclick="event.stopPropagation()">
+        <button class="modal-close sheet-x" data-action="notif-full-close" aria-label="Close">×</button>
+        <div class="pay-detail-ico">${notifAppIcon(n.pkg)}</div>
+        <div class="confirm-title">${escText(n.app)}</div>
+        <div class="confirm-sub">${n.title ? '<b>' + escText(n.title) + '</b><br>' : ''}<span style="white-space:pre-wrap;">${escText(n.text)}</span><br><span style="opacity:0.7;">${escText(moneyDate(n.ts))}</span></div>
+        <div class="confirm-btn-row" style="margin-top:12px;">
+          <button class="btn-wide btn-primary" style="margin-top:0;" data-action="notif-full-open" data-key="${escText(n.key)}">Open</button>
+        </div>
+      </div>
+    </div>`;
 }
 function notificationsPanelScreen(){
   const access = NATIVE && window.StoryNative.moneyAccess ? window.StoryNative.moneyAccess() : false;
   const off = notifOff();
   const list = access ? realNotifs().filter(n=>!off.has(n.pkg)) : [];
+  state.notifList = list;
   return `
     <div class="page-shell">
     ${topBar('Notifications Panel', false)}
     <div class="note" style="margin-bottom:10px;">All your app notifications in one place. Manage which apps show up in Notification Settings.</div>
     ${!access ? `<div class="notif-card" data-action="money-access" style="margin-bottom:8px;cursor:pointer;"><div class="notif-icon-wrap">${NOTIF_BELL}</div><div class="notif-mid"><div class="notif-source">Allow Lockedintool to see your notifications</div><div class="notif-label">Turn on notification access</div></div></div>`
       : list.length ? list.map(n=>`
-        <div class="notif-card" style="margin-bottom:8px;">
+        <div class="notif-card" style="margin-bottom:8px;cursor:pointer;" data-action="notif-full" data-key="${escText(n.key)}">
           <div class="notif-icon-wrap">${notifAppIcon(n.pkg)}</div>
           <div class="notif-mid">
             <div class="notif-source">${escText(n.app)}${n.title ? ' · ' + escText(n.title) : ''}</div>
-            <div class="notif-label">${escText(n.text)}</div>
+            <div class="notif-label notif-label-more">${escText(n.text)}</div>
           </div>
           <div class="notif-right"><div class="notif-time">${escText(msgTime(n.ts))}</div></div>
         </div>`).join('') : `<div class="note">No notifications right now.</div>`}
-    </div>`;
+    </div>
+    ${state.notifOpenKey ? notifFullTemplate() : ''}`;
 }
 // A new notification (or one cleared) while the panel is open: it updates at once.
 window.storyNotifsChanged = function(){ if(state.current === 'notifications' || state.current === 'notif-settings') renderDevice(); };
@@ -17473,6 +17554,9 @@ function attachHandlers(){
         case 'cards-edit': state.cardsEditOpen = true; break;
         case 'page-edit': state.pageEdit = el.getAttribute('data-v'); break;
         case 'allcards-open': state.allCardsOpen = true; break;
+        case 'notif-full': state.notifOpenKey = el.getAttribute('data-key'); break;
+        case 'notif-full-close': state.notifOpenKey = null; break;
+        case 'notif-full-open': { const k = el.getAttribute('data-key'); state.notifOpenKey = null; if(NATIVE && window.StoryNative.notifOpen) try{ window.StoryNative.notifOpen(k); }catch(e){} break; }
         case 'wallet-hide': { const k = el.getAttribute('data-v'); walletHideSet(k, !walletHidden(k)); break; }
         case 'allcards-close': state.allCardsOpen = false; break;
         case 'allcards-pick': setWalletCardIndex(+el.getAttribute('data-i') || 1); state.allCardsOpen = false; break;
