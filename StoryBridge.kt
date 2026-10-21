@@ -172,10 +172,10 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         if (!openFirst(tries, "GALLERY")) host.showToast("No gallery app on this phone")
     }
 
-    /** An app made into a page: landing on its page opens the REAL app (STORY steps aside), with a thin strip on the
-     *  left edge to swipe your pages back. */
+    /** An app made into a page: tapping its card / Open opens the REAL app (STORY steps aside), with a thin strip on the
+     *  left edge to swipe your pages back. Landing on the page never opens it (owner). A live widget's card opens it too. */
     @JavascriptInterface
-    fun appPageOpen(pkg: String) { if (pages) host.appPageOpen(pkg) }
+    fun appPageOpen(pkg: String) { if (pages || widget) host.appPageOpen(pkg) }
 
     /** A live home screen widget's '‹ Dashboard': STORY opens full screen (owner). */
     @JavascriptInterface

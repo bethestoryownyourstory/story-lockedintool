@@ -832,7 +832,9 @@ class OverlayService : Service(), StoryBridge.Host {
         quietWatch = watch
     }
 
-    private fun showPanel(station3Only: Boolean) {
+    /** back = coming back from an app page (its left-edge strip): the Pages return where you were; otherwise opening
+     *  Lockedintool lands on your Home Screen (Layouts > Home Screen, owner). */
+    private fun showPanel(station3Only: Boolean, back: Boolean = false) {
         if (WidgetMode.on(this)) return   // Only use widgets: only the widgets
         warmUp()
         if (station3Only) {
@@ -846,7 +848,7 @@ class OverlayService : Service(), StoryBridge.Host {
         } else {
             // Station 3 stays open; Pages opens underneath it.
             val p = pagesPane!!
-            showPagesOn(p, "window.storyShow&&window.storyShow(null,false)") { updateBubble(); addBar() }
+            showPagesOn(p, "window.storyShow&&window.storyShow(null,false," + back + ")") { updateBubble(); addBar() }
             return
         }
         updateBubble()
@@ -1121,7 +1123,7 @@ class OverlayService : Service(), StoryBridge.Host {
         v.setOnTouchListener { _, e ->
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> { downX = e.rawX; done = false }
-                MotionEvent.ACTION_MOVE -> if (!done && e.rawX - downX > 36 * dp) { done = true; removeAppEdge(); appPagePkg = null; showPanel(station3Only = false) }
+                MotionEvent.ACTION_MOVE -> if (!done && e.rawX - downX > 36 * dp) { done = true; removeAppEdge(); appPagePkg = null; showPanel(station3Only = false, back = true) }
             }
             true
         }
