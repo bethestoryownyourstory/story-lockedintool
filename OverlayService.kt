@@ -436,7 +436,7 @@ class OverlayService : Service(), StoryBridge.Host {
         // Only system (owner): the bottom line that switches Apps | Pages (and swipes to the home screen / recent apps)
         // doesn't exist at all - not shown, not in the background, nowhere.
         pagesPane?.web?.evaluateJavascript(dashPadJs(), null)   // with or without the line, the Dashboard keeps the right room
-        if (SystemMode.on(this) || WidgetMode.on(this)) { bar = null; barLine = null; hidePicker(); return }   // ... and with Only use widgets
+        if (SystemMode.on(this) || WidgetMode.on(this)) { bar = null; barLine = null; hidePicker(); dashLineSync(); return }   // ... and with Only use widgets
         val hasLine = phoneHasGestureLine()
         val w = (150 * dp).toInt(); val h = (26 * dp).toInt()
         val touch = ViewConfiguration.get(this).scaledTouchSlop
@@ -476,6 +476,7 @@ class OverlayService : Service(), StoryBridge.Host {
         barLp = overlayParams(w, h, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL, 0, bottom).also { it.type = layerType }
         barLp!!.flags = barFlags(barLp!!.flags)
         layerWm.addView(v, barLp)
+        dashLineSync()
     }
     private var barLp: WindowManager.LayoutParams? = null
     // While Station 3 is open its own buttons come first: the bottom line's tap area (which sits under
@@ -493,19 +494,20 @@ class OverlayService : Service(), StoryBridge.Host {
     private var barLine: View? = null
     private var barHasLine = false
     // The phone's own line shows everywhere (the Pages sit under it), so STORY only draws one when the phone has none.
-    private fun updateBarLine() { barLine?.visibility = if (!barHasLine) View.VISIBLE else View.INVISIBLE }
+    // On the Dashboard Station 3's background covers the line's place, so the line is drawn on it there (dashLineSync).
+    private fun updateBarLine() { barLine?.visibility = if (!barHasLine && !dashGeom) View.VISIBLE else View.INVISIBLE; dashLineSync() }
 
     /** Android's gesture line size (width, height, corner radius in px), from the phone's own System UI. */
     private fun phoneLineSize(): Triple<Int, Int, Float> {
-        val r = runCatching { packageManager.getResourcesForApplication("com.android.systemui") }.getOrNull()
-        fun dim(name: String, fallbackDp: Float): Float {
-            val id = r?.getIdentifier(name, "dimen", "com.android.systemui") ?: 0
-            return if (id != 0) runCatching { r!!.getDimension(id) }.getOrDefault(fallbackDp * dp) else fallbackDp * dp
-        }
-        val w = dim("navigation_home_handle_width", 108f)
-        val radius = dim("navigation_handle_radius", 2f)
-        val h = maxOf(dim("navigation_handle_height", 0f), radius * 2)
+        val w = sysUiDim("navigation_home_handle_width", 108f)
+        val radius = sysUiDim("navigation_handle_radius", 2f)
+        val h = maxOf(sysUiDim("navigation_handle_height", 0f), radius * 2)
         return Triple(Math.round(w), maxOf(1, Math.round(h)), radius)
+    }
+    private fun sysUiDim(name: String, fallbackDp: Float): Float {
+        val r = runCatching { packageManager.getResourcesForApplication("com.android.systemui") }.getOrNull()
+        val id = r?.getIdentifier(name, "dimen", "com.android.systemui") ?: 0
+        return if (id != 0) runCatching { r!!.getDimension(id) }.getOrDefault(fallbackDp * dp) else fallbackDp * dp
     }
 
     // ---- Apps | Pages switch ----
@@ -1207,6 +1209,27 @@ class OverlayService : Service(), StoryBridge.Host {
     }
     /** Station 3's bottom edge above the screen's bottom: 0 (the corner) everywhere but the Dashboard. */
     fun s3BandYPx(): Int = if (dashGeom) dashBandYPx() else 0
+    /** On the Dashboard Station 3's background runs on to the bottom (owner), under the bottom line's place: down to
+     *  the screen's edge, or on 3-button phones down to the phone's own buttons (never over them). */
+    private fun dashUnderPx(): Int = maxOf(0, dashBandYPx() - (if (phoneHasGestureLine()) 0 else navBarHeightPx()))
+    /** The bottom line stays visible on that background (owner: the line that switches Apps | Pages): drawn on it in
+     *  the line's own place and size - the phone's gesture line (only covered in Lockedintool's top layer; in the
+     *  normal layer the phone draws its own over it) or, on 3-button phones, Lockedintool's line. */
+    private fun dashLineSync() {
+        val line = barBgLine ?: return
+        val gesture = phoneHasGestureLine()
+        val show = dashGeom && dashUnderPx() > 0 &&
+            (if (gesture) layerType == WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY else bar != null)
+        if (!show) { line.visibility = View.GONE; return }
+        val (w, h, r) = phoneLineSize()
+        val barH = (26 * dp).toInt()
+        val bottom = if (gesture) Math.round(sysUiDim("navigation_handle_bottom", 6f)) else (6 * dp).toInt() + barH - h - (barH - h) / 2
+        // The phone's own line colours: dark on a white background, light on a black one.
+        val c = if (th(Color.WHITE) == Color.WHITE) Color.parseColor("#99000000") else Color.parseColor("#EBFFFFFF")
+        line.background = GradientDrawable().apply { cornerRadius = r; setColor(c) }
+        line.layoutParams = FrameLayout.LayoutParams(w, h, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = bottom }
+        line.visibility = View.VISIBLE
+    }
     /** The room (CSS px) the Dashboard keeps at its bottom: the bottom line's area, Station 3's 40dp band and 6dp. */
     private fun dashPadJs(): String {
         val pagesBottom = if (phoneHasGestureLine()) 0 else navBarHeightPx()   // the Pages stop above 3-button navigation
@@ -1227,7 +1250,9 @@ class OverlayService : Service(), StoryBridge.Host {
         val y = s3BandYPx()
         s3Pane?.let { p -> p.lp.y = y - (10 * dp).toInt(); runCatching { p.wm.updateViewLayout(p.frame, p.lp) } }
         barBg?.let { v -> barBgLp?.let { lp ->
-            lp.y = y
+            val under = if (dash) dashUnderPx() else 0
+            lp.y = y - under
+            lp.height = (40 * dp).toInt() + under
             lp.width = if (dash) resources.displayMetrics.widthPixels else getSharedPreferences("story", MODE_PRIVATE).getInt("bar_w", (220 * dp).toInt())
             (v.background as? GradientDrawable)?.cornerRadii = if (dash) FloatArray(8) else floatArrayOf(20 * dp, 20 * dp, 0f, 0f, 0f, 0f, 0f, 0f)
             runCatching { (barBgWm ?: wm).updateViewLayout(v, lp) }
@@ -1235,6 +1260,7 @@ class OverlayService : Service(), StoryBridge.Host {
         dialPane?.let { p -> p.lp.y = y + (52 * dp).toInt(); runCatching { p.wm.updateViewLayout(p.frame, p.lp) } }
         fitProfileGap()
         syncBarTouch()
+        updateBarLine()
     }
     /** Opens the Dashboard's Station 3 only once its page has drawn the Dashboard layout (owner: Rows / Page Styles
      *  flashed for a moment): the page switches while the window is still see-through, then the window shows. */
@@ -1319,15 +1345,19 @@ class OverlayService : Service(), StoryBridge.Host {
     private var barBg: View? = null
     private var barBgLp: WindowManager.LayoutParams? = null
     private var barBgWm: WindowManager? = null
+    private var barBgLine: View? = null   // the bottom line, drawn on the Dashboard's Station 3 background (dashLineSync)
 
     private fun addBarBg() {
         removeBarBg()
-        val v = View(this).apply {
+        val line = View(this).apply { visibility = View.GONE }
+        val v = FrameLayout(this).apply {
             background = GradientDrawable().apply {
                 cornerRadii = floatArrayOf(20 * dp, 20 * dp, 0f, 0f, 0f, 0f, 0f, 0f)  // like the button: rounded top-left
                 setColor(th(Color.WHITE))
             }
+            addView(line, FrameLayout.LayoutParams(0, 0))
         }
+        barBgLine = line
         val h = (40 * dp).toInt()  // the button's own height, same rounding
         val lp = overlayParams(getSharedPreferences("story", MODE_PRIVATE).getInt("bar_w", (220 * dp).toInt()), h, Gravity.BOTTOM or Gravity.END, 0, 0).also {
             it.type = layerType
@@ -1341,7 +1371,7 @@ class OverlayService : Service(), StoryBridge.Host {
 
     private fun removeBarBg() {
         barBg?.let { runCatching { (barBgWm ?: wm).removeView(it) } }
-        barBg = null; barBgLp = null
+        barBg = null; barBgLp = null; barBgLine = null
     }
 
     /** The white shows exactly while Station 3's page shows. */
@@ -1484,6 +1514,7 @@ class OverlayService : Service(), StoryBridge.Host {
         (bubble as? TextView)?.let { b -> b.setTextColor(th(Color.WHITE)); (b.background as? GradientDrawable)?.setColor(th(Color.parseColor("#FF000000"))) }
         (barBg?.background as? GradientDrawable)?.setColor(th(Color.WHITE))
         (barLine?.background as? GradientDrawable)?.setColor(th(Color.parseColor("#B3FFFFFF")))
+        dashLineSync()
         pagesPane?.let { it.frame.setBackgroundColor(th(Color.BLACK)); it.web.setBackgroundColor(th(Color.BLACK)) }
         profileStrip?.setBackgroundColor(th(Color.BLACK))
         for (p in listOfNotNull(pagesPane, s3Pane, dialPane, profilePane, profileGapPane, lockDialPane))
