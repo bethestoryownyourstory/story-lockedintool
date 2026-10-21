@@ -1464,7 +1464,7 @@
   /* Home screen widget pictures: the page only - no veils, bubbles or Station 3 pieces over it. */
   html.story-widget #system-dimmer, html.story-widget #device-dimmer, html.story-widget .app-toast,
   html.story-widget .station3-region{ display:none !important; }
-  /* App pages: the app's own icon and name; landing here opens the real app. */
+  /* App pages: the app's own icon and name; tap it / Open for the real app (landing here never opens it - owner). */
   .app-page-body{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; min-height:360px; padding:24px 0; }
   .app-page-icon{ width:96px; height:96px; display:flex; align-items:center; justify-content:center; }
   .app-page-letter{ width:96px; height:96px; border-radius:22px; border:1px solid #333333; display:flex; align-items:center; justify-content:center; font-size:40px; font-weight:600; color:#ffffff; }
@@ -4361,7 +4361,7 @@ function wheelScreenHTML(key, W, H, s){
   tmp.innerHTML = pageCleanHTML(key, true);
   const root = tmp.firstElementChild;
   if(!root) return '';
-  const z = isAppPage(key) ? 1 : pageFitZoom(key, W, H);
+  const z = pageFitZoom(key, W, H);
   if(z !== 1){
     root.style.zoom = z.toFixed(4);
     const top = root.querySelector(':scope > .page-top');
@@ -4968,6 +4968,28 @@ let state = {
     {id:'spotify', name:'Spotify', icon:'🎵', section:'SOCIAL'},
   ],
 };
+// Settings stay set (owner: 'once a setting is set it stays set until changed' - updates and restarts used to put these
+// back): the choices kept in state are saved on the phone (story-settings, by the Pages window only - saveSettings at the
+// end of every render) and read back here when Lockedintool starts. Home Screen also decides where it opens.
+const SAVED_SETTINGS = { homeScreen:v=>['dashboard','wallet','money','trading'].includes(v), lastPage:v=>typeof v === 'string' && !!v,
+  pageArrangement:v=>['vertical','horizontal','circle','wheel'].includes(v), myControls:v=>Array.isArray(v) && v.every(x=>typeof x === 'string'),
+  lotSize:v=>typeof v === 'number' && v >= 0.01 && v <= 10, selectedCover:'string', selectedPageStyle:'string', selectedLineColor:'string',
+  canvasColor:'string', canvasPageStyle:'string', canvasLineColor:'string', canvasPenColor:'string', canvasPenSize:'number',
+  highlighterColor:'string', highlighterSize:'number', scrollDirection:v=>v === 'vertical' || v === 'horizontal' };
+(function(){
+  let s = {}; try{ s = JSON.parse(localStorage.getItem('story-settings') || '{}') || {}; }catch(e){}
+  Object.keys(SAVED_SETTINGS).forEach(k=>{ const ok = SAVED_SETTINGS[k], v = s[k]; if(v !== undefined && v !== null && (typeof ok === 'function' ? ok(v) : typeof v === ok)) state[k] = v; });
+  state.current = state.homeScreen;
+})();
+let savedSettingsJSON = null;
+function saveSettings(){
+  if(/[?&](s3|widget)=/.test(location.search)) return;   // only the Pages window keeps them (Station 3 / Profile / widgets read)
+  const o = {}; Object.keys(SAVED_SETTINGS).forEach(k=>{ o[k] = state[k]; });
+  const j = JSON.stringify(o);
+  if(j === savedSettingsJSON) return;
+  savedSettingsJSON = j;
+  try{ localStorage.setItem('story-settings', j); }catch(e){}
+}
 
 function homeBadge(){
   return `<span class="home-badge">⌂ HOME</span>`;
@@ -9081,6 +9103,7 @@ function loadNativeApps(){
       if(still.length !== kept.length){
         try{ localStorage.setItem('story-app-pages', JSON.stringify(still)); }catch(e){}
         if(isAppPage(state.current) && !have.has(state.current.slice(4))) state.current = 'trading';
+        if(isAppPage(state.lastPage) && !have.has(state.lastPage.slice(4))) state.lastPage = 'trading';
         syncAppPages();
       }
     }
@@ -9095,9 +9118,10 @@ window.storyWidget = function(page){
   window.__storyWidgetReady = true;
 };
 // Called by the Android overlay: open STORY on a given page (and optionally with Station 3 open).
-window.storyShow = function(page, station3){
+window.storyShow = function(page, station3, back){
   state.recentsOpen=false; state.homePickerOpen=false; state.appMenuId=null;
-  state.current = page || state.lastPage || state.homeScreen || 'wallet';
+  // Opening Lockedintool = your Home Screen (Layouts > Home Screen, owner); back from an app page = where you were.
+  state.current = page || (back ? state.current : '') || state.homeScreen || 'wallet';
   if(['money','wallet','trading'].includes(state.current)) state.lastPage = state.current;
   state.station3Open = !!station3;
   renderDevice();
@@ -14974,6 +14998,9 @@ notesDb().then(db=>new Promise(res=>{
 document.addEventListener('visibilitychange', ()=>{ if(document.hidden){ if(noteLiveSaveT){ clearTimeout(noteLiveSaveT); noteLiveSaveT = null; } persistNotesNow(); } });
 function renderDevice(){
   if(CORE_ITEMS.some(it=>it.key === state.current) && hiddenPages().includes(state.current) && PAGES.length) state.current = PAGES[0];   // a removed page (Page layout) never shows
+  // An app page that isn't in your rows any more (Only system, Basic plan, the app uninstalled) never shows either.
+  if(isAppPage(state.current) && !IN_STATION3_WINDOW){ const r = rowOfPage(state.current); if(!r) state.current = PAGES[0] || 'dashboard'; else if(r !== curRow){ curRow = r; syncAppPages(); } }
+  if(isAppPage(state.lastPage) && !rowOfPage(state.lastPage)) state.lastPage = PAGES[0] || 'wallet';
   // No plan (once subscriptions are really on) = Free: the Dashboard only, the Pages hidden (owner's full layout).
   if(planFree() && isPagesScreen(state.current) && !IN_STATION3_WINDOW){ state.current = 'dashboard'; state.rowsViewOpen = false; state.pageStyleViewOpen = false; }
   // A live home screen widget never leaves its page (owner: the Money widget stays on Money, the Dashboard widget on
@@ -15092,6 +15119,7 @@ function renderDevice(){
   positionStation3();
   dashTellNative();
   placeAllCardsBtn();
+  saveSettings();
   attachPayScroll();
   refreshNeighbors();
   if(typeof updatePhoneStatusClock === 'function') updatePhoneStatusClock();
@@ -19391,6 +19419,9 @@ function beginPageSlide(next){
     Object.assign(copy.style, { position:'absolute', left:((br.left - wrapRect.left) / z)+'px', top:((br.top - wrapRect.top) / z)+'px',
       width:(br.width / z)+'px', height:(br.height / z)+'px', margin:'0', pointerEvents:'none', visibility:'visible', boxSizing:'border-box', whiteSpace:'nowrap' });
     const outer = document.createElement('div'), inner = document.createElement('div');
+    // Its colours are copied from the real one (already themed): the White theme's swap must not flip them again
+    // (owner: the Dashboard button flashed on every page swipe - its words turned white on white while sliding).
+    outer.setAttribute('data-keep-color', '');
     outer.style.cssText = 'position:absolute;left:0;top:0;z-index:50;pointer-events:none;zoom:' + zShell + ';';
     inner.style.cssText = 'position:absolute;left:0;top:0;zoom:' + zTop + ';';
     inner.appendChild(copy); outer.appendChild(inner); wrap.appendChild(outer);
