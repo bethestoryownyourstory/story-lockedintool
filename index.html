@@ -7713,7 +7713,38 @@ function cardMatches(c, t){
   return !!a && (b.includes(a) || a.includes(b.split(' ')[0]));
 }
 // The whole Wallet follows the card that's showing (owner), like Money.
-const walletActivityList = ()=>walletNwOn() ? moneyTx().filter(t=>nwHas(WALLET_NW_KEY, moneyAcctKey(t))).slice(0, 5) : moneyView().slice(0, 5);
+// Wallet = ONLY money that went OUT when you paid with the Wallet (owner: 'Money shows everything about your money;
+// Wallet shows money that came out when the wallet was used - sending money and tap to pay'): your Send transfers that
+// were paid (Lockedintool's server, /v1/pay/history) and the payments your bank / wallet app reported while
+// Lockedintool's Tap to Pay was up (its open / close times are kept on the phone - story-tap-pays - plus 3 minutes after
+// it closed, for the bank's message to arrive). Wallet Activity, Subscriptions, Overview's Transactions and Transaction
+// History all use only these; Money keeps everything.
+const TAP_KEY = 'story-tap-pays', TAP_AFTER = 3 * 60000;
+function tapSessions(){ try{ const a = JSON.parse(localStorage.getItem(TAP_KEY) || '[]'); return Array.isArray(a) ? a : []; }catch(e){ return []; } }
+function tapMark(open){
+  const a = tapSessions(), now = Date.now(), last = a[a.length - 1];
+  if(open){ if(!last || last.b) a.push({ a: now, b: 0 }); }
+  else if(last && !last.b) last.b = now;
+  try{ localStorage.setItem(TAP_KEY, JSON.stringify(a.slice(-300))); }catch(e){}
+}
+function tapPaid(ts){ return tapSessions().some(s=>ts >= s.a - 5000 && ts <= (s.b || s.a + 10 * 60000) + TAP_AFTER); }
+function payHistoryEnsure(){
+  if(state.pay && state.pay.history === null && !state.pay.histAsked && msgAccount()){
+    state.pay.histAsked = true;
+    msgApi('/v1/pay/history').then(r=>{ state.pay.history = r.payments || []; if(MONEY_PAGES.includes(state.current)) renderDevice(); }).catch(()=>{});
+  }
+}
+function walletPayments(){
+  const base = walletNwOn() ? moneyTx().filter(t=>nwHas(WALLET_NW_KEY, moneyAcctKey(t))) : moneyView();
+  const taps = base.filter(t=>t.amt < 0 && tapPaid(t.ts)).map(t=>Object.assign({}, t, { via:'Tap to Pay' }));
+  payHistoryEnsure();
+  const c = !walletNwOn() && activeCard(), cur = moneyMainCur();
+  const sends = ((state.pay && state.pay.history) || []).filter(p=>p.dir !== 'in' && p.status === 'paid' && (!c || !p.from || String(p.from).includes(c.last4)))
+    .map(p=>{ const v = fxConvert(+p.amount || 0, 'ZAR', cur);
+      return { id:'send:' + (p.id || p.at), ts:+p.at || 0, amt:-(v == null ? +p.amount || 0 : v), cur: v == null ? 'ZAR' : cur, who:p.who || '', app:'Send money', via:'Send money' }; });
+  return taps.concat(sends).sort((x, y)=>y.ts - x.ts);
+}
+const walletActivityList = ()=>walletPayments().slice(0, 5);
 const NW_ICON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg>';
 const NW_PENCIL = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>';
 function walletActivityColor(amt, ts){
@@ -7736,9 +7767,9 @@ function walletActivitySubLabel(entry){
 function walletActivityRowsHTML(){
   if(!moneyAccessOk()) return `<div class="row" data-action="money-access" style="cursor:pointer;"><div class="row-left"><div class="row-icon">🔔</div><div class="row-name">Allow Lockedintool to see your payments</div></div><div class="row-amt">Turn on</div></div>`;
   const list = walletActivityList();
-  if(!list.length) return moneyRowsEmpty('No activity yet');
+  if(!list.length) return moneyRowsEmpty('Nothing paid with Wallet yet');
   const hide = walletHidden('activity');
-  return list.map(t=>({ icon: moneyIcon(t), name: escText(moneyWho(t)), sub: moneyWhen(t.ts), amt: t.amt, ts: t.ts, cur: t.cur })).map(t=>`
+  return list.map(t=>({ icon: moneyIcon(t), name: escText(moneyWho(t)), sub: t.via + ' · ' + moneyWhen(t.ts), amt: t.amt, ts: t.ts, cur: t.cur })).map(t=>`
     <div class="row"><div class="row-left"><div class="row-icon">${t.icon}</div><div><div class="row-name">${t.name}</div><div class="row-sub">${walletActivitySubLabel(t)}</div></div></div><div class="row-amt" style="color:${hide ? 'var(--text)' : walletActivityColor(t.amt, t.ts)};">${hide ? HIDDEN_AMT : fmtCur(t.amt, t.cur, true)}</div></div>
   `).join('');
 }
@@ -7757,7 +7788,7 @@ function walletSecTitle(title, k){
 // Subscriptions = the same payee paid in 2+ different months (worked out from your real payments).
 function walletSubscriptions(){
   const by = {};
-  moneyView().forEach(t=>{ if(t.amt >= 0 || !t.who) return; const k = t.who.toLowerCase() + '|' + t.cur; (by[k] = by[k] || []).push(t); });
+  walletPayments().forEach(t=>{ if(t.amt >= 0 || !t.who) return; const k = t.who.toLowerCase() + '|' + t.cur; (by[k] = by[k] || []).push(t); });
   return Object.values(by).map(l=>{
     const months = new Set(l.map(t=>monthKey(t.ts)));
     if(months.size < 2) return null;
@@ -7918,9 +7949,9 @@ function walletOverviewScreen(){
       <span style="font-size:10.5px;color:var(--green);cursor:pointer;font-weight:700;" data-action="open-tx-from-overview">More</span>
     </div>
     <div class="row-card">
-      ${moneyView().slice(0,4).length ? moneyView().slice(0,4).map(t=>`
-        <div class="row"><div class="row-left"><div class="row-icon">${moneyIcon(t)}</div><div><div class="row-name">${escText(moneyWho(t))}</div><div class="row-sub">${escText(t.app || '')} · ${moneyDate(t.ts)}</div></div></div><div class="row-amt" style="color:${t.amt<0?'var(--red)':'var(--green)'};">${fmtCur(t.amt, t.cur, true)}</div></div>
-      `).join('') : moneyRowsEmpty('No transactions yet')}
+      ${(l=>l.length ? l.map(t=>`
+        <div class="row"><div class="row-left"><div class="row-icon">${moneyIcon(t)}</div><div><div class="row-name">${escText(moneyWho(t))}</div><div class="row-sub">${escText(t.via)} · ${moneyDate(t.ts)}</div></div></div><div class="row-amt" style="color:var(--red);">${fmtCur(t.amt, t.cur, true)}</div></div>
+      `).join('') : moneyRowsEmpty('Nothing paid with Wallet yet'))(walletPayments().slice(0, 4))}
     </div>
     </div>
   `;
@@ -8443,9 +8474,9 @@ function txHistoryScreen(){
     </div>
     <div class="section-title">TRANSACTION HISTORY</div>
     <div class="row-card">
-      ${moneyView().slice(0,200).length ? moneyView().slice(0,200).map(t=>`
-        <div class="row"><div class="row-left"><div class="row-icon">${moneyIcon(t)}</div><div><div class="row-name">${escText(moneyWho(t))}</div><div class="row-sub">${escText(t.app || '')} · ${moneyDate(t.ts)}</div></div></div><div class="row-amt" style="color:${t.amt<0?'var(--red)':'var(--green)'};">${fmtCur(t.amt, t.cur, true)}</div></div>
-      `).join('') : moneyRowsEmpty('No transactions yet')}
+      ${(l=>l.length ? l.map(t=>`
+        <div class="row"><div class="row-left"><div class="row-icon">${moneyIcon(t)}</div><div><div class="row-name">${escText(moneyWho(t))}</div><div class="row-sub">${escText(t.via)} · ${moneyDate(t.ts)}</div></div></div><div class="row-amt" style="color:var(--red);">${fmtCur(t.amt, t.cur, true)}</div></div>
+      `).join('') : moneyRowsEmpty('Nothing paid with Wallet yet'))(walletPayments().slice(0, 200))}
     </div>
     </div>
   `;
@@ -17458,8 +17489,8 @@ function attachHandlers(){
           showToast('Card removed');
           break;
         }
-        case 'tap-to-pay': state.tapPayOpen = true; break;
-        case 'tap-pay-close': state.tapPayOpen = false; break;
+        case 'tap-to-pay': state.tapPayOpen = true; tapMark(true); break;
+        case 'tap-pay-close': state.tapPayOpen = false; tapMark(false); break;
         case 'tap-pay-nfc': if(NATIVE && window.StoryNative.nfcSettings) window.StoryNative.nfcSettings(); break;
         case 'money-access': { if(NATIVE && window.StoryNative.moneyAccessOpen) window.StoryNative.moneyAccessOpen(); else showToast('Turn on notification access for Lockedintool'); break; }
         case 'spend-limit-open': state.spendLimitOpen = true; break;
