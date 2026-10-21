@@ -1,0 +1,52 @@
+name: Lockedintool problem reports
+# What went wrong on phones (errors, crashes, windows that broke, slow app opens, music / camera / update failures) -
+# reported by every phone with nothing personal in it (ProblemLog.kt, msg-worker.js /v1/problems). The hourly check-up
+# runs this to read them, fixes what it can for every phone, and runs it again with action 'fixed' to mark what it fixed
+# (a problem that comes back on a newer version opens again by itself).
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'list | all | fixed'
+        required: true
+        default: 'list'
+        type: choice
+        options: ['list', 'all', 'fixed']
+      sigs:
+        description: 'fixed: the problems fixed (JSON array of sig strings)'
+        required: false
+        default: '[]'
+      app:
+        description: 'fixed: the app version that has the fix (e.g. 1.320)'
+        required: false
+        default: ''
+      note:
+        description: 'fixed: what was done (update number)'
+        required: false
+        default: ''
+jobs:
+  problems:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read / mark problems
+        env:
+          T: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ACTION: ${{ inputs.action }}
+          SIGS: ${{ inputs.sigs }}
+          APPV: ${{ inputs.app }}
+          NOTE: ${{ inputs.note }}
+        run: |
+          if [ -z "$T" ]; then echo "No CLOUDFLARE_API_TOKEN secret"; exit 1; fi
+          KEY=$(printf 'lit-problems:%s' "$T" | sha256sum | cut -c1-48)
+          U=https://story-msg.percyjuniormaseko0.workers.dev
+          if [ "$ACTION" = "fixed" ]; then
+            jq -n --arg key "$KEY" --argjson sigs "$SIGS" --arg app "$APPV" --arg note "$NOTE" '{key:$key,sigs:$sigs,app:$app,note:$note}' \
+              | curl -sS -X POST -H 'content-type: application/json' --data @- "$U/v1/problems/fixed"
+          else
+            ALL=false; [ "$ACTION" = "all" ] && ALL=true
+            jq -n --arg key "$KEY" --argjson all $ALL '{key:$key,all:$all}' \
+              | curl -sS -X POST -H 'content-type: application/json' --data @- "$U/v1/problems/list" > p.json
+            echo "===== PROBLEMS ====="
+            jq -r '"open: \(.open)", (.problems[] | "---\nsig: \(.sig)\nkind: \(.kind) | \(.n) times | \(.phones) phones | fixed: \(.fixed) \(.fixapp // "")\nwhere: \(.place)\nwhat: \(.msg)\nlatest: app \(.app) / screens \(.scr) / \(.device)\nfirst: \(.first/1000|todate) last: \(.last/1000|todate)")' p.json || cat p.json
+            echo "===== END ====="
+          fi

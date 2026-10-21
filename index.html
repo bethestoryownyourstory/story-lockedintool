@@ -2,6 +2,35 @@
 <html lang="en" dir="ltr">
 <head>
 <script>
+/* Problem reports (owner: something always running that keeps Lockedintool working and keeps fixing it): every window
+   tells the app when something goes wrong - an error, a promise that failed - and the app sends it to Lockedintool's
+   server, scrubbed of anything personal (ProblemLog.kt). Each problem once an hour per window. Lost connections are normal
+   and never reported. window.litProblem(kind, msg, place) reports anything else that didn't work. */
+(function(){
+  var sent = {};
+  function where(){ var q = location.search;
+    return /[?&]widget=/.test(q) ? 'widget' : /[?&]s3=1/.test(q) ? (/profile=1/.test(q) ? (/gap=1/.test(q) ? 'profile gap' : 'profile') : /dial=1/.test(q) ? (/lock=1/.test(q) ? 'lock dial pad' : 'dial pad') : 'station3') : 'pages'; }
+  function screen(){ try{ return (typeof state !== 'undefined' && state && state.current) ? ' on ' + state.current : ''; }catch(e){ return ''; } }
+  window.litProblem = function(kind, msg, place){
+    try{
+      msg = String(msg == null ? '' : msg); if(!msg) return;
+      if(/Failed to fetch|NetworkError|Load failed|AbortError|net::ERR_|The operation was aborted|WebSocket|ResizeObserver loop/i.test(msg)) return;
+      var key = kind + '|' + (place || '') + '|' + msg.slice(0, 120), now = Date.now();
+      if(sent[key] && now - sent[key] < 3600000) return; sent[key] = now;
+      var item = JSON.stringify({ kind: kind, msg: msg.slice(0, 300), place: (where() + ' ' + (place || '') + screen()).slice(0, 120) });
+      if(window.StoryNative && window.StoryNative.problem) window.StoryNative.problem(item);
+    }catch(e){}
+  };
+  window.addEventListener('error', function(e){
+    if(!e || !e.message) return;
+    litProblem('js', e.message, (String(e.filename || '').split('/').pop().split('?')[0] || 'page') + ':' + (e.lineno || 0) + ':' + (e.colno || 0));
+  });
+  window.addEventListener('unhandledrejection', function(e){
+    var r = e && e.reason; litProblem('js', 'unhandled: ' + (r && (r.message || r.name) || String(r)), 'promise');
+  });
+})();
+</script>
+<script>
 /* Android overlay: mark the page early so it can be transparent / drop its own bottom line before first paint. */
 (function(){ try{
   if(window.StoryNative){ document.documentElement.classList.add('native'); }
@@ -1259,6 +1288,18 @@
   .paycard .cnum{ font-family:var(--font-mono); font-size:11px; letter-spacing:0.6px; }
   .paycard .cname{ font-weight:700; font-size:11px; }
   .paycard-carousel{ overflow:hidden; touch-action:pan-y; margin-top:4px; }
+  .paycard-wrap{ position:relative; }
+  /* Show all cards (owner's drawing): white with black words in Black, the opposite in White (the theme swap flips it). */
+  .allcards-btn{ position:absolute; z-index:3; top:0; right:0; width:16px; padding:0; border:none; border-radius:10px;
+    background:#ffffff; color:#000000; display:flex; align-items:center; justify-content:center; overflow:hidden; cursor:pointer; visibility:hidden; }
+  .allcards-btn span{ writing-mode:vertical-rl; font-size:10px; font-weight:800; letter-spacing:0.6px; white-space:nowrap; line-height:1; }
+  .allcards-btn:active{ opacity:0.7; }
+  .allcards-sheet{ max-height:82%; overflow-y:auto; scrollbar-width:none; }
+  .allcards-sheet::-webkit-scrollbar{ display:none; }
+  .allcards-item{ position:relative; margin:10px auto 0; width:82%; cursor:pointer; }
+  .allcards-item .realcard{ width:100%; flex:none; }
+  .allcards-item.on .realcard{ outline:2px solid #ffffff; outline-offset:3px; }
+  .allcards-showing{ position:absolute; right:10px; top:-8px; background:#ffffff; color:#000000; font-size:10px; font-weight:800; padding:2px 8px; border-radius:999px; }
   .paycard-track{ display:flex; width:300%; transition:transform 0.32s cubic-bezier(0.22,1,0.36,1); }
   .paycard-slide{ width:33.3333%; flex-shrink:0; display:flex; justify-content:center; box-sizing:border-box; }
 
@@ -7425,6 +7466,36 @@ const PAGE_SECTIONS = {
 function pageSecs(){ try{ return JSON.parse(localStorage.getItem('story-page-sections') || '{}') || {}; }catch(e){ return {}; } }
 function pageSecOn(page, key){ const p = pageSecs()[page] || {}; return p[key] !== false; }
 function pageSecSet(page, key, on){ const a = pageSecs(); a[page] = Object.assign({}, a[page], { [key]: !!on }); try{ localStorage.setItem('story-page-sections', JSON.stringify(a)); }catch(e){} }
+// Show all cards (owner's drawing): a tall button down the right of the card, its words turned sideways, always the
+// opposite of the system theme (white in Black, black in White - the theme swap flips it). Tap -> every card you added,
+// as it really looks; tap one to go to it (the same as swiping to it).
+function allCardsTemplate(){
+  const cards = walletCards();
+  return `
+    <div class="modal-overlay" data-action="allcards-close">
+      <div class="modal-sheet page-edit-sheet allcards-sheet" onclick="event.stopPropagation()">
+        <div class="modal-head"><span class="modal-title">All cards</span><button class="modal-close" data-action="allcards-close">×</button></div>
+        ${cards.map((c, k)=>`<div class="allcards-item${state.walletCardIndex === k + 1 ? ' on' : ''}" data-action="allcards-pick" data-i="${k + 1}">
+          <div class="realcard${c.photo ? ' realcard-isphoto' : ''}" data-keep-color style="background:#000000;border:1px solid rgba(255,255,255,0.08);">${cardFaceHTML(c)}</div>
+          ${state.walletCardIndex === k + 1 ? '<div class="allcards-showing">Showing</div>' : ''}
+        </div>`).join('')}
+      </div>
+    </div>`;
+}
+// The button sits in the space between the card and the screen's right edge, exactly as tall as the card, on every
+// phone size (the page is scaled to fit, so it's worked out from the card's real size, never from where a sliding card is).
+function placeAllCardsBtn(){
+  const b = document.querySelector('.allcards-btn'); if(!b) return;
+  const wrap = b.parentElement, car = wrap && wrap.querySelector('.paycard-carousel'), card = car && car.querySelector('.realcard');
+  if(!car || !card || !wrap.offsetWidth) return;
+  const wr = wrap.getBoundingClientRect(), ratio = (wr.width / wrap.offsetWidth) || 1;
+  const cardR = car.offsetLeft + (car.offsetWidth + card.offsetWidth) / 2;
+  const screenR = (window.innerWidth - wr.left) / ratio;
+  const left = cardR + 4 / ratio, right = screenR - 3 / ratio;
+  b.style.left = left + 'px'; b.style.width = Math.max(12, right - left) + 'px';
+  b.style.top = car.offsetTop + 'px'; b.style.height = card.offsetHeight + 'px';
+  b.style.visibility = 'visible';   // hidden until it's in its place (page previews never show it out of place)
+}
 function pageEditTemplate(page){
   const cards = walletCards();
   return `
@@ -7655,6 +7726,7 @@ function walletScreen(){
     <div class="page-shell">
     ${topBar('Wallet', true, '<span style="display:flex;gap:6px;"><button class="order-corner-btn" data-action="wallet-nw-edit" title="Pick the accounts" style="' + (walletNwOn() ? '' : 'visibility:hidden;') + '">' + NW_PENCIL + '</button><button class="order-corner-btn' + (walletNwOn() ? ' money-all-on' : '') + '" data-action="wallet-nw" title="Net worth">' + NW_ICON + '</button><button class="order-corner-btn" data-action="open-tx-from-wallet" title="Transaction History"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg></button></span>')}
     ${pageArrows()}
+    <div class="paycard-wrap">
     <div class="paycard-carousel" id="paycard-swipe" style="width:122%;margin-left:-11%;">
       <div class="paycard-track" style="width:${nSlides * 100}%;transform:translateX(calc(-${state.walletCardIndex} * ${100 / nSlides}%));">
         <div class="paycard-slide" style="width:${100 / nSlides}%;">
@@ -7664,6 +7736,8 @@ function walletScreen(){
         </div>
         ${cards.map((c, k)=>cardSlideHTML(c, k + 1).replace('<div class="paycard-slide">', `<div class="paycard-slide" style="width:${100 / nSlides}%;">`)).join('')}
       </div>
+    </div>
+    ${cards.length ? `<button class="allcards-btn" data-action="allcards-open" aria-label="Show all cards"><span>Show all cards</span></button>` : ''}
     </div>
     <div class="paycard-dots" style="position:relative;">
       ${Array.from({ length:nSlides }, (_, k)=>`<span class="dot${state.walletCardIndex===k?' active':''}" data-cardidx="${k}"></span>`).join('')}
@@ -7719,6 +7793,7 @@ function walletScreen(){
     ${state.tapPayOpen ? tapPayTemplate() : ''}
     ${state.favoritesOpen ? favoritesPopupTemplate() : ''}
     ${state.pageEdit === 'wallet' ? pageEditTemplate('wallet') : ''}
+    ${state.allCardsOpen ? allCardsTemplate() : ''}
     ${state.cardSheetId ? cardSheetTemplate() : ''}
     ${state.moneyAllEdit ? moneyAllEditTemplate() : ''}
   `;
@@ -15000,6 +15075,7 @@ function renderDevice(){
   if(fsLive){ const lock = state.current === 'trading' && state.chartFullscreen; fsLive.classList.toggle('fs-lock', lock); if(lock) fsLive.scrollTop = 0; }
   positionStation3();
   dashTellNative();
+  placeAllCardsBtn();
   attachPayScroll();
   refreshNeighbors();
   if(typeof updatePhoneStatusClock === 'function') updatePhoneStatusClock();
@@ -17320,6 +17396,9 @@ function attachHandlers(){
         case 'card-sheet-close': state.cardSheetId = null; break;
         case 'cards-edit': state.cardsEditOpen = true; break;
         case 'page-edit': state.pageEdit = el.getAttribute('data-v'); break;
+        case 'allcards-open': state.allCardsOpen = true; break;
+        case 'allcards-close': state.allCardsOpen = false; break;
+        case 'allcards-pick': setWalletCardIndex(+el.getAttribute('data-i') || 1); state.allCardsOpen = false; break;
         case 'page-edit-close': state.pageEdit = null; break;
         case 'page-sec': { const pg = el.getAttribute('data-page'), k = el.getAttribute('data-k'); pageSecSet(pg, k, !pageSecOn(pg, k)); break; }
         case 'cards-edit-close': state.cardsEditOpen = false; break;

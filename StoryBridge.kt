@@ -43,7 +43,7 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         fun toggleCalls()
         fun toggleUpdates()
         fun pagesAction(action: String)
-        fun hidePanelFor(pkg: String?)
+        fun hidePanelFor(pkg: String?, what: String)
         fun dashShown(on: Boolean)
         fun getCalls(): String
         fun createShutter()
@@ -92,6 +92,10 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
     @JavascriptInterface fun musicState(): String = MusicPlayer.state(ctx)
     @JavascriptInterface fun musicChoose(pkg: String) { MusicPlayer.choose(ctx, pkg) }
     @JavascriptInterface fun musicCmd(cmd: String) { MusicPlayer.command(ctx, cmd) }
+    /** A window's page hit a problem (an error, something that didn't work): sent to Lockedintool's server, scrubbed of anything personal. */
+    @JavascriptInterface fun problem(json: String) {
+        runCatching { val o = JSONObject(json); ProblemLog.record(ctx, o.optString("kind", "js"), o.optString("msg"), o.optString("place")) }
+    }
     /** The card's button for the card's own player; the answer (did the player react?) comes back to this page. */
     @JavascriptInterface fun musicCmdFor(cmd: String, pkg: String) {
         MusicPlayer.commandFor(ctx, cmd, pkg) { res -> val js = "window.storyMusicResult&&window.storyMusicResult($res)"; evalTo?.invoke(js) ?: host.evalPages(js) }
@@ -109,11 +113,11 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
 
     /** Opens the first of these the phone has. The app opens UNDER the Pages, and the Pages step aside the moment it is
      *  in front (owner: you saw the background changing while it took long) - the same on every phone. */
-    private fun openFirst(tries: Sequence<Intent>): Boolean {
+    private fun openFirst(tries: Sequence<Intent>, what: String = "an app"): Boolean {
         for (i in tries) {
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             if (runCatching { ctx.startActivity(i) }.isSuccess) {
-                host.hidePanelFor(i.component?.packageName ?: runCatching { i.resolveActivity(ctx.packageManager)?.packageName }.getOrNull())
+                host.hidePanelFor(i.component?.packageName ?: runCatching { i.resolveActivity(ctx.packageManager)?.packageName }.getOrNull(), what)
                 return true
             }
         }
@@ -134,7 +138,7 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
     fun openCamera() {
         val locked = (ctx.getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager).isKeyguardLocked
         val i = Intent(if (locked) android.provider.MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA_SECURE else android.provider.MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA)
-        if (!openFirst(sequenceOf(i, Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE)))) host.showToast("No camera app on this phone")
+        if (!openFirst(sequenceOf(i, Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE)), "CAMERA")) host.showToast("No camera app on this phone")
     }
     /** Dashboard > ALARM (owner): the phone's own alarms (its Clock app); STORY steps aside like opening any app. */
     @JavascriptInterface
@@ -156,7 +160,7 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
             }.getOrNull()?.let { pm.getLaunchIntentForPackage(it) }?.let { yield(it) }
             yield(Intent(android.provider.AlarmClock.ACTION_SET_ALARM))
         }
-        if (!openFirst(tries)) host.showToast("No clock app on this phone")
+        if (!openFirst(tries, "ALARM")) { host.showToast("No clock app on this phone"); ProblemLog.record(ctx, "alarm", "no clock app found", "dashboard") }
     }
     @JavascriptInterface
     fun openGallery() {
@@ -165,7 +169,7 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
             yield(Intent(Intent.ACTION_VIEW).setDataAndType(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, "image/*"))
             ctx.packageManager.getLaunchIntentForPackage("com.google.android.apps.photos")?.let { yield(it) }
         }
-        if (!openFirst(tries)) host.showToast("No gallery app on this phone")
+        if (!openFirst(tries, "GALLERY")) host.showToast("No gallery app on this phone")
     }
 
     /** An app made into a page: landing on its page opens the REAL app (STORY steps aside), with a thin strip on the

@@ -123,6 +123,8 @@ object MusicPlayer {
         worker.post {
             val r = runCatching { runCmd(c, cmd0, cardPkg) { my != gen } }.getOrElse { JSONObject().put("cmd", cmd0).put("ok", false).put("why", "error") }
             if (my == gen) report(r.toString())
+            if (!r.optBoolean("ok", true) && r.optString("why") != "replaced")
+                ProblemLog.record(c, "music", "${r.optString("cmd")} not done (${r.optString("why")}) by ${r.optString("pkg").ifEmpty { "no player" }}", "dashboard music card")
         }
     }
     private fun key(code: Int, send: (KeyEvent) -> Unit) {

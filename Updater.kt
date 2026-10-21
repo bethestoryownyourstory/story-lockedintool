@@ -43,6 +43,7 @@ object Updater {
 
     // ---- What the setup screen shows ----
     fun setStatus(ctx: Context, s: String) {
+        if (Regex("failed|stopped|Couldn't start|Couldn't download", RegexOption.IGNORE_CASE).containsMatchIn(s)) ProblemLog.record(ctx, "update", s, "updater")
         ctx.getSharedPreferences("story", Context.MODE_PRIVATE).edit().putString("upd_status", s).putLong("upd_status_at", System.currentTimeMillis()).apply()
     }
     /** Download progress 0-100 while downloading, -1 while installing (no percentage), null otherwise. */

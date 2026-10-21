@@ -151,6 +151,7 @@ class OverlayService : Service(), StoryBridge.Host {
 
     override fun onCreate() {
         super.onCreate()
+        ProblemLog.catchCrashes(this); ProblemLog.flush(this)   // a crash is written down, and sent the next time
         wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         startAsForeground()
         // Using STORY means agreeing to automatic updates (everyone, owner included). Not agreed yet:
@@ -260,6 +261,8 @@ class OverlayService : Service(), StoryBridge.Host {
             ui.post {
                 val before = screensSeen
                 screensSeen = v
+                getSharedPreferences("story", MODE_PRIVATE).edit().putString("screens_seen", v.take(40)).apply()
+                ProblemLog.flush(this)   // problems waiting to be sent (nothing happens when there are none)
                 val now = System.currentTimeMillis()
                 for (p in listOfNotNull(s3Pane, pagesPane, dialPane, profilePane, profileGapPane, lockDialPane)) {  // every STORY window, the dial pad included
                     // Loaded from the site just before this first check: it already has these screens.
@@ -609,6 +612,8 @@ class OverlayService : Service(), StoryBridge.Host {
             // Android sometimes shuts the page down to free memory, which leaves a blank white window:
             // build STORY's windows again instead (and don't let it take the app down).
             override fun onRenderProcessGone(v: WebView, detail: android.webkit.RenderProcessGoneDetail): Boolean {
+                ProblemLog.record(this@OverlayService, "window", "page stopped (" + (if (detail.didCrash()) "crashed" else "closed by Android for memory") + ")",
+                    if (gap) "profile gap" else if (profile) "profile" else if (lock) "lock dial pad" else if (dial) "dial pad" else if (small) "station3" else "pages")
                 ui.post { rebuildLayer() }
                 return true
             }
@@ -1445,10 +1450,15 @@ class OverlayService : Service(), StoryBridge.Host {
      *  the Pages step aside the moment it is in front - never a flash of whatever was underneath while it starts (owner).
      *  At most 1.5 s (0.4 s when Lockedintool can't see which app is in front). */
     private var openingPkg: String? = null
-    private val openingHide = Runnable { if (openingPkg != null) { openingPkg = null; pagesPane?.takeIf { it.shown }?.let { hideOne(it) }; updateBubble() } }
-    override fun hidePanelFor(pkg: String?) { ui.post {
+    private var openingWhat = ""
+    private val openingHide = Runnable { if (openingPkg != null) {
+        // It never came to the front in 1.5 s: slow on this phone - reported so it gets looked at (which button, never which app).
+        if (!openingPkg.isNullOrEmpty() && StoryAccessibilityService.instance != null) ProblemLog.record(this, "slow", "$openingWhat took over 1.5 s to open", "pages")
+        openingPkg = null; pagesPane?.takeIf { it.shown }?.let { hideOne(it) }; updateBubble() } }
+    override fun hidePanelFor(pkg: String?, what: String) { ui.post {
         ui.removeCallbacks(openingHide)
         if (pagesPane?.shown != true) { openingPkg = null; updateBubble(); return@post }
+        openingWhat = what
         openingPkg = pkg ?: ""
         ui.postDelayed(openingHide, if (pkg.isNullOrEmpty() || StoryAccessibilityService.instance == null) 400L else 1500L)
     } }
@@ -1859,6 +1869,7 @@ class OverlayService : Service(), StoryBridge.Host {
     fun closeS3WindowFromCamera() { ui.post { profilePane?.takeIf { it.shown }?.let { hideOne(it) } } }
     /** The camera tells Create what happened: ready / recording / photo / video / denied / error. */
     fun createEvent(kind: String, extra: String) { ui.post {
+        if (kind == "error") ProblemLog.record(this, "camera", extra.ifEmpty { "camera error" }, "create")
         // A video plays on the phone's own player under Create; anything else stops it.
         if (kind == "video") CreateCameraActivity.instance?.playCapture()
         else if (kind == "photo") CreateCameraActivity.instance?.stopPlayback()

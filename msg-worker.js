@@ -132,6 +132,10 @@ export class Hub {
     try { this.sql.exec(`ALTER TABLE payments ADD COLUMN mode TEXT`); } catch (e) {}
     try { this.sql.exec(`ALTER TABLE payments ADD COLUMN payfrom TEXT`); } catch (e) {}   // which of your accounts you chose to pay from (Pay with)
     this.sql.exec(`CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT)`);
+    // Problem reports from every phone (owner: something always running that keeps Lockedintool working): grouped by
+    // what went wrong; phones are counted by a random install id only (never an account, never personal data).
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS problems (sig TEXT PRIMARY KEY, kind TEXT, msg TEXT, place TEXT, app TEXT, scr TEXT, device TEXT, n INTEGER, first INTEGER, last INTEGER, fixed INTEGER DEFAULT 0, fixapp TEXT, note TEXT)`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS problemphones (sig TEXT, pid TEXT, PRIMARY KEY (sig, pid))`);
     // Updates (owner): following, profile posts and 24-hour statuses, and the pictures / videos they show.
     try { this.sql.exec(`ALTER TABLE users ADD COLUMN about TEXT`); } catch (e) {}
     try { this.sql.exec(`ALTER TABLE users ADD COLUMN country TEXT`); } catch (e) {}   // chosen at Create your account (sets the default currency)
@@ -233,6 +237,9 @@ export class Hub {
       if (path === '/v1/reset') return this.resetPage(req, url);
       if (path === '/v1/reset/options') return this.resetOptions(url.searchParams.get('u') || '', req.headers.get('cf-connecting-ip') || '');
       const body = req.method === 'POST' ? await req.json().catch(() => ({})) : {};
+      if (path === '/v1/problems' && req.method === 'POST') return this.problemsIn(body, req.headers.get('cf-connecting-ip') || '');
+      if (path === '/v1/problems/list') return this.problemsList(body, url);
+      if (path === '/v1/problems/fixed') return this.problemsFixed(body);
       if (path === '/v1/register') return this.register(body, req.headers.get('cf-connecting-ip') || '');
       if (path === '/v1/login') return this.login(body);
       if (path === '/v1/reset/start') return this.resetStart(body, req.headers.get('cf-connecting-ip') || '');
@@ -655,6 +662,52 @@ export class Hub {
     if (!this.smsLinkReady()) return false;
     const r = await this.twilio('/2010-04-01/Accounts/' + this.env.TWILIO_ACCOUNT_SID + '/Messages.json', { From: this.env.TWILIO_FROM, To: to, Body: body }).catch(() => null);
     return !!(r && r.ok);
+  }
+  // ---- Problem reports: every phone sends what went wrong (errors, crashes, a window that broke, an app slow to open,
+  //      music / camera / updates failing) - already scrubbed of anything personal on the phone. The check-up reads them
+  //      (problems.yml, with PROBLEMS_KEY) and marks the ones it fixed; one that comes back on a newer version reopens. ----
+  problemsIn(b, ip) {
+    if (this.limit('prob:' + ip, 60)) return json({ ok: true, limited: true });
+    const cut = (v, n) => String(v == null ? '' : v).slice(0, n);
+    const pid = cut(b.pid, 40), app = cut(b.app, 40), scr = cut(b.scr, 40), device = cut(b.device, 80), now = Date.now();
+    const items = Array.isArray(b.items) ? b.items.slice(0, 40) : [];
+    for (const it of items) {
+      const kind = cut(it.kind, 24).replace(/[^a-z0-9_-]/gi, '') || 'other', msg = cut(it.msg, 300), place = cut(it.place, 120);
+      if (!msg) continue;
+      const n = Math.max(1, Math.min(1000, parseInt(it.n, 10) || 1));
+      const sig = (kind + '|' + place.replace(/:\d+(:\d+)?/g, '') + '|' + msg.replace(/\d+/g, '#')).slice(0, 400);
+      const old = this.one('SELECT * FROM problems WHERE sig = ?', sig);
+      if (!old) this.sql.exec('INSERT INTO problems (sig, kind, msg, place, app, scr, device, n, first, last, fixed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)', sig, kind, msg, place, app, scr, device, n, now, now);
+      else {
+        // Marked fixed, but it happened again on a version newer than the fix: it isn't fixed - open it again.
+        const build = v => parseInt(String(v || '').split('.').pop(), 10) || 0;
+        const back = old.fixed && (!old.fixapp || build(app) > build(old.fixapp));
+        this.sql.exec('UPDATE problems SET n = n + ?, last = ?, app = ?, scr = ?, device = ?, msg = ?, place = ?, fixed = ? WHERE sig = ?', n, now, app, scr, device, msg, place, back ? 0 : old.fixed, sig);
+      }
+      if (pid) this.sql.exec('INSERT OR IGNORE INTO problemphones (sig, pid) VALUES (?, ?)', sig, pid);
+    }
+    // Keep it small: the oldest fixed ones go first.
+    const total = this.one('SELECT COUNT(*) AS c FROM problems').c;
+    if (total > 2000) this.sql.exec('DELETE FROM problems WHERE sig IN (SELECT sig FROM problems ORDER BY fixed DESC, last ASC LIMIT ?)', total - 2000);
+    return json({ ok: true });
+  }
+  problemsKeyOk(k) {
+    const want = this.env.PROBLEMS_KEY || '';
+    if (!want || typeof k !== 'string' || k.length !== want.length) return false;
+    let d = 0; for (let i = 0; i < k.length; i++) d |= k.charCodeAt(i) ^ want.charCodeAt(i);
+    return d === 0;
+  }
+  problemsList(b, url) {
+    if (!this.problemsKeyOk(b.key || url.searchParams.get('key') || '')) return json({ error: 'key' }, 403);
+    const all = b.all || url.searchParams.get('all') === '1';
+    const rows = this.sql.exec(`SELECT p.*, (SELECT COUNT(*) FROM problemphones f WHERE f.sig = p.sig) AS phones FROM problems p ${all ? '' : 'WHERE p.fixed = 0'} ORDER BY p.fixed ASC, p.last DESC LIMIT 300`).toArray();
+    return json({ now: Date.now(), open: this.one('SELECT COUNT(*) AS c FROM problems WHERE fixed = 0').c, problems: rows });
+  }
+  problemsFixed(b) {
+    if (!this.problemsKeyOk(b.key || '')) return json({ error: 'key' }, 403);
+    const sigs = Array.isArray(b.sigs) ? b.sigs.slice(0, 200) : [];
+    for (const sig of sigs) this.sql.exec('UPDATE problems SET fixed = ?, fixapp = ?, note = ? WHERE sig = ?', Date.now(), String(b.app || '').slice(0, 40), String(b.note || '').slice(0, 300), String(sig));
+    return json({ ok: true, fixed: sigs.length });
   }
   limit(k, max) {
     const hour = Math.floor(Date.now() / 3600000), r = this.one('SELECT * FROM rlimit WHERE k = ?', k), n = r && r.hour === hour ? r.n + 1 : 1;

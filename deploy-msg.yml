@@ -75,6 +75,8 @@ jobs:
             v="${!k}"
             if [ -n "$v" ]; then printf '%s' "$v" | npx --yes wrangler@4 secret put "$k" -c msg-wrangler.toml >/dev/null && echo "$k set"; fi
           done
+          # Problem reports: the key the check-up (problems.yml) reads them with - made from the Cloudflare token, never stored anywhere.
+          printf 'lit-problems:%s' "$CLOUDFLARE_API_TOKEN" | sha256sum | cut -c1-48 | tr -d '\n' | npx --yes wrangler@4 secret put PROBLEMS_KEY -c msg-wrangler.toml >/dev/null && echo "PROBLEMS_KEY set"
       - name: Live video (Cloudflare Realtime) - made once on this Cloudflare account
         if: steps.ready.outputs.ok == 'true'
         env:
