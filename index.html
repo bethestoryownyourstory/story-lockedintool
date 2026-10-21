@@ -4978,7 +4978,7 @@ const SAVED_SETTINGS = { homeScreen:v=>['dashboard','wallet','money','trading'].
 (function(){
   let s = {}; try{ s = JSON.parse(localStorage.getItem('story-settings') || '{}') || {}; }catch(e){}
   Object.keys(SAVED_SETTINGS).forEach(k=>{ const ok = SAVED_SETTINGS[k], v = s[k]; if(v !== undefined && v !== null && (typeof ok === 'function' ? ok(v) : typeof v === ok)) state[k] = v; });
-  state.current = state.homeScreen;
+  if(!/[?&](s3|widget)=/.test(location.search)) state.current = state.homeScreen;   // the Pages start on your Home Screen
 })();
 let savedSettingsJSON = null;
 function saveSettings(){
@@ -5038,7 +5038,7 @@ function ctlApply(st, out){
   if(out && Array.isArray(out.list) && out.list.length){ state.audioOutputs = out.list.map(String); state.activeAudioOutput = String(out.active || out.list[0]); }
 }
 function ctlRefresh(){
-  if(!CTL_NATIVE) return;
+  if(!CTL_NATIVE || IN_STATION3_WINDOW) return;
   try{ ctlApply(JSON.parse(window.StoryNative.controlsState() || '{}'), window.StoryNative.audioOutputs ? JSON.parse(window.StoryNative.audioOutputs() || '{}') : null); }catch(e){}
 }
 window.storyControlsChanged = function(st, out){ ctlApply(st, out); if(state.current === 'dashboard') renderDevice(); };
@@ -8588,12 +8588,11 @@ function layoutsDashboardScreen(){
 }
 
 function layoutsHomeScreenScreen(){
-  const homeLabel = state.homeScreen==='dashboard' ? 'Dashboard' : PAGE_LABEL[state.homeScreen];
   return `
     <div class="page-shell layouts-shell">
     ${topBar('Home Screen', false, '', 'layouts', '', false, true)}
     <div class="section-title">HOME SCREEN</div>
-    <div class="note">Pick which screen Lockedintool opens to every time you launch it — on phone, laptop, or PC.</div>
+    <div class="note">Pick which screen Lockedintool opens on every time you open it.</div>
     <div style="margin-top:12px;">
       ${['dashboard','wallet','money','trading'].map(s=>`
         <div class="settings-option${s===state.homeScreen?' selected':''}" data-sethome="${s}">
@@ -8602,8 +8601,6 @@ function layoutsHomeScreenScreen(){
         </div>
       `).join('')}
     </div>
-    <button class="reopen-btn" id="reopen-btn">↻ Reopen App</button>
-    <div class="note">Reopening simulates a fresh launch — it should land you straight on <b>${homeLabel}</b>, no extra taps.</div>
     </div>
   `;
 }
@@ -12324,8 +12321,7 @@ function communityGuidelinesScreen(){
     </div>
     <div class="community-policy-box" style="margin-bottom:10px;">
       A first violation gets a warning with time to remove the content. An unresolved or repeated violation
-      leads to a suspension. (This prototype checks a basic keyword list, not real content — a production
-      system would need real moderation on top of this.)
+      leads to a suspension.
     </div>
     <div class="community-policy-box">
       This only applies inside Lockedintool itself. Lockedintool doesn't control apps like TikTok, Instagram, or Facebook,
@@ -15652,12 +15648,6 @@ function attachHandlers(){
   document.querySelectorAll('[data-layouttab]').forEach(el=>{
     el.addEventListener('click', ()=>{ state.layoutsTab = el.getAttribute('data-layouttab'); renderDevice(); });
   });
-  const reopen = document.getElementById('reopen-btn');
-  if(reopen){ reopen.addEventListener('click', ()=>{
-    state.current = state.homeScreen;
-    if(PAGES.includes(state.current)) state.lastPage = state.current;
-    renderDevice();
-  }); }
 
   // --- fullscreen-chart lot input mirrors the main lot input ---
   const lotInputFs = document.getElementById('lot-input-fs');
