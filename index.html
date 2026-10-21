@@ -4894,9 +4894,8 @@ let state = {
   controlsEditMode:false,
   airplaneOn:false,
   mediaOutputOpen:false,
-  audioSeparateOn:false,
   activeAudioOutput:'This Phone',
-  audioOutputs:['This Phone','Bluetooth Headphones','Living Room Speaker'],
+  audioOutputs:['This Phone'],   // the phone's real outputs (ctlRefresh) - never made up
   spotifyPlaying:false,
   // Station 3 -- the combined global panel (Rows, Page Styles, create/post, call history,
   // dial pad, messages, profile) opened from the corner arrow -- see buildPhone()/
@@ -5030,7 +5029,21 @@ function pageArrows(){
 }
 
 /* ---------- SCREEN TEMPLATES ---------- */
+// The Dashboard's Controls / Media output come from the phone (StoryNative.controlsState / audioOutputs - PhoneControls.kt):
+// read when the Dashboard draws, and told by the app after a change (storyControlsChanged). No loop.
+const CTL_NATIVE = !!(window.StoryNative && window.StoryNative.controlsState && window.StoryNative.controlToggle);
+const CTL_FIELDS = {wifi:'wifiOn', bt:'btOn', dnd:'dndOn', airplane:'airplaneOn', flashlight:'flashlightOn', rotation:'rotationLockOn'};
+function ctlApply(st, out){
+  if(st && typeof st === 'object') Object.keys(CTL_FIELDS).forEach(k=>{ if(typeof st[k] === 'boolean') state[CTL_FIELDS[k]] = st[k]; });
+  if(out && Array.isArray(out.list) && out.list.length){ state.audioOutputs = out.list.map(String); state.activeAudioOutput = String(out.active || out.list[0]); }
+}
+function ctlRefresh(){
+  if(!CTL_NATIVE) return;
+  try{ ctlApply(JSON.parse(window.StoryNative.controlsState() || '{}'), window.StoryNative.audioOutputs ? JSON.parse(window.StoryNative.audioOutputs() || '{}') : null); }catch(e){}
+}
+window.storyControlsChanged = function(st, out){ ctlApply(st, out); if(state.current === 'dashboard') renderDevice(); };
 function dashboardScreen(){
+  ctlRefresh();
   return `
     <div class="story-screen${dashS3On() ? ' s3-dash' : ''}" id="dashboard-swipe-zone">
       <div class="notif-pull" id="notif-pull" style="pointer-events:none;">▾</div>
@@ -5260,16 +5273,10 @@ function mediaOutputTemplate(){
           <span class="modal-title">Media Output</span>
           <button class="modal-close" data-action="media-output-close">×</button>
         </div>
-        <div class="row-card" style="margin-bottom:10px;">
-          <div class="row">
-            <div class="row-left"><div class="row-name">Separate app audio</div><div class="row-sub">Route this app's sound to Bluetooth while other apps stay on the phone speaker</div></div>
-            <button class="toggle-switch${state.audioSeparateOn?' on':''}" data-action="audio-separate-toggle"><span class="toggle-knob"></span></button>
-          </div>
-        </div>
         <div class="section-title" style="margin-top:0;">ACTIVE OUTPUT</div>
         ${state.audioOutputs.map(o=>`
-          <div class="settings-option${state.activeAudioOutput===o?' selected':''}" data-audiooutput="${o}">
-            <div class="row-left"><div class="row-name">${o}</div></div>
+          <div class="settings-option${state.activeAudioOutput===o?' selected':''}" data-audiooutput="${escText(o)}">
+            <div class="row-left"><div class="row-name">${escText(o)}</div></div>
             <div class="radio-dot"></div>
           </div>
         `).join('')}
@@ -16004,8 +16011,10 @@ function attachHandlers(){
   document.querySelectorAll('[data-toggle]').forEach(el=>{
     el.addEventListener('click', ()=>{
       const key = el.getAttribute('data-toggle');
-      const map = {wifi:'wifiOn', bt:'btOn', dnd:'dndOn', airplane:'airplaneOn', flashlight:'flashlightOn', rotation:'rotationLockOn'};
-      const field = map[key];
+      // The phone's real switch (owner: everything real): changed right away where Android allows it, else the phone's
+      // own switch opens and Lockedintool comes back after (storyControlsChanged brings the real state).
+      if(CTL_NATIVE){ try{ window.StoryNative.controlToggle(key); }catch(e){} return; }
+      const field = CTL_FIELDS[key];
       if(field) state[field] = !state[field];
       renderDevice();
     });
@@ -16050,7 +16059,10 @@ function attachHandlers(){
   }
   document.querySelectorAll('[data-audiooutput]').forEach(el=>{
     el.addEventListener('click', ()=>{
-      state.activeAudioOutput = el.getAttribute('data-audiooutput');
+      const o = el.getAttribute('data-audiooutput');
+      // Only the phone can move other apps' sound: picking another output opens its own output switcher.
+      if(CTL_NATIVE && window.StoryNative.outputSwitch){ if(o !== state.activeAudioOutput) try{ window.StoryNative.outputSwitch(); }catch(e){} return; }
+      state.activeAudioOutput = o;
       renderDevice();
     });
   });
@@ -16764,7 +16776,6 @@ function attachHandlers(){
         case 'media-output-open': state.mediaOutputOpen = true; break;
         case 'media-output-close':
         case 'media-output-bg': state.mediaOutputOpen = false; break;
-        case 'audio-separate-toggle': state.audioSeparateOn = !state.audioSeparateOn; break;
         case 'spotify-toggle': state.spotifyPlaying = !state.spotifyPlaying; break;
         case 'dash-community': { const on = !dashCommunityOn(); try{ localStorage.setItem('story-dash-community', on ? 'on' : 'off'); }catch(e){} showToast(on ? 'Community is on the Dashboard' : 'Community is off the Dashboard'); break; }
         case 'music-pick': { const p = el.getAttribute('data-v'); if(NATIVE && window.StoryNative.musicChoose) window.StoryNative.musicChoose(p); musicCache = null; showToast(p ? 'Music player set' : 'Following whatever is playing'); break; }

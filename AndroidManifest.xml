@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- The Dashboard's real Controls: Wi-Fi's state (and switching it on Android 9 and older), Do Not Disturb. -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
     <uses-permission android:name="android.permission.WRITE_SETTINGS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
@@ -99,6 +103,14 @@
         <!-- Dial pad > New contact: the phone's own new-contact screen with the number filled in (see-through). -->
         <activity
             android:name=".ContactAddActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <!-- One of the phone's own screens for a Lockedintool feature (Wi-Fi panel, Bluetooth, output switcher...), see-through. -->
+        <activity
+            android:name=".SystemScreenActivity"
             android:exported="false"
             android:excludeFromRecents="true"
             android:taskAffinity=""

@@ -2252,6 +2252,25 @@ class OverlayService : Service(), StoryBridge.Host {
         runCatching { startActivity(Intent(this, ContactAddActivity::class.java).putExtra(ContactAddActivity.EXTRA_NUMBER, number).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)) }
             .onFailure { contactDone(false) }
     } }
+    // ---- The Dashboard's Controls / Media output are the phone's real ones (PhoneControls). What Android lets
+    //      Lockedintool change is changed right away; the rest opens the phone's own switch (SystemScreenActivity) with
+    //      the Pages stepping aside and coming straight back. ----
+    override fun controlToggle(id: String) { ui.post {
+        val i = PhoneControls.toggle(this, id)
+        if (i != null) openSystemScreen(i) else controlsChanged()
+    } }
+    override fun outputSwitch() { ui.post { PhoneControls.outputSwitcher(this)?.let { openSystemScreen(it) } } }
+    /** Tells the Pages the controls / outputs as they are now (after a change, the flashlight switched elsewhere...). */
+    fun controlsChanged() { ui.post {
+        val js = "window.storyControlsChanged&&window.storyControlsChanged(" + PhoneControls.state(this) + "," + PhoneControls.outputs(this) + ")"
+        pagesPane?.web?.evaluateJavascript(js, null)
+    } }
+    private fun openSystemScreen(i: Intent) {
+        if (!stepAsideForSystem()) return
+        runCatching { startActivity(Intent(this, SystemScreenActivity::class.java).putExtra(SystemScreenActivity.EXTRA_INTENT, i).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)) }
+            .onFailure { comeBackFromSystem() }
+    }
+    fun systemScreenDone() { ui.post { comeBackFromSystem(); controlsChanged() } }
     fun contactDone(saved: Boolean) { ui.post {
         comeBackFromSystem()
         if (contactDialWasOpen) { contactDialWasOpen = false; dialPane?.takeIf { !it.shown && s3Pane?.shown == true }?.let { setShown(it, true) } }

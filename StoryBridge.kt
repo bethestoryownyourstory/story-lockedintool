@@ -45,6 +45,8 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         fun pagesAction(action: String)
         fun hidePanelFor(pkg: String?, what: String)
         fun dashShown(on: Boolean)
+        fun controlToggle(id: String)
+        fun outputSwitch()
         fun getCalls(): String
         fun createShutter()
         fun createVideo(on: Boolean)
@@ -575,6 +577,17 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
     /** The Pages say whether the Dashboard is on screen (Station 3 stays open at its bottom - Settings > QUICK ACCESS). */
     @JavascriptInterface
     fun dashShown(on: Boolean) { if (!station3 && !widget) host.dashShown(on) }
+
+    /** The Dashboard's Controls are the phone's real ones (PhoneControls): their state now, and changing one. */
+    @JavascriptInterface
+    fun controlsState(): String { PhoneControls.watch(ctx); return PhoneControls.state(ctx).toString() }
+    @JavascriptInterface
+    fun controlToggle(id: String) { if (pages || widget) host.controlToggle(id) }
+    /** Media output: the phone's real outputs and where media plays; another output = the phone's own switcher. */
+    @JavascriptInterface
+    fun audioOutputs(): String = PhoneControls.outputs(ctx).toString()
+    @JavascriptInterface
+    fun outputSwitch() { if (pages || widget) host.outputSwitch() }
 
     @JavascriptInterface
     fun getCalls(): String = if (profile) host.getCalls() else "[]"
