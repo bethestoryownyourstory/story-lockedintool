@@ -36,6 +36,7 @@ object MoneyLog {
     private val WHO = Regex("(?:\\b(?:[Aa]t|[Tt]o|[Ff]rom|[Bb]y)|@)\\s+([A-Z0-9@][A-Za-z0-9&'@*\\-]*(?:\\.[A-Za-z0-9]+)*(?:\\s[A-Z0-9][A-Za-z0-9&'\\-]*(?:\\.[A-Za-z0-9]+)*){0,3})")
     private val IN_WORDS = Regex("(?i)\\b(received|receive|deposit(?:ed)?|credited|credit of|paid you|sent you|incoming|refund(?:ed)?|payment from|salary|cash ?back|transfer(?:red)? in|money in|inward)\\b")
     private val OUT_WORDS = Regex("(?i)\\b(purchase[ds]?|paid|spent|debit(?:ed)?|withdraw(?:al|n)?|payment (?:of|to|made)|you sent|sent to|card (?:used|transaction|payment)|used (?:for|at)|pos|transfer(?:red)? to|deducted|charged|debit order|money out|bought)\\b")
+    private val OWN = Regex("(?i)\\b(account|acc|acct|a/c|cheque|savings|current|transmission|credit card|debit card|card|wallet)\\b")
     private val JUNK = Regex("(?i)\\b(otp|one[- ]time (?:pin|password)|verification code|% ?off|discount|promo|voucher code|win |stand a chance|offer ends|sale ends|limited time)\\b")
 
     private fun prefs(c: Context) = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -125,8 +126,15 @@ object MoneyLog {
             inAt == Int.MAX_VALUE && outAt == Int.MAX_VALUE -> return null   // an amount with no payment words: not a payment
             else -> inAt < outAt
         }
-        val who = WHO.findAll(text).map { it.groupValues[1].replace(Regex("(?i)\\s+(avail|available|bal|balance|on|ref|for|from|using|with|via)\\b.*"), "").trim().trimEnd('.', ',') }
-            .firstOrNull { w -> w.length > 1 && !Regex("(?i)^(R|ZAR|USD|\\$)?\\s?[0-9]").containsMatchIn(w) && !Regex("(?i)^(your|you|the|card|account|acc|a/c)\\b").containsMatchIn(w) }
+        // Who it was with (owner: real names): never your own account / card ('Main Account', 'Savings', 'Wallet
+        // account'...) - money out prefers 'at / to X', money in 'from X'. (index.html's payeeOf reads it the same way.)
+        val cands = WHO.findAll(text).mapNotNull { mm ->
+            val w = mm.groupValues[1].replace(Regex("(?i)\\s+(avail|available|bal|balance|on|ref|for|from|using|with|via)\\b.*"), "").trim().trimEnd('.', ',')
+            if (w.length <= 1 || Regex("(?i)^(R|ZAR|USD|\\$)?\\s?[0-9]").containsMatchIn(w) || Regex("(?i)^(your|you|the|card|account|acc|a/c)\\b").containsMatchIn(w) || OWN.containsMatchIn(w)) null
+            else mm.value.trim().split(Regex("\\s+")).first().lowercase() to w
+        }.toList()
+        val order = if (isIn) listOf("from", "by", "@", "at", "to") else listOf("at", "to", "@", "by", "from")
+        val who = order.firstNotNullOfOrNull { p -> cands.firstOrNull { it.first == p }?.second }
         val card = CARD.find(text)?.groupValues?.get(1)
         val b = bal?.let { num(it.groupValues[3]) }
         return Parsed(if (isIn) value else -value, curCode(m.groupValues[2]), b, who?.take(40), card)

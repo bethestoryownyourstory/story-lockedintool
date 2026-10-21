@@ -337,6 +337,28 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
 
     /** The phone's notifications right now (STORY's Notifications Panel). Pages only. */
     @JavascriptInterface fun notifList(): String = if (pages) StoryMediaListener.current(ctx) else "[]"
+    /** Any app's real icon (also apps with no icon in the app list, e.g. system ones), as a base64 PNG ('' = none). */
+    @JavascriptInterface fun appIcon(pkg: String): String = runCatching {
+        val d = ctx.packageManager.getApplicationIcon(pkg)
+        val bmp = Bitmap.createBitmap(96, 96, Bitmap.Config.ARGB_8888)
+        d.setBounds(0, 0, 96, 96); d.draw(Canvas(bmp))
+        val bos = ByteArrayOutputStream(); bmp.compress(Bitmap.CompressFormat.PNG, 90, bos)
+        Base64.encodeToString(bos.toByteArray(), Base64.NO_WRAP)
+    }.getOrDefault("")
+    /** Opens a notification the way tapping it in the phone's own panel does (its app, at that message). */
+    @JavascriptInterface fun notifOpen(key: String) {
+        if (!pages) return
+        val sbn = runCatching { StoryMediaListener.instance?.activeNotifications?.firstOrNull { it.key == key } }.getOrNull() ?: return
+        val pi = sbn.notification?.contentIntent
+        val ok = pi != null && runCatching {
+            if (android.os.Build.VERSION.SDK_INT >= 34) {
+                val o = android.app.ActivityOptions.makeBasic().setPendingIntentBackgroundActivityStartMode(android.app.ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED)
+                pi.send(ctx, 0, null, null, null, null, o.toBundle())
+            } else pi.send()
+        }.isSuccess
+        if (ok) host.hidePanelFor(sbn.packageName, "a notification")
+        else ctx.packageManager.getLaunchIntentForPackage(sbn.packageName)?.let { openFirst(sequenceOf(it), "a notification") }
+    }
 
     /** Opens Android's own notification-access switch for STORY. */
     @JavascriptInterface

@@ -1193,6 +1193,14 @@ export class Hub {
     return { basic: { usd: 5, zar: Number(this.env.SUB_BASIC_ZAR || 95) }, premium: { usd: 15, zar: Number(this.env.SUB_PREMIUM_ZAR || 285) } };
   }
   subReady() { return this.expressReady(); }
+  // Calls cost Lockedintool (owner: 'they won't be available on free plan'): Lockedintool calls (voice, video, group)
+  // need Basic or Premium - only once subscriptions are switched on (SUB_ENFORCE + payments connected), never the
+  // official accounts. Phone calls from the dial pad are the phone's own and aren't touched.
+  callPlanOk(u) {
+    if (this.env.SUB_ENFORCE !== '1' || !this.subReady() || !u || u.official) return true;
+    const r = this.one('SELECT until FROM subs WHERE uid = ?', u.id);
+    return !!(r && r.until > Date.now());
+  }
   subView(me) {
     const r = this.one('SELECT * FROM subs WHERE uid = ?', me.id), now = Date.now();
     const active = !!(r && r.until > now);
@@ -1511,7 +1519,9 @@ export class Hub {
         // Call set-up only: offer / answer / ice / ring / end / decline / busy.
         if (!to) return ws.send(JSON.stringify({ t: 'call', kind: 'unavailable', callId: m.callId, from: m.to }));
         if (m.kind === 'offer') {
+          if (!this.callPlanOk(me)) return ws.send(JSON.stringify({ t: 'call', kind: 'plan', callId: m.callId, from: to.id }));
           if (!this.canCall(me, to)) return ws.send(JSON.stringify({ t: 'call', kind: 'blocked', callId: m.callId, from: to.id }));
+          if (!this.callPlanOk(to)) return ws.send(JSON.stringify({ t: 'call', kind: 'unavailable', callId: m.callId, from: to.id }));
           if (!this.ctx.getWebSockets(to.id).length) return ws.send(JSON.stringify({ t: 'call', kind: 'unavailable', callId: m.callId, from: to.id }));
         }
         this.sendTo(to.id, { t: 'call', kind: String(m.kind), callId: String(m.callId || ''), video: !!m.video, sdp: m.sdp, cand: m.cand, from: uid, name: me.name || '', username: me.username || '', at: now });
@@ -1553,6 +1563,7 @@ export class Hub {
     const mine = this.member(gid, uid), leader = !!mine && mine.role === 'leader';
     const part = this.one('SELECT role FROM gcparts WHERE gid = ? AND uid = ?', gid, uid);
     if (m.kind === 'start' || m.kind === 'join') {
+      if (!this.callPlanOk(me)) return say({ kind: 'error', error: 'plan' });
       if (g.type === 'private' && !mine) return say({ kind: 'error', error: 'member' });
       if (g.type === 'public' && this.isPrivate(me)) return say({ kind: 'error', error: 'private-account' });
       let c = this.one('SELECT * FROM gcalls WHERE gid = ?', gid);
@@ -1568,7 +1579,7 @@ export class Hub {
       say({ kind: 'joined', callId: c.id, video: !!c.video, role, leader, name: g.name, callJoin: g.calljoin || 'open', parts: others });
       for (const p of others) this.sendTo(p.id, { t: 'gcall', kind: 'peer', group: gid, id: uid, role, name: me.name || '', username: me.username || '' });
       // A leader's call rings every member (owner); anyone else's call shows as live in the group.
-      if (fresh && leader) for (const id of this.memberIds(gid)) if (id !== uid && !this.blocked(uid, id)) this.sendTo(id, { t: 'gcall', kind: 'ring', group: gid, callId: c.id, video: !!c.video, gname: g.name, gtype: g.type, from: uid, name: me.name || '', username: me.username || '', at: now });
+      if (fresh && leader) for (const id of this.memberIds(gid)) if (id !== uid && !this.blocked(uid, id) && this.callPlanOk(this.one('SELECT id, official FROM users WHERE id = ?', id))) this.sendTo(id, { t: 'gcall', kind: 'ring', group: gid, callId: c.id, video: !!c.video, gname: g.name, gtype: g.type, from: uid, name: me.name || '', username: me.username || '', at: now });
       this.gcallTellLive(gid);
       return;
     }
