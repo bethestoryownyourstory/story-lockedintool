@@ -2361,6 +2361,12 @@
   #story-profile .pf-msgs-search input{ flex:1; min-width:0; border:none; outline:none; background:transparent; color:var(--pf-fg); font-size:15px; font-family:inherit; padding:11px 0; -webkit-user-select:text; user-select:text; -webkit-appearance:none; appearance:none; }
   #story-profile .pf-msgs-search input::placeholder{ color:var(--pf-muted); }
   .lit-recent{ margin:8px 0 6px; border:1px solid rgba(128,128,128,0.35); border-radius:12px; padding:4px 0; font-size:14px; text-align:left; }
+  /* On the Dashboard (one fixed screen) the list lies OVER the page under the search bar - in the flow it squeezed the
+     Dashboard and pushed the bottom cards under Station 3. It never reaches Station 3's band; the rest scrolls. */
+  .story-screen{ position:relative; }
+  .story-screen > .lit-recent{ position:absolute; left:12px; right:12px; top:var(--lr-top, 80px); margin:0; z-index:40; background:#000;
+    max-height:calc(100% - var(--lr-top, 80px) - var(--s3-dash-pad, 0px) - 12px); overflow-y:auto; scrollbar-width:none; }
+  .story-screen > .lit-recent::-webkit-scrollbar{ display:none; }
   .lit-recent-h{ display:flex; align-items:center; justify-content:space-between; padding:6px 12px 4px; font-size:11px; font-weight:800; letter-spacing:0.08em; text-transform:uppercase; opacity:0.6; }
   .lit-recent-h button{ border:0; background:none; color:inherit; font:inherit; font-size:11px; padding:0; text-transform:none; letter-spacing:0; text-decoration:underline; }
   .lit-recent-row{ display:flex; align-items:center; }
@@ -3234,7 +3240,7 @@
     content:''; position:absolute; inset:0; z-index:-1; pointer-events:none;
     background:linear-gradient(115deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.02) 22%, rgba(255,255,255,0) 45%);
   }
-  .search-label{ font-size:10px; letter-spacing:0.5px; color:var(--muted); font-weight:600; flex-shrink:0; }
+  .search-label{ font-size:10px; letter-spacing:0.5px; color:var(--muted); font-weight:600; flex-shrink:0; margin-right:10px; }   /* typed words never run into it */
   .search-value-input{
     font-size:13px; font-weight:700; color:var(--text); text-align:right; background:transparent;
     border:none; outline:none; resize:none; overflow:hidden; padding:0; margin:0; font-family:var(--font-body);
@@ -3290,7 +3296,9 @@
   .ctl-reorder-row.dragging{ opacity:0.4; }
   .ctl-reorder-row.notpooled{ opacity:0.55; }
   .ctl-reorder-row.displayed{ border-color:rgba(232,230,225,0.5); background:rgba(232,230,225,0.08); }
-  .ctl-drag-handle{ color:var(--muted); font-size:14px; width:14px; cursor:grab; flex-shrink:0; }
+  .ctl-drag-handle{ color:var(--muted); font-size:14px; width:14px; cursor:grab; flex-shrink:0; touch-action:none; position:relative; }
+  .ctl-drag-handle::before{ content:''; position:absolute; top:-9px; bottom:-9px; left:-10px; right:-8px; }   /* the whole left end of the row */
+  .ctl-reorder-row.dragging{ position:relative; z-index:2; }
   .ctl-reorder-icon{ display:flex; align-items:center; color:var(--text); flex-shrink:0; }
   .ctl-reorder-icon svg{ width:18px; height:18px; }
   .ctl-reorder-label{ font-size:12px; font-weight:700; flex:1; }
@@ -3354,9 +3362,10 @@
   }
   .spotify-controls .play:active{ transform:scale(0.9); box-shadow:var(--press1); }
   .controls-card{ min-width:0; }
-  .controls-toggles{ display:flex; align-items:center; gap:8px; font-size:10.5px; font-weight:700; min-width:0; }
-  .controls-toggles-scroll{ display:flex; align-items:center; gap:10px; overflow-x:auto; min-width:0; scrollbar-width:none; }
-  .controls-toggles-scroll::-webkit-scrollbar{ display:none; }
+  /* The top 4 controls never get cut (Airplane / Flashlight / Rotation don't fit one line on any phone): they wrap onto a
+     second line only when needed, the ︿ staying at the end of the first. */
+  .controls-toggles{ display:flex; align-items:flex-start; gap:8px; font-size:10.5px; font-weight:700; min-width:0; }
+  .controls-toggles-scroll{ display:flex; align-items:center; flex-wrap:wrap; gap:8px 10px; min-width:0; }
   .controls-toggles .chev{ margin-left:auto; color:var(--muted); flex-shrink:0; }
   .controls-hr{ height:1px; background:rgba(255,255,255,0.18); margin:8px 0 6px; }
   .controls-label{ font-size:11px; color:var(--muted); }
@@ -3381,6 +3390,12 @@
   .ctl-toggle{ cursor:pointer; color:var(--muted); transition:color 0.15s; white-space:nowrap; flex-shrink:0; }
   .ctl-toggle.on{ color:#e8e6e1; }
   .controls-toggles .chev{ cursor:pointer; }
+  /* Bigger finger targets for the control words, ︿ and the brightness ▲ without moving anything (padding taken back by
+     negative margin / an invisible area around them) - a near miss on ▲ used to land on the slider. */
+  .ctl-toggle{ padding:4px 5px; margin:-4px -5px; }
+  .controls-toggles .chev{ position:relative; }
+  .controls-toggles .chev::before{ content:''; position:absolute; top:-12px; bottom:-12px; left:-6px; right:-11px; }
+  .brightness-arrow::before{ content:''; position:absolute; top:-16px; bottom:-16px; left:-4px; right:-10px; }
   .spotify-visualizer{
     position:absolute; top:10px; right:11px; display:flex; align-items:flex-end; gap:2px; height:12px;
   }
@@ -4575,7 +4590,9 @@ function searchStepGo(inputId){
   }
   state.searchBlocked = false;
   if(state.pendingSearchQuery === q){
-    window.open('https://www.google.com/search?q=' + encodeURIComponent(q) + '&safe=active', '_blank');
+    // In the app window.open goes nowhere (the Pages only load Lockedintool): the phone's browser opens it, like every link.
+    const url = 'https://www.google.com/search?q=' + encodeURIComponent(q) + '&safe=active';
+    if(NATIVE && window.StoryNative.openUrl) window.StoryNative.openUrl(url); else window.open(url, '_blank');
     state.searchOpen = false;
     state.pendingSearchQuery = null;
     state.searchQuery = '';
@@ -4584,6 +4601,12 @@ function searchStepGo(inputId){
     state.recentSearches = [q, ...state.recentSearches.filter(x=>x!==q)].slice(0, 5);
   }
   renderDevice();
+  // 'Press Enter again': the redraw made a new box, so you're put straight back in it (keyboard up) to press Enter.
+  const again = state.pendingSearchQuery && document.getElementById(inputId);
+  if(again){
+    if(inputId === 'dash-search-input') litRecentWriting.web = true;
+    again.readOnly = false; again.focus(); again.setSelectionRange(again.value.length, again.value.length); litKeyboard(true);
+  }
 }
 
 function closePool(){
@@ -5139,15 +5162,17 @@ const CTL_NATIVE = !!(window.StoryNative && window.StoryNative.controlsState && 
 const CTL_FIELDS = {wifi:'wifiOn', bt:'btOn', dnd:'dndOn', airplane:'airplaneOn', flashlight:'flashlightOn', rotation:'rotationLockOn'};
 function ctlApply(st, out){
   if(st && typeof st === 'object') Object.keys(CTL_FIELDS).forEach(k=>{ if(typeof st[k] === 'boolean') state[CTL_FIELDS[k]] = st[k]; });
+  if(st && typeof st.torch === 'boolean') state.hasTorch = st.torch;   // false = this phone has no flashlight
   if(out && Array.isArray(out.list) && out.list.length){ state.audioOutputs = out.list.map(String); state.activeAudioOutput = String(out.active || out.list[0]); }
 }
 function ctlRefresh(){
   if(!CTL_NATIVE || IN_STATION3_WINDOW) return;
   try{ ctlApply(JSON.parse(window.StoryNative.controlsState() || '{}'), window.StoryNative.audioOutputs ? JSON.parse(window.StoryNative.audioOutputs() || '{}') : null); }catch(e){}
 }
-window.storyControlsChanged = function(st, out){ ctlApply(st, out); if(state.current === 'dashboard') renderDevice(); };
+// (never redrawn under your fingers while you type a search - the next draw shows it)
+window.storyControlsChanged = function(st, out){ ctlApply(st, out); if(state.current === 'dashboard' && !(document.activeElement && document.activeElement.id === 'dash-search-input')) renderDevice(); };
 function dashboardScreen(){
-  ctlRefresh();
+  ctlRefresh(); brightFollowPhone();
   return `
     <div class="story-screen${dashS3On() ? ' s3-dash' : ''}" id="dashboard-swipe-zone">
       <div class="notif-pull" id="notif-pull" style="pointer-events:none;">▾</div>
@@ -5168,7 +5193,7 @@ function dashboardScreen(){
         <textarea class="search-value-input" id="dash-search-input" rows="1" placeholder="Google">${state.searchQuery.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
       </div>
       ${state.searchBlocked ? `<div class="dash-search-note dash-search-note-blocked">🛡 Safe Search is on — this search isn't allowed on Lockedintool.</div>` : ''}
-      ${(!state.searchBlocked && state.pendingSearchQuery) ? `<div class="dash-search-note">Press Enter again to open "${state.pendingSearchQuery}"</div>` : ''}
+      ${(!state.searchBlocked && state.pendingSearchQuery) ? `<div class="dash-search-note">Press Enter again to open "${escText(state.pendingSearchQuery)}"</div>` : ''}
       <div class="safe-search"><span class="diamond">◇</span> Safe search is on</div>
       <div class="story-body">
         <div class="story-sidebar">
@@ -5189,7 +5214,7 @@ function dashboardScreen(){
         </div>
       </div>
       <div class="story-bottom">
-        <div class="media-card" data-action="media-output-open"><div class="media-label">MEDIA OUTPUT</div><div class="media-sub">${state.activeAudioOutput}</div></div>
+        <div class="media-card" data-action="media-output-open"><div class="media-label">MEDIA OUTPUT</div><div class="media-sub">${escText(state.activeAudioOutput)}</div></div>
         <div class="brightness-card">
           <span class="sun-ico" id="sun-ico" style="opacity:${(0.3 + (state.brightnessValue/100)*0.7).toFixed(2)};"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-label="Brightness"><circle cx="12" cy="12" r="4.2" fill="currentColor"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></svg></span>
           <input type="range" class="brightness-slider" id="brightness-slider" min="0" max="100" value="${state.brightnessValue}">
@@ -5234,19 +5259,19 @@ function searchPopupTemplate(){
       <div class="confirm-sheet" onclick="event.stopPropagation()">
         <div class="confirm-title">Search Google</div>
         <div style="display:flex; gap:8px; align-items:center; margin:10px 0;">
-          <input class="field-input" id="search-input" type="text" placeholder="Search the web…" value="${state.searchQuery}" style="margin:0;flex:1;">
+          <input class="field-input" id="search-input" type="text" placeholder="Search the web…" value="${escText(state.searchQuery).replace(/"/g,'&quot;')}" style="margin:0;flex:1;">
           <button class="search-go-arrow" id="search-go-arrow" title="Go">→</button>
         </div>
         ${state.recentSearches.length ? `
           <div class="section-title" style="text-align:left;margin:2px 0 6px;">RECENT SEARCHES</div>
           <div style="margin-bottom:10px;">
-            ${state.recentSearches.map(q=>`<div class="row-card" data-recentsearch="${q}" style="margin-bottom:6px;cursor:pointer;padding:8px 12px;"><div class="row-name" style="font-size:12px;">${q}</div></div>`).join('')}
+            ${state.recentSearches.map(q=>`<div class="row-card" data-recentsearch="${escText(q).replace(/"/g,'&quot;')}" style="margin-bottom:6px;cursor:pointer;padding:8px 12px;"><div class="row-name" style="font-size:12px;">${escText(q)}</div></div>`).join('')}
           </div>
         ` : ''}
         ${state.searchBlocked ? `
           <div class="search-blocked-note">🛡 Safe Search is on — this search isn't allowed on Lockedintool.</div>
         ` : `
-          <button class="btn-wide btn-primary" id="search-action-btn" style="margin-top:0;">${state.pendingSearchQuery ? `Open "${state.pendingSearchQuery}" ↗` : 'Search'}</button>
+          <button class="btn-wide btn-primary" id="search-action-btn" style="margin-top:0;">${state.pendingSearchQuery ? `Open "${escText(state.pendingSearchQuery)}" ↗` : 'Search'}</button>
         `}
       </div>
     </div>
@@ -5344,7 +5369,7 @@ function controlsExpandedTemplate(){
           ${poolItems.length ? poolItems.map((it, idx)=>{
             const isDisplayed = idx < MAX_DISPLAYED_CONTROLS;
             return `
-            <div class="ctl-reorder-row${isDisplayed?' displayed':''}" draggable="true" data-dragid="${it.id}">
+            <div class="ctl-reorder-row${isDisplayed?' displayed':''}" data-dragid="${it.id}">
               <span class="ctl-drag-handle">☰</span>
               <span class="ctl-reorder-icon">${CTL_ICONS[it.id]}</span>
               <span class="ctl-reorder-label">${it.label}</span>
@@ -5379,7 +5404,7 @@ function mediaOutputTemplate(){
         </div>
         <div class="section-title" style="margin-top:0;">ACTIVE OUTPUT</div>
         ${state.audioOutputs.map(o=>`
-          <div class="settings-option${state.activeAudioOutput===o?' selected':''}" data-audiooutput="${escText(o)}">
+          <div class="settings-option${state.activeAudioOutput===o?' selected':''}" data-audiooutput="${escText(o).replace(/"/g,'&quot;')}">
             <div class="row-left"><div class="row-name">${escText(o)}</div></div>
             <div class="radio-dot"></div>
           </div>
@@ -9578,6 +9603,8 @@ function litRecentAttach(inp, key, run, anchor){
       if(r === 'go' && q){ close(); litRecentAdd(key, q); run(q); }
     });
     anchor.insertAdjacentElement('afterend', panel);
+    // The Dashboard: the list lies over the page, right under the bar (.story-screen > .lit-recent).
+    if(panel.parentElement && panel.parentElement.classList.contains('story-screen')) panel.style.setProperty('--lr-top', (anchor.offsetTop + anchor.offsetHeight + 6) + 'px');
     return true;
   };
   inp.addEventListener('pointerdown', e=>{
@@ -15615,18 +15642,30 @@ function initCanvas(canvasId, isOverlay){
 // over the pages (that greyed everything in the White theme). Until you move it, the slider shows the phone's own
 // brightness and STORY leaves it alone. Kept on the phone (story-brightness). The browser preview still uses the veil.
 const BRIGHT_NATIVE = (()=>{ try{ const j = JSON.parse(window.StoryNative && StoryNative.brightness ? (StoryNative.brightness() || '{}') : '{}'); return !!(j && j.v != null); }catch(e){ return false; } })();
+let brightLocalAt = 0;   // when you last moved the slider / picked a mode here
 (function(){
   if(!BRIGHT_NATIVE) return;
   let saved = null; try{ saved = JSON.parse(localStorage.getItem('story-brightness') || 'null'); }catch(e){}
   if(saved && saved.set){
     state.brightnessValue = Math.max(0, Math.min(100, +saved.v || 0)); state.brightnessMode = saved.mode === 'device' ? 'device' : 'system'; state.brightnessUserSet = true;
-    try{ StoryNative.setBrightness(state.brightnessMode, state.brightnessValue); }catch(e){}
+    // Device control is the phone's own setting: it's kept by the phone, so a reload only reads it (putting the old value
+    // back would undo what you set in the phone's panel). The Pages' own brightness is put back.
+    if(state.brightnessMode === 'device' && brightPhone().canWrite) brightFollowPhone();
+    else try{ StoryNative.setBrightness(state.brightnessMode, state.brightnessValue); }catch(e){}
   } else {
     try{ state.brightnessValue = JSON.parse(StoryNative.brightness()).v; }catch(e){}
   }
 })();
+function brightPhone(){ try{ return JSON.parse(StoryNative.brightness() || '{}') || {}; }catch(e){ return {}; } }
+// The slider follows the phone's brightness (changed in its own panel / by auto-brightness) whenever the Dashboard is
+// drawn - untouched, or in Device control - but never right after you moved it (the phone is still being set).
+function brightFollowPhone(){
+  if(!BRIGHT_NATIVE || Date.now() - brightLocalAt < 3000) return;
+  const j = brightPhone(); if(j.v == null) return;
+  if(!state.brightnessUserSet || (state.brightnessMode === 'device' && j.canWrite)) state.brightnessValue = Math.max(0, Math.min(100, +j.v || 0));
+}
 function brightnessUserSet(){
-  state.brightnessUserSet = true;
+  state.brightnessUserSet = true; brightLocalAt = Date.now();
   try{ localStorage.setItem('story-brightness', JSON.stringify({ set:true, v:state.brightnessValue, mode:state.brightnessMode })); }catch(e){}
   if(BRIGHT_NATIVE) try{ StoryNative.setBrightness(state.brightnessMode, state.brightnessValue); }catch(e){}
 }
@@ -16224,7 +16263,8 @@ function attachHandlers(){
   if(searchGoArrow){ searchGoArrow.addEventListener('click', searchStepGo); }
 
   const dashSearchInput = document.getElementById('dash-search-input');
-  if(dashSearchInput) litRecentAttach(dashSearchInput, 'web', q=>{ dashSearchInput.value = q; state.searchQuery = q; searchStepGo('dash-search-input'); }, dashSearchInput.closest('.search-row'));
+  // A recent search tapped = searched again at once (no 'Press Enter again' - you already chose it).
+  if(dashSearchInput) litRecentAttach(dashSearchInput, 'web', q=>{ dashSearchInput.value = q; state.searchQuery = q; state.pendingSearchQuery = q; searchStepGo('dash-search-input'); }, dashSearchInput.closest('.search-row'));
   if(dashSearchInput){
     dashSearchInput.style.height = 'auto';
     dashSearchInput.style.height = dashSearchInput.scrollHeight + 'px';
@@ -16273,6 +16313,7 @@ function attachHandlers(){
       const key = el.getAttribute('data-toggle');
       // The phone's real switch (owner: everything real): changed right away where Android allows it, else the phone's
       // own switch opens and Lockedintool comes back after (storyControlsChanged brings the real state).
+      if(CTL_NATIVE && key === 'flashlight' && state.hasTorch === false){ showToast('This phone has no flashlight'); return; }
       if(CTL_NATIVE){ try{ window.StoryNative.controlToggle(key); }catch(e){} return; }
       const field = CTL_FIELDS[key];
       if(field) state[field] = !state[field];
@@ -16290,30 +16331,38 @@ function attachHandlers(){
       renderDevice();
     });
   });
+  // Drag ☰ to reorder - with a finger (the phone's WebView never starts HTML drag-and-drop from a touch): the row
+  // follows the finger and drops in the place its middle is over.
   const ctlReorderList = document.querySelector('.ctl-reorder-list');
   if(ctlReorderList){
-    let dragId = null;
-    ctlReorderList.querySelectorAll('[data-dragid]').forEach(row=>{
-      row.addEventListener('dragstart', e=>{
-        dragId = row.getAttribute('data-dragid');
-        row.classList.add('dragging');
-        e.dataTransfer.effectAllowed = 'move';
-      });
-      row.addEventListener('dragend', ()=>{ row.classList.remove('dragging'); });
-      row.addEventListener('dragover', e=>{ e.preventDefault(); });
-      row.addEventListener('drop', e=>{
+    ctlReorderList.querySelectorAll('[data-dragid] .ctl-drag-handle').forEach(h=>{
+      h.addEventListener('pointerdown', e=>{
+        const row = h.closest('[data-dragid]'), id = row.getAttribute('data-dragid');
+        if(!state.myControls.includes(id)) return;
         e.preventDefault();
-        const targetId = row.getAttribute('data-dragid');
-        if(!dragId || dragId === targetId){ dragId = null; return; }
-        if(!state.myControls.includes(dragId) || !state.myControls.includes(targetId)){ dragId = null; return; }
-        const from = state.myControls.indexOf(dragId);
-        const to = state.myControls.indexOf(targetId);
-        const next = [...state.myControls];
-        next.splice(from, 1);
-        next.splice(to, 0, dragId);
-        state.myControls = next;
-        dragId = null;
-        renderDevice();
+        try{ h.setPointerCapture(e.pointerId); }catch(err){}
+        const rows = [...ctlReorderList.querySelectorAll('[data-dragid]')];
+        const mids = rows.map(r=>{ const b = r.getBoundingClientRect(); return b.top + b.height / 2; });
+        const me = rows.indexOf(row), y0 = e.clientY;
+        let to = me;
+        row.classList.add('dragging');
+        const move = ev=>{
+          if(ev.pointerId !== e.pointerId) return;
+          const dy = ev.clientY - y0, mid = mids[me] + dy;
+          row.style.transform = 'translateY(' + dy + 'px)';
+          to = mids.filter((m, i)=>i !== me && m < mid).length;
+        };
+        const end = ev=>{
+          if(ev.pointerId !== e.pointerId) return;
+          h.removeEventListener('pointermove', move); h.removeEventListener('pointerup', end); h.removeEventListener('pointercancel', end);
+          row.style.transform = ''; row.classList.remove('dragging');
+          if(ev.type !== 'pointerup' || to === me) return;
+          const next = rows.map(r=>r.getAttribute('data-dragid')).filter(x=>x !== id);
+          next.splice(to, 0, id);
+          state.myControls = next.concat(state.myControls.filter(x=>!next.includes(x)));
+          renderDevice();
+        };
+        h.addEventListener('pointermove', move); h.addEventListener('pointerup', end); h.addEventListener('pointercancel', end);
       });
     });
   }
@@ -20210,7 +20259,9 @@ document.addEventListener('pointercancel', endSwipe, true);
   const EDGE = 40; // px from the very top of the viewport (status-bar zone, above the header)
   document.addEventListener('pointerdown', (e)=>{
     n = null;
-    if(NATIVE) return; // the phone's own notification shade is the only one
+    // In the app too (owner: pull down on the Dashboard): the Pages sit under the phone's status bar, so a pull that
+    // starts on the page never takes the phone's own panel away - that one still comes from the status bar.
+    if(IN_STATION3_WINDOW) return;
     if(state.current !== 'dashboard') return;
     if(e.target.closest && e.target.closest('.swipe-confirm')) return;
     const scr = document.querySelector('.phone-screen, .laptop-screen');

@@ -40,8 +40,10 @@ object PhoneControls {
         return ids.firstOrNull { flash(it) && back(it) } ?: ids.firstOrNull { flash(it) }
     }
 
-    /** Follows the flashlight (also when it's switched from the phone's own panel). Only listens - nothing runs. */
+    /** Follows the flashlight (also when it's switched from the phone's own panel) and the sound outputs (earbuds /
+     *  headphones connecting while the Dashboard shows - Media output). Only listens - nothing runs. */
     fun watch(c: Context) {
+        watchOutputs(c)
         if (torchWatched) return
         val cm = c.getSystemService(CameraManager::class.java) ?: return
         val id = torchId(c) ?: return
@@ -51,6 +53,23 @@ object PhoneControls {
                 override fun onTorchModeChanged(cameraId: String, enabled: Boolean) {
                     if (cameraId == id && torchOn != enabled) { torchOn = enabled; OverlayService.instance?.controlsChanged() }
                 }
+            }, Handler(Looper.getMainLooper()))
+        }
+    }
+
+    @Volatile private var outputsWatched = false
+    private fun watchOutputs(c: Context) {
+        if (outputsWatched) return
+        val am = c.getSystemService(AudioManager::class.java) ?: return
+        outputsWatched = true
+        runCatching {
+            am.registerAudioDeviceCallback(object : android.media.AudioDeviceCallback() {
+                private var first = true   // Android hands over the devices already there right after registering
+                override fun onAudioDevicesAdded(added: Array<out AudioDeviceInfo>?) {
+                    if (first) { first = false; return }
+                    OverlayService.instance?.controlsChanged()
+                }
+                override fun onAudioDevicesRemoved(removed: Array<out AudioDeviceInfo>?) { OverlayService.instance?.controlsChanged() }
             }, Handler(Looper.getMainLooper()))
         }
     }

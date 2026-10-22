@@ -105,7 +105,10 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         MusicPlayer.commandFor(ctx, cmd, pkg) { res -> val js = "window.storyMusicResult&&window.storyMusicResult($res)"; evalTo?.invoke(js) ?: host.evalPages(js) }
     }
     /** Hold the music card: opens the music player app (STORY steps aside like opening any app). */
-    @JavascriptInterface fun musicOpen() { val p = MusicPlayer.appToOpen(ctx); if (p.isNotEmpty()) launchApp(p) }
+    @JavascriptInterface fun musicOpen() {
+        val p = MusicPlayer.appToOpen(ctx)
+        if (p.isNotEmpty()) launchApp(p) else host.showToast("Pick your music player in Layouts > Dashboard > Music player")   // no player known yet: say so
+    }
 
     /** Opens the real app exactly as the phone's own launcher would, and gets STORY out of the way. */
     @JavascriptInterface
@@ -351,8 +354,9 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         (Settings.Secure.getString(ctx.contentResolver, "enabled_notification_listeners") ?: "").contains(ctx.packageName + "/")
     }.getOrDefault(false)
 
-    /** The phone's notifications right now (STORY's Notifications Panel). Pages only. */
-    @JavascriptInterface fun notifList(): String = if (pages) StoryMediaListener.current(ctx) else "[]"
+    /** The phone's notifications right now (STORY's Notifications Panel). The Pages, and the Dashboard widget (it works
+     *  as the Dashboard, the panel opens inside it). */
+    @JavascriptInterface fun notifList(): String = if (pages || widget) StoryMediaListener.current(ctx) else "[]"
     /** Any app's real icon (also apps with no icon in the app list, e.g. system ones), as a base64 PNG ('' = none). */
     @JavascriptInterface fun appIcon(pkg: String): String = runCatching {
         val d = ctx.packageManager.getApplicationIcon(pkg)
@@ -363,7 +367,7 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
     }.getOrDefault("")
     /** Opens a notification the way tapping it in the phone's own panel does (its app, at that message). */
     @JavascriptInterface fun notifOpen(key: String) {
-        if (!pages) return
+        if (!pages && !widget) return
         val sbn = runCatching { StoryMediaListener.instance?.activeNotifications?.firstOrNull { it.key == key } }.getOrNull() ?: return
         val pi = sbn.notification?.contentIntent
         val ok = pi != null && runCatching {

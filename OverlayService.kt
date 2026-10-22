@@ -1207,8 +1207,10 @@ class OverlayService : Service(), StoryBridge.Host {
     private var s3Opening = false
     override fun dashShown(on: Boolean) { ui.post { if (dashUp != on) { dashUp = on; updateBubble() } } }
     /** The Pages stepped aside for a moment for Lockedintool's own screens (Create's camera, a system picker): the
-     *  Dashboard's Station 3 stays where it is. */
-    private fun pagesAside() = pagesHiddenForCreate || pickerHid.any { it === pagesPane }
+     *  Dashboard's Station 3 stays where it is. Not for the phone's own switch screens opened from the Dashboard's
+     *  Controls / Media output (sysFromPages) - held there, Station 3 covered their bottom buttons (Wi-Fi panel's Done...). */
+    private fun pagesAside() = pagesHiddenForCreate || (pickerHid.any { it === pagesPane } && !sysFromPages)
+    private var sysFromPages = false
     /** The phone's own navigation area at the bottom (gesture line / buttons), in px. */
     private fun navInsetPx(): Int = if (Build.VERSION.SDK_INT >= 30)
         runCatching { wm.currentWindowMetrics.windowInsets.getInsetsIgnoringVisibility(android.view.WindowInsets.Type.navigationBars()).bottom }.getOrDefault(0)
@@ -2099,7 +2101,7 @@ class OverlayService : Service(), StoryBridge.Host {
         return true
     }
     private fun comeBackFromSystem() {
-        val back = pickerHid; pickerHid = listOf()
+        val back = pickerHid; pickerHid = listOf(); sysFromPages = false
         for (p in back) if (!p.shown) setShown(p, true)
         if (profilePane in back) tellProfileStation3()
     }
@@ -2434,9 +2436,13 @@ class OverlayService : Service(), StoryBridge.Host {
     fun controlsChanged() { ui.post {
         val js = "window.storyControlsChanged&&window.storyControlsChanged(" + PhoneControls.state(this) + "," + PhoneControls.outputs(this) + ")"
         pagesPane?.web?.evaluateJavascript(js, null)
+        liveWidgets.values.forEach { runCatching { it.web.evaluateJavascript(js, null) } }   // the Dashboard widget's Controls too
     } }
     private fun openSystemScreen(i: Intent) {
-        if (!stepAsideForSystem()) return
+        if (pickerHid.isNotEmpty()) return
+        // Opened from the Pages themselves (not Station 3's window): Station 3 steps away too while the phone's screen shows.
+        sysFromPages = pagesPane?.shown == true && profilePane?.shown != true
+        if (!stepAsideForSystem()) { sysFromPages = false; return }
         runCatching { startActivity(Intent(this, SystemScreenActivity::class.java).putExtra(SystemScreenActivity.EXTRA_INTENT, i).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)) }
             .onFailure { comeBackFromSystem() }
     }
