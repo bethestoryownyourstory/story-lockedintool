@@ -512,7 +512,7 @@ class OverlayService : Service(), StoryBridge.Host {
         return if (id != 0) runCatching { r!!.getDimension(id) }.getOrDefault(fallbackDp * dp) else fallbackDp * dp
     }
 
-    // ---- Apps | Pages switch ----
+    // ---- Apps | Lockedintool switch (owner: 'rename the word Pages on the switch to Lockedintool') ----
     private fun showPicker() {
         hidePicker()
         if (SystemMode.on(this)) return
@@ -527,7 +527,7 @@ class OverlayService : Service(), StoryBridge.Host {
         // Apps = straight back to whatever was underneath (the app you were on, untouched, or the home screen).
         row.addView(word("Apps") { hidePanel() })
         row.addView(TextView(this).apply { text = "|"; setTextColor(th(Color.parseColor("#66FFFFFF"))); textSize = 18f })
-        row.addView(word("Pages") { showPanel(station3Only = false) })  // the only way into STORY itself
+        row.addView(word("Lockedintool") { showPanel(station3Only = false) })  // the only way into Lockedintool itself (owner: it says Lockedintool, not Pages)
         picker = row; pickerWm = layerWm
         layerWm.addView(row, overlayParams(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL, 0, if (dashGeom) dashBandYPx() + (48 * dp).toInt() else (64 * dp).toInt() + (if (phoneHasGestureLine()) 0 else navBarHeightPx())).also { it.type = layerType })
         ui.postDelayed({ hidePicker() }, 4000)
