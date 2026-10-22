@@ -1299,9 +1299,20 @@ class OverlayService : Service(), StoryBridge.Host {
         }
         ui.postDelayed(go, 300)
     }
+    // The phone's own panel (notifications / quick settings) pulled down while unlocked: Station 3 steps aside so it never
+    // covers it (owner, Oct 2026: 'it also overlaps other things - the panel') and comes back the moment it's closed.
+    // Checked only when windows change (StoryAccessibilityService), and every second only while the panel is down.
+    private var panelOver = false
+    fun windowsMoved() { ui.removeCallbacks(panelCheck); ui.postDelayed(panelCheck, 120) }
+    private val panelCheck = Runnable {
+        val over = !keyguardLocked() && StoryAccessibilityService.panelInFront() == true
+        if (over != panelOver) { panelOver = over; updateBubble() }
+        if (panelOver) { ui.removeCallbacks(panelRecheck); ui.postDelayed(panelRecheck, 1000) }
+    }
+    private val panelRecheck = Runnable { windowsMoved() }
     private fun updateBubble() {
         val pagesUp = pagesPane?.shown == true
-        val dash = (pagesUp || (s3Held && pagesAside())) && dashUp && QuickAccess.s3Dash(this) && !WidgetMode.on(this) && !aodShowing()
+        val dash = (pagesUp || (s3Held && pagesAside())) && dashUp && QuickAccess.s3Dash(this) && !WidgetMode.on(this) && !aodShowing() && !panelOver
         if (dash) {
             s3Held = true
             val p = s3Pane
@@ -1324,6 +1335,7 @@ class OverlayService : Service(), StoryBridge.Host {
         if (aodShowing() && !QuickAccess.s3Aod(this)) on = false
         if (WidgetMode.on(this)) on = false   // Only use widgets: no Station 3
         if (dash) on = false                  // the Dashboard's Station 3 has no button
+        if (panelOver) on = false             // the phone's own panel is pulled down over everything
         // Station 3 must stay on top everywhere (owner): it can only sit above the keyboard and every app's screen in
         // the accessibility layer. If that layer came back (the system re-connected Lockedintool system actions) while
         // Station 3 was still in the normal layer, move everything up at once.

@@ -17,6 +17,9 @@ class StoryAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() { instance = this; KeepAlive.ensureRunning(this); refreshOverlay() }
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         val e = event ?: return
+        // Windows moved / focus changed (the phone's panel pulled down or closed...): Station 3 checks whether the
+        // phone's own panel is in front (OverlayService.windowsMoved - one short look, after things settle).
+        if (e.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED || e.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) OverlayService.instance?.windowsMoved()
         val pkg = e.packageName?.toString() ?: return
         // The lock screen asks for your PIN / password / pattern: STORY's lock screen dial pad gets out of the way
         // at once, so it can never cover it (owner: never get locked out of your own phone).
@@ -118,6 +121,15 @@ class StoryAccessibilityService : AccessibilityService() {
                 if (find(c, depth + 1, count, match)) return true
             }
             return false
+        }
+        /** Unlocked: is the phone's own panel (notifications / quick settings - or another SystemUI screen such as the
+         *  power menu) in front right now? It takes the screen's focus while it's pulled down and gives it back when
+         *  it closes (a notification popping up at the top doesn't). null = can't tell. */
+        fun panelInFront(): Boolean? {
+            val s = instance ?: return null
+            val ws = runCatching { s.windows }.getOrNull() ?: return null
+            return ws.any { w -> w.isFocused && w.type == android.view.accessibility.AccessibilityWindowInfo.TYPE_SYSTEM &&
+                runCatching { w.root?.packageName?.toString() }.getOrNull() == "com.android.systemui" }
         }
         // The phone's own output switcher / Media output panel (SystemUI, or Samsung's media panel) - never Settings.
         private val OUT_PKGS = Regex("^com\\.android\\.systemui$|^com\\.samsung\\.android\\..*(mdx|quickboard|media)")
