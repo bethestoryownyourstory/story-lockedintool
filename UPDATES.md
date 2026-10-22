@@ -94,3 +94,4 @@ commits, pushed as a new update) - nothing else changes.
 | 86 | 2026-10-22 | Settings > Quick access: 'Wallet page on lock screen' turns the lock screen's Wallet page button on / off, and its own 'Always On Display' shows it on the Always On Display too | 9a4fa21 |
 | 87 | 2026-10-22 | Dashboard: Station 3 at the bottom now goes with the system theme (black in Black, white in White) instead of the opposite, and all its buttons - the + too - are the same size and evenly spaced | 812b46e |
 | 88 | 2026-10-22 | Dashboard: Station 3's + now sits exactly in the middle of the screen, with all the buttons still the same size and evenly spaced | 1262432 |
+| 89 | 2026-10-22 | Dashboard: Station 3's buttons no longer disappear while your phone is between the new screens and the app update - the band turns white (White theme) with black icons once the app update has installed | aa2a049 |
