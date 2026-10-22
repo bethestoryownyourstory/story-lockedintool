@@ -1547,6 +1547,8 @@
   .edit-remove.edit-add{ color:var(--green); }
   .phone-screen:has(.modal-overlay) .money-transfer-fab-wrap{ visibility:hidden; }
   .page-edit-sheet{ padding-bottom:56px !important; }   /* clear of Station 3's corner */
+  html.native:not(.s3-dash-on) .confirm-sheet{ padding-bottom:52px; }   /* every sheet's bottom buttons clear Station 3's corner button */
+  .phone-screen:has(.modal-overlay, .notes-popover-overlay) .scroll-hint{ display:none; }
   .edit-remove{ font:inherit; font-size:12px; font-weight:700; color:var(--red); background:transparent; border:1px solid var(--line); border-radius:999px; padding:5px 12px; cursor:pointer; flex:none; }
   .paycard-dots .dot{ width:6px; height:6px; border-radius:50%; background:var(--card-2); cursor:pointer; }
   .paycard-dots .dot.active{ background:#e8e6e1; }
@@ -2173,8 +2175,18 @@
      exactly in the middle of the screen (owner: 'the plus needs to centre the Dashboard look'): equal columns, the +
      in the middle one (6 buttons: 7 columns, the last one left free; 5 buttons without the dial pad: 5 columns). */
   body.s3-only.s3-dash .station3-bar > button{ width:32px; height:32px; box-sizing:border-box; }
-  body.s3-only.s3-dash .station3-bar{ display:grid; grid-template-columns:repeat(5, 1fr); justify-items:center; align-items:center; padding:4px 0; }
-  body.s3-only.s3-dash .station3-bar:has(> :nth-child(6)){ grid-template-columns:repeat(7, 1fr); }
+  body.s3-only.s3-dash .station3-bar{ display:grid; grid-template-columns:repeat(5, 1fr); justify-items:center; align-items:center; padding:4px 0; gap:0; }
+  /* Balanced (owner: 'it's not aligned - extend the ones on the right and put their names on them'): the 3 round buttons
+     on the left take the left half, the + the middle, and Messages / Profile - wider, with their names - the right half. */
+  body.s3-only.s3-dash .station3-bar:has(> :nth-child(6)){ grid-template-columns:1fr 1fr 1fr 44px 1.5fr 1.5fr; }
+  body.s3-only.s3-dash .station3-bar > button:nth-last-child(-n+2){ width:calc(100% - 4px); max-width:110px; border-radius:16px; gap:3px; padding:0 4px; }
+  /* Their unread number goes where the icon is, before the name (it covered the name in the corner). */
+  body.s3-only.s3-dash .station3-bar > button:nth-last-child(-n+2) .s3-badge{ position:static; order:-1; flex-shrink:0; min-width:14px; height:14px; line-height:14px; border-radius:7px; font-size:9px; }
+  body.s3-only.s3-dash .station3-bar > button:nth-last-child(-n+2):has(.s3-badge:not([hidden])) svg{ display:none; }
+  body.s3-only.s3-dash .station3-bar > button:nth-last-child(-n+2):has(.s3-badge:not([hidden])){ gap:2px; padding:0 2px; }
+  body.s3-only.s3-dash .station3-bar > button:nth-last-child(-n+2) svg{ flex-shrink:0; width:14px; height:14px; }
+  /* Narrow phones: the name alone, so it's never cut. */
+  @media (max-width:419px){ body.s3-only.s3-dash .station3-bar > button:nth-last-child(-n+2) svg{ display:none; } }   /* (the window is 10dp wider than the screen) */
   body.s3-only.s3-dash .station3-bar-card{ padding:0 !important; }
   html.s3-dash-follow body.s3-only.s3-dash .station3-btn-plus:active{ background:#2b2b2b; }
   body.s3-only .station3-dialpad-card{ border-radius:20px !important; }
@@ -2236,6 +2248,7 @@
     .community-post-image-wrap, .realcard-addslide){
     background:#000 !important; outline:1px solid rgba(255,255,255,0.1); outline-offset:-1px;
   }
+  html.focus .order-corner-btn.money-all-on{ background:#e8e6e1 !important; color:#0a0a0a; }   /* Net worth on: filled (owner) */
   html.focus .phone-screen::before, html.focus .phone-screen::after{ display:none !important; }
   /* Crisp text: no glow or blur around any letters or numbers. */
   html.focus .phone-screen *:not(.community-trend-name2){ text-shadow:none !important; }
@@ -2255,6 +2268,7 @@
   html.focus :is(.wfab, .btn-buy, .btn-sell, .swipe-confirm, .money-transfer-fab, .btn-row-action, .mt5-corner-btn, .dash-back, .layouts-btn, .arrow-btn){
     box-shadow:inset 0 1px 0 rgba(255,255,255,0.06), 0 6px 18px rgba(0,0,0,0.35) !important;
   }
+  html.focus .notif-scroll .notif-card{ box-shadow:inset 0 1px 0 rgba(255,255,255,0.035), 0 3px 6px -3px rgba(0,0,0,0.35) !important; }
   html.focus .row{ border-bottom-color:rgba(255,255,255,0.045); }
   html.focus .row-name{ font-weight:500; color:#dcdbd6; }
   html.focus .row-sub, html.focus .notif-time{ color:#5f5f66; }
@@ -2361,6 +2375,12 @@
   #story-profile .pf-msgs-search input{ flex:1; min-width:0; border:none; outline:none; background:transparent; color:var(--pf-fg); font-size:15px; font-family:inherit; padding:11px 0; -webkit-user-select:text; user-select:text; -webkit-appearance:none; appearance:none; }
   #story-profile .pf-msgs-search input::placeholder{ color:var(--pf-muted); }
   .lit-recent{ margin:8px 0 6px; border:1px solid rgba(128,128,128,0.35); border-radius:12px; padding:4px 0; font-size:14px; text-align:left; }
+  /* On the Dashboard (one fixed screen) the list lies OVER the page under the search bar - in the flow it squeezed the
+     Dashboard and pushed the bottom cards under Station 3. It never reaches Station 3's band; the rest scrolls. */
+  .story-screen{ position:relative; }
+  .story-screen > .lit-recent{ position:absolute; left:12px; right:12px; top:var(--lr-top, 80px); margin:0; z-index:40; background:#000;
+    max-height:calc(100% - var(--lr-top, 80px) - var(--s3-dash-pad, 0px) - 12px); overflow-y:auto; scrollbar-width:none; }
+  .story-screen > .lit-recent::-webkit-scrollbar{ display:none; }
   .lit-recent-h{ display:flex; align-items:center; justify-content:space-between; padding:6px 12px 4px; font-size:11px; font-weight:800; letter-spacing:0.08em; text-transform:uppercase; opacity:0.6; }
   .lit-recent-h button{ border:0; background:none; color:inherit; font:inherit; font-size:11px; padding:0; text-transform:none; letter-spacing:0; text-decoration:underline; }
   .lit-recent-row{ display:flex; align-items:center; }
@@ -2811,6 +2831,8 @@
   }
   .station3-btn:active{ background:rgba(0,0,0,0.14); }
   .station3-btn.s3-has-badge{ position:relative; }
+  .station3-btn .s3-lbl{ display:none; }
+  body.s3-only.s3-dash .station3-btn .s3-lbl{ display:inline; font-size:10.5px; font-weight:700; white-space:nowrap; font-family:var(--font-body); }
   .station3-btn.s3-has-badge{ overflow:hidden; }   /* the number stays inside the button (owner) */
   .s3-badge{ position:absolute; top:4px; right:4px; min-width:16px; height:16px; padding:0 4px; box-sizing:border-box; border-radius:8px; background:#ff3b30; color:#fff; font-size:10px; font-weight:800; line-height:16px; text-align:center; font-family:var(--font-body); pointer-events:none; }
   .s3-badge[hidden]{ display:none; }
@@ -3039,8 +3061,8 @@
     opacity:1; transform:scale(1.5);
     transition:transform 0.18s ease-out, opacity 0.08s ease-out;
   }
-  .mtf-arrow{
-    position:absolute; right:-3px; bottom:-3px; width:18px; height:18px; border-radius:50%;
+  .mtf-arrow{   /* beside the button in its wrap (not inside it - the button clips), taps go through to the button */
+    position:absolute; right:-3px; bottom:-3px; pointer-events:none; width:18px; height:18px; border-radius:50%;
     background:var(--green); color:#052710; display:flex; align-items:center; justify-content:center;
     font-size:10px; font-weight:900; border:2px solid var(--card);
   }
@@ -3234,7 +3256,7 @@
     content:''; position:absolute; inset:0; z-index:-1; pointer-events:none;
     background:linear-gradient(115deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.02) 22%, rgba(255,255,255,0) 45%);
   }
-  .search-label{ font-size:10px; letter-spacing:0.5px; color:var(--muted); font-weight:600; flex-shrink:0; }
+  .search-label{ font-size:10px; letter-spacing:0.5px; color:var(--muted); font-weight:600; flex-shrink:0; margin-right:10px; }   /* typed words never run into it */
   .search-value-input{
     font-size:13px; font-weight:700; color:var(--text); text-align:right; background:transparent;
     border:none; outline:none; resize:none; overflow:hidden; padding:0; margin:0; font-family:var(--font-body);
@@ -3290,7 +3312,9 @@
   .ctl-reorder-row.dragging{ opacity:0.4; }
   .ctl-reorder-row.notpooled{ opacity:0.55; }
   .ctl-reorder-row.displayed{ border-color:rgba(232,230,225,0.5); background:rgba(232,230,225,0.08); }
-  .ctl-drag-handle{ color:var(--muted); font-size:14px; width:14px; cursor:grab; flex-shrink:0; }
+  .ctl-drag-handle{ color:var(--muted); font-size:14px; width:14px; cursor:grab; flex-shrink:0; touch-action:none; position:relative; }
+  .ctl-drag-handle::before{ content:''; position:absolute; top:-9px; bottom:-9px; left:-10px; right:-8px; }   /* the whole left end of the row */
+  .ctl-reorder-row.dragging{ position:relative; z-index:2; }
   .ctl-reorder-icon{ display:flex; align-items:center; color:var(--text); flex-shrink:0; }
   .ctl-reorder-icon svg{ width:18px; height:18px; }
   .ctl-reorder-label{ font-size:12px; font-weight:700; flex:1; }
@@ -3354,9 +3378,10 @@
   }
   .spotify-controls .play:active{ transform:scale(0.9); box-shadow:var(--press1); }
   .controls-card{ min-width:0; }
-  .controls-toggles{ display:flex; align-items:center; gap:8px; font-size:10.5px; font-weight:700; min-width:0; }
-  .controls-toggles-scroll{ display:flex; align-items:center; gap:10px; overflow-x:auto; min-width:0; scrollbar-width:none; }
-  .controls-toggles-scroll::-webkit-scrollbar{ display:none; }
+  /* The top 4 controls never get cut (Airplane / Flashlight / Rotation don't fit one line on any phone): they wrap onto a
+     second line only when needed, the ︿ staying at the end of the first. */
+  .controls-toggles{ display:flex; align-items:flex-start; gap:8px; font-size:10.5px; font-weight:700; min-width:0; }
+  .controls-toggles-scroll{ display:flex; align-items:center; flex-wrap:wrap; gap:8px 10px; min-width:0; }
   .controls-toggles .chev{ margin-left:auto; color:var(--muted); flex-shrink:0; }
   .controls-hr{ height:1px; background:rgba(255,255,255,0.18); margin:8px 0 6px; }
   .controls-label{ font-size:11px; color:var(--muted); }
@@ -3381,6 +3406,12 @@
   .ctl-toggle{ cursor:pointer; color:var(--muted); transition:color 0.15s; white-space:nowrap; flex-shrink:0; }
   .ctl-toggle.on{ color:#e8e6e1; }
   .controls-toggles .chev{ cursor:pointer; }
+  /* Bigger finger targets for the control words, ︿ and the brightness ▲ without moving anything (padding taken back by
+     negative margin / an invisible area around them) - a near miss on ▲ used to land on the slider. */
+  .ctl-toggle{ padding:4px 5px; margin:-4px -5px; }
+  .controls-toggles .chev{ position:relative; }
+  .controls-toggles .chev::before{ content:''; position:absolute; top:-12px; bottom:-12px; left:-6px; right:-11px; }
+  .brightness-arrow::before{ content:''; position:absolute; top:-16px; bottom:-16px; left:-4px; right:-10px; }
   .spotify-visualizer{
     position:absolute; top:10px; right:11px; display:flex; align-items:flex-end; gap:2px; height:12px;
   }
@@ -4575,7 +4606,9 @@ function searchStepGo(inputId){
   }
   state.searchBlocked = false;
   if(state.pendingSearchQuery === q){
-    window.open('https://www.google.com/search?q=' + encodeURIComponent(q) + '&safe=active', '_blank');
+    // In the app window.open goes nowhere (the Pages only load Lockedintool): the phone's browser opens it, like every link.
+    const url = 'https://www.google.com/search?q=' + encodeURIComponent(q) + '&safe=active';
+    if(NATIVE && window.StoryNative.openUrl) window.StoryNative.openUrl(url); else window.open(url, '_blank');
     state.searchOpen = false;
     state.pendingSearchQuery = null;
     state.searchQuery = '';
@@ -4584,6 +4617,12 @@ function searchStepGo(inputId){
     state.recentSearches = [q, ...state.recentSearches.filter(x=>x!==q)].slice(0, 5);
   }
   renderDevice();
+  // 'Press Enter again': the redraw made a new box, so you're put straight back in it (keyboard up) to press Enter.
+  const again = state.pendingSearchQuery && document.getElementById(inputId);
+  if(again){
+    if(inputId === 'dash-search-input') litRecentWriting.web = true;
+    again.readOnly = false; again.focus(); again.setSelectionRange(again.value.length, again.value.length); litKeyboard(true);
+  }
 }
 
 function closePool(){
@@ -5139,15 +5178,17 @@ const CTL_NATIVE = !!(window.StoryNative && window.StoryNative.controlsState && 
 const CTL_FIELDS = {wifi:'wifiOn', bt:'btOn', dnd:'dndOn', airplane:'airplaneOn', flashlight:'flashlightOn', rotation:'rotationLockOn'};
 function ctlApply(st, out){
   if(st && typeof st === 'object') Object.keys(CTL_FIELDS).forEach(k=>{ if(typeof st[k] === 'boolean') state[CTL_FIELDS[k]] = st[k]; });
+  if(st && typeof st.torch === 'boolean') state.hasTorch = st.torch;   // false = this phone has no flashlight
   if(out && Array.isArray(out.list) && out.list.length){ state.audioOutputs = out.list.map(String); state.activeAudioOutput = String(out.active || out.list[0]); }
 }
 function ctlRefresh(){
   if(!CTL_NATIVE || IN_STATION3_WINDOW) return;
   try{ ctlApply(JSON.parse(window.StoryNative.controlsState() || '{}'), window.StoryNative.audioOutputs ? JSON.parse(window.StoryNative.audioOutputs() || '{}') : null); }catch(e){}
 }
-window.storyControlsChanged = function(st, out){ ctlApply(st, out); if(state.current === 'dashboard') renderDevice(); };
+// (never redrawn under your fingers while you type a search - the next draw shows it)
+window.storyControlsChanged = function(st, out){ ctlApply(st, out); if(state.current === 'dashboard' && !(document.activeElement && document.activeElement.id === 'dash-search-input')) renderDevice(); };
 function dashboardScreen(){
-  ctlRefresh();
+  ctlRefresh(); brightFollowPhone();
   return `
     <div class="story-screen${dashS3On() ? ' s3-dash' : ''}" id="dashboard-swipe-zone">
       <div class="notif-pull" id="notif-pull" style="pointer-events:none;">▾</div>
@@ -5168,7 +5209,7 @@ function dashboardScreen(){
         <textarea class="search-value-input" id="dash-search-input" rows="1" placeholder="Google">${state.searchQuery.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
       </div>
       ${state.searchBlocked ? `<div class="dash-search-note dash-search-note-blocked">🛡 Safe Search is on — this search isn't allowed on Lockedintool.</div>` : ''}
-      ${(!state.searchBlocked && state.pendingSearchQuery) ? `<div class="dash-search-note">Press Enter again to open "${state.pendingSearchQuery}"</div>` : ''}
+      ${(!state.searchBlocked && state.pendingSearchQuery) ? `<div class="dash-search-note">Press Enter again to open "${escText(state.pendingSearchQuery)}"</div>` : ''}
       <div class="safe-search"><span class="diamond">◇</span> Safe search is on</div>
       <div class="story-body">
         <div class="story-sidebar">
@@ -5189,7 +5230,7 @@ function dashboardScreen(){
         </div>
       </div>
       <div class="story-bottom">
-        <div class="media-card" data-action="media-output-open"><div class="media-label">MEDIA OUTPUT</div><div class="media-sub">${state.activeAudioOutput}</div></div>
+        <div class="media-card" data-action="media-output-open"><div class="media-label">MEDIA OUTPUT</div><div class="media-sub">${escText(state.activeAudioOutput)}</div></div>
         <div class="brightness-card">
           <span class="sun-ico" id="sun-ico" style="opacity:${(0.3 + (state.brightnessValue/100)*0.7).toFixed(2)};"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-label="Brightness"><circle cx="12" cy="12" r="4.2" fill="currentColor"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></svg></span>
           <input type="range" class="brightness-slider" id="brightness-slider" min="0" max="100" value="${state.brightnessValue}">
@@ -5234,19 +5275,19 @@ function searchPopupTemplate(){
       <div class="confirm-sheet" onclick="event.stopPropagation()">
         <div class="confirm-title">Search Google</div>
         <div style="display:flex; gap:8px; align-items:center; margin:10px 0;">
-          <input class="field-input" id="search-input" type="text" placeholder="Search the web…" value="${state.searchQuery}" style="margin:0;flex:1;">
+          <input class="field-input" id="search-input" type="text" placeholder="Search the web…" value="${escText(state.searchQuery).replace(/"/g,'&quot;')}" style="margin:0;flex:1;">
           <button class="search-go-arrow" id="search-go-arrow" title="Go">→</button>
         </div>
         ${state.recentSearches.length ? `
           <div class="section-title" style="text-align:left;margin:2px 0 6px;">RECENT SEARCHES</div>
           <div style="margin-bottom:10px;">
-            ${state.recentSearches.map(q=>`<div class="row-card" data-recentsearch="${q}" style="margin-bottom:6px;cursor:pointer;padding:8px 12px;"><div class="row-name" style="font-size:12px;">${q}</div></div>`).join('')}
+            ${state.recentSearches.map(q=>`<div class="row-card" data-recentsearch="${escText(q).replace(/"/g,'&quot;')}" style="margin-bottom:6px;cursor:pointer;padding:8px 12px;"><div class="row-name" style="font-size:12px;">${escText(q)}</div></div>`).join('')}
           </div>
         ` : ''}
         ${state.searchBlocked ? `
           <div class="search-blocked-note">🛡 Safe Search is on — this search isn't allowed on Lockedintool.</div>
         ` : `
-          <button class="btn-wide btn-primary" id="search-action-btn" style="margin-top:0;">${state.pendingSearchQuery ? `Open "${state.pendingSearchQuery}" ↗` : 'Search'}</button>
+          <button class="btn-wide btn-primary" id="search-action-btn" style="margin-top:0;">${state.pendingSearchQuery ? `Open "${escText(state.pendingSearchQuery)}" ↗` : 'Search'}</button>
         `}
       </div>
     </div>
@@ -5344,7 +5385,7 @@ function controlsExpandedTemplate(){
           ${poolItems.length ? poolItems.map((it, idx)=>{
             const isDisplayed = idx < MAX_DISPLAYED_CONTROLS;
             return `
-            <div class="ctl-reorder-row${isDisplayed?' displayed':''}" draggable="true" data-dragid="${it.id}">
+            <div class="ctl-reorder-row${isDisplayed?' displayed':''}" data-dragid="${it.id}">
               <span class="ctl-drag-handle">☰</span>
               <span class="ctl-reorder-icon">${CTL_ICONS[it.id]}</span>
               <span class="ctl-reorder-label">${it.label}</span>
@@ -5379,7 +5420,7 @@ function mediaOutputTemplate(){
         </div>
         <div class="section-title" style="margin-top:0;">ACTIVE OUTPUT</div>
         ${state.audioOutputs.map(o=>`
-          <div class="settings-option${state.activeAudioOutput===o?' selected':''}" data-audiooutput="${escText(o)}">
+          <div class="settings-option${state.activeAudioOutput===o?' selected':''}" data-audiooutput="${escText(o).replace(/"/g,'&quot;')}">
             <div class="row-left"><div class="row-name">${escText(o)}</div></div>
             <div class="radio-dot"></div>
           </div>
@@ -5516,11 +5557,27 @@ function moneyTx(){
   const linkedIds = [].concat(...(bankData().accounts || []).map(a=>bankIds(a.bank.replace(/_/g, ' ') + ' ' + bankName(a.bank))));
   if(linkedIds.length) list = list.filter(t=>!bankIds(String(t.pkg || '') + ' ' + (t.app || '') + (MONEY_SMS.includes(t.pkg) ? ' ' + String(t.text || '').slice(0, 40) : '')).some(i=>linkedIds.includes(i)));
   list = list.concat(bankTx());
-  list = list.filter(t=>t && isFinite(t.amt) && t.amt && t.ts && moneyCounts(t)).sort((a, b)=>b.ts - a.ts);
+  list = moneyDedupe(list.filter(t=>t && isFinite(t.amt) && t.amt && t.ts && moneyCounts(t)).sort((a, b)=>b.ts - a.ts));
   const to = accountCur();
   if(to){ if(list.some(t=>t.cur !== to)) fxEnsure(); list = list.map(t=>t.cur === to ? t : fxTx(t, to)); }
   moneyCache = list;
   return moneyCache;
+}
+// One payment told by both your bank's app and its SMS (banks send both) counts once - the app's: the same bank, amount,
+// currency and card (or none), the same balance when both state one, within 15 minutes. Two payments from the same app always stay.
+function moneyDedupe(list){
+  const out = [];
+  list.forEach(t=>{
+    const b = moneyBankOf(t), sms = MONEY_SMS.includes(t.pkg);
+    for(let i = out.length - 1; i >= 0 && out[i].ts - t.ts < 15 * 60000; i--){
+      const o = out[i];
+      if(o.pkg === t.pkg || o.amt !== t.amt || o.cur !== t.cur || (o.card || '') !== (t.card || '') || (o.bal != null && t.bal != null && o.bal !== t.bal) || moneyBankOf(o) !== b) continue;
+      if(MONEY_SMS.includes(o.pkg) && !sms) out[i] = t;
+      return;
+    }
+    out.push(t);
+  });
+  return out.sort((a, b)=>b.ts - a.ts);
 }
 window.addEventListener('storage', e=>{ if(e.key === ACCOUNT_CUR_KEY || e.key === FX_KEY || e.key === COUNTRY_KEY){ moneyCache = null; if(MONEY_PAGES.includes(state.current)) renderDevice(); } });
 const MONEY_PAGES = ['money', 'money-summary', 'wallet', 'wallet-overview', 'tx-history'];
@@ -5533,14 +5590,15 @@ window.storyMoneyNew = function(){
 // Money shows the card that's showing in Wallet (all your payments when no card is picked).
 // Net worth (owner; the button under the calendar on Money - owner named it "Net worth"): on = Money shows ALL the accounts you added to it
 // together (bank accounts seen in your bank's messages + trading accounts) instead of only the card showing in Wallet;
-// the pencil next to it picks which accounts count. Kept in 'story-money-all' {on, keys} (keys = 'b:<app>|<card>' /
+// the pencil next to it picks which accounts count. Kept in 'story-money-all' {on, keys, v:2} (keys = 'b:<bank>|<card>' /
 // 't:<trading account id>'; no list yet = every account).
 const MONEY_ALL_KEY = 'story-money-all', WALLET_NW_KEY = 'story-wallet-nw';
 // Wallet's Net worth (owner) is its own button with its own accounts: it combines your bank accounts' money to pay
 // (Send > Pay with > Use net worth). Only bank accounts - trading accounts can't pay.
 function nwGet(store){ try{ return JSON.parse(localStorage.getItem(store) || '{}') || {}; }catch(e){ return {}; } }
 function nwSave(store, v){ try{ localStorage.setItem(store, JSON.stringify(v)); }catch(e){} }
-function nwHas(store, key){ const v = nwGet(store); return !Array.isArray(v.keys) || v.keys.includes(key); }
+// A list ticked before accounts were kept by bank (keys 'b:<app>|<card>', no v:2) counts every bank account until ticked again.
+function nwHas(store, key){ const v = nwGet(store); return !Array.isArray(v.keys) || (v.v !== 2 && key.startsWith('b:')) || v.keys.includes(key); }
 function nwAccounts(store){ return store === WALLET_NW_KEY ? moneyAllAccounts().filter(a=>a.key.startsWith('b:')) : moneyAllAccounts(); }
 function moneyAll(){ return nwGet(MONEY_ALL_KEY); }
 function moneyAllSave(v){ nwSave(MONEY_ALL_KEY, v); }
@@ -5549,10 +5607,27 @@ function walletNwOn(){ return !!nwGet(WALLET_NW_KEY).on; }
 // The newest balance your bank stated for each account (by key), in the account currency when one is picked.
 function acctBalances(){ const m = {}; moneyBalances().forEach(a=>{ if(!(a.key in m)) m[a.key] = a; }); return m; }
 function walletNwList(){ const bal = acctBalances(); return nwAccounts(WALLET_NW_KEY).filter(a=>nwHas(WALLET_NW_KEY, a.key)).map(a=>Object.assign({}, a, { bal: bal[a.key] ? bal[a.key].bal : null, cur: bal[a.key] ? bal[a.key].cur : null })); }
-const moneyAcctKey = t=>'b:' + t.pkg + '|' + (t.card || '');
+// One bank account = its bank + its card / account number, whichever told Lockedintool about it - the bank's app naming
+// the card, the same app naming none (then it's your one card from that bank) or its SMS - never one account per app.
+function moneyBankOf(t){
+  const pkg = String(t.pkg || '');
+  if(pkg.indexOf('bank:') === 0) return bankIdAt(pkg.slice(5).replace(/_/g, ' ')) || pkg.slice(5);
+  return bankIdAt(MONEY_SMS.includes(pkg) ? String(t.text || '').slice(0, 40) : pkg + ' ' + (t.app || '')) || pkg;   // a bank SMS: its sender starts the text
+}
+const acctMemo = new WeakMap();
+function moneyAcctOf(t){
+  if(acctMemo.has(t)) return acctMemo.get(t);
+  const bank = moneyBankOf(t);
+  let card = t.card || '';
+  if(!card){ const m = walletCards().filter(c=>cardMatches(c, t)); if(m.length === 1) card = m[0].last4; }
+  const r = { key:'b:' + bank + '|' + card, name:(BANK_ID_NAMES[bank] || t.app || 'Bank') + (card ? ' ••' + card : '') };
+  acctMemo.set(t, r);
+  return r;
+}
+const moneyAcctKey = t=>moneyAcctOf(t).key;
 function moneyAllAccounts(){
   const seen = {}, out = [];
-  moneyTx().forEach(t=>{ const k = moneyAcctKey(t); if(seen[k]) return; seen[k] = 1; out.push({ key:k, name: (t.app || 'Bank') + (t.card ? ' ••' + t.card : ''), icon:'🏦' }); });
+  moneyTx().forEach(t=>{ const a = moneyAcctOf(t); if(seen[a.key]) return; seen[a.key] = 1; out.push({ key:a.key, name:a.name, icon:'🏦' }); });
   tradeAccounts().forEach(a=>out.push({ key:'t:' + a.id, name:a.name, icon:'📈' }));
   return out;
 }
@@ -5564,7 +5639,9 @@ function moneyView(){
 function moneyAccessOk(){ try{ return !NATIVE || !window.StoryNative.moneyAccess || !!window.StoryNative.moneyAccess(); }catch(e){ return true; } }
 // The currency most of your payments are in (before any payment: the phone's region).
 function moneyMainCur(){
-  if(accountCur()) return accountCur();   // the account currency you picked (owner)
+  // The account currency you picked (owner) - once there are rates for it (until then payments show unconverted).
+  const ac = accountCur();
+  if(ac){ const fx = fxRates(); if((fx && fx.rates && fx.rates[ac]) || !moneyTx().some(t=>t.cur !== ac)) return ac; }
   const n = {}; (moneyView().length ? moneyView() : moneyTx()).forEach(t=>{ n[t.cur] = (n[t.cur] || 0) + 1; });
   const best = Object.keys(n).sort((a, b)=>n[b] - n[a])[0];
   if(best) return best;
@@ -5660,15 +5737,15 @@ function moneyBalances(forCard){
   const seen = {}, out = [], to = accountCur(), c = forCard && !moneyAllOn() ? activeCard() : null;
   bankBalances().forEach(b=>{
     if(!walletCards().some(x=>cardMatches(x, b)) || (c && !cardMatches(c, b))) return;
-    const k = b.pkg + '|' + (b.card || ''); if(seen[k]) return; seen[k] = 1;
+    const a = moneyAcctOf(b); if(seen[a.key]) return; seen[a.key] = 1;
     const v = to && b.cur !== to ? fxConvert(b.bal, b.cur, to) : null;
-    out.push({ key: moneyAcctKey(b), name: b.app + (b.card ? ' ••' + b.card : ''), bal: v == null ? b.bal : v, cur: v == null ? b.cur : to, ts: b.ts, icon:'🏦' });
+    out.push({ key: a.key, name: a.name, bal: v == null ? b.bal : v, cur: v == null ? b.cur : to, ts: b.ts, icon:'🏦' });
   });
   (forCard ? moneyView() : moneyTx()).forEach(t=>{
     if(t.bal == null) return;
-    const k = t.pkg + '|' + (t.card || '');
-    if(seen[k]) return; seen[k] = 1;
-    out.push({ key: moneyAcctKey(t), name: t.app + (t.card ? ' ••' + t.card : ''), bal: t.bal, cur: t.cur, ts: t.ts, icon:'🏦' });
+    const a = moneyAcctOf(t);
+    if(seen[a.key]) return; seen[a.key] = 1;   // newest first: the newest balance of each account
+    out.push({ key: a.key, name: a.name, bal: t.bal, cur: t.cur, ts: t.ts, icon:'🏦' });
   });
   return out;
 }
@@ -5689,15 +5766,19 @@ function netWorth(cur){ return moneyAssets().filter(a=>a.cur === cur).reduce((s,
 function netWorthPct(nw, cur){
   if(!moneyAssets().length) return null;
   let snaps = {}; try{ snaps = JSON.parse(localStorage.getItem('story-networth') || '{}') || {}; }catch(e){}
-  const today = new Date().toISOString().slice(0, 10);
-  if(!snaps[cur] || typeof snaps[cur] !== 'object') snaps[cur] = {};
-  snaps[cur][today] = nw;
-  const keys = Object.keys(snaps[cur]).sort();
-  if(keys.length > 400) keys.slice(0, keys.length - 400).forEach(k=>delete snaps[cur][k]);
+  // Kept per view - the card showing, or Net worth - and currency, by the phone's own date: one card's number is never
+  // compared with another's. (Old ones kept per currency only mixed them up.)
+  Object.keys(snaps).forEach(k=>{ if(k.indexOf('|') < 0) delete snaps[k]; });
+  const c = activeCard(), sk = (moneyAllOn() || !c ? 'all' : 'card:' + c.id) + '|' + cur;
+  const d = new Date(), today = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  if(!snaps[sk] || typeof snaps[sk] !== 'object') snaps[sk] = {};
+  snaps[sk][today] = nw;
+  const keys = Object.keys(snaps[sk]).sort();
+  if(keys.length > 400) keys.slice(0, keys.length - 400).forEach(k=>delete snaps[sk][k]);
   try{ localStorage.setItem('story-networth', JSON.stringify(snaps)); }catch(e){}
   const first = keys.find(k=>k.slice(0, 7) === today.slice(0, 7));
-  if(!first || first === today || !snaps[cur][first]) return null;
-  return Math.round((nw - snaps[cur][first]) / Math.abs(snaps[cur][first]) * 1000) / 10;
+  if(!first || first === today || !snaps[sk][first]) return null;
+  return Math.round((nw - snaps[sk][first]) / Math.abs(snaps[sk][first]) * 1000) / 10;
 }
 // Fills the Money page's numbers from your real payments (same places the page always read them from).
 // ---- The period Money shows (owner): the calendar button under Summary - a day, a set of days, or Day / Week /
@@ -5716,7 +5797,7 @@ function moneyRangeSpan(){
     case 'week': { const d = new Date(today); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return { from: d.getTime(), to: now, label: 'CURRENT WEEK' }; }   // this week: Monday to today
     case '3m': return { from: back(3), to: now, label: 'LAST 3 MONTHS' };
     case '6m': return { from: back(6), to: now, label: 'LAST 6 MONTHS' };
-    case '1y': return { from: back(12), to: now, label: 'LAST YEAR' };
+    case '1y': return { from: back(12), to: now, label: 'LAST 12 MONTHS' };
     case '2y': return { from: back(24), to: now, label: 'LAST 2 YEARS' };
     case '3y': return { from: back(36), to: now, label: 'LAST 3 YEARS' };
     case 'date': { const f = dayStart(r.from), t = dayStart(r.to || r.from) + D - 1; const fmt = x=>new Date(x).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' }).toUpperCase(); return { from: f, to: t, label: dayStart(r.from) === dayStart(r.to || r.from) ? fmt(f) : fmt(f) + ' – ' + fmt(t) }; }
@@ -5749,7 +5830,8 @@ function spanBuckets(from, to, n){
     const label = len <= 1.01 * D ? String(d.getHours()).padStart(2, '0') + 'h'
       : len <= 10 * D ? d.toLocaleDateString('en-US', { weekday:'short' })
       : len <= 100 * D ? d.getDate() + ' ' + d.toLocaleDateString('en-US', { month:'short' })
-      : len <= 800 * D ? d.toLocaleDateString('en-US', { month:'short' })
+      : len <= 400 * D ? d.toLocaleDateString('en-US', { month:'short' })
+      : len <= 800 * D ? d.toLocaleDateString('en-US', { month:'short' }) + " '" + String(d.getFullYear()).slice(2)   // 2 years: the months repeat
       : "'" + String(d.getFullYear()).slice(2);
     out.push({ a, b, label });
   }
@@ -5762,9 +5844,11 @@ function moneyCompute(){
   const m = spanTotals(sp.from, sp.to, cur);
   state.moneyIn = m.inA; state.moneyOut = m.outA;
   state.thisMonthLabel = sp.label;
-  state.analyticsMonths = spanBuckets(sp.from, sp.to, 6).map(k=>{ const t = spanTotals(k.a, k.b, cur); return { label: k.label, net: t.inA - t.outA }; });
+  // Today's charts run over the whole day (00h ... 20h; the hours still to come stay empty) - early in the day every bar read '00h'.
+  const chartTo = (state.moneyRange || {}).kind === 'day' ? sp.from + 864e5 : sp.to;
+  state.analyticsMonths = spanBuckets(sp.from, chartTo, 6).map(k=>{ const t = spanTotals(k.a, k.b, cur); return { label: k.label, net: t.inA - t.outA }; });
   state.expensesBreakdown = spanExpenses(sp.from, sp.to, cur);
-  let run = 0; const cum = spanBuckets(sp.from, sp.to, 7).map(k=>{ const t = spanTotals(k.a, k.b, cur); run += t.inA - t.outA; return run; });
+  let run = 0; const cum = spanBuckets(sp.from, chartTo, 7).map(k=>{ const t = spanTotals(k.a, k.b, cur); run += t.inA - t.outA; return run; });
   const lo = Math.min(...cum), hi = Math.max(...cum);
   state.savingsSeries = cum.map(v=>hi === lo ? 10 : Math.round(10 + (v - lo) / (hi - lo) * 70));
   state.savingsPeakValue = fmtCur(Math.max(0, hi), cur);
@@ -5784,6 +5868,8 @@ function paymentCardsHTML(){
   if(!moneyAccessOk()) return `<div class="notif-card" data-action="money-access"><div class="notif-icon-wrap">🔔</div><div class="notif-mid"><div class="notif-source">Lockedintool</div><div class="notif-label">Allow Lockedintool to see your payments</div></div><div class="notif-right"><div class="notif-amt">Turn on</div><div class="notif-time">&nbsp;</div></div></div>`;
   const sp = state.moneySpan || moneyRangeSpan();
   const list = moneyView().filter(t=>t.ts >= sp.from && t.ts <= sp.to).slice(0, 300);
+  // Only your cards' payments count (owner) - with no card added none ever will, so say how they start.
+  if(!list.length && !walletCards().length) return `<div class="notif-card notif-empty"><div class="notif-icon-wrap">💳</div><div class="notif-mid"><div class="notif-source">No card added yet</div><div class="notif-label">Add your card in Wallet - its payments show here</div></div><div class="notif-right"><div class="notif-amt">&nbsp;</div><div class="notif-time">&nbsp;</div></div></div>`;
   if(!list.length) return `<div class="notif-card notif-empty"><div class="notif-icon-wrap">💳</div><div class="notif-mid"><div class="notif-source">${moneyView().length ? 'No payments in this time' : 'No payments yet'}</div><div class="notif-label">They show as your bank apps send them</div></div><div class="notif-right"><div class="notif-amt">&nbsp;</div><div class="notif-time">&nbsp;</div></div></div>`;
   return list.map(t=>`
         <div class="notif-card" data-notif="${escText(t.id)}">
@@ -5934,9 +6020,8 @@ function moneyScreen(){
     </div>
 
     <div class="money-transfer-fab-wrap">
-      <button class="money-transfer-fab" data-action="money-transfer-open" title="Transfer Money">
-        $<span class="mtf-arrow">↗</span>
-      </button>
+      <button class="money-transfer-fab" data-action="money-transfer-open" title="Transfer Money">$</button>
+      <span class="mtf-arrow">↗</span>
     </div>
     </div>
 
@@ -5950,6 +6035,14 @@ function moneyScreen(){
   `;
 }
 
+// The period you picked, as words after 'You have spent R…' (the spending is that period's - the limit below is always this month's).
+function moneySpanPhrase(){
+  const r = state.moneyRange || { kind:'month' }, sp = state.moneySpan || moneyRangeSpan();
+  const per = { month:'this month', day:'today', week:'in the current week', '3m':'in the last 3 months', '6m':'in the last 6 months', '1y':'in the last 12 months', '2y':'in the last 2 years', '3y':'in the last 3 years' }[r.kind];
+  if(per) return per;
+  const fmt = x=>new Date(x).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' });
+  return dayStart(sp.from) === dayStart(sp.to) ? 'on ' + fmt(sp.from) : 'from ' + fmt(sp.from) + ' to ' + fmt(sp.to);
+}
 function moneySummaryScreen(){
   moneyCompute();
   const cur = state.moneyCur;
@@ -5967,17 +6060,17 @@ function moneySummaryScreen(){
     ${topBar('Summary', false, '', 'money')}
     <div class="grid2" style="grid-template-columns:1fr 1fr;">
       <div class="row-card" style="padding:12px;">
-        <div class="row-sub" style="display:flex;justify-content:space-between;">INCOMES <span style="color:var(--green);">${pctTxt(state.summaryIncomesPct)}</span></div>
+        <div class="row-sub" style="display:flex;justify-content:space-between;">INCOMES <span style="color:${state.summaryIncomesPct < 0 ? 'var(--red)' : 'var(--green)'};">${pctTxt(state.summaryIncomesPct)}</span></div>
         <div class="big-num" style="font-size:20px;margin:6px 0 2px;">${fmtCur(state.summaryIncomes, cur, true, 0)}</div>
       </div>
       <div class="row-card" style="padding:12px;">
-        <div class="row-sub" style="display:flex;justify-content:space-between;">OUTCOMES <span style="color:var(--red);">${pctTxt(state.summaryOutcomesPct)}</span></div>
+        <div class="row-sub" style="display:flex;justify-content:space-between;">OUTCOMES <span style="color:${state.summaryOutcomesPct > 0 ? 'var(--red)' : 'var(--green)'};">${pctTxt(state.summaryOutcomesPct)}</span></div>
         <div class="big-num" style="font-size:20px;margin:6px 0 2px;">${fmtCur(-state.summaryOutcomes, cur, false, 0)}</div>
       </div>
     </div>
     <div class="section-title">SPENDING BREAKDOWN</div>
     <div class="row-card">
-      <div class="note" style="margin-bottom:8px;">You have spent ${fmtCur(spent, cur)} ${state.thisMonthLabel === 'THIS MONTH' ? 'this month' : 'in ' + state.thisMonthLabel.charAt(0) + state.thisMonthLabel.slice(1).toLowerCase()}.</div>
+      <div class="note" style="margin-bottom:8px;">You have spent ${fmtCur(state.summaryOutcomes, cur)} ${moneySpanPhrase()}.</div>
       <div class="donut-row">
         <div class="donut" style="background:conic-gradient(${donutGradient});"><div class="donut-hole"></div></div>
         <div class="donut-legend">
@@ -7530,7 +7623,7 @@ const CARDS_KEY = 'story-cards';
 const CARD_NETS = ['Visa', 'Mastercard', 'Amex', 'Other'];
 // Cards added before the number check existed were never checked - they don't count (owner: no fake card details).
 function walletCards(){ try{ return (JSON.parse(localStorage.getItem(CARDS_KEY) || '[]') || []).filter(c=>c && c.checked); }catch(e){ return []; } }
-function saveWalletCards(l){ try{ localStorage.setItem(CARDS_KEY, JSON.stringify(l)); }catch(e){} }
+function saveWalletCards(l){ try{ localStorage.setItem(CARDS_KEY, JSON.stringify(l)); }catch(e){} moneyCache = null; }   // which payments count follows your cards
 // The card that's showing in Wallet (null on the + slide or with no cards) - Money shows this card's money.
 // There is always ONE card showing (owner): the + slide doesn't change it - Money keeps the last card you were on
 // (or your first card). Only with no cards at all does Money show everything.
@@ -7846,6 +7939,10 @@ const BANK_IDS = [['fnb', /fnb|firstrand|first national/], ['capitec', /capitec/
   ['standard', /standard ?bank|sbg\.mobile|sbsa|stanbic/], ['tyme', /tyme/], ['discovery', /discovery/], ['investec', /investec/],
   ['african', /african ?bank/], ['bankzero', /bank ?zero/], ['oldmutual', /old ?mutual/], ['access', /access ?bank/], ['bidvest', /bidvest/]];
 const bankIds = s=>{ s = String(s || '').toLowerCase(); return BANK_IDS.filter(([, re])=>re.test(s)).map(([id])=>id); };
+// The bank named first (a bank SMS can name another bank further on: 'Capitec: R100 paid to FNB...').
+const bankIdAt = s=>{ s = String(s || '').toLowerCase(); let id = '', at = Infinity; BANK_IDS.forEach(([b, re])=>{ const i = s.search(re); if(i >= 0 && i < at){ at = i; id = b; } }); return id; };
+const BANK_ID_NAMES = { fnb:'FNB', capitec:'Capitec', absa:'Absa', nedbank:'Nedbank', standard:'Standard Bank', tyme:'TymeBank', discovery:'Discovery Bank', investec:'Investec',
+  african:'African Bank', bankzero:'Bank Zero', oldmutual:'Old Mutual', access:'Access Bank', bidvest:'Bidvest Bank' };
 function cardMatches(c, t){
   if(!c) return true;
   if(t.card && t.card === c.last4) return true;
@@ -8275,7 +8372,7 @@ function sendMoneyScreen(){
   const w = p.waiting;
   if(w) return `
     <div class="page-shell">
-    ${topBar('Send Money', false, '', 'wallet')}
+    ${topBar('Send Money', false, '', state.pay.origin === 'money' ? 'money' : 'wallet')}
     <div class="row-card pay-wait">
       <div class="pay-wait-amt">${payMoney(w.amount)}</div>
       <div class="pay-wait-who">to ${escText(w.who)}${w.from ? ' · from ' + escText(w.from) : ''}${w.of > 1 ? ' · part ' + (w.part + 1) + ' of ' + w.of : ''}</div>
@@ -8296,7 +8393,7 @@ function sendMoneyScreen(){
   const amt = parseFloat(String(p.amount).replace(',', '.'));
   return `
     <div class="page-shell">
-    ${topBar('Send Money', false, '', 'wallet')}
+    ${topBar('Send Money', false, '', state.pay.origin === 'money' ? 'money' : 'wallet')}
     <div class="order-type-grid pay-tabs">
       <button class="order-type-btn${p.mode === 'story' ? ' active' : ''}" data-action="pay-mode" data-v="story">Lockedintool profile</button>
       <button class="order-type-btn${p.mode === 'bank' ? ' active' : ''}" data-action="pay-mode" data-v="bank">Anyone</button>
@@ -8327,7 +8424,7 @@ function receiveMoneyScreen(){
     ${mine ? `<button class="btn-wide" data-action="pay-recv-cancel" style="margin-top:8px;">Cancel</button>` : ''}`;
   return `
     <div class="page-shell">
-    ${topBar('Receive Money', false, '', 'wallet')}
+    ${topBar('Receive Money', false, '', state.pay.recvFrom === 'money' ? 'money' : 'wallet')}
     <div class="row-card" style="text-align:center;padding:18px 16px;">
       <div class="pay-recv-who">${escText(prof.username ? '@' + prof.username : (prof.name || 'Your Lockedintool profile'))}</div>
       <div class="note" style="margin-top:6px;">People on Lockedintool send you money by your ${prof.username ? '@username' : 'name'}.${prof.username ? '' : ' Add a @username in your profile so they can find you easily.'}</div>
@@ -9578,6 +9675,8 @@ function litRecentAttach(inp, key, run, anchor){
       if(r === 'go' && q){ close(); litRecentAdd(key, q); run(q); }
     });
     anchor.insertAdjacentElement('afterend', panel);
+    // The Dashboard: the list lies over the page, right under the bar (.story-screen > .lit-recent).
+    if(panel.parentElement && panel.parentElement.classList.contains('story-screen')) panel.style.setProperty('--lr-top', (anchor.offsetTop + anchor.offsetHeight + 6) + 'px');
     return true;
   };
   inp.addEventListener('pointerdown', e=>{
@@ -14323,10 +14422,10 @@ function station3BarHTML(){
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       </button>
       <button class="station3-btn s3-has-badge" data-action="station3-messages" title="Messages">${s3BadgeHTML('msgs')}
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-4.3-1.2L3 20l1.2-5.2A8.38 8.38 0 0 1 3 11.5 8.5 8.5 0 0 1 11.5 3a8.38 8.38 0 0 1 8.5 8.5Z"/></svg>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-4.3-1.2L3 20l1.2-5.2A8.38 8.38 0 0 1 3 11.5 8.5 8.5 0 0 1 11.5 3a8.38 8.38 0 0 1 8.5 8.5Z"/></svg><span class="s3-lbl">Messages</span>
       </button>
       <button class="station3-btn" data-action="station3-profile" title="Profile">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 4-6 8-6s8 2 8 6"/></svg>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 4-6 8-6s8 2 8 6"/></svg><span class="s3-lbl">Profile</span>
       </button>
     </div>
   `;
@@ -15343,6 +15442,8 @@ function renderDevice(){
   // underneath it gets torn down and rebuilt -- see currentScreenKey()/lastScreenKey above.
   const oldContentAreaForScroll = document.getElementById('content-area');
   const prevScrollTop = oldContentAreaForScroll ? oldContentAreaForScroll.scrollTop : 0;
+  const oldPayScroll = document.getElementById('pay-scroll');   // Money's Payments box keeps its place too
+  const prevPayTop = oldPayScroll ? oldPayScroll.scrollTop : 0;
   const newScreenKey = currentScreenKey();
   const sameScreenAsBefore = lastScreenKey !== null && newScreenKey === lastScreenKey;
   lastScreenKey = newScreenKey;
@@ -15357,6 +15458,8 @@ function renderDevice(){
   if(sameScreenAsBefore){
     const freshContentArea = document.getElementById('content-area');
     if(freshContentArea) freshContentArea.scrollTop = prevScrollTop;
+    const freshPay = document.getElementById('pay-scroll');
+    if(freshPay && prevPayTop){ freshPay.style.scrollBehavior = 'auto'; freshPay.scrollTop = prevPayTop; freshPay.style.scrollBehavior = ''; }
   }
   attachHandlers();
   setupCircleAndWheelDrag();
@@ -15615,18 +15718,30 @@ function initCanvas(canvasId, isOverlay){
 // over the pages (that greyed everything in the White theme). Until you move it, the slider shows the phone's own
 // brightness and STORY leaves it alone. Kept on the phone (story-brightness). The browser preview still uses the veil.
 const BRIGHT_NATIVE = (()=>{ try{ const j = JSON.parse(window.StoryNative && StoryNative.brightness ? (StoryNative.brightness() || '{}') : '{}'); return !!(j && j.v != null); }catch(e){ return false; } })();
+let brightLocalAt = 0;   // when you last moved the slider / picked a mode here
 (function(){
   if(!BRIGHT_NATIVE) return;
   let saved = null; try{ saved = JSON.parse(localStorage.getItem('story-brightness') || 'null'); }catch(e){}
   if(saved && saved.set){
     state.brightnessValue = Math.max(0, Math.min(100, +saved.v || 0)); state.brightnessMode = saved.mode === 'device' ? 'device' : 'system'; state.brightnessUserSet = true;
-    try{ StoryNative.setBrightness(state.brightnessMode, state.brightnessValue); }catch(e){}
+    // Device control is the phone's own setting: it's kept by the phone, so a reload only reads it (putting the old value
+    // back would undo what you set in the phone's panel). The Pages' own brightness is put back.
+    if(state.brightnessMode === 'device' && brightPhone().canWrite) brightFollowPhone();
+    else try{ StoryNative.setBrightness(state.brightnessMode, state.brightnessValue); }catch(e){}
   } else {
     try{ state.brightnessValue = JSON.parse(StoryNative.brightness()).v; }catch(e){}
   }
 })();
+function brightPhone(){ try{ return JSON.parse(StoryNative.brightness() || '{}') || {}; }catch(e){ return {}; } }
+// The slider follows the phone's brightness (changed in its own panel / by auto-brightness) whenever the Dashboard is
+// drawn - untouched, or in Device control - but never right after you moved it (the phone is still being set).
+function brightFollowPhone(){
+  if(!BRIGHT_NATIVE || Date.now() - brightLocalAt < 3000) return;
+  const j = brightPhone(); if(j.v == null) return;
+  if(!state.brightnessUserSet || (state.brightnessMode === 'device' && j.canWrite)) state.brightnessValue = Math.max(0, Math.min(100, +j.v || 0));
+}
 function brightnessUserSet(){
-  state.brightnessUserSet = true;
+  state.brightnessUserSet = true; brightLocalAt = Date.now();
   try{ localStorage.setItem('story-brightness', JSON.stringify({ set:true, v:state.brightnessValue, mode:state.brightnessMode })); }catch(e){}
   if(BRIGHT_NATIVE) try{ StoryNative.setBrightness(state.brightnessMode, state.brightnessValue); }catch(e){}
 }
@@ -15753,6 +15868,7 @@ function attachHandlers(){
       // Pressing Community (not coming back from one of its groups): the choose screen, or Your Community (owner).
       if(target === 'community' && state.current !== 'community-group' && state.current !== 'community') state.communityMode = cmStartMode();
       if(target === 'layouts-pagelayout') state.layoutRowEdit = null;   // Page layout opens on its list of rows
+      state.moneyTransferOpen = false;   // Money's Transfer Money pop-up (its Wallet Overview button) never stays open behind
       state.current = target;
       if(PAGES.includes(target)) state.lastPage = target;
       renderDevice();
@@ -16118,8 +16234,9 @@ function attachHandlers(){
     const store = state.moneyAllEdit === WALLET_NW_KEY ? WALLET_NW_KEY : MONEY_ALL_KEY;
     const k = el.getAttribute('data-moneyacct'), v = nwGet(store);
     let keys = Array.isArray(v.keys) ? v.keys.slice() : nwAccounts(store).map(a=>a.key);
+    if(Array.isArray(v.keys) && v.v !== 2) keys = keys.filter(x=>!x.startsWith('b:')).concat(nwAccounts(store).filter(a=>a.key.startsWith('b:')).map(a=>a.key));   // an old list: every bank account, as it showed
     keys = keys.includes(k) ? keys.filter(x=>x !== k) : keys.concat(k);
-    v.keys = keys; nwSave(store, v); renderDevice();
+    v.keys = keys; v.v = 2; nwSave(store, v); renderDevice();
   }));
   document.querySelectorAll('[data-moneyrange]').forEach(el=>el.addEventListener('click', ()=>{ setMoneyRange({ kind: el.getAttribute('data-moneyrange') }); state.calOpen = false; state.calSel = null; state.calView = null; renderDevice(); }));
   // The calendar: first tap = a day, second tap = the other end of the range, a third tap starts again.
@@ -16224,7 +16341,8 @@ function attachHandlers(){
   if(searchGoArrow){ searchGoArrow.addEventListener('click', searchStepGo); }
 
   const dashSearchInput = document.getElementById('dash-search-input');
-  if(dashSearchInput) litRecentAttach(dashSearchInput, 'web', q=>{ dashSearchInput.value = q; state.searchQuery = q; searchStepGo('dash-search-input'); }, dashSearchInput.closest('.search-row'));
+  // A recent search tapped = searched again at once (no 'Press Enter again' - you already chose it).
+  if(dashSearchInput) litRecentAttach(dashSearchInput, 'web', q=>{ dashSearchInput.value = q; state.searchQuery = q; state.pendingSearchQuery = q; searchStepGo('dash-search-input'); }, dashSearchInput.closest('.search-row'));
   if(dashSearchInput){
     dashSearchInput.style.height = 'auto';
     dashSearchInput.style.height = dashSearchInput.scrollHeight + 'px';
@@ -16273,6 +16391,7 @@ function attachHandlers(){
       const key = el.getAttribute('data-toggle');
       // The phone's real switch (owner: everything real): changed right away where Android allows it, else the phone's
       // own switch opens and Lockedintool comes back after (storyControlsChanged brings the real state).
+      if(CTL_NATIVE && key === 'flashlight' && state.hasTorch === false){ showToast('This phone has no flashlight'); return; }
       if(CTL_NATIVE){ try{ window.StoryNative.controlToggle(key); }catch(e){} return; }
       const field = CTL_FIELDS[key];
       if(field) state[field] = !state[field];
@@ -16290,30 +16409,38 @@ function attachHandlers(){
       renderDevice();
     });
   });
+  // Drag ☰ to reorder - with a finger (the phone's WebView never starts HTML drag-and-drop from a touch): the row
+  // follows the finger and drops in the place its middle is over.
   const ctlReorderList = document.querySelector('.ctl-reorder-list');
   if(ctlReorderList){
-    let dragId = null;
-    ctlReorderList.querySelectorAll('[data-dragid]').forEach(row=>{
-      row.addEventListener('dragstart', e=>{
-        dragId = row.getAttribute('data-dragid');
-        row.classList.add('dragging');
-        e.dataTransfer.effectAllowed = 'move';
-      });
-      row.addEventListener('dragend', ()=>{ row.classList.remove('dragging'); });
-      row.addEventListener('dragover', e=>{ e.preventDefault(); });
-      row.addEventListener('drop', e=>{
+    ctlReorderList.querySelectorAll('[data-dragid] .ctl-drag-handle').forEach(h=>{
+      h.addEventListener('pointerdown', e=>{
+        const row = h.closest('[data-dragid]'), id = row.getAttribute('data-dragid');
+        if(!state.myControls.includes(id)) return;
         e.preventDefault();
-        const targetId = row.getAttribute('data-dragid');
-        if(!dragId || dragId === targetId){ dragId = null; return; }
-        if(!state.myControls.includes(dragId) || !state.myControls.includes(targetId)){ dragId = null; return; }
-        const from = state.myControls.indexOf(dragId);
-        const to = state.myControls.indexOf(targetId);
-        const next = [...state.myControls];
-        next.splice(from, 1);
-        next.splice(to, 0, dragId);
-        state.myControls = next;
-        dragId = null;
-        renderDevice();
+        try{ h.setPointerCapture(e.pointerId); }catch(err){}
+        const rows = [...ctlReorderList.querySelectorAll('[data-dragid]')];
+        const mids = rows.map(r=>{ const b = r.getBoundingClientRect(); return b.top + b.height / 2; });
+        const me = rows.indexOf(row), y0 = e.clientY;
+        let to = me;
+        row.classList.add('dragging');
+        const move = ev=>{
+          if(ev.pointerId !== e.pointerId) return;
+          const dy = ev.clientY - y0, mid = mids[me] + dy;
+          row.style.transform = 'translateY(' + dy + 'px)';
+          to = mids.filter((m, i)=>i !== me && m < mid).length;
+        };
+        const end = ev=>{
+          if(ev.pointerId !== e.pointerId) return;
+          h.removeEventListener('pointermove', move); h.removeEventListener('pointerup', end); h.removeEventListener('pointercancel', end);
+          row.style.transform = ''; row.classList.remove('dragging');
+          if(ev.type !== 'pointerup' || to === me) return;
+          const next = rows.map(r=>r.getAttribute('data-dragid')).filter(x=>x !== id);
+          next.splice(to, 0, id);
+          state.myControls = next.concat(state.myControls.filter(x=>!next.includes(x)));
+          renderDevice();
+        };
+        h.addEventListener('pointermove', move); h.addEventListener('pointerup', end); h.addEventListener('pointercancel', end);
       });
     });
   }
@@ -17603,8 +17730,8 @@ function attachHandlers(){
           state.drawToolsPopoverOpen = false;
           break;
         }
-        case 'send-open': state.pay.origin = state.current === 'money' ? 'money' : 'wallet'; state.current = 'send-money'; state.pay.info = null; state.pay.loading = false; break;
-        case 'receive-open': state.current = 'receive-money'; state.pay.info = null; state.pay.loading = false; break;
+        case 'send-open': state.pay.origin = state.current === 'money' ? 'money' : 'wallet'; state.moneyTransferOpen = false; state.favoritesOpen = false; state.current = 'send-money'; state.pay.info = null; state.pay.loading = false; break;
+        case 'receive-open': state.pay.recvFrom = state.current === 'money' ? 'money' : 'wallet'; state.moneyTransferOpen = false; state.favoritesOpen = false; state.current = 'receive-money'; state.pay.info = null; state.pay.loading = false; break;
         case 'sub-buy': subBuy(el.getAttribute('data-plan')); break;
         case 'widgets-only': widgetsOnlyAsk(); break;
         case 'sec-mode': secModeSet(el.getAttribute('data-v')); break;
@@ -17739,7 +17866,11 @@ function attachHandlers(){
         case 'spend-limit-open': state.spendLimitOpen = true; break;
         case 'spend-limit-close': state.spendLimitOpen = false; break;
         case 'spend-limit-save': {
-          const v = parseFloat(((document.getElementById('spend-limit-input') || {}).value || '').replace(/[^0-9.]/g, ''));
+          // 'R1 000,50' (a comma before the cents, as South African keyboards give) = 1000.50; other commas / spaces group thousands.
+          let sv = ((document.getElementById('spend-limit-input') || {}).value || '').replace(/[^0-9.,]/g, '');
+          const ci = sv.lastIndexOf(',');
+          sv = /,\d{1,2}$/.test(sv) ? sv.slice(0, ci).replace(/[.,]/g, '') + '.' + sv.slice(ci + 1) : sv.replace(/,/g, '');
+          const v = parseFloat(sv);
           const cur = state.moneyCur || moneyMainCur();
           let all = {}; try{ all = JSON.parse(localStorage.getItem('story-spend-limit') || '{}') || {}; }catch(e){}
           if(v > 0) all[cur] = v; else delete all[cur];
@@ -20210,7 +20341,9 @@ document.addEventListener('pointercancel', endSwipe, true);
   const EDGE = 40; // px from the very top of the viewport (status-bar zone, above the header)
   document.addEventListener('pointerdown', (e)=>{
     n = null;
-    if(NATIVE) return; // the phone's own notification shade is the only one
+    // In the app too (owner: pull down on the Dashboard): the Pages sit under the phone's status bar, so a pull that
+    // starts on the page never takes the phone's own panel away - that one still comes from the status bar.
+    if(IN_STATION3_WINDOW) return;
     if(state.current !== 'dashboard') return;
     if(e.target.closest && e.target.closest('.swipe-confirm')) return;
     const scr = document.querySelector('.phone-screen, .laptop-screen');
