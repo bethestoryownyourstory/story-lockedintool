@@ -95,3 +95,4 @@ commits, pushed as a new update) - nothing else changes.
 | 87 | 2026-10-22 | Dashboard: Station 3 at the bottom now goes with the system theme (black in Black, white in White) instead of the opposite, and all its buttons - the + too - are the same size and evenly spaced | 812b46e |
 | 88 | 2026-10-22 | Dashboard: Station 3's + now sits exactly in the middle of the screen, with all the buttons still the same size and evenly spaced | 1262432 |
 | 89 | 2026-10-22 | Dashboard: Station 3's buttons no longer disappear while your phone is between the new screens and the app update - the band turns white (White theme) with black icons once the app update has installed | aa2a049 |
+| 90 | 2026-10-22 | The daily 'post a status' reminder is now just a notification - no more messages in Lockedintool's chat (the old ones are cleared). The red dot on Station 3 and the Messages number only count real messages from people | 24a3c96 |
