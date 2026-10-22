@@ -131,6 +131,7 @@ export class Hub {
     this.sql.exec(`CREATE TABLE IF NOT EXISTS subs (uid TEXT PRIMARY KEY, plan TEXT, until INTEGER, updated INTEGER)`);
     // The option a plan is bought under (owner): 'second' = Lockedintool as your second system, 'only' = your only system.
     try { this.sql.exec(`ALTER TABLE subs ADD COLUMN mode TEXT`); } catch (e) {}
+    try { this.sql.exec(`ALTER TABLE subs ADD COLUMN pscust TEXT`); } catch (e) {}   // Paystack customer (monthly renewals)
     try { this.sql.exec(`ALTER TABLE payments ADD COLUMN mode TEXT`); } catch (e) {}
     try { this.sql.exec(`ALTER TABLE payments ADD COLUMN payfrom TEXT`); } catch (e) {}   // which of your accounts you chose to pay from (Pay with)
     this.sql.exec(`CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT)`);
@@ -230,7 +231,9 @@ export class Hub {
         // Payments: can the server really sign in to Stitch? (just a sign-in - no payment is made)
         let pay = this.expressReady() ? 'keys' : 'no-keys';
         if (url.searchParams.get('pay') === '1' && this.expressReady()) { try { await this.expressToken(); pay = 'ok'; } catch (e) { pay = String(e.message || e).slice(0, 160); } }
-        return json({ ok: true, sms: !!(this.env.TWILIO_VERIFY_SID || this.env.TWILIO_FROM), mail: this.mailReady(), resetSms: this.smsLinkReady(), plans: this.subPlans(), pay, subs: this.subReady(), transfers: this.payReady(), live: this.liveReady(), turn: this.turnReady() });
+        let paystack = this.paystackReady() ? (this.env.PAYSTACK_SECRET_KEY.startsWith('sk_live_') ? 'live-keys' : 'test-keys') : 'no-keys';
+        if (url.searchParams.get('pay') === '1' && this.paystackReady()) { try { await this.paystack('GET', '/plan?perPage=1'); paystack += ' ok'; } catch (e) { paystack = String(e.message || e).slice(0, 160); } }
+        return json({ ok: true, paystack, sms: !!(this.env.TWILIO_VERIFY_SID || this.env.TWILIO_FROM), mail: this.mailReady(), resetSms: this.smsLinkReady(), plans: this.subPlans(), pay, subs: this.subReady(), transfers: this.payReady(), live: this.liveReady(), turn: this.turnReady() });
       }
       if (path === '/v1/pay/return') return new Response('<!doctype html><meta name=viewport content="width=device-width,initial-scale=1"><body style="margin:0;background:#000;color:#fff;font:600 18px system-ui;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center;padding:24px;box-sizing:border-box">Done - go back to Lockedintool to see your payment.</body>', { headers: { 'content-type': 'text/html; charset=utf-8' } });
       if (path === '/v1/bank/return') return this.bankReturn(url);
@@ -238,6 +241,7 @@ export class Hub {
       if (path === '/v1/login/salt') return this.loginSalt(url.searchParams.get('u') || '');
       if (path === '/v1/reset') return this.resetPage(req, url);
       if (path === '/v1/reset/options') return this.resetOptions(url.searchParams.get('u') || '', req.headers.get('cf-connecting-ip') || '');
+      if (path === '/v1/paystack/hook' && req.method === 'POST') return this.paystackHook(await req.text(), req.headers.get('x-paystack-signature') || '');
       const body = req.method === 'POST' ? await req.json().catch(() => ({})) : {};
       if (path === '/v1/problems' && req.method === 'POST') return this.problemsIn(body, req.headers.get('cf-connecting-ip') || '');
       if (path === '/v1/problems/list') return this.problemsList(body, url);
@@ -1195,7 +1199,8 @@ export class Hub {
   subPlans() {
     return { basic: { usd: 5, zar: Number(this.env.SUB_BASIC_ZAR || 95) }, premium: { usd: 15, zar: Number(this.env.SUB_PREMIUM_ZAR || 285) } };
   }
-  subReady() { return this.expressReady(); }
+  // Paystack (owner, Oct 2026: Stitch wasn't answering) when its key is in - else Stitch Express, as before.
+  subReady() { return this.paystackReady() || this.expressReady(); }
   // Calls cost Lockedintool (owner: 'they won't be available on free plan'): Lockedintool calls (voice, video, group)
   // need Basic or Premium - only once subscriptions are switched on (SUB_ENFORCE + payments connected), never the
   // official accounts. Phone calls from the dial pad are the phone's own and aren't touched.
@@ -1237,21 +1242,102 @@ export class Hub {
     if (!this.exBackDone) { try { await this.express('POST', '/api/v1/redirect-urls', { redirectUrl: back }); } catch (e) {} this.exBackDone = true; }
     return back;
   }
-  // A plan payment's state at Stitch; paid = 30 days of that plan (same plan adds on, a different plan starts now).
+  // ---- Paystack (owner, Oct 2026: 'Stitch is not coming back to me' - Paystack merchant account; key PAYSTACK_SECRET_KEY,
+  //      test key first, then the live one). A plan is a REAL Paystack subscription: Basic / Premium monthly plans in
+  //      rand made once per price (kept in meta), the first payment on Paystack's own page (card, Capitec Pay, EFT...)
+  //      and then Paystack charges it every month by itself; each successful charge = 30 more days. Renewals reach the
+  //      server through Paystack's notifications (/v1/paystack/hook, signed with the key) and, as a fallback, are read
+  //      from Paystack when a member's plan is about to run out. Amounts in cents. ----
+  paystackReady() { return !!this.env.PAYSTACK_SECRET_KEY; }
+  async paystack(method, path, body) {
+    const r = await fetch((this.env.PAYSTACK_BASE || 'https://api.paystack.co') + path, { method,
+      headers: { 'content-type': 'application/json', authorization: 'Bearer ' + this.env.PAYSTACK_SECRET_KEY }, body: body ? JSON.stringify(body) : undefined });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || j.status === false) throw new Error('paystack: ' + (j.message || r.status));
+    return j.data;
+  }
+  async paystackPlan(plan, cents) {
+    const k = 'psplan:' + (this.env.PAYSTACK_SECRET_KEY.startsWith('sk_live_') ? 'live' : 'test') + ':' + plan + ':' + cents;
+    const have = this.one('SELECT v FROM meta WHERE k = ?', k);
+    if (have) return have.v;
+    const d = await this.paystack('POST', '/plan', { name: 'LOCKED IN TOOL ' + (plan === 'premium' ? 'Premium' : 'Basic'), interval: 'monthly', amount: cents, currency: 'ZAR' });
+    if (!d || !d.plan_code) throw new Error('paystack: no plan');
+    this.sql.exec('INSERT OR REPLACE INTO meta (k, v) VALUES (?, ?)', k, d.plan_code);
+    return d.plan_code;
+  }
+  // 30 more days of a plan (same plan adds on, a different plan starts now).
+  subCredit(uid, plan, mode, now, cust) {
+    const cur = this.one('SELECT * FROM subs WHERE uid = ?', uid);
+    const from = cur && cur.plan === plan && cur.until > now ? cur.until : now;
+    this.sql.exec('INSERT OR REPLACE INTO subs (uid, plan, until, updated, mode, pscust) VALUES (?, ?, ?, ?, ?, ?)', uid, plan, from + 30 * 86400000, now,
+      mode === 'only' ? 'only' : (mode === 'second' ? 'second' : ((cur && cur.mode) || 'second')), cust || (cur && cur.pscust) || null);
+  }
+  // A successful Paystack charge: the first payment of a plan (our reference) or a monthly renewal (Paystack's own).
+  paystackCharged(d, now) {
+    if (!d || d.status !== 'success') return;
+    const ref = String(d.reference || ''), cust = d.customer && d.customer.customer_code ? String(d.customer.customer_code) : null;
+    if (!ref || this.one('SELECT id FROM payments WHERE stitch = ? AND status = ?', 'ps:' + ref, 'paid')) return;   // counted already
+    const p = this.one("SELECT * FROM payments WHERE id = ? AND kind LIKE 'sub:%'", ref);
+    if (p) {   // the first payment (a cancelled one that was paid anyway still counts)
+      this.sql.exec('UPDATE payments SET status = ?, updated = ? WHERE id = ?', 'paid', now, p.id);
+      this.subCredit(p.uid, p.kind.slice(4), p.mode, now, cust);
+      return;
+    }
+    // A renewal: whose plan it is (Paystack customer, else the first payment's details) and which plan.
+    const md = d.metadata && typeof d.metadata === 'object' ? d.metadata : {};
+    const row = cust ? this.one('SELECT * FROM subs WHERE pscust = ?', cust) : null;
+    const uid = (row && row.uid) || (md.uid && this.one('SELECT id FROM users WHERE id = ?', String(md.uid)) ? String(md.uid) : null);
+    const code = d.plan && typeof d.plan === 'object' ? d.plan.plan_code : (typeof d.plan === 'string' ? d.plan : '');
+    const pk = code ? this.one("SELECT k FROM meta WHERE v = ? AND k LIKE 'psplan:%'", code) : null;
+    const plan = pk ? pk.k.split(':')[2] : (row ? row.plan : null);
+    if (!uid || !plan || !this.subPlans()[plan]) return;
+    const id = 'p' + rand(9), cents = Number(d.amount) || 0;
+    this.sql.exec('INSERT INTO payments (id, uid, to_uid, to_name, to_bank, to_mask, cents, ref, stitch, status, created, updated, kind, mode) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      id, uid, 'LOCKED IN TOOL ' + plan, '', '', cents, 'LIT ' + plan.toUpperCase(), 'ps:' + ref, 'paid', now, now, 'sub:' + plan, (row && row.mode) || 'second');
+    this.subCredit(uid, plan, null, now, cust);
+  }
+  // Paystack's notifications: signed with the secret key (HMAC SHA-512 of the body) - anything else is ignored.
+  async paystackHook(raw, sig) {
+    if (!this.paystackReady()) return new Response('no', { status: 404 });
+    const key = await crypto.subtle.importKey('raw', enc.encode(this.env.PAYSTACK_SECRET_KEY), { name: 'HMAC', hash: 'SHA-512' }, false, ['sign']);
+    const mac = [...new Uint8Array(await crypto.subtle.sign('HMAC', key, enc.encode(raw)))].map(x => x.toString(16).padStart(2, '0')).join('');
+    if (!sig || mac !== sig.toLowerCase()) return new Response('bad signature', { status: 401 });
+    let ev = {}; try { ev = JSON.parse(raw); } catch (e) {}
+    if (ev.event === 'charge.success') this.paystackCharged(ev.data, Date.now());
+    return new Response('ok');
+  }
+  // Fallback for renewals (no notification reached us): a plan that's about to run out is checked at Paystack.
+  async paystackRenewals(me) {
+    const r = this.one('SELECT * FROM subs WHERE uid = ?', me.id), now = Date.now();
+    if (!this.paystackReady() || !r || !r.pscust || r.until > now + 86400000 || (this.psLook || {})[me.id] > now - 3600000) return;
+    (this.psLook = this.psLook || {})[me.id] = now;
+    try {
+      const c = await this.paystack('GET', '/customer/' + encodeURIComponent(r.pscust));
+      for (const t of await this.paystack('GET', '/transaction?status=success&perPage=10&customer=' + encodeURIComponent(c.id)) || []) this.paystackCharged(t, now);
+    } catch (e) {}
+  }
+
+  // A plan payment's state (Paystack or Stitch); paid = 30 days of that plan (same plan adds on, a different plan starts now).
   async subCheck(me, p) {
-    if (p.status !== 'pending' || !this.expressReady()) return p.status;
+    if (p.status !== 'pending') return p.status;
     const now = Date.now();
+    if (String(p.stitch || '').startsWith('ps:')) {
+      if (!this.paystackReady()) return p.status;
+      const d = await this.paystack('GET', '/transaction/verify/' + encodeURIComponent(p.id));
+      if (d && d.status === 'success') { this.paystackCharged(d, now); p.status = 'paid'; }
+      else if (d && (d.status === 'failed' || d.status === 'reversed' || now - p.created > 86400000)) {
+        this.sql.exec('UPDATE payments SET status = ?, updated = ? WHERE id = ?', 'expired', now, p.id); p.status = 'expired';
+      }
+      return p.status;
+    }
+    if (!this.expressReady()) return p.status;
     const d = await this.express('GET', '/api/v1/payment-links/' + encodeURIComponent(p.stitch));
     const ls = (d.payment && d.payment.status) || 'PENDING';
     const st = ls === 'PAID' ? 'paid' : ls === 'CANCELLED' ? 'cancelled' : ls === 'EXPIRED' || ls === 'FAILED' ? 'expired' : 'pending';
     if (st !== 'pending') {
       this.sql.exec('UPDATE payments SET status = ?, updated = ? WHERE id = ?', st, now, p.id);
       p.status = st;
-      if (st === 'paid') {
-        const plan = p.kind.slice(4), cur = this.one('SELECT * FROM subs WHERE uid = ?', me.id);
-        const from = cur && cur.plan === plan && cur.until > now ? cur.until : now;
-        this.sql.exec('INSERT OR REPLACE INTO subs (uid, plan, until, updated, mode) VALUES (?, ?, ?, ?, ?)', me.id, plan, from + 30 * 86400000, now, p.mode === 'only' ? 'only' : 'second');
-      }
+      if (st === 'paid') this.subCredit(me.id, p.kind.slice(4), p.mode, now, null);
     }
     return p.status;
   }
@@ -1259,7 +1345,10 @@ export class Hub {
   // If Stitch says it's already paid / going through, the real state is read instead (paid still counts).
   async subCancel(me, p) {
     if (p.status !== 'pending') return p.status;
-    if (this.expressReady()) {
+    if (String(p.stitch || '').startsWith('ps:')) {   // Paystack: a page can't be cancelled - paid already counts, else it's off here
+      try { await this.subCheck(me, p); } catch (e) {}
+      if (p.status !== 'pending') return p.status;
+    } else if (this.expressReady()) {
       try { await this.express('POST', '/api/v1/payment-links/' + encodeURIComponent(p.stitch) + '/cancel'); }
       catch (e) { try { await this.subCheck(me, p); } catch (e2) {} return p.status; }
     }
@@ -1269,7 +1358,7 @@ export class Hub {
   }
   async sub(me, op, b, url) {
     const now = Date.now();
-    if (op === 'info') return json(this.subView(me));
+    if (op === 'info') { await this.paystackRenewals(me); return json(this.subView(me)); }
     if (op === 'buy') {
       const plans = this.subPlans(), plan = String(b.plan || '');
       if (!plans[plan]) return json({ error: 'plan' }, 400);
@@ -1277,7 +1366,18 @@ export class Hub {
       // Changed your mind before paying (owner): any plan you started but didn't pay is cancelled at Stitch first,
       // so only the newest one can be paid. One that was already paid still counts (subCheck credits it).
       for (const old of this.sql.exec("SELECT * FROM payments WHERE uid = ? AND kind LIKE 'sub:%' AND status = 'pending'", me.id).toArray()) await this.subCancel(me, old);
-      const cents = Math.round(plans[plan].zar * 100), id = 'p' + rand(9);
+      const cents = Math.round(plans[plan].zar * 100), id = 'p' + rand(9).replace(/_/g, '-');   // (Paystack references: letters, digits, - . = only)
+      if (this.paystackReady()) {
+        // Paystack sends the receipt (and each month's) to an email you give when you buy - it isn't kept by Lockedintool.
+        const email = String(b.email || '').trim().toLowerCase();
+        if (!/^[^\s@]{1,64}@[^\s@]+\.[a-z]{2,}$/i.test(email) || email.length > 120) return json({ error: 'email' }, 400);
+        const d = await this.paystack('POST', '/transaction/initialize', { email, amount: cents, currency: 'ZAR', plan: await this.paystackPlan(plan, cents),
+          reference: id, callback_url: this.env.PAYSTACK_REDIRECT || (url.origin + '/v1/pay/return'), metadata: { uid: me.id, plan, mode: b.mode === 'only' ? 'only' : 'second' } });
+        if (!d || !d.authorization_url) throw new Error('paystack: no payment page');
+        this.sql.exec('INSERT INTO payments (id, uid, to_uid, to_name, to_bank, to_mask, cents, ref, stitch, status, created, updated, kind, mode) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          id, me.id, 'LOCKED IN TOOL ' + plan, '', '', cents, 'LIT ' + plan.toUpperCase(), 'ps:' + id, 'pending', now, now, 'sub:' + plan, b.mode === 'only' ? 'only' : 'second');
+        return json({ id, url: d.authorization_url });
+      }
       const who = String(me.name || (me.username ? '@' + me.username : '') || 'LOCKED IN member').replace(/[^\p{L}\p{N} .@'_-]/gu, '').trim();
       const d = await this.express('POST', '/api/v1/payment-links', {
         amount: cents, payerName: (who.length >= 3 ? who : 'LOCKED IN member').slice(0, 40),

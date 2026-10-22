@@ -3611,6 +3611,7 @@
   .lit-sheet button.lit-del-r::after, #story-profile .lit-sheet button.lit-del-r::after{ content:''; width:16px; height:16px; border-radius:50%; border:2px solid #8b8b92; box-sizing:border-box; }
   .lit-sheet button.lit-del-r.on::after, #story-profile .lit-sheet button.lit-del-r.on::after{ border-color:#ffffff; background:radial-gradient(circle, #ffffff 0 3.5px, transparent 4px); }
   .lit-sheet button.lit-del-next[disabled], #story-profile .lit-sheet button.lit-del-next[disabled]{ opacity:0.4; }
+  .lit-sheet-in, #story-profile .lit-sheet-in{ display:block; width:100%; box-sizing:border-box; margin:4px 0 10px; padding:11px 12px; border-radius:12px; border:1px solid #333333; background:transparent; color:#ffffff; font:inherit; font-size:14px; outline:none; }
   .lit-del-note, #story-profile .lit-del-note{ width:100%; box-sizing:border-box; margin:8px 0 4px; min-height:70px; padding:10px 12px; border-radius:12px; border:1px solid #333333; background:transparent; color:#ffffff; font:inherit; font-size:14px; resize:none; outline:none; }
   .lit-del-list, #story-profile .lit-del-list{ margin:0 4px 10px; padding-left:18px; font-size:13px; line-height:1.6; color:#ffffff; }
   #story-profile .cm-link{ display:block; margin-top:8px; padding:7px 12px; border-radius:14px; border:1px solid currentColor; background:transparent; color:inherit; font:inherit; font-size:12px; font-weight:700; }
@@ -8697,6 +8698,19 @@ function subPoll(){
     else subPollT = setTimeout(subPoll, 3000);
   }).catch(()=>{ subPollT = setTimeout(subPoll, 5000); });
 }
+// Paystack (the plans' payment partner) sends your receipt - and each month's - to an email you give the first time you
+// buy; it's kept on this phone (story-pay-email) and only goes to Paystack with a payment.
+function subPayEmail(){ try{ return localStorage.getItem('story-pay-email') || ''; }catch(e){ return ''; } }
+function subAskEmail(plan, again){
+  litSheet({ title: 'Email for your receipt', text: (again ? 'That email doesn’t look right. ' : '') + 'Paystack sends your receipt - and each month’s - to this email. It’s only used for your payments.',
+    input: { type:'email', placeholder:'you@example.com', value: subPayEmail(), autocomplete:'email' },
+    items: [{ label:'Continue to payment', fn: f=>{
+      const v = String((f && f.value) || '').trim().toLowerCase();
+      if(!/^[^\s@]{1,64}@[^\s@]+\.[a-z]{2,}$/.test(v)){ subAskEmail(plan, true); return; }
+      try{ localStorage.setItem('story-pay-email', v); }catch(e){}
+      subBuy(plan);
+    } }] });
+}
 function subBuy(plan){
   const s = subState() || {};
   if(!subMode()){ showToast('Choose Second system or Only system first'); return; }   // owner: no plan without an option
@@ -8705,11 +8719,12 @@ function subBuy(plan){
   const p = SUB_PLANS.find(x=>x.key === plan), pr = (s.plans || {})[plan] || {};
   state.sub.busy = true; state.sub.msg = '';
   const mode = subMode();
-  msgApi('/v1/sub/buy', { plan, mode }).then(r=>{
+  msgApi('/v1/sub/buy', { plan, mode, email: subPayEmail() }).then(r=>{
     state.sub.busy = false;
     state.sub.waiting = { id:r.id, url:r.url, plan, mode, name:p.name, usd:pr.usd, zar:pr.zar, status:'pending', started:Date.now() };
     payOpenBank(r.url); renderDevice(); subPollT = setTimeout(subPoll, 4000);
-  }).catch(e=>{ state.sub.busy = false; state.sub.msg = e.code === 'not-connected' ? 'Subscriptions open once LOCKED IN TOOL’s payments are set up.' : 'Couldn’t start the payment - try again.'; renderDevice(); });
+  }).catch(e=>{ state.sub.busy = false; if(e.code === 'email'){ renderDevice(); subAskEmail(plan, !!subPayEmail()); return; }
+    state.sub.msg = e.code === 'not-connected' ? 'Subscriptions open once LOCKED IN TOOL’s payments are set up.' : 'Couldn’t start the payment - try again.'; renderDevice(); });
 }
 // Changed your mind before paying (owner: a customer must be able to go back and pick the other plan): the plan you
 // started is cancelled at Stitch (its link can't be paid any more) and you choose again. Choosing the other plan while
@@ -9124,7 +9139,7 @@ function litAccountGone(why){
 }
 function delAccountForget(){
   ['story-msg-account', 'story-msg-peers', MSG_KEY, MSG_OUTBOX, 'story-profile', 'story-profile-stats', PF_LOCKS_KEY, 'story-posts', 'story-highlights', 'story-upost-queue',
-   'story-status-seen', 'story-status-remind', 'story-activity', 'story-calls', 'story-privacy', 'story-blocked', 'story-community', 'story-community-chats', 'story-community-always-mine', 'story-sub', 'story-photo-up', 'story-recovery', 'story-auth-locked', 'story-glive', 'story-recent-messages', 'story-recent-updates', 'story-recent-calls', 'story-recent-web', 'story-recent-groups', 'story-country', 'story-bank']
+   'story-status-seen', 'story-status-remind', 'story-activity', 'story-calls', 'story-privacy', 'story-blocked', 'story-community', 'story-community-chats', 'story-community-always-mine', 'story-sub', 'story-photo-up', 'story-recovery', 'story-auth-locked', 'story-glive', 'story-recent-messages', 'story-recent-updates', 'story-recent-calls', 'story-recent-web', 'story-recent-groups', 'story-country', 'story-bank', 'story-pay-email']
     .forEach(k=>{ try{ localStorage.removeItem(k); }catch(e){} });
   msgChatsCache = null;
   if(NATIVE && window.StoryNative.removeProfilePhoto) try{ window.StoryNative.removeProfilePhoto(); }catch(e){}
@@ -9185,7 +9200,7 @@ function privacySettingsHTML(){
 // ---- Privacy Policy + Terms of Service (owner, under Information). Written from how Lockedintool really works; the
 //      owner's details: Lockedintool, lockedintool@gmail.com, no refunds (except where the law requires). Also reachable from the
 //      Subscription page (must be readable by someone without a plan, before they agree to it).
-const LEGAL_UPDATED = '17 October 2026';
+const LEGAL_UPDATED = '22 October 2026';
 const LEGAL = {
   'legal-privacy': { title:'Privacy Policy', sections:[
     ['Who we are', [
@@ -9213,7 +9228,8 @@ const LEGAL = {
       'Private details: the email and / or phone number you add in Edit profile (checked with a code first). They are never shown to anyone and never used to find you - only to send you a password reset link or a Delete account confirmation.',
       'Your internet address (IP) for a short time to stop abuse such as mass sign-ups.' ]],
     ['Who we share with', [
-      'Stitch (our payment partner, a licensed South African payment provider) when you pay a plan or send money - you pay on Stitch’s or your bank’s own page; we never see your card or banking login.',
+      'Paystack (our payment partner for plans, a licensed payment provider) when you pay a plan: the email you give for your receipt, your plan and the amount - you pay on Paystack’s own page; we never see your card or banking login.',
+      'Stitch (a licensed South African payment provider) when you send money or connect your bank - you approve it on Stitch’s or your bank’s own page; we never see your banking login.',
       'Your brokers and exchanges: Lockedintool talks to them straight from your phone with the keys you added.',
       'TradingView: the chart is TradingView’s own website inside Lockedintool; signing in to TradingView is between you and TradingView.',
       'binlist.net: only the first 8 digits of a card you add, to show its bank’s name.',
@@ -9252,7 +9268,7 @@ const LEGAL = {
     ['Subscription', [
       'Without a plan you can use the Dashboard for free. Basic adds the Money, Wallet and Focus pages and Lockedintool calls (voice, video and group calls); Premium adds everything else (more pages and rows). Calls aren’t part of the free plan - phone calls from the dial pad are your phone’s own and always work.',
       'Basic is $5 a month and Premium $15 a month. Changes to prices will be announced before they apply. Plans are charged in rand (shown before you pay - currently R95 and R285). One payment gives 30 days of your plan; paying the same plan again adds 30 days.',
-      'Plans do not renew by themselves yet - you pay each month. Payments are made through Stitch and approved by you on your own bank’s or card’s page.',
+      'Plans are paid through Paystack (a licensed payment provider) on Paystack’s own page - card, Capitec Pay or EFT. A plan renews by itself every month: Paystack charges the same card or account each month until you cancel, and every payment gives 30 more days. You can cancel the renewal any time with the link in Paystack’s email; your plan then runs to the end of the days already paid.',
       'Before you pay you can cancel or switch plans at any time. Once a payment is made it is not refundable, except where South African law requires a refund.',
       'We may change prices or what a plan includes; you will be told in the app before it affects you.' ]],
     ['Lockedintool as your system', [
@@ -9271,7 +9287,7 @@ const LEGAL = {
       'You can block anyone (they can’t message or call you, see your profile or statuses, or find you - and aren’t told) and report profiles, chats, statuses, posts, comments and groups. Lockedintool reviews every report; nobody - not the person reported and not Lockedintool’s review - sees who reported. The person gets an automatic warning saying how many reports came in about what, and if Lockedintool removes something they’re told why. Reporting a chat sends us the last messages that person sent you, so we can see what happened - nothing else from your chats is ever readable by us.',
       'The dial pad places normal phone calls through your mobile network; your network’s charges apply. For emergencies, use your phone’s own dialer if anything doesn’t work.' ]],
     ['Other services', [
-      'Your brokers, TradingView, Stitch, your bank and other apps you open from Lockedintool have their own terms, which apply when you use them.' ]],
+      'Your brokers, TradingView, Paystack, Stitch, your bank and other apps you open from Lockedintool have their own terms, which apply when you use them.' ]],
     ['The app', [
       'Lockedintool, its name, logo and design belong to Lockedintool. Don’t copy, resell or reverse-engineer the app or misuse our servers.',
       'We work to keep Lockedintool running, but it is provided as it is and may sometimes be unavailable, change or have mistakes. ' ]],
@@ -18622,14 +18638,17 @@ function litSheet(o){
   const bg = document.createElement('div'); bg.className = 'lit-sheet-bg';
   const box = document.createElement('div'); box.className = 'lit-sheet';
   box.innerHTML = (o.title ? '<div class="lit-sheet-t">' + escText(o.title) + '</div>' : '') + (o.text ? '<div class="lit-sheet-d">' + escText(o.text) + '</div>' : '');
+  let field = null;
+  if(o.input){ field = document.createElement('input'); field.className = 'lit-sheet-in'; field.type = o.input.type || 'text'; field.placeholder = o.input.placeholder || ''; field.value = o.input.value || ''; field.autocomplete = o.input.autocomplete || 'off'; box.appendChild(field); }
   let closed = false;
   const close = ()=>{ if(closed) return; closed = true; bg.remove(); if(o.onClose) o.onClose(); };
   (o.items || []).forEach(it=>{ const b = document.createElement('button'); b.textContent = it.label; if(it.danger) b.className = 'danger';
-    b.addEventListener('click', e=>{ e.stopPropagation(); if(it.keep){ it.fn(b); return; } closed = true; bg.remove(); it.fn(); }); box.appendChild(b); });
+    b.addEventListener('click', e=>{ e.stopPropagation(); if(it.keep){ it.fn(b, field); return; } closed = true; bg.remove(); it.fn(field); }); box.appendChild(b); });
   const c = document.createElement('button'); c.className = 'cancel'; c.textContent = 'Cancel'; c.addEventListener('click', e=>{ e.stopPropagation(); close(); }); box.appendChild(c);
   box.addEventListener('click', e=>e.stopPropagation()); bg.addEventListener('click', close);
   // Profile's window shows nothing outside #story-profile, so the sheet goes inside it there.
   bg.appendChild(box); (document.getElementById('story-profile') || document.body).appendChild(bg);
+  if(field) setTimeout(()=>{ try{ field.focus(); }catch(e){} }, 60);
   return close;
 }
 const LIT_REASONS = [['spam', 'Spam'], ['scam', 'Scam or fraud'], ['abuse', 'Bullying or harassment'], ['hate', 'Hate speech'], ['violence', 'Violence or threats'], ['nudity', 'Nudity or sexual content'], ['other', 'Something else']];
