@@ -28,14 +28,16 @@ object MoneyLog {
     private val SMS = setOf("com.google.android.apps.messaging", "com.samsung.android.messaging", "com.android.mms", "com.android.messaging",
         "com.huawei.message", "com.hihonor.mms", "com.oneplus.mms", "com.coloros.mms", "com.transsion.message", "com.android.mms.service")
 
-    private const val NUM = "([0-9]{1,3}(?:[ ,][0-9]{3})+(?:\\.[0-9]{1,2})?|[0-9]+(?:\\.[0-9]{1,2})?)"
+    // Cents after a point or a comma (South African banks write 'R1 286,95' too).
+    private const val NUM = "([0-9]{1,3}(?:[ ,][0-9]{3})+(?:[.,][0-9]{1,2})?|[0-9]+(?:[.,][0-9]{1,2})?)"
     private const val CUR = "(ZAR|USD|US\\$|EUR|GBP|NGN|KES|KSh|INR|R|\\$|€|£|₦|₹)"
-    private val AMOUNT = Regex("(?<![A-Za-z0-9])([+-]?)\\s?$CUR\\s?$NUM(?![0-9])")
+    // The sign before or after the currency ('-R150.00' or Absa's 'R-150.00').
+    private val AMOUNT = Regex("(?<![A-Za-z0-9])([+-]?)\\s?$CUR\\s?([+-]?)\\s?$NUM(?![0-9])")
     private val BAL = Regex("(?i)(avail(?:able)?\\.?\\s*(?:bal(?:ance)?\\.?)?|(?:new\\s+|acc(?:ount)?\\s+)?bal(?:ance)?\\.?)\\s*(?:is|of|:)?\\s*$CUR\\s?$NUM", RegexOption.IGNORE_CASE)
     private val CARD = Regex("(?i)(?:card|acc(?:ount)?|a/c|visa|mastercard|amex|cheque|savings)\\s*(?:no\\.?|number|ending(?:\\s+in)?|ending)?\\s*[x*.•]*\\s*(\\d{4})\\b")
     private val WHO = Regex("(?:\\b(?:[Aa]t|[Tt]o|[Ff]rom|[Bb]y)|@)\\s+([A-Z0-9@][A-Za-z0-9&'@*\\-]*(?:\\.[A-Za-z0-9]+)*(?:\\s[A-Z0-9][A-Za-z0-9&'\\-]*(?:\\.[A-Za-z0-9]+)*){0,3})")
     private val IN_WORDS = Regex("(?i)\\b(received|receive|deposit(?:ed)?|credited|credit of|paid you|sent you|incoming|refund(?:ed)?|payment from|salary|cash ?back|transfer(?:red)? in|money in|inward)\\b")
-    private val OUT_WORDS = Regex("(?i)\\b(purchase[ds]?|paid|spent|debit(?:ed)?|withdraw(?:al|n)?|payment (?:of|to|made)|you sent|sent to|card (?:used|transaction|payment)|used (?:for|at)|pos|transfer(?:red)? to|deducted|charged|debit order|money out|bought)\\b")
+    private val OUT_WORDS = Regex("(?i)\\b(purchase[ds]?|paid|spent|debit(?:ed)?|withdraw(?:al|n)?|payment (?:of|to|made)|you sent|sent to|card (?:used|transaction|payment)|used (?:for|at)|pos|transfer(?:red)? to|deducted|charged|debit order|money out|bought|pur|purch|pmt)\\b")
     private val OWN = Regex("(?i)\\b(account|acc|acct|a/c|cheque|savings|current|transmission|credit card|debit card|card|wallet)\\b")
     private val JUNK = Regex("(?i)\\b(otp|one[- ]time (?:pin|password)|verification code|% ?off|discount|promo|voucher code|win |stand a chance|offer ends|sale ends|limited time)\\b")
 
@@ -67,7 +69,12 @@ object MoneyLog {
         "R", "ZAR" -> "ZAR"; "$", "USD", "US$" -> "USD"; "€", "EUR" -> "EUR"; "£", "GBP" -> "GBP"
         "₦", "NGN" -> "NGN"; "KES", "KSh" -> "KES"; "₹", "INR" -> "INR"; else -> s
     }
-    private fun num(s: String): Double? = s.replace(" ", "").replace(",", "").toDoubleOrNull()
+    // A comma before the last 1-2 digits is the decimal point ('1 286,95'); any other comma / space groups thousands.
+    private fun num(s: String): Double? {
+        val t = s.replace(" ", "")
+        val dec = Regex(",([0-9]{1,2})$").find(t) ?: return t.replace(",", "").toDoubleOrNull()
+        return (t.substring(0, dec.range.first).replace(",", "").replace(".", "") + "." + dec.groupValues[1]).toDoubleOrNull()
+    }
 
     /** Reads one notification; true if it was a payment and got kept. */
     fun handle(c: Context, sbn: StatusBarNotification): Boolean {
@@ -115,9 +122,9 @@ object MoneyLog {
         val bal = BAL.find(text)
         val amounts = AMOUNT.findAll(text).filter { m -> bal == null || m.range.first < bal.range.first || m.range.first > bal.range.last }.toList()
         val m = amounts.firstOrNull() ?: return null
-        val value = num(m.groupValues[3]) ?: return null
+        val value = num(m.groupValues[4]) ?: return null
         if (value <= 0.0) return null
-        val sign = m.groupValues[1]
+        val sign = m.groupValues[1].ifEmpty { m.groupValues[3] }
         val inAt = IN_WORDS.find(text)?.range?.first ?: Int.MAX_VALUE
         val outAt = OUT_WORDS.find(text)?.range?.first ?: Int.MAX_VALUE
         val isIn = when {

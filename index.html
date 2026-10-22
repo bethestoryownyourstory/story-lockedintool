@@ -1547,6 +1547,8 @@
   .edit-remove.edit-add{ color:var(--green); }
   .phone-screen:has(.modal-overlay) .money-transfer-fab-wrap{ visibility:hidden; }
   .page-edit-sheet{ padding-bottom:56px !important; }   /* clear of Station 3's corner */
+  html.native:not(.s3-dash-on) .confirm-sheet{ padding-bottom:52px; }   /* every sheet's bottom buttons clear Station 3's corner button */
+  .phone-screen:has(.modal-overlay, .notes-popover-overlay) .scroll-hint{ display:none; }
   .edit-remove{ font:inherit; font-size:12px; font-weight:700; color:var(--red); background:transparent; border:1px solid var(--line); border-radius:999px; padding:5px 12px; cursor:pointer; flex:none; }
   .paycard-dots .dot{ width:6px; height:6px; border-radius:50%; background:var(--card-2); cursor:pointer; }
   .paycard-dots .dot.active{ background:#e8e6e1; }
@@ -2236,6 +2238,7 @@
     .community-post-image-wrap, .realcard-addslide){
     background:#000 !important; outline:1px solid rgba(255,255,255,0.1); outline-offset:-1px;
   }
+  html.focus .order-corner-btn.money-all-on{ background:#e8e6e1 !important; color:#0a0a0a; }   /* Net worth on: filled (owner) */
   html.focus .phone-screen::before, html.focus .phone-screen::after{ display:none !important; }
   /* Crisp text: no glow or blur around any letters or numbers. */
   html.focus .phone-screen *:not(.community-trend-name2){ text-shadow:none !important; }
@@ -2255,6 +2258,7 @@
   html.focus :is(.wfab, .btn-buy, .btn-sell, .swipe-confirm, .money-transfer-fab, .btn-row-action, .mt5-corner-btn, .dash-back, .layouts-btn, .arrow-btn){
     box-shadow:inset 0 1px 0 rgba(255,255,255,0.06), 0 6px 18px rgba(0,0,0,0.35) !important;
   }
+  html.focus .notif-scroll .notif-card{ box-shadow:inset 0 1px 0 rgba(255,255,255,0.035), 0 3px 6px -3px rgba(0,0,0,0.35) !important; }
   html.focus .row{ border-bottom-color:rgba(255,255,255,0.045); }
   html.focus .row-name{ font-weight:500; color:#dcdbd6; }
   html.focus .row-sub, html.focus .notif-time{ color:#5f5f66; }
@@ -3045,8 +3049,8 @@
     opacity:1; transform:scale(1.5);
     transition:transform 0.18s ease-out, opacity 0.08s ease-out;
   }
-  .mtf-arrow{
-    position:absolute; right:-3px; bottom:-3px; width:18px; height:18px; border-radius:50%;
+  .mtf-arrow{   /* beside the button in its wrap (not inside it - the button clips), taps go through to the button */
+    position:absolute; right:-3px; bottom:-3px; pointer-events:none; width:18px; height:18px; border-radius:50%;
     background:var(--green); color:#052710; display:flex; align-items:center; justify-content:center;
     font-size:10px; font-weight:900; border:2px solid var(--card);
   }
@@ -5541,11 +5545,27 @@ function moneyTx(){
   const linkedIds = [].concat(...(bankData().accounts || []).map(a=>bankIds(a.bank.replace(/_/g, ' ') + ' ' + bankName(a.bank))));
   if(linkedIds.length) list = list.filter(t=>!bankIds(String(t.pkg || '') + ' ' + (t.app || '') + (MONEY_SMS.includes(t.pkg) ? ' ' + String(t.text || '').slice(0, 40) : '')).some(i=>linkedIds.includes(i)));
   list = list.concat(bankTx());
-  list = list.filter(t=>t && isFinite(t.amt) && t.amt && t.ts && moneyCounts(t)).sort((a, b)=>b.ts - a.ts);
+  list = moneyDedupe(list.filter(t=>t && isFinite(t.amt) && t.amt && t.ts && moneyCounts(t)).sort((a, b)=>b.ts - a.ts));
   const to = accountCur();
   if(to){ if(list.some(t=>t.cur !== to)) fxEnsure(); list = list.map(t=>t.cur === to ? t : fxTx(t, to)); }
   moneyCache = list;
   return moneyCache;
+}
+// One payment told by both your bank's app and its SMS (banks send both) counts once - the app's: the same bank, amount,
+// currency and card (or none), the same balance when both state one, within 15 minutes. Two payments from the same app always stay.
+function moneyDedupe(list){
+  const out = [];
+  list.forEach(t=>{
+    const b = moneyBankOf(t), sms = MONEY_SMS.includes(t.pkg);
+    for(let i = out.length - 1; i >= 0 && out[i].ts - t.ts < 15 * 60000; i--){
+      const o = out[i];
+      if(o.pkg === t.pkg || o.amt !== t.amt || o.cur !== t.cur || (o.card || '') !== (t.card || '') || (o.bal != null && t.bal != null && o.bal !== t.bal) || moneyBankOf(o) !== b) continue;
+      if(MONEY_SMS.includes(o.pkg) && !sms) out[i] = t;
+      return;
+    }
+    out.push(t);
+  });
+  return out.sort((a, b)=>b.ts - a.ts);
 }
 window.addEventListener('storage', e=>{ if(e.key === ACCOUNT_CUR_KEY || e.key === FX_KEY || e.key === COUNTRY_KEY){ moneyCache = null; if(MONEY_PAGES.includes(state.current)) renderDevice(); } });
 const MONEY_PAGES = ['money', 'money-summary', 'wallet', 'wallet-overview', 'tx-history'];
@@ -5558,14 +5578,15 @@ window.storyMoneyNew = function(){
 // Money shows the card that's showing in Wallet (all your payments when no card is picked).
 // Net worth (owner; the button under the calendar on Money - owner named it "Net worth"): on = Money shows ALL the accounts you added to it
 // together (bank accounts seen in your bank's messages + trading accounts) instead of only the card showing in Wallet;
-// the pencil next to it picks which accounts count. Kept in 'story-money-all' {on, keys} (keys = 'b:<app>|<card>' /
+// the pencil next to it picks which accounts count. Kept in 'story-money-all' {on, keys, v:2} (keys = 'b:<bank>|<card>' /
 // 't:<trading account id>'; no list yet = every account).
 const MONEY_ALL_KEY = 'story-money-all', WALLET_NW_KEY = 'story-wallet-nw';
 // Wallet's Net worth (owner) is its own button with its own accounts: it combines your bank accounts' money to pay
 // (Send > Pay with > Use net worth). Only bank accounts - trading accounts can't pay.
 function nwGet(store){ try{ return JSON.parse(localStorage.getItem(store) || '{}') || {}; }catch(e){ return {}; } }
 function nwSave(store, v){ try{ localStorage.setItem(store, JSON.stringify(v)); }catch(e){} }
-function nwHas(store, key){ const v = nwGet(store); return !Array.isArray(v.keys) || v.keys.includes(key); }
+// A list ticked before accounts were kept by bank (keys 'b:<app>|<card>', no v:2) counts every bank account until ticked again.
+function nwHas(store, key){ const v = nwGet(store); return !Array.isArray(v.keys) || (v.v !== 2 && key.startsWith('b:')) || v.keys.includes(key); }
 function nwAccounts(store){ return store === WALLET_NW_KEY ? moneyAllAccounts().filter(a=>a.key.startsWith('b:')) : moneyAllAccounts(); }
 function moneyAll(){ return nwGet(MONEY_ALL_KEY); }
 function moneyAllSave(v){ nwSave(MONEY_ALL_KEY, v); }
@@ -5574,10 +5595,27 @@ function walletNwOn(){ return !!nwGet(WALLET_NW_KEY).on; }
 // The newest balance your bank stated for each account (by key), in the account currency when one is picked.
 function acctBalances(){ const m = {}; moneyBalances().forEach(a=>{ if(!(a.key in m)) m[a.key] = a; }); return m; }
 function walletNwList(){ const bal = acctBalances(); return nwAccounts(WALLET_NW_KEY).filter(a=>nwHas(WALLET_NW_KEY, a.key)).map(a=>Object.assign({}, a, { bal: bal[a.key] ? bal[a.key].bal : null, cur: bal[a.key] ? bal[a.key].cur : null })); }
-const moneyAcctKey = t=>'b:' + t.pkg + '|' + (t.card || '');
+// One bank account = its bank + its card / account number, whichever told Lockedintool about it - the bank's app naming
+// the card, the same app naming none (then it's your one card from that bank) or its SMS - never one account per app.
+function moneyBankOf(t){
+  const pkg = String(t.pkg || '');
+  if(pkg.indexOf('bank:') === 0) return bankIdAt(pkg.slice(5).replace(/_/g, ' ')) || pkg.slice(5);
+  return bankIdAt(MONEY_SMS.includes(pkg) ? String(t.text || '').slice(0, 40) : pkg + ' ' + (t.app || '')) || pkg;   // a bank SMS: its sender starts the text
+}
+const acctMemo = new WeakMap();
+function moneyAcctOf(t){
+  if(acctMemo.has(t)) return acctMemo.get(t);
+  const bank = moneyBankOf(t);
+  let card = t.card || '';
+  if(!card){ const m = walletCards().filter(c=>cardMatches(c, t)); if(m.length === 1) card = m[0].last4; }
+  const r = { key:'b:' + bank + '|' + card, name:(BANK_ID_NAMES[bank] || t.app || 'Bank') + (card ? ' ••' + card : '') };
+  acctMemo.set(t, r);
+  return r;
+}
+const moneyAcctKey = t=>moneyAcctOf(t).key;
 function moneyAllAccounts(){
   const seen = {}, out = [];
-  moneyTx().forEach(t=>{ const k = moneyAcctKey(t); if(seen[k]) return; seen[k] = 1; out.push({ key:k, name: (t.app || 'Bank') + (t.card ? ' ••' + t.card : ''), icon:'🏦' }); });
+  moneyTx().forEach(t=>{ const a = moneyAcctOf(t); if(seen[a.key]) return; seen[a.key] = 1; out.push({ key:a.key, name:a.name, icon:'🏦' }); });
   tradeAccounts().forEach(a=>out.push({ key:'t:' + a.id, name:a.name, icon:'📈' }));
   return out;
 }
@@ -5589,7 +5627,9 @@ function moneyView(){
 function moneyAccessOk(){ try{ return !NATIVE || !window.StoryNative.moneyAccess || !!window.StoryNative.moneyAccess(); }catch(e){ return true; } }
 // The currency most of your payments are in (before any payment: the phone's region).
 function moneyMainCur(){
-  if(accountCur()) return accountCur();   // the account currency you picked (owner)
+  // The account currency you picked (owner) - once there are rates for it (until then payments show unconverted).
+  const ac = accountCur();
+  if(ac){ const fx = fxRates(); if((fx && fx.rates && fx.rates[ac]) || !moneyTx().some(t=>t.cur !== ac)) return ac; }
   const n = {}; (moneyView().length ? moneyView() : moneyTx()).forEach(t=>{ n[t.cur] = (n[t.cur] || 0) + 1; });
   const best = Object.keys(n).sort((a, b)=>n[b] - n[a])[0];
   if(best) return best;
@@ -5685,15 +5725,15 @@ function moneyBalances(forCard){
   const seen = {}, out = [], to = accountCur(), c = forCard && !moneyAllOn() ? activeCard() : null;
   bankBalances().forEach(b=>{
     if(!walletCards().some(x=>cardMatches(x, b)) || (c && !cardMatches(c, b))) return;
-    const k = b.pkg + '|' + (b.card || ''); if(seen[k]) return; seen[k] = 1;
+    const a = moneyAcctOf(b); if(seen[a.key]) return; seen[a.key] = 1;
     const v = to && b.cur !== to ? fxConvert(b.bal, b.cur, to) : null;
-    out.push({ key: moneyAcctKey(b), name: b.app + (b.card ? ' ••' + b.card : ''), bal: v == null ? b.bal : v, cur: v == null ? b.cur : to, ts: b.ts, icon:'🏦' });
+    out.push({ key: a.key, name: a.name, bal: v == null ? b.bal : v, cur: v == null ? b.cur : to, ts: b.ts, icon:'🏦' });
   });
   (forCard ? moneyView() : moneyTx()).forEach(t=>{
     if(t.bal == null) return;
-    const k = t.pkg + '|' + (t.card || '');
-    if(seen[k]) return; seen[k] = 1;
-    out.push({ key: moneyAcctKey(t), name: t.app + (t.card ? ' ••' + t.card : ''), bal: t.bal, cur: t.cur, ts: t.ts, icon:'🏦' });
+    const a = moneyAcctOf(t);
+    if(seen[a.key]) return; seen[a.key] = 1;   // newest first: the newest balance of each account
+    out.push({ key: a.key, name: a.name, bal: t.bal, cur: t.cur, ts: t.ts, icon:'🏦' });
   });
   return out;
 }
@@ -5714,15 +5754,19 @@ function netWorth(cur){ return moneyAssets().filter(a=>a.cur === cur).reduce((s,
 function netWorthPct(nw, cur){
   if(!moneyAssets().length) return null;
   let snaps = {}; try{ snaps = JSON.parse(localStorage.getItem('story-networth') || '{}') || {}; }catch(e){}
-  const today = new Date().toISOString().slice(0, 10);
-  if(!snaps[cur] || typeof snaps[cur] !== 'object') snaps[cur] = {};
-  snaps[cur][today] = nw;
-  const keys = Object.keys(snaps[cur]).sort();
-  if(keys.length > 400) keys.slice(0, keys.length - 400).forEach(k=>delete snaps[cur][k]);
+  // Kept per view - the card showing, or Net worth - and currency, by the phone's own date: one card's number is never
+  // compared with another's. (Old ones kept per currency only mixed them up.)
+  Object.keys(snaps).forEach(k=>{ if(k.indexOf('|') < 0) delete snaps[k]; });
+  const c = activeCard(), sk = (moneyAllOn() || !c ? 'all' : 'card:' + c.id) + '|' + cur;
+  const d = new Date(), today = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  if(!snaps[sk] || typeof snaps[sk] !== 'object') snaps[sk] = {};
+  snaps[sk][today] = nw;
+  const keys = Object.keys(snaps[sk]).sort();
+  if(keys.length > 400) keys.slice(0, keys.length - 400).forEach(k=>delete snaps[sk][k]);
   try{ localStorage.setItem('story-networth', JSON.stringify(snaps)); }catch(e){}
   const first = keys.find(k=>k.slice(0, 7) === today.slice(0, 7));
-  if(!first || first === today || !snaps[cur][first]) return null;
-  return Math.round((nw - snaps[cur][first]) / Math.abs(snaps[cur][first]) * 1000) / 10;
+  if(!first || first === today || !snaps[sk][first]) return null;
+  return Math.round((nw - snaps[sk][first]) / Math.abs(snaps[sk][first]) * 1000) / 10;
 }
 // Fills the Money page's numbers from your real payments (same places the page always read them from).
 // ---- The period Money shows (owner): the calendar button under Summary - a day, a set of days, or Day / Week /
@@ -5741,7 +5785,7 @@ function moneyRangeSpan(){
     case 'week': { const d = new Date(today); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return { from: d.getTime(), to: now, label: 'CURRENT WEEK' }; }   // this week: Monday to today
     case '3m': return { from: back(3), to: now, label: 'LAST 3 MONTHS' };
     case '6m': return { from: back(6), to: now, label: 'LAST 6 MONTHS' };
-    case '1y': return { from: back(12), to: now, label: 'LAST YEAR' };
+    case '1y': return { from: back(12), to: now, label: 'LAST 12 MONTHS' };
     case '2y': return { from: back(24), to: now, label: 'LAST 2 YEARS' };
     case '3y': return { from: back(36), to: now, label: 'LAST 3 YEARS' };
     case 'date': { const f = dayStart(r.from), t = dayStart(r.to || r.from) + D - 1; const fmt = x=>new Date(x).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' }).toUpperCase(); return { from: f, to: t, label: dayStart(r.from) === dayStart(r.to || r.from) ? fmt(f) : fmt(f) + ' – ' + fmt(t) }; }
@@ -5774,7 +5818,8 @@ function spanBuckets(from, to, n){
     const label = len <= 1.01 * D ? String(d.getHours()).padStart(2, '0') + 'h'
       : len <= 10 * D ? d.toLocaleDateString('en-US', { weekday:'short' })
       : len <= 100 * D ? d.getDate() + ' ' + d.toLocaleDateString('en-US', { month:'short' })
-      : len <= 800 * D ? d.toLocaleDateString('en-US', { month:'short' })
+      : len <= 400 * D ? d.toLocaleDateString('en-US', { month:'short' })
+      : len <= 800 * D ? d.toLocaleDateString('en-US', { month:'short' }) + " '" + String(d.getFullYear()).slice(2)   // 2 years: the months repeat
       : "'" + String(d.getFullYear()).slice(2);
     out.push({ a, b, label });
   }
@@ -5787,9 +5832,11 @@ function moneyCompute(){
   const m = spanTotals(sp.from, sp.to, cur);
   state.moneyIn = m.inA; state.moneyOut = m.outA;
   state.thisMonthLabel = sp.label;
-  state.analyticsMonths = spanBuckets(sp.from, sp.to, 6).map(k=>{ const t = spanTotals(k.a, k.b, cur); return { label: k.label, net: t.inA - t.outA }; });
+  // Today's charts run over the whole day (00h ... 20h; the hours still to come stay empty) - early in the day every bar read '00h'.
+  const chartTo = (state.moneyRange || {}).kind === 'day' ? sp.from + 864e5 : sp.to;
+  state.analyticsMonths = spanBuckets(sp.from, chartTo, 6).map(k=>{ const t = spanTotals(k.a, k.b, cur); return { label: k.label, net: t.inA - t.outA }; });
   state.expensesBreakdown = spanExpenses(sp.from, sp.to, cur);
-  let run = 0; const cum = spanBuckets(sp.from, sp.to, 7).map(k=>{ const t = spanTotals(k.a, k.b, cur); run += t.inA - t.outA; return run; });
+  let run = 0; const cum = spanBuckets(sp.from, chartTo, 7).map(k=>{ const t = spanTotals(k.a, k.b, cur); run += t.inA - t.outA; return run; });
   const lo = Math.min(...cum), hi = Math.max(...cum);
   state.savingsSeries = cum.map(v=>hi === lo ? 10 : Math.round(10 + (v - lo) / (hi - lo) * 70));
   state.savingsPeakValue = fmtCur(Math.max(0, hi), cur);
@@ -5809,6 +5856,8 @@ function paymentCardsHTML(){
   if(!moneyAccessOk()) return `<div class="notif-card" data-action="money-access"><div class="notif-icon-wrap">🔔</div><div class="notif-mid"><div class="notif-source">Lockedintool</div><div class="notif-label">Allow Lockedintool to see your payments</div></div><div class="notif-right"><div class="notif-amt">Turn on</div><div class="notif-time">&nbsp;</div></div></div>`;
   const sp = state.moneySpan || moneyRangeSpan();
   const list = moneyView().filter(t=>t.ts >= sp.from && t.ts <= sp.to).slice(0, 300);
+  // Only your cards' payments count (owner) - with no card added none ever will, so say how they start.
+  if(!list.length && !walletCards().length) return `<div class="notif-card notif-empty"><div class="notif-icon-wrap">💳</div><div class="notif-mid"><div class="notif-source">No card added yet</div><div class="notif-label">Add your card in Wallet - its payments show here</div></div><div class="notif-right"><div class="notif-amt">&nbsp;</div><div class="notif-time">&nbsp;</div></div></div>`;
   if(!list.length) return `<div class="notif-card notif-empty"><div class="notif-icon-wrap">💳</div><div class="notif-mid"><div class="notif-source">${moneyView().length ? 'No payments in this time' : 'No payments yet'}</div><div class="notif-label">They show as your bank apps send them</div></div><div class="notif-right"><div class="notif-amt">&nbsp;</div><div class="notif-time">&nbsp;</div></div></div>`;
   return list.map(t=>`
         <div class="notif-card" data-notif="${escText(t.id)}">
@@ -5959,9 +6008,8 @@ function moneyScreen(){
     </div>
 
     <div class="money-transfer-fab-wrap">
-      <button class="money-transfer-fab" data-action="money-transfer-open" title="Transfer Money">
-        $<span class="mtf-arrow">↗</span>
-      </button>
+      <button class="money-transfer-fab" data-action="money-transfer-open" title="Transfer Money">$</button>
+      <span class="mtf-arrow">↗</span>
     </div>
     </div>
 
@@ -5975,6 +6023,14 @@ function moneyScreen(){
   `;
 }
 
+// The period you picked, as words after 'You have spent R…' (the spending is that period's - the limit below is always this month's).
+function moneySpanPhrase(){
+  const r = state.moneyRange || { kind:'month' }, sp = state.moneySpan || moneyRangeSpan();
+  const per = { month:'this month', day:'today', week:'in the current week', '3m':'in the last 3 months', '6m':'in the last 6 months', '1y':'in the last 12 months', '2y':'in the last 2 years', '3y':'in the last 3 years' }[r.kind];
+  if(per) return per;
+  const fmt = x=>new Date(x).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' });
+  return dayStart(sp.from) === dayStart(sp.to) ? 'on ' + fmt(sp.from) : 'from ' + fmt(sp.from) + ' to ' + fmt(sp.to);
+}
 function moneySummaryScreen(){
   moneyCompute();
   const cur = state.moneyCur;
@@ -5992,17 +6048,17 @@ function moneySummaryScreen(){
     ${topBar('Summary', false, '', 'money')}
     <div class="grid2" style="grid-template-columns:1fr 1fr;">
       <div class="row-card" style="padding:12px;">
-        <div class="row-sub" style="display:flex;justify-content:space-between;">INCOMES <span style="color:var(--green);">${pctTxt(state.summaryIncomesPct)}</span></div>
+        <div class="row-sub" style="display:flex;justify-content:space-between;">INCOMES <span style="color:${state.summaryIncomesPct < 0 ? 'var(--red)' : 'var(--green)'};">${pctTxt(state.summaryIncomesPct)}</span></div>
         <div class="big-num" style="font-size:20px;margin:6px 0 2px;">${fmtCur(state.summaryIncomes, cur, true, 0)}</div>
       </div>
       <div class="row-card" style="padding:12px;">
-        <div class="row-sub" style="display:flex;justify-content:space-between;">OUTCOMES <span style="color:var(--red);">${pctTxt(state.summaryOutcomesPct)}</span></div>
+        <div class="row-sub" style="display:flex;justify-content:space-between;">OUTCOMES <span style="color:${state.summaryOutcomesPct > 0 ? 'var(--red)' : 'var(--green)'};">${pctTxt(state.summaryOutcomesPct)}</span></div>
         <div class="big-num" style="font-size:20px;margin:6px 0 2px;">${fmtCur(-state.summaryOutcomes, cur, false, 0)}</div>
       </div>
     </div>
     <div class="section-title">SPENDING BREAKDOWN</div>
     <div class="row-card">
-      <div class="note" style="margin-bottom:8px;">You have spent ${fmtCur(spent, cur)} ${state.thisMonthLabel === 'THIS MONTH' ? 'this month' : 'in ' + state.thisMonthLabel.charAt(0) + state.thisMonthLabel.slice(1).toLowerCase()}.</div>
+      <div class="note" style="margin-bottom:8px;">You have spent ${fmtCur(state.summaryOutcomes, cur)} ${moneySpanPhrase()}.</div>
       <div class="donut-row">
         <div class="donut" style="background:conic-gradient(${donutGradient});"><div class="donut-hole"></div></div>
         <div class="donut-legend">
@@ -7555,7 +7611,7 @@ const CARDS_KEY = 'story-cards';
 const CARD_NETS = ['Visa', 'Mastercard', 'Amex', 'Other'];
 // Cards added before the number check existed were never checked - they don't count (owner: no fake card details).
 function walletCards(){ try{ return (JSON.parse(localStorage.getItem(CARDS_KEY) || '[]') || []).filter(c=>c && c.checked); }catch(e){ return []; } }
-function saveWalletCards(l){ try{ localStorage.setItem(CARDS_KEY, JSON.stringify(l)); }catch(e){} }
+function saveWalletCards(l){ try{ localStorage.setItem(CARDS_KEY, JSON.stringify(l)); }catch(e){} moneyCache = null; }   // which payments count follows your cards
 // The card that's showing in Wallet (null on the + slide or with no cards) - Money shows this card's money.
 // There is always ONE card showing (owner): the + slide doesn't change it - Money keeps the last card you were on
 // (or your first card). Only with no cards at all does Money show everything.
@@ -7871,6 +7927,10 @@ const BANK_IDS = [['fnb', /fnb|firstrand|first national/], ['capitec', /capitec/
   ['standard', /standard ?bank|sbg\.mobile|sbsa|stanbic/], ['tyme', /tyme/], ['discovery', /discovery/], ['investec', /investec/],
   ['african', /african ?bank/], ['bankzero', /bank ?zero/], ['oldmutual', /old ?mutual/], ['access', /access ?bank/], ['bidvest', /bidvest/]];
 const bankIds = s=>{ s = String(s || '').toLowerCase(); return BANK_IDS.filter(([, re])=>re.test(s)).map(([id])=>id); };
+// The bank named first (a bank SMS can name another bank further on: 'Capitec: R100 paid to FNB...').
+const bankIdAt = s=>{ s = String(s || '').toLowerCase(); let id = '', at = Infinity; BANK_IDS.forEach(([b, re])=>{ const i = s.search(re); if(i >= 0 && i < at){ at = i; id = b; } }); return id; };
+const BANK_ID_NAMES = { fnb:'FNB', capitec:'Capitec', absa:'Absa', nedbank:'Nedbank', standard:'Standard Bank', tyme:'TymeBank', discovery:'Discovery Bank', investec:'Investec',
+  african:'African Bank', bankzero:'Bank Zero', oldmutual:'Old Mutual', access:'Access Bank', bidvest:'Bidvest Bank' };
 function cardMatches(c, t){
   if(!c) return true;
   if(t.card && t.card === c.last4) return true;
@@ -8300,7 +8360,7 @@ function sendMoneyScreen(){
   const w = p.waiting;
   if(w) return `
     <div class="page-shell">
-    ${topBar('Send Money', false, '', 'wallet')}
+    ${topBar('Send Money', false, '', state.pay.origin === 'money' ? 'money' : 'wallet')}
     <div class="row-card pay-wait">
       <div class="pay-wait-amt">${payMoney(w.amount)}</div>
       <div class="pay-wait-who">to ${escText(w.who)}${w.from ? ' · from ' + escText(w.from) : ''}${w.of > 1 ? ' · part ' + (w.part + 1) + ' of ' + w.of : ''}</div>
@@ -8321,7 +8381,7 @@ function sendMoneyScreen(){
   const amt = parseFloat(String(p.amount).replace(',', '.'));
   return `
     <div class="page-shell">
-    ${topBar('Send Money', false, '', 'wallet')}
+    ${topBar('Send Money', false, '', state.pay.origin === 'money' ? 'money' : 'wallet')}
     <div class="order-type-grid pay-tabs">
       <button class="order-type-btn${p.mode === 'story' ? ' active' : ''}" data-action="pay-mode" data-v="story">Lockedintool profile</button>
       <button class="order-type-btn${p.mode === 'bank' ? ' active' : ''}" data-action="pay-mode" data-v="bank">Anyone</button>
@@ -8352,7 +8412,7 @@ function receiveMoneyScreen(){
     ${mine ? `<button class="btn-wide" data-action="pay-recv-cancel" style="margin-top:8px;">Cancel</button>` : ''}`;
   return `
     <div class="page-shell">
-    ${topBar('Receive Money', false, '', 'wallet')}
+    ${topBar('Receive Money', false, '', state.pay.recvFrom === 'money' ? 'money' : 'wallet')}
     <div class="row-card" style="text-align:center;padding:18px 16px;">
       <div class="pay-recv-who">${escText(prof.username ? '@' + prof.username : (prof.name || 'Your Lockedintool profile'))}</div>
       <div class="note" style="margin-top:6px;">People on Lockedintool send you money by your ${prof.username ? '@username' : 'name'}.${prof.username ? '' : ' Add a @username in your profile so they can find you easily.'}</div>
@@ -15370,6 +15430,8 @@ function renderDevice(){
   // underneath it gets torn down and rebuilt -- see currentScreenKey()/lastScreenKey above.
   const oldContentAreaForScroll = document.getElementById('content-area');
   const prevScrollTop = oldContentAreaForScroll ? oldContentAreaForScroll.scrollTop : 0;
+  const oldPayScroll = document.getElementById('pay-scroll');   // Money's Payments box keeps its place too
+  const prevPayTop = oldPayScroll ? oldPayScroll.scrollTop : 0;
   const newScreenKey = currentScreenKey();
   const sameScreenAsBefore = lastScreenKey !== null && newScreenKey === lastScreenKey;
   lastScreenKey = newScreenKey;
@@ -15384,6 +15446,8 @@ function renderDevice(){
   if(sameScreenAsBefore){
     const freshContentArea = document.getElementById('content-area');
     if(freshContentArea) freshContentArea.scrollTop = prevScrollTop;
+    const freshPay = document.getElementById('pay-scroll');
+    if(freshPay && prevPayTop){ freshPay.style.scrollBehavior = 'auto'; freshPay.scrollTop = prevPayTop; freshPay.style.scrollBehavior = ''; }
   }
   attachHandlers();
   setupCircleAndWheelDrag();
@@ -15792,6 +15856,7 @@ function attachHandlers(){
       // Pressing Community (not coming back from one of its groups): the choose screen, or Your Community (owner).
       if(target === 'community' && state.current !== 'community-group' && state.current !== 'community') state.communityMode = cmStartMode();
       if(target === 'layouts-pagelayout') state.layoutRowEdit = null;   // Page layout opens on its list of rows
+      state.moneyTransferOpen = false;   // Money's Transfer Money pop-up (its Wallet Overview button) never stays open behind
       state.current = target;
       if(PAGES.includes(target)) state.lastPage = target;
       renderDevice();
@@ -16157,8 +16222,9 @@ function attachHandlers(){
     const store = state.moneyAllEdit === WALLET_NW_KEY ? WALLET_NW_KEY : MONEY_ALL_KEY;
     const k = el.getAttribute('data-moneyacct'), v = nwGet(store);
     let keys = Array.isArray(v.keys) ? v.keys.slice() : nwAccounts(store).map(a=>a.key);
+    if(Array.isArray(v.keys) && v.v !== 2) keys = keys.filter(x=>!x.startsWith('b:')).concat(nwAccounts(store).filter(a=>a.key.startsWith('b:')).map(a=>a.key));   // an old list: every bank account, as it showed
     keys = keys.includes(k) ? keys.filter(x=>x !== k) : keys.concat(k);
-    v.keys = keys; nwSave(store, v); renderDevice();
+    v.keys = keys; v.v = 2; nwSave(store, v); renderDevice();
   }));
   document.querySelectorAll('[data-moneyrange]').forEach(el=>el.addEventListener('click', ()=>{ setMoneyRange({ kind: el.getAttribute('data-moneyrange') }); state.calOpen = false; state.calSel = null; state.calView = null; renderDevice(); }));
   // The calendar: first tap = a day, second tap = the other end of the range, a third tap starts again.
@@ -17652,8 +17718,8 @@ function attachHandlers(){
           state.drawToolsPopoverOpen = false;
           break;
         }
-        case 'send-open': state.pay.origin = state.current === 'money' ? 'money' : 'wallet'; state.current = 'send-money'; state.pay.info = null; state.pay.loading = false; break;
-        case 'receive-open': state.current = 'receive-money'; state.pay.info = null; state.pay.loading = false; break;
+        case 'send-open': state.pay.origin = state.current === 'money' ? 'money' : 'wallet'; state.moneyTransferOpen = false; state.favoritesOpen = false; state.current = 'send-money'; state.pay.info = null; state.pay.loading = false; break;
+        case 'receive-open': state.pay.recvFrom = state.current === 'money' ? 'money' : 'wallet'; state.moneyTransferOpen = false; state.favoritesOpen = false; state.current = 'receive-money'; state.pay.info = null; state.pay.loading = false; break;
         case 'sub-buy': subBuy(el.getAttribute('data-plan')); break;
         case 'widgets-only': widgetsOnlyAsk(); break;
         case 'sec-mode': secModeSet(el.getAttribute('data-v')); break;
@@ -17788,7 +17854,11 @@ function attachHandlers(){
         case 'spend-limit-open': state.spendLimitOpen = true; break;
         case 'spend-limit-close': state.spendLimitOpen = false; break;
         case 'spend-limit-save': {
-          const v = parseFloat(((document.getElementById('spend-limit-input') || {}).value || '').replace(/[^0-9.]/g, ''));
+          // 'R1 000,50' (a comma before the cents, as South African keyboards give) = 1000.50; other commas / spaces group thousands.
+          let sv = ((document.getElementById('spend-limit-input') || {}).value || '').replace(/[^0-9.,]/g, '');
+          const ci = sv.lastIndexOf(',');
+          sv = /,\d{1,2}$/.test(sv) ? sv.slice(0, ci).replace(/[.,]/g, '') + '.' + sv.slice(ci + 1) : sv.replace(/,/g, '');
+          const v = parseFloat(sv);
           const cur = state.moneyCur || moneyMainCur();
           let all = {}; try{ all = JSON.parse(localStorage.getItem('story-spend-limit') || '{}') || {}; }catch(e){}
           if(v > 0) all[cur] = v; else delete all[cur];

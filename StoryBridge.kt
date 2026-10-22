@@ -344,9 +344,10 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); host.hidePanel(); ctx.startActivity(i); return true
     }
 
-    /** Money / Wallet: every payment STORY read from your bank / payment apps' notifications (MoneyLog, JSON, newest first). */
+    /** Money / Wallet: every payment STORY read from your bank / payment apps' notifications (MoneyLog, JSON, newest first).
+     *  The Pages and the Money / Wallet / Dashboard home screen widgets (they show the whole page as on the Pages). */
     @JavascriptInterface
-    fun moneyList(): String = if (pages) MoneyLog.list(ctx) else "[]"
+    fun moneyList(): String = if (pages || widget) MoneyLog.list(ctx) else "[]"
 
     /** Whether STORY may read notifications (needed to see payments). */
     @JavascriptInterface
@@ -383,7 +384,7 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
     /** Opens Android's own notification-access switch for STORY. */
     @JavascriptInterface
     fun moneyAccessOpen() {
-        if (!pages) return
+        if (!pages && !widget) return   // a live widget's 'Allow Lockedintool to see your payments' too
         val cn = android.content.ComponentName(ctx, StoryMediaListener::class.java).flattenToString()
         val i = if (android.os.Build.VERSION.SDK_INT >= 30) Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS).putExtra(Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME, cn)
             else Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
