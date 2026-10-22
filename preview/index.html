@@ -5506,8 +5506,8 @@ function moneyCounts(t){
   // to a card you added (its last 4, or - when the message names no card - the bank of one of your cards).
   return walletCards().some(c=>cardMatches(c, t));
 }
-// ---- Connect your bank (owner: your REAL balance and history, like your bank's app): open banking through a licensed
-// worldwide partner (msg-worker /v1/bank/info|link|accounts|unlink; none connected yet - Stitch is out, owner). You log in to your own bank on its page; Lockedintool only
+// ---- Connect your bank (owner: your REAL balance and history, like your bank's app): open banking through Stitch for
+// South African users (owner chose Stitch back for South Africa; other countries later) (msg-worker /v1/bank/info|link|accounts|unlink). You log in to your own bank on Stitch's page; Lockedintool only
 // reads. Kept on the phone in 'story-bank' {linked, ready, at, accounts}; looked at most every 5 minutes, when a
 // money page shows or Lockedintool comes back (no loop). A connected bank's own history replaces what its
 // notifications said (no double payments). ----
@@ -5536,7 +5536,7 @@ async function bankRefresh(force){
 async function bankConnect(){
   if(!litSignedIn()){ showToast('Log in to Lockedintool first'); return; }
   try{ const r = await msgApi('/v1/bank/link', {}); state.bankWaiting = true; payOpenBank(r.url); }
-  catch(e){ showToast(e.code === 'not-ready' ? 'Connecting your bank switches on once Lockedintool’s banking partner is connected' : 'Couldn’t open your bank - try again'); }
+  catch(e){ showToast(e.code === 'country' ? 'Connecting your bank isn’t available in your country yet' : e.code === 'not-ready' ? 'Connecting your bank switches on once Stitch turns on bank connections for Lockedintool' : 'Couldn’t open your bank - try again'); }
 }
 async function bankUnlink(){
   try{ await msgApi('/v1/bank/unlink', {}); }catch(e){}
@@ -8225,8 +8225,9 @@ function walletOverviewScreen(){
 }
 
 // ---- Money transfer (owner: send money profile to profile - and to anyone, even people not on STORY; 'everyone must be
-// able to send to banks', worldwide). Through a licensed worldwide payout partner (msg-worker.js /v1/pay/*) - not
-// connected yet (Stitch is out - owner), so Send says it connects once it is. A STORY profile is paid into the bank account they
+// able to send to banks'). South African users through Stitch (msg-worker.js /v1/pay/*; owner chose it back for South
+// Africa): you approve it in your OWN bank and it goes straight into their bank account by account number; STORY
+// never holds the money. Other countries are told it isn't available there yet. A STORY profile is paid into the bank account they
 // added under Receive (nobody sending sees it); anyone else by their name + bank + account number. ----
 const PAY_BANKS_UI = { absa:'Absa', african_bank:'African Bank', capitec:'Capitec', discovery_bank:'Discovery Bank', fnb:'FNB', investec:'Investec', nedbank:'Nedbank', standard_bank:'Standard Bank', tymebank:'TymeBank' };
 state.pay = { mode:'story', q:'', found:[], to:null, name:'', bank:'', acct:'', amount:'', ref:'', busy:false, msg:'', info:null, history:null, waiting:null,
@@ -8239,7 +8240,7 @@ function payLoad(){
   msgApi('/v1/pay/info').then(i=>{ state.pay.info = i; payShow(); }).catch(()=>{});
   msgApi('/v1/pay/history').then(h=>{ state.pay.history = h.payments || []; payShow(); }).catch(()=>{});
 }
-const PAY_ERRORS = { 'not-connected':'Sending money connects once Lockedintool’s payout partner is set up.', 'no-bank':'They haven’t added a bank account to receive money yet.',
+const PAY_ERRORS = { 'not-connected':'Sending money connects once Lockedintool’s payout partner is set up.', country:'Sending money isn’t available in your country yet.', 'no-bank':'They haven’t added a bank account to receive money yet.',
   'bank-details':'Check the name, bank and account number.', amount:'Send between R1 and R50 000.', self:'That’s you.', notfound:'That Lockedintool account doesn’t exist any more.', signin:'Your Lockedintool account isn’t ready yet - try again in a moment.' };
 function payBankChips(sel, action){
   return `<div class="community-chip-row pay-banks">${Object.entries(payBanks()).map(([k, n])=>`<div class="community-chip${sel === k ? ' active' : ''}" data-action="${action}" data-v="${k}">${escText(n)}</div>`).join('')}</div>`;
@@ -8550,15 +8551,16 @@ function payRecvSave(){
     r.busy = false; r.editing = false; r.acct = ''; if(state.pay.info) state.pay.info.bank = x.bank; showToast('Saved - people on Lockedintool can send you money'); payShow();
   }).catch(e=>{ r.busy = false; r.msg = PAY_ERRORS[e.code] || 'Couldn’t save - try again.'; payShow(); });
 }
-// ---- LOCKED IN TOOL subscription (owner: Basic $5 / Premium $15 a month; no plan = STORY doesn't open). Paid worldwide
-// through Lemon Squeezy (msg-worker.js /v1/sub/*): its own checkout page, renews every month. Nobody is ever asked before payments are
+// ---- LOCKED IN TOOL subscription (owner: Basic $5 / Premium $15 a month; no plan = STORY doesn't open). South African
+// users pay in rand in their own bank through Stitch; everyone else through Lemon Squeezy's checkout (renews monthly) -
+// the server picks (msg-worker.js /v1/sub/*, provider). Nobody is ever asked before payments are
 // really connected, and the owner's own phone (Test channel, /preview/) always has everything. ----
 const SUB_KEY = 'story-sub';
 const STORY_OWNER = /\/preview\//.test(location.pathname);
 function subState(){ try{ return JSON.parse(localStorage.getItem(SUB_KEY) || 'null'); }catch(e){ return null; } }
 function subSave(v){ try{ localStorage.setItem(SUB_KEY, JSON.stringify(Object.assign({}, v, { checked:Date.now() }))); }catch(e){} }
 function subActive(){ const s = subState(); return !!(s && s.plan && s.until > Date.now()); }
-// The paywall only shows once the owner switches it on (server secret SUB_ENFORCE=1, with the live Lemon Squeezy key - owner).
+// The paywall only shows once the owner switches it on (server secret SUB_ENFORCE=1, with the live payment keys - owner).
 function subLocked(){ const s = subState(); return !!(s && s.connected && s.enforced) && !subActive() && !STORY_OWNER; }
 function subPremium(){ const s = subState(); return STORY_OWNER || !(s && s.connected) || (subActive() && s.plan === 'premium'); }
 // Plans (owner's 'Full layout of Lockedintool'): FREE (no plan) = the Dashboard only - the Pages are hidden; BASIC =
@@ -8592,7 +8594,8 @@ state.sub = { waiting:null, busy:false, msg:'' };
 function subscriptionScreen(){
   const s = subState() || {};
   if(!state.sub.asked){ state.sub.asked = true; subRefresh(true); }
-  const plans = s.plans || { basic:{ usd:5 }, premium:{ usd:15 } };
+  const plans = s.plans || { basic:{ usd:5, zar:95 }, premium:{ usd:15, zar:285 } };
+  const viaStitch = s.provider === 'stitch';   // South African users pay in rand through Stitch (owner); everyone else through Lemon Squeezy
   const locked = subLocked(), active = subActive();
   const until = s.until ? new Date(s.until).toLocaleDateString('en-ZA', { day:'numeric', month:'short', year:'numeric' }) : '';
   const w = state.sub.waiting;
@@ -8608,9 +8611,9 @@ function subscriptionScreen(){
     <div class="sub-status">${escText(status)}</div>
     ${w ? `<div class="row-card pay-wait">
       <div class="pay-wait-amt">${escText(w.name)}</div>
-      <div class="pay-wait-who">${subOptName(w.mode)} · $${w.usd}/month</div>
-      <div class="pay-wait-status">${w.status === 'paid' ? 'Paid - your plan is on.' : w.status === 'pending' ? 'Pay on the payment page that opened. This updates by itself.' : w.status === 'cancelled' ? 'Cancelled in your bank' : 'Not approved in time - nothing was paid'}</div>
-      ${w.status === 'pending' ? `<button class="btn-wide" data-action="sub-reopen">Open the payment page again</button>
+      <div class="pay-wait-who">${subOptName(w.mode)} · $${w.usd}/month${w.provider === 'stitch' && w.zar ? ' · R' + Number(w.zar).toFixed(2) : ''}</div>
+      <div class="pay-wait-status">${w.status === 'paid' ? 'Paid - your plan is on.' : w.status === 'pending' ? (w.provider === 'stitch' ? 'Approve it in your bank’s page that opened. This updates by itself.' : 'Pay on the payment page that opened. This updates by itself.') : w.status === 'cancelled' ? 'Cancelled in your bank' : 'Not approved in time - nothing was paid'}</div>
+      ${w.status === 'pending' ? `<button class="btn-wide" data-action="sub-reopen">${w.provider === 'stitch' ? 'Open my bank’s page again' : 'Open the payment page again'}</button>
       <button class="btn-wide" data-action="sub-cancel"${state.sub.busy ? ' disabled' : ''}>Cancel - nothing is paid</button>` : `<button class="btn-wide btn-primary" data-action="sub-done">Done</button>`}
     </div>` : ''}
     ${SUB_PLANS.map(p=>{ const pr = plans[p.key] || {}; const mine = active && s.plan === p.key; return `
@@ -8620,8 +8623,8 @@ function subscriptionScreen(){
         <div class="sub-tag">${p.tag}</div>
         <div class="sub-text">${p.text}</div>
         <ul class="sub-list">${p.list.map(x=>`<li>${x}</li>`).join('')}</ul>
-        ${`<button class="btn-wide${mine ? '' : ' btn-primary'}" data-action="sub-buy" data-plan="${p.key}"${state.sub.busy || (w && w.status === 'pending' && w.plan === p.key) ? ' disabled' : ''}>${w && w.status === 'pending' && w.plan === p.key ? 'Waiting for your payment' : w && w.status === 'pending' ? 'Switch to ' + p.name : mine ? 'Add another month' : 'Choose ' + p.name}</button>
-        <div class="sub-zar">$${pr.usd || p.usd || ''} a month on Lemon Squeezy’s secure page - card, PayPal, Apple Pay or Google Pay. Renews every month.</div>`}
+        ${`<button class="btn-wide${mine ? '' : ' btn-primary'}" data-action="sub-buy" data-plan="${p.key}"${state.sub.busy || (w && w.status === 'pending' && w.plan === p.key) ? ' disabled' : ''}>${w && w.status === 'pending' && w.plan === p.key ? (w.provider === 'stitch' ? 'Waiting for your bank' : 'Waiting for your payment') : w && w.status === 'pending' ? 'Switch to ' + p.name : mine ? 'Add another month' : 'Choose ' + p.name}</button>
+        <div class="sub-zar">${viaStitch ? `Paid in rand: R${Number(pr.zar || 0).toFixed(2)} a month, approved in your own bank` : `$${pr.usd || p.usd || ''} a month on Lemon Squeezy’s secure page - card, PayPal, Apple Pay or Google Pay. Renews every month.`}</div>`}
       </div>`; }).join('')}
     ${state.sub.msg ? `<div class="note pay-msg">${escText(state.sub.msg)}</div>` : ''}
     <div class="note" style="margin:12px 0 4px;">Both plans are designed to help you stay organized, focused, and consistent.</div>
@@ -8708,7 +8711,7 @@ function subBuy(plan){
   const mode = subMode();
   msgApi('/v1/sub/buy', { plan, mode }).then(r=>{
     state.sub.busy = false;
-    state.sub.waiting = { id:r.id, url:r.url, plan, mode, name:p.name, usd:pr.usd, status:'pending', started:Date.now() };
+    state.sub.waiting = { id:r.id, url:r.url, plan, mode, name:p.name, usd:pr.usd, zar:pr.zar, provider:s.provider || '', status:'pending', started:Date.now() };
     payOpenBank(r.url); renderDevice(); subPollT = setTimeout(subPoll, 4000);
   }).catch(e=>{ state.sub.busy = false; state.sub.msg = e.code === 'not-connected' ? 'Subscriptions open once LOCKED IN TOOL’s payments are set up.' : 'Couldn’t start the payment - try again.'; renderDevice(); });
 }
@@ -9198,7 +9201,7 @@ const LEGAL = {
       'We do not sell your information and Lockedintool shows no ads.' ]],
     ['Kept only on your phone', [
       'Money and Wallet: payments read from the notifications and bank SMS your bank and payment apps put on your phone (amount, who, date, balance, the card or account’s last 4 digits). One-time PINs, chats, email and adverts are skipped.',
-      'Connect your bank (only if you choose to, once it’s available): you log in to your own bank on the page of Lockedintool’s licensed open banking partner. Lockedintool then READS your accounts’ names, last 4 digits, balances and transactions to show them in Money and Wallet - it can’t move money with this. Your bank’s sign-in is kept locked on Lockedintool’s server; disconnect any time (Money > Bank connected) and it is deleted, and it is deleted with your account.',
+      'Connect your bank (only if you choose to; South African banks for now): you log in to your own bank on Stitch’s page (Stitch is a licensed open banking provider). Lockedintool then READS your accounts’ names, last 4 digits, balances and transactions to show them in Money and Wallet - it can’t move money with this. Your bank’s sign-in is kept locked on Lockedintool’s server; disconnect any time (Money > Bank connected) and it is deleted, and it is deleted with your account.',
       'Cards you add: bank name, last 4 digits and expiry. The full card number and CVV are only checked while you add the card and are never kept. Pictures of scanned cards are kept with the long number and CVV covered.',
       'Notes, drawings, pictures and audio you add to notes; highlights you make with Create; your settings.',
       'Trading: the sign-in tokens and API keys of the broker accounts you add, in Lockedintool’s private storage. Your broker password is never kept.',
@@ -9214,7 +9217,8 @@ const LEGAL = {
       'Private details: the email and / or phone number you add in Edit profile (checked with a code first). They are never shown to anyone and never used to find you - only to send you a password reset link or a Delete account confirmation.',
       'Your internet address (IP) for a short time to stop abuse such as mass sign-ups.' ]],
     ['Who we share with', [
-      'Lemon Squeezy (lemonsqueezy.com - it sells the plans for us and handles the payment and your country’s sales tax) when you pay a plan: you give your email and pay on Lemon Squeezy’s own page; Lockedintool only learns which plan you have and until when - we never see your card.',
+      'Lemon Squeezy (lemonsqueezy.com - it sells the plans for us outside South Africa and handles the payment and your country’s sales tax) when you pay a plan: you give your email and pay on Lemon Squeezy’s own page; Lockedintool only learns which plan you have and until when - we never see your card.',
+      'Stitch (a licensed South African payment provider) when you pay a plan in South Africa, send money or connect your bank - you approve it on Stitch’s or your bank’s own page; we never see your card or banking login.',
       'Your brokers and exchanges: Lockedintool talks to them straight from your phone with the keys you added.',
       'TradingView: the chart is TradingView’s own website inside Lockedintool; signing in to TradingView is between you and TradingView.',
       'binlist.net: only the first 8 digits of a card you add, to show its bank’s name.',
@@ -9252,8 +9256,9 @@ const LEGAL = {
       'Using Lockedintool means agreeing that it keeps itself up to date: new versions install automatically.' ]],
     ['Subscription', [
       'Without a plan you can use the Dashboard for free. Basic adds the Money, Wallet and Focus pages and Lockedintool calls (voice, video and group calls); Premium adds everything else (more pages and rows). Calls aren’t part of the free plan - phone calls from the dial pad are your phone’s own and always work.',
-      'Basic is $5 a month and Premium $15 a month, charged in US dollars wherever you are (your bank may show it in your own currency). Changes to prices will be announced before they apply.',
-      'Plans are sold through Lemon Squeezy (lemonsqueezy.com), which takes the payment on its own page - card, PayPal, Apple Pay or Google Pay - and handles your country’s sales tax. A plan renews by itself every month until you cancel; cancel any time with the link in Lemon Squeezy’s email, and your plan runs to the end of the month already paid.',
+      'Basic is $5 a month and Premium $15 a month. Changes to prices will be announced before they apply.',
+      'In South Africa plans are charged in rand (shown before you pay - currently R95 and R285) through Stitch and approved by you on your own bank’s or card’s page. One payment gives 30 days of your plan; paying the same plan again adds 30 days. These plans don’t renew by themselves - you pay each month.',
+      'Outside South Africa plans are charged in US dollars (your bank may show it in your own currency) and sold through Lemon Squeezy (lemonsqueezy.com), which takes the payment on its own page - card, PayPal, Apple Pay or Google Pay - and handles your country’s sales tax. A plan renews by itself every month until you cancel; cancel any time with the link in Lemon Squeezy’s email, and your plan runs to the end of the month already paid.',
       'Before you pay you can cancel or switch plans at any time. Once a payment is made it is not refundable, except where the law requires a refund.',
       'We may change prices or what a plan includes; you will be told in the app before it affects you.' ]],
     ['Lockedintool as your system', [
@@ -9263,8 +9268,8 @@ const LEGAL = {
       'Orders you place in Lockedintool are sent to your broker exactly as you place them. You are responsible for every trade. Trading is risky and you can lose more than you put in.',
       'Prices, charts and balances come from your broker and TradingView and can be late, wrong or unavailable. We are not responsible for losses caused by markets, your broker, TradingView, your connection or app downtime.' ]],
     ['Money and Wallet', [
-      'By using Lockedintool you agree that it reads your bank and card details - your payments, balances and the last 4 digits of your cards and accounts - from your bank’s notifications and messages on your phone and, when you connect your bank, from your bank through Lockedintool’s licensed open banking partner, to show them to you in Money and Wallet.',
-      'Money and Wallet are built from your bank’s notifications and messages (or, if you connect your bank, what your bank shares through that partner), so they can be incomplete or wrong - they are not bank statements. Check with your bank before relying on them.',
+      'By using Lockedintool you agree that it reads your bank and card details - your payments, balances and the last 4 digits of your cards and accounts - from your bank’s notifications and messages on your phone and, when you connect your bank, from your bank through Stitch, to show them to you in Money and Wallet.',
+      'Money and Wallet are built from your bank’s notifications and messages (or, if you connect your bank, what your bank shares through Stitch), so they can be incomplete or wrong - they are not bank statements. Check with your bank before relying on them.',
       'Tap to Pay uses your phone’s own payment app. When sending money is available it goes from your bank account straight into theirs through our payment partner; Lockedintool never holds your money.' ]],
     ['Messages, groups and calls', [
       'You own what you post. You let us carry and show it so the app can work (for example, posts in public groups are visible to everyone).',
@@ -9272,7 +9277,7 @@ const LEGAL = {
       'You can block anyone (they can’t message or call you, see your profile or statuses, or find you - and aren’t told) and report profiles, chats, statuses, posts, comments and groups. Lockedintool reviews every report; nobody - not the person reported and not Lockedintool’s review - sees who reported. The person gets an automatic warning saying how many reports came in about what, and if Lockedintool removes something they’re told why. Reporting a chat sends us the last messages that person sent you, so we can see what happened - nothing else from your chats is ever readable by us.',
       'The dial pad places normal phone calls through your mobile network; your network’s charges apply. For emergencies, use your phone’s own dialer if anything doesn’t work.' ]],
     ['Other services', [
-      'Your brokers, TradingView, Lemon Squeezy, your bank and other apps you open from Lockedintool have their own terms, which apply when you use them.' ]],
+      'Your brokers, TradingView, Lemon Squeezy, Stitch, your bank and other apps you open from Lockedintool have their own terms, which apply when you use them.' ]],
     ['The app', [
       'Lockedintool, its name, logo and design belong to Lockedintool. Don’t copy, resell or reverse-engineer the app or misuse our servers.',
       'We work to keep Lockedintool running, but it is provided as it is and may sometimes be unavailable, change or have mistakes. ' ]],
@@ -11495,7 +11500,7 @@ async function msgOnServer(m){
     return;
   }
   if(m.t === 'release'){ if(NATIVE && window.StoryNative.releaseNow) try{ window.StoryNative.releaseNow(); }catch(e){} return; }   // a new version is live: get it now
-  if(m.t === 'paid'){   // money sent to you on Lockedintool (the payout partner) - it lands in the bank account you added under Receive
+  if(m.t === 'paid'){   // money sent to you on Lockedintool (Stitch) - it lands in the bank account you added under Receive
     if(NATIVE && window.StoryNative.msgNotify) try{ window.StoryNative.msgNotify('Money received', (m.name || (m.username ? '@' + m.username : 'Someone')) + ' sent you R' + Number(m.amount || 0).toFixed(2) + (m.ref ? ' · ' + m.ref : '')); }catch(e){}
     if(m.seq) msgSend({ t:'ack', seq:m.seq });
     return;
