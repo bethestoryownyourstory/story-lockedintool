@@ -647,7 +647,8 @@ class OverlayService : Service(), StoryBridge.Host {
                     ui.postDelayed({ paneRef?.let { it.loading = false; if (it.shown) it.frame.alpha = 1f }; syncBarBg() }, 200)
                 } else if (small) {
                     v.evaluateJavascript(exactGeometryJs(), null)
-                    v.evaluateJavascript("window.__storyLocked=${keyguardLocked()};window.__storyOnPages=${lastOnPages ?: (pagesPane?.shown == true)};window.__storyOnDash=${lastOnDash == true};window.storyStation3Only&&window.storyStation3Only()", null); v.evaluateJavascript(S3_JS, null)
+                    // s3-dash-follow: this app draws the Dashboard's band in the theme's own colour (barBgColor), so the page's icons may follow it too.
+                    v.evaluateJavascript("document.documentElement.classList.add('s3-dash-follow');window.__storyLocked=${keyguardLocked()};window.__storyOnPages=${lastOnPages ?: (pagesPane?.shown == true)};window.__storyOnDash=${lastOnDash == true};window.storyStation3Only&&window.storyStation3Only()", null); v.evaluateJavascript(S3_JS, null)
                     // Show it again once Station 3 has actually drawn (a moment after the page is ready).
                     ui.postDelayed({ paneRef?.let { it.loading = false; if (it.shown) it.frame.alpha = 1f }; syncBarBg() }, 200)
                 } else {

@@ -2160,12 +2160,15 @@
   body.s3-only.s3-dash .station3-quick-row{ display:none !important; }
   /* The Dashboard's Station 3 FOLLOWS the system theme (owner: 'make it go with the system theme and not oppose it'):
      black band with white icons in Black, white band with black icons in White. Written in Station 3's own colours and
-     listed in FOLLOW_SEL, so the theme swap turns them the other way round from the rest of Station 3. */
-  body.s3-only.s3-dash .station3-btn{ color:#000; background:rgba(0,0,0,0.05); border-color:rgba(0,0,0,0.08); }
-  body.s3-only.s3-dash .station3-btn:active{ background:rgba(0,0,0,0.14); }
-  body.s3-only.s3-dash .station3-btn-chevron{ color:#000; background:rgba(0,0,0,0.05); border:1px solid rgba(0,0,0,0.08); }
-  body.s3-only.s3-dash .station3-btn-chevron:active{ background:rgba(0,0,0,0.14); }
-  body.s3-only.s3-dash .station3-btn-plus{ color:#fff; background:#000; border-color:#000; }
+     listed in FOLLOW_SEL, so the theme swap turns them the other way round from the rest of Station 3. Only once the app
+     says it draws the band that way too (html.s3-dash-follow, set by OverlayService) - new screens reach a phone before
+     its app update installs, and black icons on the old black band would vanish. */
+  body.s3-only.s3-dash .station3-btn-chevron{ background:rgba(0,0,0,0.05); border:1px solid rgba(0,0,0,0.08); }
+  html.s3-dash-follow body.s3-only.s3-dash .station3-btn{ color:#000; background:rgba(0,0,0,0.05); border-color:rgba(0,0,0,0.08); }
+  html.s3-dash-follow body.s3-only.s3-dash .station3-btn:active{ background:rgba(0,0,0,0.14); }
+  html.s3-dash-follow body.s3-only.s3-dash .station3-btn-chevron{ color:#000; background:rgba(0,0,0,0.05); border:1px solid rgba(0,0,0,0.08); }
+  html.s3-dash-follow body.s3-only.s3-dash .station3-btn-chevron:active{ background:rgba(0,0,0,0.14); }
+  html.s3-dash-follow body.s3-only.s3-dash .station3-btn-plus{ color:#fff; background:#000; border-color:#000; }
   /* All evenly spaced (owner's choice): every button the same size, the same distance apart - the + too - and the +
      exactly in the middle of the screen (owner: 'the plus needs to centre the Dashboard look'): equal columns, the +
      in the middle one (6 buttons: 7 columns, the last one left free; 5 buttons without the dial pad: 5 columns). */
@@ -2173,7 +2176,7 @@
   body.s3-only.s3-dash .station3-bar{ display:grid; grid-template-columns:repeat(5, 1fr); justify-items:center; align-items:center; padding:4px 0; }
   body.s3-only.s3-dash .station3-bar:has(> :nth-child(6)){ grid-template-columns:repeat(7, 1fr); }
   body.s3-only.s3-dash .station3-bar-card{ padding:0 !important; }
-  body.s3-only.s3-dash .station3-btn-plus:active{ background:#2b2b2b; }
+  html.s3-dash-follow body.s3-only.s3-dash .station3-btn-plus:active{ background:#2b2b2b; }
   body.s3-only .station3-dialpad-card{ border-radius:20px !important; }
   body.s3-dial .station3-corner-arrow, body.s3-dial .station3-bar-card{ display:none !important; }
   /* Over other apps the Station 3 button itself is drawn by the app, always the same, on top -- the page
@@ -3892,7 +3895,7 @@
   }
   // The dial pad is the one thing that FOLLOWS the theme instead of opposing it (owner): its own colours are the
   // reverse of what it's drawn with - black dial pad in Black, white dial pad in White (the green call stays green).
-  const FOLLOW_SEL = /station3-(dialpad|call-btn|newcontact|backspace-btn)|\.s3-dash \.station3-btn/;   // + the Dashboard's Station 3 (owner)
+  const FOLLOW_SEL = /station3-(dialpad|call-btn|newcontact|backspace-btn)|s3-dash-follow/;   // + the Dashboard's Station 3 (owner)
   function themeSheets(white){
     for(const r of sheetRules()){
       const flipIt = FOLLOW_SEL.test(r.selectorText) ? !white : white;
