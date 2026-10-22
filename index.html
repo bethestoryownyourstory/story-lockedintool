@@ -3568,6 +3568,12 @@
   .community-comment-input-row .lit-att{ width:34px; height:34px; margin-right:6px; }
   /* Accounts (owner): Create your account / Log in - first thing, for everyone. */
   .lit-auth{ position:fixed; inset:0; z-index:999995; background:#000000; color:#ffffff; overflow-y:auto; scrollbar-width:none; font-family:inherit; }
+  /* Lockedintool security (Settings > SECURITY): the lock over the Pages / Station 3's window until you unlock. */
+  .sec-cover{ position:fixed; inset:0; z-index:999998; background:#000000; color:#ffffff; display:flex; align-items:center; justify-content:center; font-family:inherit; touch-action:none; }
+  .sec-cover .sec-box{ display:flex; flex-direction:column; align-items:center; gap:10px; padding:24px; text-align:center; }
+  .sec-cover .sec-t{ font-size:18px; font-weight:800; margin-top:6px; }
+  .sec-cover .sec-s{ font-size:13px; color:#8a8a8a; }
+  .sec-cover .sec-btn{ margin-top:14px; min-width:150px; padding:12px 26px; border-radius:999px; border:0; background:#ffffff; color:#000000; font-family:inherit; font-size:15px; font-weight:800; line-height:1; cursor:pointer; }
   .lit-auth::-webkit-scrollbar{ display:none; }
   .lit-auth-in{ max-width:420px; margin:0 auto; padding:calc(var(--pf-top, 24px) + 40px) 22px 80px; box-sizing:border-box; }
   .lit-auth img{ display:block; width:84px; height:84px; border-radius:20px; background:#ffffff; margin:0 0 22px; }
@@ -4985,6 +4991,81 @@ const SAVED_SETTINGS = { homeScreen:v=>['dashboard','wallet','money','trading'].
   if(!/[?&](s3|widget)=/.test(location.search)) state.current = state.homeScreen;   // the Pages start on your Home Screen
 })();
 let savedSettingsJSON = null;
+// Settings > SECURITY (owner): "Phone's security" (default - Lockedintool works anywhere the phone is unlocked; it uses
+// the phone's own lock) or "Lockedintool security" (every time you come into Lockedintool it asks the phone's own
+// fingerprint / face / PIN first). The app keeps the choice and does the asking (Security.kt, OverlayService secGate);
+// the windows only show the lock: the Pages and Station 3's window (Messages, Profile, Updates, Create, Call history)
+// cover themselves with it, a live widget asks on the first tap. Calls and the dial pad's phone calls always work.
+function secState(){
+  try{ if(NATIVE && window.StoryNative.securityState) return Object.assign({ mode:'phone', secure:true, open:true }, JSON.parse(window.StoryNative.securityState()) || {}); }catch(e){}
+  let m = 'phone'; try{ m = localStorage.getItem('story-security') === 'lit' ? 'lit' : 'phone'; }catch(e){}
+  return { mode:m, secure:true, open:true };
+}
+function secSettingsOn(){ return !NATIVE || !!window.StoryNative.securityState; }
+function securitySettingsHTML(){
+  if(!secSettingsOn()) return '';
+  const lit = secState().mode === 'lit';
+  return `
+    <div class="section-title">SECURITY</div>
+    <div class="set2-card">
+      <div class="set2-row set2-stack">
+        <div class="set2-text"><div class="set2-name">Lockedintool security</div><div class="set2-sub">${lit ? 'You unlock Lockedintool with your fingerprint, face or PIN every time you use it.' : 'Lockedintool works whenever your phone is unlocked - it uses your phone’s own lock.'}</div></div>
+        <div class="set2-seg">
+          <button class="theme-opt${lit ? '' : ' on'}" data-action="sec-mode" data-v="phone">Phone’s security</button>
+          <button class="theme-opt${lit ? ' on' : ''}" data-action="sec-mode" data-v="lit">Lockedintool security</button>
+        </div>
+      </div>
+    </div>`;
+}
+function secModeSet(v){
+  v = v === 'lit' ? 'lit' : 'phone';
+  if(secState().mode === v) return;
+  if(NATIVE && window.StoryNative.securitySet){
+    let ok = false; try{ ok = window.StoryNative.securitySet(v); }catch(e){}
+    if(!ok){ showToast(v === 'lit' ? 'Set a screen lock (PIN, pattern or fingerprint) on your phone first - Lockedintool security uses it' : 'Couldn’t change it'); return; }
+  } else { try{ localStorage.setItem('story-security', v); }catch(e){} }
+  showToast(v === 'lit' ? 'Lockedintool security is on' : 'Phone’s security is on');
+}
+let SEC_LOCKED = false;
+const SEC_WIDGET = /[?&]widget=/.test(location.search);
+const SEC_COVERS = !SEC_WIDGET && (!/[?&]s3=1/.test(location.search) || (/[?&]profile=1/.test(location.search) && !/[?&]gap=1/.test(location.search)));
+function secCallUp(){ try{ return (typeof call !== 'undefined' && call.state !== 'idle') || (typeof gcall !== 'undefined' && gcall.state !== 'idle'); }catch(e){ return false; } }
+function secCoverSync(){
+  if(!SEC_COVERS || !document.body) return;
+  let el = document.getElementById('sec-cover');
+  const on = SEC_LOCKED && !secCallUp();   // a call always shows (and can be answered)
+  if(!on){ if(el) el.remove(); return; }
+  // (Station 3's window shows only #story-profile - the lock goes inside it, like the account gate; not before it's there.)
+  const host = /[?&]profile=1/.test(location.search) ? document.getElementById('story-profile') : document.body;
+  if(!host) return;
+  if(el){ if(el.parentElement !== host) host.appendChild(el); return; }
+  el = document.createElement('div'); el.id = 'sec-cover'; el.className = 'sec-cover';
+  el.innerHTML = '<div class="sec-box"><svg viewBox="0 0 24 24" width="38" height="38" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/></svg>' +
+    '<div class="sec-t">Lockedintool is locked</div><div class="sec-s">Unlock with your fingerprint, face or PIN</div><button class="sec-btn" type="button">Unlock</button></div>';
+  el.querySelector('.sec-btn').addEventListener('click', e=>{ e.stopPropagation(); try{ window.StoryNative.secUnlock(); }catch(err){} });
+  // Nothing under the lock reacts to a touch on it (no page swipes, no pull-down panel behind it).
+  ['touchstart', 'touchmove', 'touchend', 'pointerdown', 'pointermove', 'pointerup', 'click', 'wheel'].forEach(t=>el.addEventListener(t, e=>{ if(!(e.target.closest && e.target.closest('.sec-btn'))) e.stopPropagation(); }, { passive:true }));
+  host.appendChild(el);
+}
+window.storySecLock = function(locked){ SEC_LOCKED = !!locked; secCoverSync(); };
+setTimeout(()=>{ const st = secState(); SEC_LOCKED = st.mode === 'lit' && !st.open; secCoverSync(); }, 0);
+// A live widget (it IS Lockedintool, working): while Lockedintool is locked, the first tap asks to unlock instead of doing anything.
+if(SEC_WIDGET && window.__storyWidgetLive){
+  const secCatch = e=>{ if(!SEC_LOCKED) return; e.preventDefault(); e.stopPropagation(); if(e.type === 'pointerdown') try{ window.StoryNative.secUnlock(); }catch(err){} };
+  ['pointerdown', 'click', 'touchstart'].forEach(t=>document.addEventListener(t, secCatch, { capture:true, passive:false }));
+}
+// The lock screen's Wallet page button only shows when the Wallet page can really open: signed in, a plan with the
+// Pages, Wallet not removed from the rows (the Pages tell the app; only when it changes).
+let walletBtnLast = null;
+function walletBtnTell(){
+  try{
+    if(!window.StoryNative || !window.StoryNative.walletButtonOk || /[?&](s3|widget)=/.test(location.search)) return;
+    const ok = litSignedIn() && !planFree() && !hiddenPages().includes('wallet');
+    if(ok === walletBtnLast) return;
+    walletBtnLast = ok;
+    window.StoryNative.walletButtonOk(ok);
+  }catch(e){}
+}
 function saveSettings(){
   if(/[?&](s3|widget)=/.test(location.search)) return;   // only the Pages window keeps them (Station 3 / Profile / widgets read)
   const o = {}; Object.keys(SAVED_SETTINGS).forEach(k=>{ o[k] = state[k]; });
@@ -9145,6 +9226,7 @@ function settingsHubScreen(){
     </div>
     ${quickAccessSettingsHTML()}
     ${widgetsOnlySettingsHTML()}
+    ${securitySettingsHTML()}
     ${privacySettingsHTML()}
     <div class="section-title">CATEGORIES</div>
     <div class="set2-card">
@@ -9753,6 +9835,7 @@ window.storyProfileOnly = function(){
     <div class="pf-gap"><div class="pf-gap-clip"><svg></svg></div></div>
     <div class="pf-line"></div>`;
   document.body.appendChild(el);
+  secCoverSync();   // Lockedintool security: the lock goes in now that Station 3's window has its page
   el.addEventListener('click', e=>{
     const b = e.target.closest('[data-pf]');
     if(!b) return;
@@ -11524,6 +11607,7 @@ function callView(){
   return v;
 }
 function callRender(){
+  secCoverSync();   // Lockedintool security: a call always shows over the lock
   const v = callView(); if(!v) return;
   const on = call.state !== 'idle';
   v.hidden = !on; if(!on) return;
@@ -11695,6 +11779,7 @@ function gcallTileHTML(id, p){
     (ask ? '<i>' + (me ? 'Listening' : 'Wants to join') + '</i>' + (!me && gcall.leader ? '<button class="gc-admit" data-pf="gcall-admit" data-id="' + escText(id) + '">Let in</button>' : '') : '') + '</div>';
 }
 function gcallRender(){
+  secCoverSync();   // Lockedintool security: a call always shows over the lock
   const v = gcallView(); if(!v) return;
   const on = gcall.state !== 'idle';
   v.hidden = !on; if(!on){ v.querySelector('.gc-grid').innerHTML = ''; return; }
@@ -15246,6 +15331,7 @@ function renderDevice(){
   dashTellNative();
   placeAllCardsBtn();
   saveSettings();
+  walletBtnTell();
   attachPayScroll();
   refreshNeighbors();
   if(typeof updatePhoneStatusClock === 'function') updatePhoneStatusClock();
@@ -17460,6 +17546,7 @@ function attachHandlers(){
         case 'receive-open': state.current = 'receive-money'; state.pay.info = null; state.pay.loading = false; break;
         case 'sub-buy': subBuy(el.getAttribute('data-plan')); break;
         case 'widgets-only': widgetsOnlyAsk(); break;
+        case 'sec-mode': secModeSet(el.getAttribute('data-v')); break;
         case 'sub-opt': state.sub.optView = el.getAttribute('data-v'); renderDevice(); break;
         case 'sub-opt-back': state.sub.optView = null; renderDevice(); break;
         case 'sub-opt-ok': subOptConfirm(); break;

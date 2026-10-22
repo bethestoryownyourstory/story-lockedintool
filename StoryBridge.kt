@@ -62,6 +62,8 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         fun requestPhotoAccess()
         fun chatPick(kind: String)
         fun confirmIdentity(title: String)
+        fun secUnlock()
+        fun walletButtonOk(on: Boolean)
         fun wipeAll()
         fun chatOpenFile(url: String, key: String, iv: String, name: String, mime: String, fromProfile: Boolean)
         fun useProfilePhoto(id: Long)
@@ -258,6 +260,20 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
 
     @JavascriptInterface
     fun confirmIdentity(title: String) { if (profile || pages) host.confirmIdentity(title) }
+
+    /** Settings > SECURITY (owner): {mode: phone | lit, secure: the phone has a screen lock, open: Lockedintool is unlocked
+     *  right now}. Set only from the Pages (Settings); Unlock from the Pages, Profile's window or a live widget. */
+    @JavascriptInterface
+    fun securityState(): String = JSONObject().put("mode", if (Security.lit(ctx)) "lit" else "phone").put("secure", Security.phoneSecure(ctx))
+        .put("open", OverlayService.instance?.secIsOpen() ?: true).toString()
+    @JavascriptInterface
+    fun securitySet(mode: String): Boolean = if (!pages) false else Security.set(ctx, mode == "lit")
+    @JavascriptInterface
+    fun secUnlock() { if (pages || profile || widget) host.secUnlock() }
+    /** The lock screen's Wallet page button only shows when the Wallet page can open (signed in, a plan with the Pages,
+     *  Wallet not removed) - the Pages tell it. */
+    @JavascriptInterface
+    fun walletButtonOk(on: Boolean) { if (pages) host.walletButtonOk(on) }
 
     @JavascriptInterface
     fun chatPick(kind: String) { if ((profile || pages) && (kind == "doc" || kind == "audio")) host.chatPick(kind) }

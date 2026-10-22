@@ -10,16 +10,30 @@ import android.os.Build
 import android.os.Bundle
 import android.os.CancellationSignal
 
-/** "Is it really you?" (owner: Delete account asks for the phone's PIN or biometrics): the phone's own fingerprint /
- *  face / PIN / pattern screen. See-through, so only the phone's own prompt shows. Answer -> OverlayService.identityDone:
- *  "ok", "fail" (cancelled / wrong) or "nolock" (the phone has no screen lock to ask for). */
+/** "Is it really you?" - the phone's own fingerprint / face / PIN / pattern screen. See-through, so only the phone's own
+ *  prompt shows. Used by Delete account (owner: asks for the phone's PIN or biometrics), Lockedintool security (unlock
+ *  Lockedintool every time you use it) and the lock screen's Wallet page button. On the lock screen it is the phone's
+ *  own unlock (Android shows its PIN / fingerprint page and the phone unlocks). Answer: "ok", "fail" (cancelled / wrong)
+ *  or "nolock" (the phone has no screen lock to ask for) -> OverlayService (identityDone / secDone / walletDone). */
 class IdentityActivity : Activity() {
     private var reported = false
+    private val purpose get() = intent.getStringExtra(EXTRA_FOR).orEmpty()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (savedInstanceState != null) return
         val km = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
+        // On the lock screen: the phone's own unlock (its PIN page / fingerprint), then Lockedintool goes on.
+        if (km.isKeyguardLocked && Build.VERSION.SDK_INT >= 27) {
+            setShowWhenLocked(true)
+            km.requestDismissKeyguard(this, object : KeyguardManager.KeyguardDismissCallback() {
+                override fun onDismissSucceeded() { done("ok") }
+                override fun onDismissCancelled() { done("fail") }
+                override fun onDismissError() { done("fail") }
+            })
+            return
+        }
+        if (purpose == "wallet") { done("ok"); return }   // already unlocked: the Wallet page just opens (Lockedintool security asks next)
         if (!km.isDeviceSecure) { done("nolock"); return }
         val title = intent.getStringExtra(EXTRA_TITLE) ?: "Confirm it's you"
         if (Build.VERSION.SDK_INT >= 29) {
@@ -48,15 +62,20 @@ class IdentityActivity : Activity() {
         done(if (resultCode == RESULT_OK) "ok" else "fail")
     }
 
+    private fun report(result: String) {
+        val s = OverlayService.instance ?: return
+        when (purpose) { "security" -> s.secDone(result); "wallet" -> s.walletDone(result); else -> s.identityDone(result) }
+    }
+
     private fun done(result: String) {
-        if (!reported) { reported = true; OverlayService.instance?.identityDone(result) }
+        if (!reported) { reported = true; report(result) }
         finish(); overridePendingTransition(0, 0)
     }
 
     override fun onDestroy() {
-        if (!reported && isFinishing) { reported = true; OverlayService.instance?.identityDone("fail") }
+        if (!reported && isFinishing) { reported = true; report("fail") }
         super.onDestroy()
     }
 
-    companion object { const val EXTRA_TITLE = "title" }
+    companion object { const val EXTRA_TITLE = "title"; const val EXTRA_FOR = "for" }
 }
