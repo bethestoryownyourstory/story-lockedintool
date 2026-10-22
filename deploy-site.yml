@@ -1,0 +1,52 @@
+name: Deploy Lockedintool website
+# Lockedintool's website (owner: 'a website for the company where the plans will be at'): site-build.mjs builds it
+# from the app's own words in index.html (plans, the two options, Information, Privacy Policy, Terms) and the message
+# server's prices, then it goes on Cloudflare as the Worker "lockedintool" (site-wrangler.toml):
+# https://lockedintool.<workers subdomain>.workers.dev, and the owner's own domain once it's added there.
+# Runs when the site or the app's texts change, or Actions -> Run workflow.
+# Needs repo secrets CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID (the same ones the message server uses).
+on:
+  push:
+    branches: [main]
+    paths: ['site-build.mjs', 'site-wrangler.toml', 'index.html', 'icon-192.png', 'icon-512.png', '.github/workflows/deploy-site.yml']
+  workflow_dispatch:
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Check the secrets are set
+        id: ready
+        env:
+          T: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          A: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -n "$T" ] && [ -n "$A" ]; then echo "ok=true" >> "$GITHUB_OUTPUT"
+          else echo "### Not deployed: add CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID in Settings -> Secrets and variables -> Actions." >> "$GITHUB_STEP_SUMMARY"; fi
+      - name: Build the website (prices from the message server)
+        if: steps.ready.outputs.ok == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          SUB=$(curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/subdomain | python3 -c 'import sys,json; print(json.load(sys.stdin)["result"]["subdomain"])' || true)
+          echo "SUB=$SUB" >> "$GITHUB_ENV"
+          PLANS_JSON=$(curl -s "https://story-msg.$SUB.workers.dev/v1/health" | python3 -c 'import sys,json; print(json.dumps(json.load(sys.stdin).get("plans")))' || echo null)
+          PLANS_JSON="$PLANS_JSON" node site-build.mjs _site
+      - name: Put it on Cloudflare
+        if: steps.ready.outputs.ok == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx --yes wrangler@4 deploy -c site-wrangler.toml
+      - name: Check it answers
+        if: steps.ready.outputs.ok == 'true'
+        run: |
+          sleep 5
+          U="https://lockedintool.$SUB.workers.dev"
+          for p in / /privacy/ /terms/; do echo "$p $(curl -s -o /dev/null -w '%{http_code}' "$U$p")"; done
+          T=$(curl -s "$U/" | grep -o '<title>[^<]*</title>' || true)
+          echo "### Website: $U ($T)" | tee -a "$GITHUB_STEP_SUMMARY"
