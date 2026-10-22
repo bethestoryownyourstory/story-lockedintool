@@ -1,0 +1,12 @@
+# The Lockedintool website in the Cloudflare account that holds the owner's domain (owner: 'I bought the domain
+# lockedintool.com' - in a second Cloudflare account, not the one with the app's server): https://lockedintool.com and
+# www.lockedintool.com. deploy-site.yml uses this with the repo secrets SITE_CLOUDFLARE_API_TOKEN / SITE_CLOUDFLARE_ACCOUNT_ID
+# (that account's key); site-wrangler.toml is the same website in the server's account (its workers.dev address).
+name = "lockedintool"
+compatibility_date = "2025-01-01"
+workers_dev = false
+routes = [{ pattern = "lockedintool.com", custom_domain = true }, { pattern = "www.lockedintool.com", custom_domain = true }]
+
+[assets]
+directory = "./_site"
+not_found_handling = "404-page"

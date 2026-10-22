@@ -2,13 +2,14 @@ name: Deploy Lockedintool website
 # Lockedintool's website (owner: 'a website for the company where the plans will be at'): site-build.mjs builds it
 # from the app's own words in index.html (plans, the two options, Information, Privacy Policy, Terms) and the message
 # server's prices, then it goes on Cloudflare as the Worker "lockedintool" (site-wrangler.toml):
-# https://lockedintool.<workers subdomain>.workers.dev, and the owner's own domain once it's added there.
+# https://lockedintool.<workers subdomain>.workers.dev - and, in the Cloudflare account that holds the owner's domain
+# (SITE_CLOUDFLARE_API_TOKEN + SITE_CLOUDFLARE_ACCOUNT_ID, site-domain.toml), https://lockedintool.com and www.
 # Runs when the site or the app's texts change, or Actions -> Run workflow.
 # Needs repo secrets CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID (the same ones the message server uses).
 on:
   push:
     branches: [main]
-    paths: ['site-build.mjs', 'site-wrangler.toml', 'index.html', 'icon-192.png', 'icon-512.png', '.github/workflows/deploy-site.yml']
+    paths: ['site-build.mjs', 'site-wrangler.toml', 'site-domain.toml', 'index.html', 'icon-192.png', 'icon-512.png', '.github/workflows/deploy-site.yml']
   workflow_dispatch:
 jobs:
   deploy:
@@ -23,9 +24,13 @@ jobs:
         env:
           T: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           A: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          ST: ${{ secrets.SITE_CLOUDFLARE_API_TOKEN }}
+          SA: ${{ secrets.SITE_CLOUDFLARE_ACCOUNT_ID }}
         run: |
           if [ -n "$T" ] && [ -n "$A" ]; then echo "ok=true" >> "$GITHUB_OUTPUT"
           else echo "### Not deployed: add CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID in Settings -> Secrets and variables -> Actions." >> "$GITHUB_STEP_SUMMARY"; fi
+          if [ -n "$ST" ] && [ -n "$SA" ]; then echo "domain=true" >> "$GITHUB_OUTPUT"
+          else echo "### lockedintool.com waits for SITE_CLOUDFLARE_API_TOKEN + SITE_CLOUDFLARE_ACCOUNT_ID (the key of the Cloudflare account the domain is in)." >> "$GITHUB_STEP_SUMMARY"; fi
       - name: Build the website (prices from the message server)
         if: steps.ready.outputs.ok == 'true'
         env:
@@ -36,20 +41,18 @@ jobs:
           echo "SUB=$SUB" >> "$GITHUB_ENV"
           PLANS_JSON=$(curl -s "https://story-msg.$SUB.workers.dev/v1/health" | python3 -c 'import sys,json; print(json.dumps(json.load(sys.stdin).get("plans")))' || echo null)
           PLANS_JSON="$PLANS_JSON" node site-build.mjs _site
-      - name: Where lockedintool.com is (its nameservers, and whether this Cloudflare account / token sees it)
-        if: steps.ready.outputs.ok == 'true'
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          A: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          echo "Nameservers: $(dig +short NS lockedintool.com | tr '\n' ' ')" | tee -a "$GITHUB_STEP_SUMMARY"
-          curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/zones?name=lockedintool.com" | python3 -c 'import sys, json, os; d = json.load(sys.stdin); r = d.get("result") or []; print("Zones the token sees:", len(r), [(z.get("status"), (z.get("account") or {}).get("id") == os.environ.get("A")) for z in r], d.get("errors") or "")' | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Put it on Cloudflare
         if: steps.ready.outputs.ok == 'true'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: npx --yes wrangler@4 deploy -c site-wrangler.toml
+      - name: Put it on lockedintool.com (the domain's own Cloudflare account)
+        if: steps.ready.outputs.ok == 'true' && steps.ready.outputs.domain == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.SITE_CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.SITE_CLOUDFLARE_ACCOUNT_ID }}
+        run: npx --yes wrangler@4 deploy -c site-domain.toml
       - name: Check it answers
         if: steps.ready.outputs.ok == 'true'
         run: |
@@ -58,9 +61,13 @@ jobs:
           for p in / /privacy/ /terms/; do echo "$p $(curl -s -o /dev/null -w '%{http_code}' "$U$p")"; done
           T=$(curl -s "$U/" | grep -o '<title>[^<]*</title>' || true)
           echo "### Website: $U ($T)" | tee -a "$GITHUB_STEP_SUMMARY"
-          # The owner's domain (attached in Cloudflare - see site-wrangler.toml; a new certificate can take a few minutes).
+          # The owner's domain (a new certificate can take a few minutes the first time) - it must answer.
+          [ "${{ steps.ready.outputs.domain }}" = true ] || exit 0
+          bad=0
           for d in lockedintool.com www.lockedintool.com; do
-            c=000; for i in $(seq 1 6); do c=$(curl -s -o /dev/null -w '%{http_code}' "https://$d/" || true); [ "$c" = 200 ] && break; sleep 10; done
+            c=000; for i in $(seq 1 36); do c=$(curl -s -o /dev/null -w '%{http_code}' "https://$d/" || true); [ "$c" = 200 ] && break; sleep 10; done
             t=$(curl -s "https://$d/" | grep -o '<title>[^<]*</title>' || true)
             echo "### https://$d/ answers $c $t" | tee -a "$GITHUB_STEP_SUMMARY"
+            [ "$c" = 200 ] || bad=1
           done
+          exit $bad

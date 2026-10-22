@@ -1,7 +1,7 @@
 name: Build STORY APK
 on:
   push:
-    paths-ignore: ['index.html', '*.md', 'release.json', 'release-worker.js', 'screens.yml', '.github/workflows/screens.yml', 'deploy-worker.yml', '.github/workflows/deploy-worker.yml', 'site-build.mjs', 'site-wrangler.toml', 'deploy-site.yml', '.github/workflows/deploy-site.yml']
+    paths-ignore: ['index.html', '*.md', 'release.json', 'release-worker.js', 'screens.yml', '.github/workflows/screens.yml', 'deploy-worker.yml', '.github/workflows/deploy-worker.yml', 'site-build.mjs', 'site-wrangler.toml', 'site-domain.toml', 'deploy-site.yml', '.github/workflows/deploy-site.yml']
   workflow_dispatch:
 permissions:
   contents: write
