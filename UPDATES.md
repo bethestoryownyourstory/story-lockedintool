@@ -109,3 +109,4 @@ commits, pushed as a new update) - nothing else changes.
 | 101 | 2026-10-22 | Subscription: once you've paid for a plan it's no longer listed - you have it (the line at the top says so) - and only the other plans show; it comes back when it runs out | 43413e6 |
 | 102 | 2026-10-22 | The Lockedintool website: what Lockedintool is, the plans (Basic $5 / Premium $15, R95 / R285 in South Africa) with Second system / Only system, Privacy Policy, Terms of Service and contact - at https://lockedintool.percyjuniormaseko0.workers.dev until your own domain is added | 39cb2e3 |
 | 103 | 2026-10-22 | Website: says 'Lockedintool is not yet available to the public' (no download) until the launch, when the line goes away and Download for Android shows | 419f645 |
+| 104 | 2026-10-22 | The website is on your own domain: https://lockedintool.com (and www.lockedintool.com) | e20f948 |
