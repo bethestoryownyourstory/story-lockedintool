@@ -41,7 +41,15 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: npx --yes wrangler@4 deploy -c site-wrangler.toml
+        run: |
+          # With the owner's domain (routes in site-wrangler.toml). If Cloudflare won't attach it (the token can't, or the
+          # domain isn't in this account), the website still goes up without it and the summary says what to do.
+          set -o pipefail
+          if npx --yes wrangler@4 deploy -c site-wrangler.toml 2>&1 | tee deploy.log; then exit 0; fi
+          grep -v '^routes' site-wrangler.toml > site-nodomain.toml
+          npx --yes wrangler@4 deploy -c site-nodomain.toml
+          { echo "### The website is up, but Cloudflare didn't attach the domain:"; grep -iE 'error|denied|not found|authentication' deploy.log | head -5
+            echo "Add it in Cloudflare: Workers & Pages > lockedintool > Settings > Domains & Routes > Add > Custom domain (lockedintool.com, then www.lockedintool.com)."; } >> "$GITHUB_STEP_SUMMARY"
       - name: Check it answers
         if: steps.ready.outputs.ok == 'true'
         run: |
@@ -50,3 +58,8 @@ jobs:
           for p in / /privacy/ /terms/; do echo "$p $(curl -s -o /dev/null -w '%{http_code}' "$U$p")"; done
           T=$(curl -s "$U/" | grep -o '<title>[^<]*</title>' || true)
           echo "### Website: $U ($T)" | tee -a "$GITHUB_STEP_SUMMARY"
+          # The owner's domain (its certificate can take a few minutes the first time).
+          for d in lockedintool.com www.lockedintool.com; do
+            c=000; for i in $(seq 1 30); do c=$(curl -s -o /dev/null -w '%{http_code}' "https://$d/"); [ "$c" = 200 ] && break; sleep 10; done
+            echo "### https://$d/ answers $c" | tee -a "$GITHUB_STEP_SUMMARY"
+          done

@@ -1,9 +1,10 @@
 # Lockedintool's website (site-build.mjs builds it into _site; deploy-site.yml puts it on Cloudflare).
-# https://lockedintool.<workers subdomain>.workers.dev - and the owner's own domain once it's added here as
-#   routes = [{ pattern = "<domain>", custom_domain = true }, { pattern = "www.<domain>", custom_domain = true }]
+# https://lockedintool.com (the owner's own domain, bought on Cloudflare - owner: 'I bought the domain lockedintool.com'),
+# www.lockedintool.com and https://lockedintool.<workers subdomain>.workers.dev.
 name = "lockedintool"
 compatibility_date = "2025-01-01"
 workers_dev = true
+routes = [{ pattern = "lockedintool.com", custom_domain = true }, { pattern = "www.lockedintool.com", custom_domain = true }]
 
 [assets]
 directory = "./_site"
