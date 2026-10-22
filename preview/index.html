@@ -2166,8 +2166,13 @@
   body.s3-only.s3-dash .station3-btn-chevron{ color:#000; background:rgba(0,0,0,0.05); border:1px solid rgba(0,0,0,0.08); }
   body.s3-only.s3-dash .station3-btn-chevron:active{ background:rgba(0,0,0,0.14); }
   body.s3-only.s3-dash .station3-btn-plus{ color:#fff; background:#000; border-color:#000; }
-  /* All evenly spaced (owner's choice): every button the same size, the same distance apart - the + too. */
+  /* All evenly spaced (owner's choice): every button the same size, the same distance apart - the + too - and the +
+     exactly in the middle of the screen (owner: 'the plus needs to centre the Dashboard look'): equal columns, the +
+     in the middle one (6 buttons: 7 columns, the last one left free; 5 buttons without the dial pad: 5 columns). */
   body.s3-only.s3-dash .station3-bar > button{ width:32px; height:32px; box-sizing:border-box; }
+  body.s3-only.s3-dash .station3-bar{ display:grid; grid-template-columns:repeat(5, 1fr); justify-items:center; align-items:center; padding:4px 0; }
+  body.s3-only.s3-dash .station3-bar:has(> :nth-child(6)){ grid-template-columns:repeat(7, 1fr); }
+  body.s3-only.s3-dash .station3-bar-card{ padding:0 !important; }
   body.s3-only.s3-dash .station3-btn-plus:active{ background:#2b2b2b; }
   body.s3-only .station3-dialpad-card{ border-radius:20px !important; }
   body.s3-dial .station3-corner-arrow, body.s3-dial .station3-bar-card{ display:none !important; }
