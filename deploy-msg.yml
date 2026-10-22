@@ -8,13 +8,19 @@ name: Deploy STORY message server
 #     TWILIO_FROM also sends password-reset links by text message.
 #   RESEND_API_KEY + MAIL_FROM (e.g. "Lockedintool <no-reply@yourdomain>") - Resend (resend.com), for the emails Lockedintool
 #     sends: password-reset links, codes to check a private email, Delete account confirmations.
-#   LEMONSQUEEZY_API_KEY - the owner's Lemon Squeezy store (owner, Oct 2026: worldwide; Stitch and Paystack are out):
-#     Basic / Premium as real monthly subscriptions in US dollars, sold worldwide. In the store make one subscription
+#   LEMONSQUEEZY_API_KEY - the owner's Lemon Squeezy store (owner, Oct 2026: worldwide): Basic / Premium as real
+#     monthly subscriptions in US dollars for everyone OUTSIDE South Africa. In the store make one subscription
 #     product (or two) with a monthly 'Basic' and a monthly 'Premium' plan - the server finds them by name and makes its
 #     own signed webhook. Test-mode key first, then the live one. LEMONSQUEEZY_STORE_ID (optional) if the account has
 #     more than one store.
+#   STITCH_CLIENT_ID, STITCH_CLIENT_SECRET - Stitch EXPRESS, for South African users only (owner chose 'B'): plans paid
+#     in rand from their own bank (payment links into LOCKED IN TOOL's balance). SUB_BASIC_ZAR / SUB_PREMIUM_ZAR
+#     (optional) - the monthly prices in rand (default R95 / R285).
+#   STITCH_ENT_CLIENT_ID, STITCH_ENT_CLIENT_SECRET - Stitch Enterprise, South African users only: Send money to a bank
+#     account and Connect your bank. STITCH_REDIRECT (optional) - the page Stitch returns to after you approve a payment
+#     (default: this server's /v1/pay/return).
 #   SUB_ENFORCE (optional) - set to 1 to switch the paywall on (no plan = only the Subscription page). Leave it unset
-#                until the LIVE Lemon Squeezy key is in.
+#                until the LIVE payment keys are in.
 #   REALTIME_APP_ID + REALTIME_APP_SECRET (optional) - Live video (Cloudflare Realtime). Without them the deploy makes the
 #     app itself, which needs the Cloudflare token to have the 'Calls' (Realtime): Edit permission.
 #   TURN_KEY_ID + TURN_KEY_TOKEN (optional) - the calls relay (Cloudflare TURN), so calls connect on mobile data. Without
@@ -40,11 +46,13 @@ jobs:
           F: ${{ secrets.TWILIO_FROM }}
           V: ${{ secrets.TWILIO_VERIFY_SID }}
           LS: ${{ secrets.LEMONSQUEEZY_API_KEY }}
+          S: ${{ secrets.STITCH_CLIENT_ID }}
         run: |
           if [ -n "$T" ] && [ -n "$A" ]; then echo "ok=true" >> "$GITHUB_OUTPUT"
           else echo "### Not deployed: add CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID in Settings -> Secrets and variables -> Actions." >> "$GITHUB_STEP_SUMMARY"; fi
           if [ -z "$F" ] && [ -z "$V" ]; then echo "### Phone verification texts wait for TWILIO_FROM (only needed when STORY verifies something)." >> "$GITHUB_STEP_SUMMARY"; fi
-          if [ -z "$LS" ]; then echo "### Plans wait for LEMONSQUEEZY_API_KEY (the Lemon Squeezy store)." >> "$GITHUB_STEP_SUMMARY"; fi
+          if [ -z "$LS" ]; then echo "### Plans outside South Africa wait for LEMONSQUEEZY_API_KEY (the Lemon Squeezy store)." >> "$GITHUB_STEP_SUMMARY"; fi
+          if [ -z "$S" ]; then echo "### Plans in South Africa wait for STITCH_CLIENT_ID + STITCH_CLIENT_SECRET (Stitch Express)." >> "$GITHUB_STEP_SUMMARY"; fi
       - name: Deploy to Cloudflare
         if: steps.ready.outputs.ok == 'true'
         env:
@@ -63,6 +71,13 @@ jobs:
           PHONE_SALT: ${{ secrets.PHONE_SALT }}
           LEMONSQUEEZY_API_KEY: ${{ secrets.LEMONSQUEEZY_API_KEY }}
           LEMONSQUEEZY_STORE_ID: ${{ secrets.LEMONSQUEEZY_STORE_ID }}
+          STITCH_CLIENT_ID: ${{ secrets.STITCH_CLIENT_ID }}
+          STITCH_CLIENT_SECRET: ${{ secrets.STITCH_CLIENT_SECRET }}
+          STITCH_REDIRECT: ${{ secrets.STITCH_REDIRECT }}
+          STITCH_ENT_CLIENT_ID: ${{ secrets.STITCH_ENT_CLIENT_ID }}
+          STITCH_ENT_CLIENT_SECRET: ${{ secrets.STITCH_ENT_CLIENT_SECRET }}
+          SUB_BASIC_ZAR: ${{ secrets.SUB_BASIC_ZAR }}
+          SUB_PREMIUM_ZAR: ${{ secrets.SUB_PREMIUM_ZAR }}
           SUB_ENFORCE: ${{ secrets.SUB_ENFORCE }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           MAIL_FROM: ${{ secrets.MAIL_FROM }}
@@ -71,7 +86,7 @@ jobs:
           TURN_KEY_ID: ${{ secrets.TURN_KEY_ID }}
           TURN_KEY_TOKEN: ${{ secrets.TURN_KEY_TOKEN }}
         run: |
-          for k in TWILIO_ACCOUNT_SID TWILIO_AUTH_TOKEN TWILIO_FROM TWILIO_VERIFY_SID PHONE_SALT LEMONSQUEEZY_API_KEY LEMONSQUEEZY_STORE_ID SUB_ENFORCE RESEND_API_KEY MAIL_FROM REALTIME_APP_ID REALTIME_APP_SECRET TURN_KEY_ID TURN_KEY_TOKEN; do
+          for k in TWILIO_ACCOUNT_SID TWILIO_AUTH_TOKEN TWILIO_FROM TWILIO_VERIFY_SID PHONE_SALT LEMONSQUEEZY_API_KEY LEMONSQUEEZY_STORE_ID STITCH_CLIENT_ID STITCH_CLIENT_SECRET STITCH_REDIRECT STITCH_ENT_CLIENT_ID STITCH_ENT_CLIENT_SECRET SUB_BASIC_ZAR SUB_PREMIUM_ZAR SUB_ENFORCE RESEND_API_KEY MAIL_FROM REALTIME_APP_ID REALTIME_APP_SECRET TURN_KEY_ID TURN_KEY_TOKEN; do
             v="${!k}"
             if [ -n "$v" ]; then printf '%s' "$v" | npx --yes wrangler@4 secret put "$k" -c msg-wrangler.toml >/dev/null && echo "$k set"; fi
           done

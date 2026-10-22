@@ -14,9 +14,11 @@
 //  - Groups (owner): public groups (Community - anyone can find and join them) and private groups (made in Messages -
 //    only people a leader adds; never listed anywhere). Private group messages are locked for each member; public
 //    group posts and chat are public by nature (anyone can join).
-//  - Money transfer (owner: send money profile to profile, and to anyone - 'everyone must be able to send to banks',
-//    worldwide): needs a licensed worldwide payout partner (none connected yet - Stitch is out, owner). A profile's
-//    bank account for receiving is kept only here (never shown to anyone - only its last 3 digits to its owner).
+//  - Money transfer (owner: send money profile to profile, and to anyone - even people not on STORY): South African
+//    users through Stitch (owner chose it back for South Africa: STITCH_ENT_CLIENT_ID / STITCH_ENT_CLIENT_SECRET) - the
+//    payer approves the payment in their OWN bank (Stitch's page) and it goes straight into the receiver's bank account
+//    (by account number); other countries get a partner later. A profile's bank account for receiving is kept only here
+//    (never shown to anyone - only its last 3 digits to its owner). STORY never holds the money.
 // Everything lives in ONE Durable Object (SQLite storage) so every phone's connection meets in the same place.
 
 const JSONH = { 'content-type': 'application/json', 'access-control-allow-origin': '*', 'access-control-allow-headers': 'content-type, authorization', 'access-control-allow-methods': 'GET, POST, OPTIONS' };
@@ -124,9 +126,8 @@ export class Hub {
     this.sql.exec(`CREATE INDEX IF NOT EXISTS payments_uid ON payments(uid, created)`);
     this.sql.exec(`CREATE INDEX IF NOT EXISTS payments_to ON payments(to_uid, created)`);
     try { this.sql.exec(`ALTER TABLE payments ADD COLUMN kind TEXT`); } catch (e) {}
-    // Connect your bank: the old Stitch sign-ins are deleted (Stitch is out - owner); the table waits for a worldwide partner.
+    // Your bank, connected through Stitch (open banking - South African users): the sign-in it gave us, locked (bankKey), and the last look.
     this.sql.exec(`CREATE TABLE IF NOT EXISTS banklinks (uid TEXT PRIMARY KEY, refresh TEXT, access TEXT, aexp INTEGER, state TEXT, verifier TEXT, linked INTEGER, cache TEXT, cached INTEGER)`);
-    this.sql.exec('DELETE FROM banklinks');
     this.sql.exec(`CREATE TABLE IF NOT EXISTS subs (uid TEXT PRIMARY KEY, plan TEXT, until INTEGER, updated INTEGER)`);
     // The option a plan is bought under (owner): 'second' = Lockedintool as your second system, 'only' = your only system.
     try { this.sql.exec(`ALTER TABLE subs ADD COLUMN mode TEXT`); } catch (e) {}
@@ -230,9 +231,13 @@ export class Hub {
         // Plans: can the server really reach the Lemon Squeezy store and find the Basic / Premium plans? (no payment is made)
         let pay = this.lsReady() ? 'keys' : 'no-keys';
         if (url.searchParams.get('pay') === '1' && this.lsReady()) { try { const c = await this.lsSetup(); pay = 'ok - store ' + c.store + ', basic ' + (c.basic || 'MISSING') + ', premium ' + (c.premium || 'MISSING') + ', notifications ' + (c.hook ? 'on' : 'off'); } catch (e) { pay = String(e.message || e).slice(0, 160); } }
-        return json({ ok: true, sms: !!(this.env.TWILIO_VERIFY_SID || this.env.TWILIO_FROM), mail: this.mailReady(), resetSms: this.smsLinkReady(), plans: this.subPlans(), pay, subs: this.subReady(), transfers: this.payReady(), live: this.liveReady(), turn: this.turnReady() });
+        // South Africa (Stitch Express): can the server really sign in? (just a sign-in - no payment is made)
+        let stitch = this.expressReady() ? 'keys' : 'no-keys';
+        if (url.searchParams.get('pay') === '1' && this.expressReady()) { try { await this.expressToken(); stitch = 'ok'; } catch (e) { stitch = String(e.message || e).slice(0, 160); } }
+        return json({ ok: true, stitch, sms: !!(this.env.TWILIO_VERIFY_SID || this.env.TWILIO_FROM), mail: this.mailReady(), resetSms: this.smsLinkReady(), plans: this.subPlans(), pay, subs: this.subReady(), transfers: this.payReady(), live: this.liveReady(), turn: this.turnReady() });
       }
       if (path === '/v1/pay/return') return new Response('<!doctype html><meta name=viewport content="width=device-width,initial-scale=1"><body style="margin:0;background:#000;color:#fff;font:600 18px system-ui;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center;padding:24px;box-sizing:border-box">Done - go back to Lockedintool to see your payment.</body>', { headers: { 'content-type': 'text/html; charset=utf-8' } });
+      if (path === '/v1/bank/return') return this.bankReturn(url);
       if (path === '/v1/delete') return this.deletePage(req, url);
       if (path === '/v1/login/salt') return this.loginSalt(url.searchParams.get('u') || '');
       if (path === '/v1/reset') return this.resetPage(req, url);
@@ -1189,8 +1194,9 @@ export class Hub {
     return new Response(null, { status: 101, webSocket: pair[0] });
   }
   // ---- LOCKED IN TOOL subscription (owner: Basic $5 / Premium $15 a month - raised from $1 / $5 so each user's costs are
-  //      covered). Paid through LEMON SQUEEZY (owner, Oct 2026: worldwide - 'this app should be able world wide'; Stitch
-  //      and Paystack are out): the owner's Lemon Squeezy store (key LEMONSQUEEZY_API_KEY) sells the plans as real
+  //      covered). South African users pay in rand through STITCH EXPRESS (owner chose Stitch back for South Africa;
+  //      saUser / subProvider); everyone else through LEMON SQUEEZY (owner, Oct 2026: worldwide - 'this app should be able
+  //      world wide'; Paystack is out): the owner's Lemon Squeezy store (key LEMONSQUEEZY_API_KEY) sells the plans as real
   //      monthly subscriptions in US dollars to every country - card, PayPal, Apple / Google Pay on Lemon Squeezy's own
   //      checkout, which also takes the receipt email and handles each country's sales tax (merchant of record). In the
   //      store: one subscription product (or two) with a 'Basic' and a 'Premium' monthly plan - the server finds them by
@@ -1199,9 +1205,13 @@ export class Hub {
   //      portal. ----
   subPlans() {
     const c = this.lsCache || {};
-    return { basic: { usd: c.basicUsd || 5 }, premium: { usd: c.premiumUsd || 15 } };
+    return { basic: { usd: c.basicUsd || 5, zar: Number(this.env.SUB_BASIC_ZAR || 95) }, premium: { usd: c.premiumUsd || 15, zar: Number(this.env.SUB_PREMIUM_ZAR || 285) } };
   }
-  subReady() { return this.lsReady(); }
+  subReady() { return this.lsReady() || this.expressReady(); }
+  // South African users (owner chose Stitch back for them): their account's Country (accounts from before Country count
+  // too). They pay in rand through Stitch Express; everyone else through Lemon Squeezy in dollars.
+  saUser(me) { const c = String((me && me.country) || '').trim().toLowerCase(); return !c || c === 'south africa' || c === 'za'; }
+  subProvider(me) { return this.expressReady() && this.saUser(me) ? 'stitch' : this.lsReady() ? 'ls' : ''; }
   // Calls cost Lockedintool (owner: 'they won't be available on free plan'): Lockedintool calls (voice, video, group)
   // need Basic or Premium - only once subscriptions are switched on (SUB_ENFORCE + payments connected), never the
   // official accounts. Phone calls from the dial pad are the phone's own and aren't touched.
@@ -1213,7 +1223,42 @@ export class Hub {
   subView(me) {
     const r = this.one('SELECT * FROM subs WHERE uid = ?', me.id), now = Date.now();
     const active = !!(r && r.until > now);
-    return { connected: this.subReady(), enforced: this.env.SUB_ENFORCE === '1', plan: active ? r.plan : null, mode: active ? (r.mode || 'second') : null, until: r ? r.until : 0, active, plans: this.subPlans() };
+    const provider = this.subProvider(me);
+    return { connected: !!provider, provider, enforced: this.env.SUB_ENFORCE === '1', plan: active ? r.plan : null, mode: active ? (r.mode || 'second') : null, until: r ? r.until : 0, active, plans: this.subPlans() };
+  }
+  // Stitch Express REST API (express.stitch.money/api/v1, its own OpenAPI spec): a 15-minute token from clientId +
+  // clientSecret, then payment links. Amounts are in cents.
+  expressReady() { return !!(this.env.STITCH_CLIENT_ID && this.env.STITCH_CLIENT_SECRET); }
+  expressBase() { return this.env.STITCH_EXPRESS_BASE || 'https://express.stitch.money'; }   // (local tests: a stand-in)
+  async expressToken() {
+    if (this.exTok && this.exTok.exp > Date.now() + 60000) return this.exTok.v;
+    const r = await fetch(this.expressBase() + '/api/v1/token', { method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ clientId: this.env.STITCH_CLIENT_ID, clientSecret: this.env.STITCH_CLIENT_SECRET, scope: 'client_paymentrequest' }) });
+    const j = await r.json().catch(() => ({}));
+    const tok = j && j.data && j.data.accessToken;
+    if (!r.ok || !tok) throw new Error('stitch-signin: ' + (r.status === 400 ? 'invalid credentials (the secret changes every time it is viewed in the dashboard)' : ((j.generalErrors || [])[0] || r.status)));
+    this.exTok = { v: tok, exp: Date.now() + 14 * 60000 };
+    return tok;
+  }
+  async express(method, path, body) {
+    const go = async () => fetch(this.expressBase() + path, { method, headers: { 'content-type': 'application/json', authorization: 'Bearer ' + await this.expressToken() }, body: body ? JSON.stringify(body) : undefined });
+    let r = await go();
+    if (r.status === 401) { this.exTok = null; r = await go(); }   // token ran out - once more with a fresh one
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || j.success === false) throw new Error('stitch: ' + (((j.generalErrors || [])[0]) || JSON.stringify(j.fieldErrors || {}) || r.status));
+    return j.data || {};
+  }
+  // Where your bank / card page sends you back to (registered with Express once; it allows up to 5).
+  async expressBack(url) {
+    const back = this.env.STITCH_REDIRECT || (url.origin + '/v1/pay/return');
+    if (!this.exBackDone) { try { await this.express('POST', '/api/v1/redirect-urls', { redirectUrl: back }); } catch (e) {} this.exBackDone = true; }
+    return back;
+  }
+  // 30 more days of a plan paid through Stitch (same plan adds on, a different plan starts now).
+  subCredit(uid, plan, mode, now) {
+    const cur = this.one('SELECT * FROM subs WHERE uid = ?', uid);
+    const from = cur && cur.plan === plan && cur.until > now ? cur.until : now;
+    this.sql.exec('INSERT OR REPLACE INTO subs (uid, plan, until, updated, mode) VALUES (?, ?, ?, ?, ?)', uid, plan, from + 30 * 86400000, now, mode === 'only' ? 'only' : 'second');
   }
   lsReady() { return !!this.env.LEMONSQUEEZY_API_KEY; }
   async ls(method, path, body) {
@@ -1298,13 +1343,33 @@ export class Hub {
     (this.lsLook = this.lsLook || {})[me.id] = now;
     try { if (!this.lsCache) await this.lsSetup(); const s = await this.ls('GET', '/subscriptions/' + encodeURIComponent(r.lssub)); if (s.data) this.lsApply(s.data, {}, now); } catch (e) {}
   }
-  // A plan payment you started: paid once Lemon Squeezy's notification says so; an unpaid checkout is just let go.
+  // A plan payment you started. Lemon Squeezy: paid once its notification says so (an unpaid checkout is let go).
+  // Stitch: its payment link's state; paid = 30 days of that plan.
   async subCheck(me, p) {
-    if (p.status === 'pending' && Date.now() - p.created > 86400000) { this.sql.exec("UPDATE payments SET status = 'expired', updated = ? WHERE id = ?", Date.now(), p.id); p.status = 'expired'; }
+    const now = Date.now();
+    if (String(p.stitch || '').startsWith('ls:')) {
+      if (p.status === 'pending' && now - p.created > 86400000) { this.sql.exec("UPDATE payments SET status = 'expired', updated = ? WHERE id = ?", now, p.id); p.status = 'expired'; }
+      return p.status;
+    }
+    if (p.status !== 'pending' || !this.expressReady()) return p.status;
+    const d = await this.express('GET', '/api/v1/payment-links/' + encodeURIComponent(p.stitch));
+    const ls = (d.payment && d.payment.status) || 'PENDING';
+    const st = ls === 'PAID' ? 'paid' : ls === 'CANCELLED' ? 'cancelled' : ls === 'EXPIRED' || ls === 'FAILED' ? 'expired' : 'pending';
+    if (st !== 'pending') {
+      this.sql.exec('UPDATE payments SET status = ?, updated = ? WHERE id = ?', st, now, p.id);
+      p.status = st;
+      if (st === 'paid') this.subCredit(me.id, p.kind.slice(4), p.mode, now);
+    }
     return p.status;
   }
+  // Cancel a plan payment that isn't paid yet. Stitch: POST payment-links/{id}/cancel (the link can't be paid any more;
+  // if it's already paid / going through, the real state is read instead - paid still counts).
   async subCancel(me, p) {
     if (p.status !== 'pending') return p.status;
+    if (!String(p.stitch || '').startsWith('ls:') && this.expressReady()) {
+      try { await this.express('POST', '/api/v1/payment-links/' + encodeURIComponent(p.stitch) + '/cancel'); }
+      catch (e) { try { await this.subCheck(me, p); } catch (e2) {} return p.status; }
+    }
     this.sql.exec("UPDATE payments SET status = 'cancelled', updated = ? WHERE id = ? AND status = 'pending'", Date.now(), p.id);   // (paid anyway later = still counts)
     const q = this.one('SELECT status FROM payments WHERE id = ?', p.id); p.status = q ? q.status : 'cancelled';
     return p.status;
@@ -1315,9 +1380,23 @@ export class Hub {
     if (op === 'buy') {
       const plans = this.subPlans(), plan = String(b.plan || '');
       if (!plans[plan]) return json({ error: 'plan' }, 400);
-      if (!this.subReady()) return json({ error: 'not-connected' }, 503);
+      const provider = this.subProvider(me);
+      if (!provider) return json({ error: 'not-connected' }, 503);
       // Changed your mind before paying (owner): any plan you started but didn't pay is let go first.
       for (const old of this.sql.exec("SELECT * FROM payments WHERE uid = ? AND kind LIKE 'sub:%' AND status = 'pending'", me.id).toArray()) await this.subCancel(me, old);
+      if (provider === 'stitch') {   // South Africa: a Stitch Express payment link in rand (card, Capitec, Apple / Google Pay)
+        const cents = Math.round(plans[plan].zar * 100), id = 'p' + rand(9);
+        const who = String(me.name || (me.username ? '@' + me.username : '') || 'LOCKED IN member').replace(/[^\p{L}\p{N} .@'_-]/gu, '').trim();
+        const d = await this.express('POST', '/api/v1/payment-links', {
+          amount: cents, payerName: (who.length >= 3 ? who : 'LOCKED IN member').slice(0, 40),
+          merchantReference: ('LIT-' + plan + '-' + me.id + '-' + id).replace(/[^A-Za-z0-9 -]/g, '').slice(0, 50) });
+        const link = d.payment || {};
+        if (!link.id || !link.link) throw new Error('stitch: no payment link');
+        this.sql.exec('INSERT INTO payments (id, uid, to_uid, to_name, to_bank, to_mask, cents, ref, stitch, status, created, updated, kind, mode) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          id, me.id, 'LOCKED IN TOOL ' + plan, '', '', cents, 'LIT ' + plan.toUpperCase(), link.id, 'pending', now, now, 'sub:' + plan, b.mode === 'only' ? 'only' : 'second');
+        const back = await this.expressBack(url);
+        return json({ id, url: link.link + (link.link.includes('?') ? '&' : '?') + 'redirect_url=' + encodeURIComponent(back) });
+      }
       const c = await this.lsSetup();
       const variant = c[plan];
       if (!variant) return json({ error: 'not-connected' }, 503);   // the store has no such plan yet
@@ -1341,14 +1420,104 @@ export class Hub {
     return json({ error: 'notfound' }, 404);
   }
 
-  // ---- Money transfer and Connect your bank (owner: 'everyone must be able to send to banks' - worldwide). Stitch is
-  //      out (owner); a licensed worldwide payout / open-banking partner isn't connected yet, so Send and Connect your
-  //      bank say they connect once it is. Your bank account for receiving (Receive) is kept here meanwhile. ----
-  payReady() { return false; }
+  // ---- Money transfer (Stitch - South African users; owner chose Stitch back for South Africa, other countries later) ----
+  // Sending money to OTHER people needs a payout partner: Stitch Express only takes payments into LOCKED IN TOOL and
+  // withdraws to the owner's own bank. This uses Stitch's Enterprise API (its own keys STITCH_ENT_CLIENT_ID /
+  // STITCH_ENT_CLIENT_SECRET) - until those exist, Send says it connects once a payout partner is set up.
+  // (STITCH_BASE: local tests only - a stand-in Stitch, like TWILIO_BASE)
+  payReady() { return !!(this.env.STITCH_ENT_CLIENT_ID && this.env.STITCH_ENT_CLIENT_SECRET); }
+  async stitchToken() {
+    if (this.stitchTok && this.stitchTok.exp > Date.now() + 60000) return this.stitchTok.v;
+    const r = await fetch((this.env.STITCH_BASE || 'https://secure.stitch.money') + '/connect/token', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ grant_type: 'client_credentials', client_id: this.env.STITCH_ENT_CLIENT_ID, client_secret: this.env.STITCH_ENT_CLIENT_SECRET,
+        scope: 'client_paymentrequest', audience: 'https://secure.stitch.money/connect/token' }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.access_token) throw new Error('stitch-signin: ' + (j.error_description || j.error || r.status));
+    this.stitchTok = { v: j.access_token, exp: Date.now() + (j.expires_in || 3600) * 1000 };
+    return j.access_token;
+  }
+  async stitch(query, variables) {
+    const r = await fetch((this.env.STITCH_BASE || 'https://api.stitch.money') + '/graphql', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + await this.stitchToken() }, body: JSON.stringify({ query, variables }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || j.errors) throw new Error('stitch: ' + ((j.errors && j.errors[0] && j.errors[0].message) || r.status));
+    return j.data;
+  }
+  // ---- Connect your bank (owner: your REAL balance and history, like your bank's app) - open banking through
+  // Stitch (the same Enterprise keys; Stitch switches on the scopes accounts / balances / transactions and the return
+  // page <server>/v1/bank/return). You log in to your own bank on Stitch's page; Lockedintool only READS (it can't
+  // move money with this) and keeps the bank's sign-in locked on this server. ----
+  async bankKey() { return crypto.subtle.importKey('raw', await crypto.subtle.digest('SHA-256', enc.encode('bank|' + (this.env.STITCH_ENT_CLIENT_SECRET || ''))), 'AES-GCM', false, ['encrypt', 'decrypt']); }
+  async bankLock(v) { const iv = crypto.getRandomValues(new Uint8Array(12)); return b64u(iv) + '.' + b64u(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await this.bankKey(), enc.encode(v))); }
+  async bankOpen(v) {
+    const [a, b] = String(v || '').split('.'); if (!b) return '';
+    const un = s => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+    try { return new TextDecoder().decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: un(a) }, await this.bankKey(), un(b))); } catch (e) { return ''; }
+  }
+  bankBack(url) { return (this.env.BANK_REDIRECT || (url.origin + '/v1/bank/return')); }
+  async bankTokens(params) {
+    const r = await fetch((this.env.STITCH_BASE || 'https://secure.stitch.money') + '/connect/token', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams(Object.assign({ client_id: this.env.STITCH_ENT_CLIENT_ID, client_secret: this.env.STITCH_ENT_CLIENT_SECRET, audience: 'https://secure.stitch.money/connect/token' }, params)) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.access_token) throw new Error((j.error_description || j.error || ('bank sign-in ' + r.status)));
+    return j;
+  }
+  async bankSave(uid, j) {
+    this.sql.exec('UPDATE banklinks SET access = ?, aexp = ?, refresh = COALESCE(?, refresh), state = NULL, verifier = NULL, linked = COALESCE(linked, ?) WHERE uid = ?',
+      await this.bankLock(j.access_token), Date.now() + (j.expires_in || 900) * 1000, j.refresh_token ? await this.bankLock(j.refresh_token) : null, Date.now(), uid);
+  }
+  async bankReturn(url) {
+    const page = (t, ok) => new Response('<!doctype html><meta name=viewport content="width=device-width,initial-scale=1"><body style="margin:0;background:#000;color:#fff;font:600 18px system-ui;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center;padding:24px;box-sizing:border-box">' + t + '</body>', { status: ok ? 200 : 400, headers: { 'content-type': 'text/html; charset=utf-8' } });
+    const st = url.searchParams.get('state') || '', code = url.searchParams.get('code') || '';
+    const l = st ? this.one('SELECT uid, verifier FROM banklinks WHERE state = ?', st) : null;
+    if (!l) return page('This link has expired - connect your bank again in Lockedintool.');
+    if (!code) { this.sql.exec('UPDATE banklinks SET state = NULL, verifier = NULL WHERE uid = ?', l.uid); return page('Your bank wasn’t connected. You can try again in Lockedintool.'); }
+    try { await this.bankSave(l.uid, await this.bankTokens({ grant_type: 'authorization_code', code, redirect_uri: this.bankBack(url), code_verifier: l.verifier })); }
+    catch (e) { return page('Your bank couldn’t be connected (' + String(e.message || e).replace(/[<>&]/g, '').slice(0, 120) + '). Try again in Lockedintool.'); }
+    this.sendTo(l.uid, { t: 'bank' });
+    return page('Your bank is connected - go back to Lockedintool.', true);
+  }
+  async bankAccess(uid) {
+    const l = this.one('SELECT * FROM banklinks WHERE uid = ?', uid);
+    if (!l || !l.refresh) return '';
+    if (l.access && l.aexp > Date.now() + 30000) return this.bankOpen(l.access);
+    const rt = await this.bankOpen(l.refresh); if (!rt) return '';
+    try { const j = await this.bankTokens({ grant_type: 'refresh_token', refresh_token: rt }); await this.bankSave(uid, j); return j.access_token; }
+    catch (e) { this.sql.exec('UPDATE banklinks SET refresh = NULL, access = NULL WHERE uid = ?', uid); return ''; }   // the bank ended it: connect again
+  }
   async bank(me, op, url) {
-    if (op === 'info') return json({ ready: false, linked: false, at: 0 });
+    if (!this.saUser(me) && op !== 'unlink') return op === 'info' ? json({ ready: false, country: false, linked: false, at: 0 }) : json({ error: 'country' }, 400);   // Stitch: South African banks only
+    if (op === 'info') { const l = this.one('SELECT refresh, linked FROM banklinks WHERE uid = ?', me.id); return json({ ready: this.payReady(), country: true, linked: !!(l && l.refresh), at: l && l.linked || 0 }); }
+    if (!this.payReady()) return json({ error: 'not-ready' }, 400);
+    if (op === 'link') {
+      const state = rand(18), verifier = rand(32), challenge = await sha(verifier), nonce = rand(12);
+      this.sql.exec('INSERT INTO banklinks (uid, state, verifier) VALUES (?, ?, ?) ON CONFLICT(uid) DO UPDATE SET state = excluded.state, verifier = excluded.verifier', me.id, state, verifier);
+      const q = new URLSearchParams({ client_id: this.env.STITCH_ENT_CLIENT_ID, scope: 'openid offline_access accounts balances transactions accountholders', response_type: 'code',
+        redirect_uri: this.bankBack(url), nonce, state, code_challenge: challenge, code_challenge_method: 'S256' });
+      return json({ url: (this.env.STITCH_BASE || 'https://secure.stitch.money') + '/connect/authorize?' + q });
+    }
     if (op === 'unlink') { this.sql.exec('DELETE FROM banklinks WHERE uid = ?', me.id); return json({ ok: true }); }
-    return json({ error: 'not-ready' }, 400);
+    if (op === 'accounts') {
+      const l = this.one('SELECT cache, cached FROM banklinks WHERE uid = ?', me.id);
+      if (l && l.cache && Date.now() - l.cached < 60000) return new Response(l.cache, { headers: JSONH });   // at most one look a minute
+      const tok = await this.bankAccess(me.id);
+      if (!tok) return json({ error: 'not-linked' }, 400);
+      const r = await fetch((this.env.STITCH_BASE || 'https://api.stitch.money') + '/graphql', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + tok },
+        body: JSON.stringify({ query: 'query { user { bankAccounts { id name accountNumber accountType bankId currentBalance availableBalance transactions(first: 100) { edges { node { id amount reference description date runningBalance } } } } } }' }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || j.errors) return json({ error: 'bank', why: String((j.errors && j.errors[0] && j.errors[0].message) || r.status).slice(0, 160) }, 502);
+      const money = m => m && m.quantity != null ? { v: +m.quantity, cur: m.currency || 'ZAR' } : null;
+      const accounts = ((j.data && j.data.user && j.data.user.bankAccounts) || []).map(a => {
+        const cb = money(a.currentBalance), ab = money(a.availableBalance);
+        return { id: a.id, name: a.name || '', last4: String(a.accountNumber || '').replace(/\D/g, '').slice(-4), type: a.accountType || '', bank: a.bankId || '',
+          balance: cb ? cb.v : null, available: ab ? ab.v : null, cur: (cb || ab || {}).cur || 'ZAR',
+          tx: ((a.transactions && a.transactions.edges) || []).map(e => e.node).filter(Boolean).map(t => { const m = money(t.amount), rb = money(t.runningBalance);
+            return m ? { id: t.id, amt: m.v, cur: m.cur, text: [t.description, t.reference].filter(Boolean).join(' · ').slice(0, 200), who: String(t.description || t.reference || '').slice(0, 60), at: Date.parse(t.date) || 0, bal: rb ? rb.v : null } : null; }).filter(Boolean) };
+      });
+      const out = JSON.stringify({ ok: true, at: Date.now(), accounts });
+      this.sql.exec('UPDATE banklinks SET cache = ?, cached = ? WHERE uid = ?', out, Date.now(), me.id);
+      return new Response(out, { headers: JSONH });
+    }
+    return json({ error: 'bad' }, 400);
   }
   bankOk(b) {
     const bank = String(b.bank || ''), acct = String(b.acct || '').replace(/\s+/g, ''), name = String(b.name || '').trim().slice(0, 60);
@@ -1367,7 +1536,7 @@ export class Hub {
     const now = Date.now();
     if (op === 'info') {
       const mine = this.one('SELECT * FROM paybank WHERE uid = ?', me.id);
-      return json({ connected: this.payReady(), banks: PAY_BANKS, bank: mine ? { name: mine.name, bank: mine.bank, mask: mine.acct.slice(-3) } : null });
+      return json({ connected: this.payReady() && this.saUser(me), country: this.saUser(me), banks: PAY_BANKS, bank: mine ? { name: mine.name, bank: mine.bank, mask: mine.acct.slice(-3) } : null });
     }
     if (op === 'bank') {
       if (b.remove) { this.sql.exec('DELETE FROM paybank WHERE uid = ?', me.id); return json({ ok: true, bank: null }); }
@@ -1389,12 +1558,33 @@ export class Hub {
         const pb = this.one('SELECT * FROM paybank WHERE uid = ?', u.id); if (!pb) return json({ error: 'no-bank' }, 409);
         to = { name: pb.name, bank: pb.bank, acct: pb.acct }; toUid = u.id;
       } else { to = this.bankOk(b.bank || {}); if (!to) return json({ error: 'bank-details' }, 400); }
-      // (the worldwide payout partner isn't connected yet - owner: Stitch is out)
-      return json({ error: 'not-connected' }, 503);
+      if (!this.saUser(me)) return json({ error: 'country' }, 400);   // Stitch: South Africa only (other countries later)
+      if (!this.payReady()) return json({ error: 'not-connected' }, 503);
+      const ref = String(b.ref || '').replace(/[^A-Za-z0-9 .\-]/g, '').trim().slice(0, 20) || 'Lockedintool';
+      const id = 'p' + rand(9);
+      const d = await this.stitch(`mutation Pay($amount: MoneyInput!, $payerReference: String!, $beneficiaryReference: String!, $externalReference: String, $name: String!, $bankId: BankBeneficiaryBankId!, $acct: String!) {
+        clientPaymentInitiationRequestCreate(input: { amount: $amount, payerReference: $payerReference, beneficiaryReference: $beneficiaryReference, externalReference: $externalReference,
+          beneficiary: { bankAccount: { name: $name, bankId: $bankId, accountNumber: $acct } } }) { paymentInitiationRequest { id url } } }`,
+        { amount: { quantity: (cents / 100).toFixed(2), currency: 'ZAR' }, payerReference: ref.slice(0, 12), beneficiaryReference: ref, externalReference: id, name: to.name, bankId: to.bank, acct: to.acct });
+      const pr = d.clientPaymentInitiationRequestCreate.paymentInitiationRequest;
+      this.sql.exec('INSERT INTO payments (id, uid, to_uid, to_name, to_bank, to_mask, cents, ref, stitch, status, created, updated, payfrom) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        id, me.id, toUid, toUid ? null : to.name, to.bank, toUid ? '' : to.acct.slice(-3), cents, ref, pr.id, 'pending', now, now, String(b.from || '').replace(/[^\p{L}\p{N} .•'&-]/gu, '').slice(0, 40) || null);
+      const back = this.env.STITCH_REDIRECT || (url.origin + '/v1/pay/return');
+      return json({ id, url: pr.url + (pr.url.includes('?') ? '&' : '?') + 'redirect_uri=' + encodeURIComponent(back) });
     }
     if (op === 'status') {
       const p = this.one("SELECT * FROM payments WHERE id = ? AND uid = ? AND (kind IS NULL OR kind NOT LIKE 'sub:%')", url.searchParams.get('id') || '', me.id);
       if (!p) return json({ error: 'notfound' }, 404);
+      if (p.status === 'pending' && this.payReady()) {
+        const d = await this.stitch(`query St($id: ID!) { node(id: $id) { ... on PaymentInitiationRequest { status { __typename } } } }`, { id: p.stitch });
+        const tn = d && d.node && d.node.status && d.node.status.__typename || '';
+        const st = /Completed/.test(tn) ? 'paid' : /Cancelled/.test(tn) ? 'cancelled' : /Expired/.test(tn) ? 'expired' : 'pending';
+        if (st !== 'pending') {
+          this.sql.exec('UPDATE payments SET status = ?, updated = ? WHERE id = ?', st, now, p.id);
+          p.status = st;
+          if (st === 'paid' && p.to_uid) this.deliver(p.to_uid, { t: 'paid', id: p.id, amount: p.cents / 100, currency: 'ZAR', ref: p.ref || '', from: me.id, name: me.name || '', username: me.username || '', at: now });
+        }
+      }
       return json(this.payView(p, me));
     }
     return json({ error: 'notfound' }, 404);
