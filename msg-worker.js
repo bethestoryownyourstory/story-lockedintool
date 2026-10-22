@@ -14,11 +14,9 @@
 //  - Groups (owner): public groups (Community - anyone can find and join them) and private groups (made in Messages -
 //    only people a leader adds; never listed anywhere). Private group messages are locked for each member; public
 //    group posts and chat are public by nature (anyone can join).
-//  - Money transfer (owner: send money profile to profile, and to anyone - even people not on STORY): needs a payout
-//    partner - Stitch Enterprise (STITCH_ENT_CLIENT_ID / STITCH_ENT_CLIENT_SECRET; Express can't pay other people): the payer approves the
-//    payment in their OWN bank (Stitch's page) and it goes straight into the receiver's bank account. A STORY profile
-//    receives into the bank account they added (kept only here, never shown to anyone - only its last 3 digits to its
-//    owner); anyone else by their name + bank + account number. STORY never holds the money.
+//  - Money transfer (owner: send money profile to profile, and to anyone - 'everyone must be able to send to banks',
+//    worldwide): needs a licensed worldwide payout partner (none connected yet - Stitch is out, owner). A profile's
+//    bank account for receiving is kept only here (never shown to anyone - only its last 3 digits to its owner).
 // Everything lives in ONE Durable Object (SQLite storage) so every phone's connection meets in the same place.
 
 const JSONH = { 'content-type': 'application/json', 'access-control-allow-origin': '*', 'access-control-allow-headers': 'content-type, authorization', 'access-control-allow-methods': 'GET, POST, OPTIONS' };
@@ -38,7 +36,7 @@ const LIT_ITER = 210000;   // the app's password key rounds (index.html LIT_ITER
 const NAME_WAIT = 60 * 86400000, USERNAME_WAIT = 100 * 86400000;   // owner: name once every 60 days, @username once every 100
 const GCALL_MAX = 8;   // group calls: every phone links to every other phone, so a call holds up to 8 people
 const USERNAME = /^(?!.*\.\.)(?!\.)(?!.*\.$)[a-z0-9_.]{3,30}$/;
-// South African banks Stitch pays into (its BankBeneficiaryBankId names) - shown by their own names.
+// Banks you can add for receiving (Receive) - shown by their own names.
 const PAY_BANKS = { absa: 'Absa', african_bank: 'African Bank', capitec: 'Capitec', discovery_bank: 'Discovery Bank', fnb: 'FNB', investec: 'Investec', nedbank: 'Nedbank', standard_bank: 'Standard Bank', tymebank: 'TymeBank' };
 
 export default {
@@ -126,12 +124,13 @@ export class Hub {
     this.sql.exec(`CREATE INDEX IF NOT EXISTS payments_uid ON payments(uid, created)`);
     this.sql.exec(`CREATE INDEX IF NOT EXISTS payments_to ON payments(to_uid, created)`);
     try { this.sql.exec(`ALTER TABLE payments ADD COLUMN kind TEXT`); } catch (e) {}
-    // Your bank, connected through Stitch (open banking): the sign-in it gave us, locked (bankKey), and the last look.
+    // Connect your bank: the old Stitch sign-ins are deleted (Stitch is out - owner); the table waits for a worldwide partner.
     this.sql.exec(`CREATE TABLE IF NOT EXISTS banklinks (uid TEXT PRIMARY KEY, refresh TEXT, access TEXT, aexp INTEGER, state TEXT, verifier TEXT, linked INTEGER, cache TEXT, cached INTEGER)`);
+    this.sql.exec('DELETE FROM banklinks');
     this.sql.exec(`CREATE TABLE IF NOT EXISTS subs (uid TEXT PRIMARY KEY, plan TEXT, until INTEGER, updated INTEGER)`);
     // The option a plan is bought under (owner): 'second' = Lockedintool as your second system, 'only' = your only system.
     try { this.sql.exec(`ALTER TABLE subs ADD COLUMN mode TEXT`); } catch (e) {}
-    try { this.sql.exec(`ALTER TABLE subs ADD COLUMN pscust TEXT`); } catch (e) {}   // Paystack customer (monthly renewals)
+    try { this.sql.exec(`ALTER TABLE subs ADD COLUMN lssub TEXT`); } catch (e) {}   // the member's Lemon Squeezy subscription
     try { this.sql.exec(`ALTER TABLE payments ADD COLUMN mode TEXT`); } catch (e) {}
     try { this.sql.exec(`ALTER TABLE payments ADD COLUMN payfrom TEXT`); } catch (e) {}   // which of your accounts you chose to pay from (Pay with)
     this.sql.exec(`CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT)`);
@@ -228,20 +227,17 @@ export class Hub {
       }
       if (path === '/v1/release-ping') return this.releasePing();
       if (path === '/v1/health') {
-        // Payments: can the server really sign in to Stitch? (just a sign-in - no payment is made)
-        let pay = this.expressReady() ? 'keys' : 'no-keys';
-        if (url.searchParams.get('pay') === '1' && this.expressReady()) { try { await this.expressToken(); pay = 'ok'; } catch (e) { pay = String(e.message || e).slice(0, 160); } }
-        let paystack = this.paystackReady() ? (this.env.PAYSTACK_SECRET_KEY.startsWith('sk_live_') ? 'live-keys' : 'test-keys') : 'no-keys';
-        if (url.searchParams.get('pay') === '1' && this.paystackReady()) { try { await this.paystack('GET', '/plan?perPage=1'); paystack += ' ok'; } catch (e) { paystack = String(e.message || e).slice(0, 160); } }
-        return json({ ok: true, paystack, sms: !!(this.env.TWILIO_VERIFY_SID || this.env.TWILIO_FROM), mail: this.mailReady(), resetSms: this.smsLinkReady(), plans: this.subPlans(), pay, subs: this.subReady(), transfers: this.payReady(), live: this.liveReady(), turn: this.turnReady() });
+        // Plans: can the server really reach the Lemon Squeezy store and find the Basic / Premium plans? (no payment is made)
+        let pay = this.lsReady() ? 'keys' : 'no-keys';
+        if (url.searchParams.get('pay') === '1' && this.lsReady()) { try { const c = await this.lsSetup(); pay = 'ok - store ' + c.store + ', basic ' + (c.basic || 'MISSING') + ', premium ' + (c.premium || 'MISSING') + ', notifications ' + (c.hook ? 'on' : 'off'); } catch (e) { pay = String(e.message || e).slice(0, 160); } }
+        return json({ ok: true, sms: !!(this.env.TWILIO_VERIFY_SID || this.env.TWILIO_FROM), mail: this.mailReady(), resetSms: this.smsLinkReady(), plans: this.subPlans(), pay, subs: this.subReady(), transfers: this.payReady(), live: this.liveReady(), turn: this.turnReady() });
       }
       if (path === '/v1/pay/return') return new Response('<!doctype html><meta name=viewport content="width=device-width,initial-scale=1"><body style="margin:0;background:#000;color:#fff;font:600 18px system-ui;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center;padding:24px;box-sizing:border-box">Done - go back to Lockedintool to see your payment.</body>', { headers: { 'content-type': 'text/html; charset=utf-8' } });
-      if (path === '/v1/bank/return') return this.bankReturn(url);
       if (path === '/v1/delete') return this.deletePage(req, url);
       if (path === '/v1/login/salt') return this.loginSalt(url.searchParams.get('u') || '');
       if (path === '/v1/reset') return this.resetPage(req, url);
       if (path === '/v1/reset/options') return this.resetOptions(url.searchParams.get('u') || '', req.headers.get('cf-connecting-ip') || '');
-      if (path === '/v1/paystack/hook' && req.method === 'POST') return this.paystackHook(await req.text(), req.headers.get('x-paystack-signature') || '');
+      if (path === '/v1/lemonsqueezy/hook' && req.method === 'POST') return this.lsHook(await req.text(), req.headers.get('x-signature') || '');
       const body = req.method === 'POST' ? await req.json().catch(() => ({})) : {};
       if (path === '/v1/problems' && req.method === 'POST') return this.problemsIn(body, req.headers.get('cf-connecting-ip') || '');
       if (path === '/v1/problems/list') return this.problemsList(body, url);
@@ -1192,15 +1188,20 @@ export class Hub {
     for (const r of this.sql.exec('SELECT c.gid FROM gcalls c JOIN gmembers m ON m.gid = c.gid WHERE m.uid = ?', me.id).toArray()) pair[1].send(JSON.stringify({ t: 'glive', group: r.gid, live: this.gcallLive(r.gid) }));
     return new Response(null, { status: 101, webSocket: pair[0] });
   }
-  // ---- LOCKED IN TOOL subscription (owner: Basic $5 / Premium $15 a month - raised from $1 / $5 so each user's costs are covered; no plan = STORY doesn't open). Paid through
-  //      Stitch EXPRESS (the owner's Stitch account - STITCH_CLIENT_ID / STITCH_CLIENT_SECRET): a payment link (card,
-  //      Capitec, Apple / Google Pay...) into LOCKED IN TOOL's Express balance, withdrawn to the owner's verified bank.
-  //      Each payment = 30 days. Prices in rand (Express is rand only): SUB_BASIC_ZAR / SUB_PREMIUM_ZAR. ----
+  // ---- LOCKED IN TOOL subscription (owner: Basic $5 / Premium $15 a month - raised from $1 / $5 so each user's costs are
+  //      covered). Paid through LEMON SQUEEZY (owner, Oct 2026: worldwide - 'this app should be able world wide'; Stitch
+  //      and Paystack are out): the owner's Lemon Squeezy store (key LEMONSQUEEZY_API_KEY) sells the plans as real
+  //      monthly subscriptions in US dollars to every country - card, PayPal, Apple / Google Pay on Lemon Squeezy's own
+  //      checkout, which also takes the receipt email and handles each country's sales tax (merchant of record). In the
+  //      store: one subscription product (or two) with a 'Basic' and a 'Premium' monthly plan - the server finds them by
+  //      name, and makes its own signed notification webhook (lsSetup). A plan lasts as long as Lemon Squeezy says
+  //      (renews_at / ends_at): it renews every month by itself until cancelled from Lemon Squeezy's email / customer
+  //      portal. ----
   subPlans() {
-    return { basic: { usd: 5, zar: Number(this.env.SUB_BASIC_ZAR || 95) }, premium: { usd: 15, zar: Number(this.env.SUB_PREMIUM_ZAR || 285) } };
+    const c = this.lsCache || {};
+    return { basic: { usd: c.basicUsd || 5 }, premium: { usd: c.premiumUsd || 15 } };
   }
-  // Paystack (owner, Oct 2026: Stitch wasn't answering) when its key is in - else Stitch Express, as before.
-  subReady() { return this.paystackReady() || this.expressReady(); }
+  subReady() { return this.lsReady(); }
   // Calls cost Lockedintool (owner: 'they won't be available on free plan'): Lockedintool calls (voice, video, group)
   // need Basic or Premium - only once subscriptions are switched on (SUB_ENFORCE + payments connected), never the
   // official accounts. Phone calls from the dial pad are the phone's own and aren't touched.
@@ -1214,180 +1215,122 @@ export class Hub {
     const active = !!(r && r.until > now);
     return { connected: this.subReady(), enforced: this.env.SUB_ENFORCE === '1', plan: active ? r.plan : null, mode: active ? (r.mode || 'second') : null, until: r ? r.until : 0, active, plans: this.subPlans() };
   }
-  // Stitch Express REST API (express.stitch.money/api/v1, its own OpenAPI spec): a 15-minute token from clientId +
-  // clientSecret, then payment links. Amounts are in cents.
-  expressReady() { return !!(this.env.STITCH_CLIENT_ID && this.env.STITCH_CLIENT_SECRET); }
-  expressBase() { return this.env.STITCH_EXPRESS_BASE || 'https://express.stitch.money'; }   // (local tests: a stand-in)
-  async expressToken() {
-    if (this.exTok && this.exTok.exp > Date.now() + 60000) return this.exTok.v;
-    const r = await fetch(this.expressBase() + '/api/v1/token', { method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ clientId: this.env.STITCH_CLIENT_ID, clientSecret: this.env.STITCH_CLIENT_SECRET, scope: 'client_paymentrequest' }) });
+  lsReady() { return !!this.env.LEMONSQUEEZY_API_KEY; }
+  async ls(method, path, body) {
+    const r = await fetch((this.env.LEMONSQUEEZY_BASE || 'https://api.lemonsqueezy.com') + '/v1' + path, { method,
+      headers: { accept: 'application/vnd.api+json', 'content-type': 'application/vnd.api+json', authorization: 'Bearer ' + this.env.LEMONSQUEEZY_API_KEY },
+      body: body ? JSON.stringify(body) : undefined });
     const j = await r.json().catch(() => ({}));
-    const tok = j && j.data && j.data.accessToken;
-    if (!r.ok || !tok) throw new Error('stitch-signin: ' + (r.status === 400 ? 'invalid credentials (the secret changes every time it is viewed in the dashboard)' : ((j.generalErrors || [])[0] || r.status)));
-    this.exTok = { v: tok, exp: Date.now() + 14 * 60000 };
-    return tok;
+    if (!r.ok) throw new Error('lemonsqueezy: ' + (((j.errors || [])[0] || {}).detail || r.status));
+    return j;
   }
-  async express(method, path, body) {
-    const go = async () => fetch(this.expressBase() + path, { method, headers: { 'content-type': 'application/json', authorization: 'Bearer ' + await this.expressToken() }, body: body ? JSON.stringify(body) : undefined });
-    let r = await go();
-    if (r.status === 401) { this.exTok = null; r = await go(); }   // token ran out - once more with a fresh one
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok || j.success === false) throw new Error('stitch: ' + (((j.generalErrors || [])[0]) || JSON.stringify(j.fieldErrors || {}) || r.status));
-    return j.data || {};
-  }
-  // Where your bank / card page sends you back to (registered with Express once; it allows up to 5).
-  async expressBack(url) {
-    const back = this.env.STITCH_REDIRECT || (url.origin + '/v1/pay/return');
-    if (!this.exBackDone) { try { await this.express('POST', '/api/v1/redirect-urls', { redirectUrl: back }); } catch (e) {} this.exBackDone = true; }
-    return back;
-  }
-  // ---- Paystack (owner, Oct 2026: 'Stitch is not coming back to me' - Paystack merchant account; key PAYSTACK_SECRET_KEY,
-  //      test key first, then the live one). A plan is a REAL Paystack subscription: Basic / Premium monthly plans in
-  //      rand made once per price (kept in meta), the first payment on Paystack's own page (card, Capitec Pay, EFT...)
-  //      and then Paystack charges it every month by itself; each successful charge = 30 more days. Renewals reach the
-  //      server through Paystack's notifications (/v1/paystack/hook, signed with the key) and, as a fallback, are read
-  //      from Paystack when a member's plan is about to run out. Amounts in cents. ----
-  paystackReady() { return !!this.env.PAYSTACK_SECRET_KEY; }
-  async paystack(method, path, body) {
-    const r = await fetch((this.env.PAYSTACK_BASE || 'https://api.paystack.co') + path, { method,
-      headers: { 'content-type': 'application/json', authorization: 'Bearer ' + this.env.PAYSTACK_SECRET_KEY }, body: body ? JSON.stringify(body) : undefined });
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok || j.status === false) throw new Error('paystack: ' + (j.message || r.status));
-    return j.data;
-  }
-  async paystackPlan(plan, cents) {
-    const k = 'psplan:' + (this.env.PAYSTACK_SECRET_KEY.startsWith('sk_live_') ? 'live' : 'test') + ':' + plan + ':' + cents;
-    const have = this.one('SELECT v FROM meta WHERE k = ?', k);
-    if (have) return have.v;
-    const d = await this.paystack('POST', '/plan', { name: 'LOCKED IN TOOL ' + (plan === 'premium' ? 'Premium' : 'Basic'), interval: 'monthly', amount: cents, currency: 'ZAR' });
-    if (!d || !d.plan_code) throw new Error('paystack: no plan');
-    this.sql.exec('INSERT OR REPLACE INTO meta (k, v) VALUES (?, ?)', k, d.plan_code);
-    return d.plan_code;
-  }
-  // 30 more days of a plan (same plan adds on, a different plan starts now).
-  subCredit(uid, plan, mode, now, cust) {
-    const cur = this.one('SELECT * FROM subs WHERE uid = ?', uid);
-    const from = cur && cur.plan === plan && cur.until > now ? cur.until : now;
-    this.sql.exec('INSERT OR REPLACE INTO subs (uid, plan, until, updated, mode, pscust) VALUES (?, ?, ?, ?, ?, ?)', uid, plan, from + 30 * 86400000, now,
-      mode === 'only' ? 'only' : (mode === 'second' ? 'second' : ((cur && cur.mode) || 'second')), cust || (cur && cur.pscust) || null);
-  }
-  // A successful Paystack charge: the first payment of a plan (our reference) or a monthly renewal (Paystack's own).
-  paystackCharged(d, now) {
-    if (!d || d.status !== 'success') return;
-    const ref = String(d.reference || ''), cust = d.customer && d.customer.customer_code ? String(d.customer.customer_code) : null;
-    if (!ref || this.one('SELECT id FROM payments WHERE stitch = ? AND status = ?', 'ps:' + ref, 'paid')) return;   // counted already
-    const p = this.one("SELECT * FROM payments WHERE id = ? AND kind LIKE 'sub:%'", ref);
-    if (p) {   // the first payment (a cancelled one that was paid anyway still counts)
-      this.sql.exec('UPDATE payments SET status = ?, updated = ? WHERE id = ?', 'paid', now, p.id);
-      this.subCredit(p.uid, p.kind.slice(4), p.mode, now, cust);
-      return;
+  // The store, its Basic / Premium monthly plans (found by name, never cached while missing) and the signed webhook.
+  async lsSetup() {
+    const k = 'ls:' + (await sha('ls|' + this.env.LEMONSQUEEZY_API_KEY)).slice(0, 10) + ':';
+    const get = n => { const r = this.one('SELECT v FROM meta WHERE k = ?', k + n); return r ? r.v : ''; };
+    const put = (n, v) => this.sql.exec('INSERT OR REPLACE INTO meta (k, v) VALUES (?, ?)', k + n, String(v));
+    let store = this.env.LEMONSQUEEZY_STORE_ID || get('store');
+    if (!store) { const st = await this.ls('GET', '/stores'); store = st.data && st.data[0] ? st.data[0].id : ''; if (!store) throw new Error('lemonsqueezy: no store'); put('store', store); }
+    let basic = get('basic'), premium = get('premium');
+    if (!basic || !premium) {
+      const prods = {}; for (const p of ((await this.ls('GET', '/products?filter[store_id]=' + encodeURIComponent(store) + '&page[size]=100')).data || [])) prods[p.id] = p.attributes.name || '';
+      for (const v of ((await this.ls('GET', '/variants?page[size]=100')).data || [])) {
+        const at = v.attributes || {}, pid = String(at.product_id || '');
+        if (!(pid in prods) || !at.is_subscription || at.status === 'draft') continue;
+        const name = ((at.name || '') + ' ' + prods[pid]).toLowerCase(), usd = Math.round(Number(at.price) || 0) / 100;
+        if (!basic && /\bbasic\b/.test(name)) { basic = v.id; put('basic', basic); if (usd) put('basicUsd', usd); }
+        if (!premium && /\bpremium\b/.test(name)) { premium = v.id; put('premium', premium); if (usd) put('premiumUsd', usd); }
+      }
     }
-    // A renewal: whose plan it is (Paystack customer, else the first payment's details) and which plan.
-    const md = d.metadata && typeof d.metadata === 'object' ? d.metadata : {};
-    const row = cust ? this.one('SELECT * FROM subs WHERE pscust = ?', cust) : null;
-    const uid = (row && row.uid) || (md.uid && this.one('SELECT id FROM users WHERE id = ?', String(md.uid)) ? String(md.uid) : null);
-    const code = d.plan && typeof d.plan === 'object' ? d.plan.plan_code : (typeof d.plan === 'string' ? d.plan : '');
-    const pk = code ? this.one("SELECT k FROM meta WHERE v = ? AND k LIKE 'psplan:%'", code) : null;
-    const plan = pk ? pk.k.split(':')[2] : (row ? row.plan : null);
-    if (!uid || !plan || !this.subPlans()[plan]) return;
-    const id = 'p' + rand(9), cents = Number(d.amount) || 0;
-    this.sql.exec('INSERT INTO payments (id, uid, to_uid, to_name, to_bank, to_mask, cents, ref, stitch, status, created, updated, kind, mode) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      id, uid, 'LOCKED IN TOOL ' + plan, '', '', cents, 'LIT ' + plan.toUpperCase(), 'ps:' + ref, 'paid', now, now, 'sub:' + plan, (row && row.mode) || 'second');
-    this.subCredit(uid, plan, null, now, cust);
+    let hook = get('hook');
+    if (!hook && this.origin) {   // the webhook Lemon Squeezy signs (its secret only lives here)
+      const secret = rand(24), url = this.origin + '/v1/lemonsqueezy/hook';
+      const events = ['subscription_created', 'subscription_updated', 'subscription_cancelled', 'subscription_resumed', 'subscription_expired', 'subscription_paused', 'subscription_unpaused', 'subscription_payment_success', 'subscription_payment_recovered'];
+      const old = ((await this.ls('GET', '/webhooks?filter[store_id]=' + encodeURIComponent(store))).data || []).find(w => (w.attributes || {}).url === url);
+      if (old) await this.ls('PATCH', '/webhooks/' + old.id, { data: { type: 'webhooks', id: String(old.id), attributes: { secret, events } } });
+      else await this.ls('POST', '/webhooks', { data: { type: 'webhooks', attributes: { url, events, secret }, relationships: { store: { data: { type: 'stores', id: String(store) } } } } });
+      hook = secret; put('hook', hook);
+    }
+    this.lsCache = { store, basic, premium, hook, basicUsd: +get('basicUsd') || 0, premiumUsd: +get('premiumUsd') || 0 };
+    return this.lsCache;
   }
-  // Paystack's notifications: signed with the secret key (HMAC SHA-512 of the body) - anything else is ignored.
-  async paystackHook(raw, sig) {
-    if (!this.paystackReady()) return new Response('no', { status: 404 });
-    const key = await crypto.subtle.importKey('raw', enc.encode(this.env.PAYSTACK_SECRET_KEY), { name: 'HMAC', hash: 'SHA-512' }, false, ['sign']);
+  // A member's plan as Lemon Squeezy has it: active / on trial / past due (being retried) / cancelled = until it ends;
+  // anything else (expired, unpaid, paused) = over now.
+  lsApply(sub, custom, now) {
+    const at = (sub && sub.attributes) || {}, c = this.lsCache || {}, cu = custom || {};
+    const row = this.one('SELECT * FROM subs WHERE lssub = ?', String(sub.id));
+    const uid = (row && row.uid) || (cu.uid && this.one('SELECT id FROM users WHERE id = ?', String(cu.uid)) ? String(cu.uid) : null);
+    if (!uid) return;
+    const vid = String(at.variant_id || '');
+    const plan = vid && vid === String(c.premium) ? 'premium' : vid && vid === String(c.basic) ? 'basic' : (row && row.plan) || (cu.plan === 'premium' ? 'premium' : cu.plan === 'basic' ? 'basic' : null);
+    if (!plan) return;
+    const live = ['active', 'on_trial', 'past_due', 'cancelled'].includes(at.status);
+    const end = Date.parse(at.status === 'cancelled' ? at.ends_at : (at.renews_at || at.ends_at)) || 0;
+    // (a day's margin on a renewing plan: the month's charge and its notification can come a little after renews_at)
+    const until = live ? Math.max(at.status === 'cancelled' ? end : end + 86400000, now + 3600000) : now;
+    const mode = cu.mode === 'only' ? 'only' : cu.mode === 'second' ? 'second' : (row && row.mode) || 'second';
+    this.sql.exec('INSERT OR REPLACE INTO subs (uid, plan, until, updated, mode, lssub) VALUES (?, ?, ?, ?, ?, ?)', uid, plan, until, now, mode, String(sub.id));
+    if (cu.pid && live) this.sql.exec("UPDATE payments SET status = 'paid', updated = ? WHERE id = ? AND uid = ? AND status != 'paid'", now, String(cu.pid), uid);
+  }
+  // Lemon Squeezy's notifications: signed with the webhook secret (HMAC SHA-256 of the body) - anything else is ignored.
+  async lsHook(raw, sig) {
+    if (!this.lsReady()) return new Response('no', { status: 404 });
+    const c = this.lsCache && this.lsCache.hook ? this.lsCache : await this.lsSetup().catch(() => ({}));
+    if (!c.hook) return new Response('no', { status: 404 });
+    const key = await crypto.subtle.importKey('raw', enc.encode(c.hook), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
     const mac = [...new Uint8Array(await crypto.subtle.sign('HMAC', key, enc.encode(raw)))].map(x => x.toString(16).padStart(2, '0')).join('');
     if (!sig || mac !== sig.toLowerCase()) return new Response('bad signature', { status: 401 });
     let ev = {}; try { ev = JSON.parse(raw); } catch (e) {}
-    if (ev.event === 'charge.success') this.paystackCharged(ev.data, Date.now());
+    const name = (ev.meta && ev.meta.event_name) || '', custom = (ev.meta && ev.meta.custom_data) || {}, d = ev.data || {}, now = Date.now();
+    try {
+      if (d.type === 'subscriptions') this.lsApply(d, custom, now);
+      else if (d.type === 'subscription-invoices' && d.attributes && d.attributes.subscription_id) {   // a month paid: read the plan again
+        const s = await this.ls('GET', '/subscriptions/' + encodeURIComponent(d.attributes.subscription_id));
+        if (s.data) this.lsApply(s.data, custom, now);
+      }
+    } catch (e) { return new Response('later', { status: 500 }); }   // Lemon Squeezy tries again
     return new Response('ok');
   }
-  // Fallback for renewals (no notification reached us): a plan that's about to run out is checked at Paystack.
-  async paystackRenewals(me) {
+  // Fallback (a notification didn't reach us): a plan that's about to run out is read from Lemon Squeezy again.
+  async lsRefresh(me) {
     const r = this.one('SELECT * FROM subs WHERE uid = ?', me.id), now = Date.now();
-    if (!this.paystackReady() || !r || !r.pscust || r.until > now + 86400000 || (this.psLook || {})[me.id] > now - 3600000) return;
-    (this.psLook = this.psLook || {})[me.id] = now;
-    try {
-      const c = await this.paystack('GET', '/customer/' + encodeURIComponent(r.pscust));
-      for (const t of await this.paystack('GET', '/transaction?status=success&perPage=10&customer=' + encodeURIComponent(c.id)) || []) this.paystackCharged(t, now);
-    } catch (e) {}
+    if (!this.lsReady() || !r || !r.lssub || r.until > now + 86400000 || (this.lsLook || {})[me.id] > now - 3600000) return;
+    (this.lsLook = this.lsLook || {})[me.id] = now;
+    try { if (!this.lsCache) await this.lsSetup(); const s = await this.ls('GET', '/subscriptions/' + encodeURIComponent(r.lssub)); if (s.data) this.lsApply(s.data, {}, now); } catch (e) {}
   }
-
-  // A plan payment's state (Paystack or Stitch); paid = 30 days of that plan (same plan adds on, a different plan starts now).
+  // A plan payment you started: paid once Lemon Squeezy's notification says so; an unpaid checkout is just let go.
   async subCheck(me, p) {
-    if (p.status !== 'pending') return p.status;
-    const now = Date.now();
-    if (String(p.stitch || '').startsWith('ps:')) {
-      if (!this.paystackReady()) return p.status;
-      const d = await this.paystack('GET', '/transaction/verify/' + encodeURIComponent(p.id));
-      if (d && d.status === 'success') { this.paystackCharged(d, now); p.status = 'paid'; }
-      else if (d && (d.status === 'failed' || d.status === 'reversed' || now - p.created > 86400000)) {
-        this.sql.exec('UPDATE payments SET status = ?, updated = ? WHERE id = ?', 'expired', now, p.id); p.status = 'expired';
-      }
-      return p.status;
-    }
-    if (!this.expressReady()) return p.status;
-    const d = await this.express('GET', '/api/v1/payment-links/' + encodeURIComponent(p.stitch));
-    const ls = (d.payment && d.payment.status) || 'PENDING';
-    const st = ls === 'PAID' ? 'paid' : ls === 'CANCELLED' ? 'cancelled' : ls === 'EXPIRED' || ls === 'FAILED' ? 'expired' : 'pending';
-    if (st !== 'pending') {
-      this.sql.exec('UPDATE payments SET status = ?, updated = ? WHERE id = ?', st, now, p.id);
-      p.status = st;
-      if (st === 'paid') this.subCredit(me.id, p.kind.slice(4), p.mode, now, null);
-    }
+    if (p.status === 'pending' && Date.now() - p.created > 86400000) { this.sql.exec("UPDATE payments SET status = 'expired', updated = ? WHERE id = ?", Date.now(), p.id); p.status = 'expired'; }
     return p.status;
   }
-  // Cancel a plan payment that isn't paid yet (Stitch: POST payment-links/{id}/cancel - the link can't be paid any more).
-  // If Stitch says it's already paid / going through, the real state is read instead (paid still counts).
   async subCancel(me, p) {
     if (p.status !== 'pending') return p.status;
-    if (String(p.stitch || '').startsWith('ps:')) {   // Paystack: a page can't be cancelled - paid already counts, else it's off here
-      try { await this.subCheck(me, p); } catch (e) {}
-      if (p.status !== 'pending') return p.status;
-    } else if (this.expressReady()) {
-      try { await this.express('POST', '/api/v1/payment-links/' + encodeURIComponent(p.stitch) + '/cancel'); }
-      catch (e) { try { await this.subCheck(me, p); } catch (e2) {} return p.status; }
-    }
-    this.sql.exec('UPDATE payments SET status = ?, updated = ? WHERE id = ?', 'cancelled', Date.now(), p.id);
-    p.status = 'cancelled';
+    this.sql.exec("UPDATE payments SET status = 'cancelled', updated = ? WHERE id = ? AND status = 'pending'", Date.now(), p.id);   // (paid anyway later = still counts)
+    const q = this.one('SELECT status FROM payments WHERE id = ?', p.id); p.status = q ? q.status : 'cancelled';
     return p.status;
   }
   async sub(me, op, b, url) {
     const now = Date.now();
-    if (op === 'info') { await this.paystackRenewals(me); return json(this.subView(me)); }
+    if (op === 'info') { await this.lsRefresh(me); return json(this.subView(me)); }
     if (op === 'buy') {
       const plans = this.subPlans(), plan = String(b.plan || '');
       if (!plans[plan]) return json({ error: 'plan' }, 400);
       if (!this.subReady()) return json({ error: 'not-connected' }, 503);
-      // Changed your mind before paying (owner): any plan you started but didn't pay is cancelled at Stitch first,
-      // so only the newest one can be paid. One that was already paid still counts (subCheck credits it).
+      // Changed your mind before paying (owner): any plan you started but didn't pay is let go first.
       for (const old of this.sql.exec("SELECT * FROM payments WHERE uid = ? AND kind LIKE 'sub:%' AND status = 'pending'", me.id).toArray()) await this.subCancel(me, old);
-      const cents = Math.round(plans[plan].zar * 100), id = 'p' + rand(9).replace(/_/g, '-');   // (Paystack references: letters, digits, - . = only)
-      if (this.paystackReady()) {
-        // Paystack sends the receipt (and each month's) to an email you give when you buy - it isn't kept by Lockedintool.
-        const email = String(b.email || '').trim().toLowerCase();
-        if (!/^[^\s@]{1,64}@[^\s@]+\.[a-z]{2,}$/i.test(email) || email.length > 120) return json({ error: 'email' }, 400);
-        const d = await this.paystack('POST', '/transaction/initialize', { email, amount: cents, currency: 'ZAR', plan: await this.paystackPlan(plan, cents),
-          reference: id, callback_url: this.env.PAYSTACK_REDIRECT || (url.origin + '/v1/pay/return'), metadata: { uid: me.id, plan, mode: b.mode === 'only' ? 'only' : 'second' } });
-        if (!d || !d.authorization_url) throw new Error('paystack: no payment page');
-        this.sql.exec('INSERT INTO payments (id, uid, to_uid, to_name, to_bank, to_mask, cents, ref, stitch, status, created, updated, kind, mode) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-          id, me.id, 'LOCKED IN TOOL ' + plan, '', '', cents, 'LIT ' + plan.toUpperCase(), 'ps:' + id, 'pending', now, now, 'sub:' + plan, b.mode === 'only' ? 'only' : 'second');
-        return json({ id, url: d.authorization_url });
-      }
-      const who = String(me.name || (me.username ? '@' + me.username : '') || 'LOCKED IN member').replace(/[^\p{L}\p{N} .@'_-]/gu, '').trim();
-      const d = await this.express('POST', '/api/v1/payment-links', {
-        amount: cents, payerName: (who.length >= 3 ? who : 'LOCKED IN member').slice(0, 40),
-        merchantReference: ('LIT-' + plan + '-' + me.id + '-' + id).replace(/[^A-Za-z0-9 -]/g, '').slice(0, 50) });
-      const link = d.payment || {};
-      if (!link.id || !link.link) throw new Error('stitch: no payment link');
+      const c = await this.lsSetup();
+      const variant = c[plan];
+      if (!variant) return json({ error: 'not-connected' }, 503);   // the store has no such plan yet
+      const id = 'p' + rand(9), mode = b.mode === 'only' ? 'only' : 'second';
+      const d = await this.ls('POST', '/checkouts', { data: { type: 'checkouts', attributes: {
+        checkout_data: { custom: { uid: me.id, plan, mode, pid: id } },
+        product_options: { redirect_url: url.origin + '/v1/pay/return' } },
+        relationships: { store: { data: { type: 'stores', id: String(c.store) } }, variant: { data: { type: 'variants', id: String(variant) } } } } });
+      const link = d.data && d.data.attributes && d.data.attributes.url;
+      if (!link) throw new Error('lemonsqueezy: no checkout');
       this.sql.exec('INSERT INTO payments (id, uid, to_uid, to_name, to_bank, to_mask, cents, ref, stitch, status, created, updated, kind, mode) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        id, me.id, 'LOCKED IN TOOL ' + plan, '', '', cents, 'LIT ' + plan.toUpperCase(), link.id, 'pending', now, now, 'sub:' + plan, b.mode === 'only' ? 'only' : 'second');
-      const back = await this.expressBack(url);
-      return json({ id, url: link.link + (link.link.includes('?') ? '&' : '?') + 'redirect_url=' + encodeURIComponent(back) });
+        id, me.id, 'LOCKED IN TOOL ' + plan, '', '', Math.round(plans[plan].usd * 100), 'LIT ' + plan.toUpperCase(), 'ls:' + d.data.id, 'pending', now, now, 'sub:' + plan, mode);
+      return json({ id, url: link });
     }
     if (op === 'status' || op === 'cancel') {
       const p = this.one("SELECT * FROM payments WHERE id = ? AND uid = ? AND kind LIKE 'sub:%'", (op === 'cancel' ? b.id : url.searchParams.get('id')) || '', me.id);
@@ -1398,103 +1341,14 @@ export class Hub {
     return json({ error: 'notfound' }, 404);
   }
 
-  // ---- Money transfer (Stitch) ----
-  // Sending money to OTHER people needs a payout partner: Stitch Express only takes payments into LOCKED IN TOOL and
-  // withdraws to the owner's own bank. This uses Stitch's Enterprise API (its own keys STITCH_ENT_CLIENT_ID /
-  // STITCH_ENT_CLIENT_SECRET) - until those exist, Send says it connects once a payout partner is set up.
-  // (STITCH_BASE: local tests only - a stand-in Stitch, like TWILIO_BASE)
-  payReady() { return !!(this.env.STITCH_ENT_CLIENT_ID && this.env.STITCH_ENT_CLIENT_SECRET); }
-  async stitchToken() {
-    if (this.stitchTok && this.stitchTok.exp > Date.now() + 60000) return this.stitchTok.v;
-    const r = await fetch((this.env.STITCH_BASE || 'https://secure.stitch.money') + '/connect/token', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ grant_type: 'client_credentials', client_id: this.env.STITCH_ENT_CLIENT_ID, client_secret: this.env.STITCH_ENT_CLIENT_SECRET,
-        scope: 'client_paymentrequest', audience: 'https://secure.stitch.money/connect/token' }) });
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok || !j.access_token) throw new Error('stitch-signin: ' + (j.error_description || j.error || r.status));
-    this.stitchTok = { v: j.access_token, exp: Date.now() + (j.expires_in || 3600) * 1000 };
-    return j.access_token;
-  }
-  async stitch(query, variables) {
-    const r = await fetch((this.env.STITCH_BASE || 'https://api.stitch.money') + '/graphql', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + await this.stitchToken() }, body: JSON.stringify({ query, variables }) });
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok || j.errors) throw new Error('stitch: ' + ((j.errors && j.errors[0] && j.errors[0].message) || r.status));
-    return j.data;
-  }
-  // ---- Connect your bank (owner: your REAL balance and history, like your bank's app) - open banking through
-  // Stitch (the same Enterprise keys; Stitch switches on the scopes accounts / balances / transactions and the return
-  // page <server>/v1/bank/return). You log in to your own bank on Stitch's page; Lockedintool only READS (it can't
-  // move money with this) and keeps the bank's sign-in locked on this server. ----
-  async bankKey() { return crypto.subtle.importKey('raw', await crypto.subtle.digest('SHA-256', enc.encode('bank|' + (this.env.STITCH_ENT_CLIENT_SECRET || ''))), 'AES-GCM', false, ['encrypt', 'decrypt']); }
-  async bankLock(v) { const iv = crypto.getRandomValues(new Uint8Array(12)); return b64u(iv) + '.' + b64u(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await this.bankKey(), enc.encode(v))); }
-  async bankOpen(v) {
-    const [a, b] = String(v || '').split('.'); if (!b) return '';
-    const un = s => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
-    try { return new TextDecoder().decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: un(a) }, await this.bankKey(), un(b))); } catch (e) { return ''; }
-  }
-  bankBack(url) { return (this.env.BANK_REDIRECT || (url.origin + '/v1/bank/return')); }
-  async bankTokens(params) {
-    const r = await fetch((this.env.STITCH_BASE || 'https://secure.stitch.money') + '/connect/token', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams(Object.assign({ client_id: this.env.STITCH_ENT_CLIENT_ID, client_secret: this.env.STITCH_ENT_CLIENT_SECRET, audience: 'https://secure.stitch.money/connect/token' }, params)) });
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok || !j.access_token) throw new Error((j.error_description || j.error || ('bank sign-in ' + r.status)));
-    return j;
-  }
-  async bankSave(uid, j) {
-    this.sql.exec('UPDATE banklinks SET access = ?, aexp = ?, refresh = COALESCE(?, refresh), state = NULL, verifier = NULL, linked = COALESCE(linked, ?) WHERE uid = ?',
-      await this.bankLock(j.access_token), Date.now() + (j.expires_in || 900) * 1000, j.refresh_token ? await this.bankLock(j.refresh_token) : null, Date.now(), uid);
-  }
-  async bankReturn(url) {
-    const page = (t, ok) => new Response('<!doctype html><meta name=viewport content="width=device-width,initial-scale=1"><body style="margin:0;background:#000;color:#fff;font:600 18px system-ui;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center;padding:24px;box-sizing:border-box">' + t + '</body>', { status: ok ? 200 : 400, headers: { 'content-type': 'text/html; charset=utf-8' } });
-    const st = url.searchParams.get('state') || '', code = url.searchParams.get('code') || '';
-    const l = st ? this.one('SELECT uid, verifier FROM banklinks WHERE state = ?', st) : null;
-    if (!l) return page('This link has expired - connect your bank again in Lockedintool.');
-    if (!code) { this.sql.exec('UPDATE banklinks SET state = NULL, verifier = NULL WHERE uid = ?', l.uid); return page('Your bank wasn’t connected. You can try again in Lockedintool.'); }
-    try { await this.bankSave(l.uid, await this.bankTokens({ grant_type: 'authorization_code', code, redirect_uri: this.bankBack(url), code_verifier: l.verifier })); }
-    catch (e) { return page('Your bank couldn’t be connected (' + String(e.message || e).replace(/[<>&]/g, '').slice(0, 120) + '). Try again in Lockedintool.'); }
-    this.sendTo(l.uid, { t: 'bank' });
-    return page('Your bank is connected - go back to Lockedintool.', true);
-  }
-  async bankAccess(uid) {
-    const l = this.one('SELECT * FROM banklinks WHERE uid = ?', uid);
-    if (!l || !l.refresh) return '';
-    if (l.access && l.aexp > Date.now() + 30000) return this.bankOpen(l.access);
-    const rt = await this.bankOpen(l.refresh); if (!rt) return '';
-    try { const j = await this.bankTokens({ grant_type: 'refresh_token', refresh_token: rt }); await this.bankSave(uid, j); return j.access_token; }
-    catch (e) { this.sql.exec('UPDATE banklinks SET refresh = NULL, access = NULL WHERE uid = ?', uid); return ''; }   // the bank ended it: connect again
-  }
+  // ---- Money transfer and Connect your bank (owner: 'everyone must be able to send to banks' - worldwide). Stitch is
+  //      out (owner); a licensed worldwide payout / open-banking partner isn't connected yet, so Send and Connect your
+  //      bank say they connect once it is. Your bank account for receiving (Receive) is kept here meanwhile. ----
+  payReady() { return false; }
   async bank(me, op, url) {
-    if (op === 'info') { const l = this.one('SELECT refresh, linked FROM banklinks WHERE uid = ?', me.id); return json({ ready: this.payReady(), linked: !!(l && l.refresh), at: l && l.linked || 0 }); }
-    if (!this.payReady()) return json({ error: 'not-ready' }, 400);
-    if (op === 'link') {
-      const state = rand(18), verifier = rand(32), challenge = await sha(verifier), nonce = rand(12);
-      this.sql.exec('INSERT INTO banklinks (uid, state, verifier) VALUES (?, ?, ?) ON CONFLICT(uid) DO UPDATE SET state = excluded.state, verifier = excluded.verifier', me.id, state, verifier);
-      const q = new URLSearchParams({ client_id: this.env.STITCH_ENT_CLIENT_ID, scope: 'openid offline_access accounts balances transactions accountholders', response_type: 'code',
-        redirect_uri: this.bankBack(url), nonce, state, code_challenge: challenge, code_challenge_method: 'S256' });
-      return json({ url: (this.env.STITCH_BASE || 'https://secure.stitch.money') + '/connect/authorize?' + q });
-    }
+    if (op === 'info') return json({ ready: false, linked: false, at: 0 });
     if (op === 'unlink') { this.sql.exec('DELETE FROM banklinks WHERE uid = ?', me.id); return json({ ok: true }); }
-    if (op === 'accounts') {
-      const l = this.one('SELECT cache, cached FROM banklinks WHERE uid = ?', me.id);
-      if (l && l.cache && Date.now() - l.cached < 60000) return new Response(l.cache, { headers: JSONH });   // at most one look a minute
-      const tok = await this.bankAccess(me.id);
-      if (!tok) return json({ error: 'not-linked' }, 400);
-      const r = await fetch((this.env.STITCH_BASE || 'https://api.stitch.money') + '/graphql', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + tok },
-        body: JSON.stringify({ query: 'query { user { bankAccounts { id name accountNumber accountType bankId currentBalance availableBalance transactions(first: 100) { edges { node { id amount reference description date runningBalance } } } } } }' }) });
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok || j.errors) return json({ error: 'bank', why: String((j.errors && j.errors[0] && j.errors[0].message) || r.status).slice(0, 160) }, 502);
-      const money = m => m && m.quantity != null ? { v: +m.quantity, cur: m.currency || 'ZAR' } : null;
-      const accounts = ((j.data && j.data.user && j.data.user.bankAccounts) || []).map(a => {
-        const cb = money(a.currentBalance), ab = money(a.availableBalance);
-        return { id: a.id, name: a.name || '', last4: String(a.accountNumber || '').replace(/\D/g, '').slice(-4), type: a.accountType || '', bank: a.bankId || '',
-          balance: cb ? cb.v : null, available: ab ? ab.v : null, cur: (cb || ab || {}).cur || 'ZAR',
-          tx: ((a.transactions && a.transactions.edges) || []).map(e => e.node).filter(Boolean).map(t => { const m = money(t.amount), rb = money(t.runningBalance);
-            return m ? { id: t.id, amt: m.v, cur: m.cur, text: [t.description, t.reference].filter(Boolean).join(' · ').slice(0, 200), who: String(t.description || t.reference || '').slice(0, 60), at: Date.parse(t.date) || 0, bal: rb ? rb.v : null } : null; }).filter(Boolean) };
-      });
-      const out = JSON.stringify({ ok: true, at: Date.now(), accounts });
-      this.sql.exec('UPDATE banklinks SET cache = ?, cached = ? WHERE uid = ?', out, Date.now(), me.id);
-      return new Response(out, { headers: JSONH });
-    }
-    return json({ error: 'bad' }, 400);
+    return json({ error: 'not-ready' }, 400);
   }
   bankOk(b) {
     const bank = String(b.bank || ''), acct = String(b.acct || '').replace(/\s+/g, ''), name = String(b.name || '').trim().slice(0, 60);
@@ -1535,32 +1389,12 @@ export class Hub {
         const pb = this.one('SELECT * FROM paybank WHERE uid = ?', u.id); if (!pb) return json({ error: 'no-bank' }, 409);
         to = { name: pb.name, bank: pb.bank, acct: pb.acct }; toUid = u.id;
       } else { to = this.bankOk(b.bank || {}); if (!to) return json({ error: 'bank-details' }, 400); }
-      if (!this.payReady()) return json({ error: 'not-connected' }, 503);
-      const ref = String(b.ref || '').replace(/[^A-Za-z0-9 .\-]/g, '').trim().slice(0, 20) || 'Lockedintool';
-      const id = 'p' + rand(9);
-      const d = await this.stitch(`mutation Pay($amount: MoneyInput!, $payerReference: String!, $beneficiaryReference: String!, $externalReference: String, $name: String!, $bankId: BankBeneficiaryBankId!, $acct: String!) {
-        clientPaymentInitiationRequestCreate(input: { amount: $amount, payerReference: $payerReference, beneficiaryReference: $beneficiaryReference, externalReference: $externalReference,
-          beneficiary: { bankAccount: { name: $name, bankId: $bankId, accountNumber: $acct } } }) { paymentInitiationRequest { id url } } }`,
-        { amount: { quantity: (cents / 100).toFixed(2), currency: 'ZAR' }, payerReference: ref.slice(0, 12), beneficiaryReference: ref, externalReference: id, name: to.name, bankId: to.bank, acct: to.acct });
-      const pr = d.clientPaymentInitiationRequestCreate.paymentInitiationRequest;
-      this.sql.exec('INSERT INTO payments (id, uid, to_uid, to_name, to_bank, to_mask, cents, ref, stitch, status, created, updated, payfrom) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        id, me.id, toUid, toUid ? null : to.name, to.bank, toUid ? '' : to.acct.slice(-3), cents, ref, pr.id, 'pending', now, now, String(b.from || '').replace(/[^\p{L}\p{N} .•'&-]/gu, '').slice(0, 40) || null);
-      const back = this.env.STITCH_REDIRECT || (url.origin + '/v1/pay/return');
-      return json({ id, url: pr.url + (pr.url.includes('?') ? '&' : '?') + 'redirect_uri=' + encodeURIComponent(back) });
+      // (the worldwide payout partner isn't connected yet - owner: Stitch is out)
+      return json({ error: 'not-connected' }, 503);
     }
     if (op === 'status') {
       const p = this.one("SELECT * FROM payments WHERE id = ? AND uid = ? AND (kind IS NULL OR kind NOT LIKE 'sub:%')", url.searchParams.get('id') || '', me.id);
       if (!p) return json({ error: 'notfound' }, 404);
-      if (p.status === 'pending' && this.payReady()) {
-        const d = await this.stitch(`query St($id: ID!) { node(id: $id) { ... on PaymentInitiationRequest { status { __typename } } } }`, { id: p.stitch });
-        const tn = d && d.node && d.node.status && d.node.status.__typename || '';
-        const st = /Completed/.test(tn) ? 'paid' : /Cancelled/.test(tn) ? 'cancelled' : /Expired/.test(tn) ? 'expired' : 'pending';
-        if (st !== 'pending') {
-          this.sql.exec('UPDATE payments SET status = ?, updated = ? WHERE id = ?', st, now, p.id);
-          p.status = st;
-          if (st === 'paid' && p.to_uid) this.deliver(p.to_uid, { t: 'paid', id: p.id, amount: p.cents / 100, currency: 'ZAR', ref: p.ref || '', from: me.id, name: me.name || '', username: me.username || '', at: now });
-        }
-      }
       return json(this.payView(p, me));
     }
     return json({ error: 'notfound' }, 404);
