@@ -10870,7 +10870,7 @@ function actRefresh(){
   let msgs = 0, changed = false;
   for(const c of msgChats()){
     if(c.readAt === undefined){ c.readAt = Date.now(); changed = true; }   // older chats start as read
-    if(c.archived || c.kind === 'system' || c.id === 'lit-reminder') continue;   // the dot / number are for real messages from people (owner)
+    if(c.archived || c.kind === 'system' || c.id === 'lit-reminder') continue;   // the dot / number are for real messages from people and groups (owner) - never Lockedintool's own chat
     msgs += (c.messages || []).filter(m=>m.from !== 'me' && (m.at || 0) > c.readAt).length;
   }
   if(changed) saveMsgChats();
