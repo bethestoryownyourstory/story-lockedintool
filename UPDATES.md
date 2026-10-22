@@ -92,3 +92,4 @@ commits, pushed as a new update) - nothing else changes.
 | 84 | 2026-10-22 | Calls: Lockedintool voice, video and group calls can now go through Cloudflare's relay when the two phones can't reach each other directly (mobile data) - it switches on once the Cloudflare key has the Calls permission | 78cfdc8 |
 | 85 | 2026-10-22 | The switch at the bottom (tap the line) now reads Apps \| Lockedintool instead of Apps \| Pages | 7f38841 |
 | 86 | 2026-10-22 | Settings > Quick access: 'Wallet page on lock screen' turns the lock screen's Wallet page button on / off, and its own 'Always On Display' shows it on the Always On Display too | 9a4fa21 |
+| 87 | 2026-10-22 | Dashboard: Station 3 at the bottom now goes with the system theme (black in Black, white in White) instead of the opposite, and all its buttons - the + too - are the same size and evenly spaced | 812b46e |
