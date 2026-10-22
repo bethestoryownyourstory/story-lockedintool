@@ -5180,6 +5180,7 @@ function ctlApply(st, out){
   if(st && typeof st === 'object') Object.keys(CTL_FIELDS).forEach(k=>{ if(typeof st[k] === 'boolean') state[CTL_FIELDS[k]] = st[k]; });
   if(st && typeof st.torch === 'boolean') state.hasTorch = st.torch;   // false = this phone has no flashlight
   if(out && Array.isArray(out.list) && out.list.length){ state.audioOutputs = out.list.map(String); state.activeAudioOutput = String(out.active || out.list[0]); }
+  if(out && typeof out.separate === 'boolean') state.audioSeparate = out.separate;   // the phone has its own Separate app sound
 }
 function ctlRefresh(){
   if(!CTL_NATIVE || IN_STATION3_WINDOW) return;
@@ -5418,6 +5419,12 @@ function mediaOutputTemplate(){
           <span class="modal-title">Media Output</span>
           <button class="modal-close" data-action="media-output-close">×</button>
         </div>
+        ${state.audioSeparate ? `<div class="row-card" style="margin-bottom:10px;">
+          <div class="row" data-action="audio-separate-open" style="cursor:pointer;">
+            <div class="row-left" style="flex-direction:column; align-items:flex-start; gap:3px; min-width:0;"><div class="row-name">Separate app audio</div><div class="row-sub">Play one app's sound on another device while the rest stays where it is - your phone's own setting</div></div>
+            <span class="chev-right">›</span>
+          </div>
+        </div>` : ''}
         <div class="section-title" style="margin-top:0;">ACTIVE OUTPUT</div>
         ${state.audioOutputs.map(o=>`
           <div class="settings-option${state.activeAudioOutput===o?' selected':''}" data-audiooutput="${escText(o).replace(/"/g,'&quot;')}">
@@ -16447,8 +16454,12 @@ function attachHandlers(){
   document.querySelectorAll('[data-audiooutput]').forEach(el=>{
     el.addEventListener('click', ()=>{
       const o = el.getAttribute('data-audiooutput');
-      // Only the phone can move other apps' sound: picking another output opens its own output switcher.
-      if(CTL_NATIVE && window.StoryNative.outputSwitch){ if(o !== state.activeAudioOutput) try{ window.StoryNative.outputSwitch(); }catch(e){} return; }
+      // Only the phone can move other apps' sound: picking another output brings up its own output switcher, and
+      // Lockedintool taps that output there for you (OutputSwitchActivity); the list updates once the sound has moved.
+      if(CTL_NATIVE && (window.StoryNative.outputSwitchTo || window.StoryNative.outputSwitch)){
+        if(o !== state.activeAudioOutput) try{ window.StoryNative.outputSwitchTo ? window.StoryNative.outputSwitchTo(o) : window.StoryNative.outputSwitch(); }catch(e){}
+        return;
+      }
       state.activeAudioOutput = o;
       renderDevice();
     });
@@ -17161,6 +17172,7 @@ function attachHandlers(){
         case 'controls-expand-bg': state.controlsExpanded = false; state.controlsEditMode = false; break;
         case 'controls-edit-toggle': state.controlsEditMode = !state.controlsEditMode; break;
         case 'media-output-open': state.mediaOutputOpen = true; break;
+        case 'audio-separate-open': try{ window.StoryNative && window.StoryNative.separateSound && window.StoryNative.separateSound(); }catch(e){} break;
         case 'media-output-close':
         case 'media-output-bg': state.mediaOutputOpen = false; break;
         case 'spotify-toggle': state.spotifyPlaying = !state.spotifyPlaying; break;

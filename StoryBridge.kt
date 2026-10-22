@@ -47,6 +47,8 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         fun dashShown(on: Boolean)
         fun controlToggle(id: String)
         fun outputSwitch()
+        fun outputSwitchTo(name: String)
+        fun separateSound()
         fun getCalls(): String
         fun createShutter()
         fun createVideo(on: Boolean)
@@ -631,6 +633,12 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
     fun audioOutputs(): String = PhoneControls.outputs(ctx).toString()
     @JavascriptInterface
     fun outputSwitch() { if (pages || widget) host.outputSwitch() }
+    /** The output you picked: the phone's own switcher comes up and Lockedintool taps it there (OutputSwitchActivity). */
+    @JavascriptInterface
+    fun outputSwitchTo(name: String) { if (pages || widget) host.outputSwitchTo(name) }
+    /** Separate app audio: the phone's own Separate app sound screen (audioOutputs' "separate" says if the phone has it). */
+    @JavascriptInterface
+    fun separateSound() { if (pages || widget) host.separateSound() }
 
     @JavascriptInterface
     fun getCalls(): String = if (profile) host.getCalls() else "[]"

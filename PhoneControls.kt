@@ -3,6 +3,7 @@ package com.story.launcher
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
 import android.media.AudioDeviceInfo
@@ -159,14 +160,37 @@ object PhoneControls {
                 AudioDeviceInfo.TYPE_WIRED_HEADPHONES, AudioDeviceInfo.TYPE_USB_DEVICE, AudioDeviceInfo.TYPE_HDMI)
             active = order.firstNotNullOfOrNull { t -> list.firstOrNull { it.type == t } }?.let { outName(it) } ?: "This Phone"
         }
-        return JSONObject().put("list", JSONArray(names.toList())).put("active", active)
+        return JSONObject().put("list", JSONArray(names.toList())).put("active", active).put("separate", separateSound(c) != null)
     }
 
-    /** Only the phone can move other apps' sound to another output: its own output switcher (Android 14+), else its
-     *  Bluetooth screen. Returns the screen to open, or null when the phone showed its own switcher. */
-    fun outputSwitcher(c: Context): Intent? {
-        if (Build.VERSION.SDK_INT >= 34 && runCatching { android.media.MediaRouter2.getInstance(c).showSystemOutputSwitcher() }.getOrDefault(false)) return null
-        return Intent("com.android.settings.panel.action.MEDIA_OUTPUT").putExtra("com.android.settings.panel.extra.PACKAGE_NAME", c.packageName)
-            .takeIf { it.resolveActivity(c.packageManager) != null } ?: Intent(Settings.ACTION_BLUETOOTH_SETTINGS)
+    /** The names the phone's own switcher may give the output picked in Lockedintool's list (OutputSwitchActivity). */
+    fun outputNames(c: Context, name: String): List<String> = when (name) {
+        "" -> emptyList()
+        "This Phone" -> listOfNotNull("This phone", "Phone", "Phone speaker", "Speaker", Build.MODEL,
+            runCatching { Settings.Global.getString(c.contentResolver, Settings.Global.DEVICE_NAME) }.getOrNull())
+        "Wired headphones" -> listOf("Wired headphones", "Headphones", "Wired headset", "Headset")
+        else -> listOf(name)
     }
+
+    /** Separate app audio (owner: 'the separate sound option'): the phone's own setting that plays one app's sound on
+     *  another device - Samsung phones have it (Separate app sound); Android itself has nothing like it, so on other
+     *  phones Lockedintool doesn't show the option. Looked up once. */
+    @Volatile private var sepLooked = false
+    @Volatile private var sepScreen: Intent? = null
+    @Suppress("DEPRECATION")
+    fun separateSound(c: Context): Intent? {
+        if (sepLooked) return sepScreen
+        val pm = c.packageManager
+        fun screenIn(pkg: String, pick: (String) -> Boolean): Intent? = runCatching {
+            (pm.getPackageInfo(pkg, PackageManager.GET_ACTIVITIES).activities ?: emptyArray())
+                .filter { it.exported && pick(it.name) }.sortedBy { if (SEPARATE.containsMatchIn(it.name)) 0 else 1 }
+                .firstOrNull()?.let { Intent().setClassName(it.packageName, it.name) }
+        }.getOrNull()
+        // Samsung's own Separate app sound app (its old name: Multi sound), else a screen of that name in the phone's Settings.
+        sepScreen = screenIn("com.samsung.android.setting.multisound") { SEPARATE.containsMatchIn(it) || Regex("Setting|MultiSound", RegexOption.IGNORE_CASE).containsMatchIn(it) }
+            ?: screenIn("com.android.settings") { SEPARATE.containsMatchIn(it) }
+        sepLooked = true
+        return sepScreen
+    }
+    private val SEPARATE = Regex("SeparateApp(Sound|Audio)|MultiSound", RegexOption.IGNORE_CASE)
 }

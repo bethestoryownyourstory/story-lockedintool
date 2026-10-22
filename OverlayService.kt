@@ -2431,22 +2431,30 @@ class OverlayService : Service(), StoryBridge.Host {
         val i = PhoneControls.toggle(this, id)
         if (i != null) openSystemScreen(i) else controlsChanged()
     } }
-    override fun outputSwitch() { ui.post { PhoneControls.outputSwitcher(this)?.let { openSystemScreen(it) } } }
+    override fun outputSwitch() = outputSwitchTo("")
+    /** Another output picked (owner: tapping 'This Phone' must really switch): the phone's own switcher, tapped for you. */
+    override fun outputSwitchTo(name: String) { ui.post {
+        openStepAside(Intent(this, OutputSwitchActivity::class.java).putStringArrayListExtra(OutputSwitchActivity.EXTRA_NAMES, ArrayList(PhoneControls.outputNames(this, name))))
+    } }
+    override fun separateSound() { ui.post { PhoneControls.separateSound(this)?.let { openSystemScreen(it) } } }
     /** Tells the Pages the controls / outputs as they are now (after a change, the flashlight switched elsewhere...). */
     fun controlsChanged() { ui.post {
         val js = "window.storyControlsChanged&&window.storyControlsChanged(" + PhoneControls.state(this) + "," + PhoneControls.outputs(this) + ")"
         pagesPane?.web?.evaluateJavascript(js, null)
         liveWidgets.values.forEach { runCatching { it.web.evaluateJavascript(js, null) } }   // the Dashboard widget's Controls too
     } }
-    private fun openSystemScreen(i: Intent) {
+    private fun openSystemScreen(i: Intent) = openStepAside(Intent(this, SystemScreenActivity::class.java).putExtra(SystemScreenActivity.EXTRA_INTENT, i))
+    /** Starts one of Lockedintool's see-through screens for the phone's own screen; the Pages step aside meanwhile. */
+    private fun openStepAside(a: Intent) {
         if (pickerHid.isNotEmpty()) return
         // Opened from the Pages themselves (not Station 3's window): Station 3 steps away too while the phone's screen shows.
         sysFromPages = pagesPane?.shown == true && profilePane?.shown != true
         if (!stepAsideForSystem()) { sysFromPages = false; return }
-        runCatching { startActivity(Intent(this, SystemScreenActivity::class.java).putExtra(SystemScreenActivity.EXTRA_INTENT, i).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)) }
+        runCatching { startActivity(a.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)) }
             .onFailure { comeBackFromSystem() }
     }
-    fun systemScreenDone() { ui.post { comeBackFromSystem(); controlsChanged() } }
+    // The outputs again a moment later too: the phone takes a little while to move the sound.
+    fun systemScreenDone() { ui.post { comeBackFromSystem(); controlsChanged(); ui.postDelayed({ controlsChanged() }, 1000) } }
     fun contactDone(saved: Boolean) { ui.post {
         comeBackFromSystem()
         if (contactDialWasOpen) { contactDialWasOpen = false; dialPane?.takeIf { !it.shown && s3Pane?.shown == true }?.let { setShown(it, true) } }

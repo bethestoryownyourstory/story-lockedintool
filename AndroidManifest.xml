@@ -116,6 +116,14 @@
             android:taskAffinity=""
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
+        <!-- Media output: brings up the phone's own output switcher and taps the output picked in Lockedintool (see-through). -->
+        <activity
+            android:name=".OutputSwitchActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
         <!-- Asks Android once for a permission STORY needs (see-through). -->
         <activity
             android:name=".AskActivity"

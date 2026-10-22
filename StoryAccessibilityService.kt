@@ -119,6 +119,54 @@ class StoryAccessibilityService : AccessibilityService() {
             }
             return false
         }
+        // The phone's own output switcher / Media output panel (SystemUI, or Samsung's media panel) - never Settings.
+        private val OUT_PKGS = Regex("^com\\.android\\.systemui$|^com\\.samsung\\.android\\..*(mdx|quickboard|media)")
+        /** Media output (OutputSwitchActivity): the phone's own list is up - tap the output picked in Lockedintool (an
+         *  exact name only; from the quick panel its Media output first), then close it. Not found in ~3 s: the list
+         *  stays up for you to pick. A few short looks only while it's up - nothing runs otherwise. */
+        fun pickOutput(names: List<String>, viaPanel: Boolean) {
+            val want = names.map { it.trim().lowercase() }.filter { it.isNotEmpty() }.toSet()
+            if (want.isEmpty() || instance == null) return
+            val h = android.os.Handler(android.os.Looper.getMainLooper())
+            var panelOpen = !viaPanel
+            var tries = 0
+            val step = object : Runnable {
+                override fun run() {
+                    val s = instance ?: return
+                    if (++tries > 20) return
+                    if (!panelOpen) {
+                        if (clickIn { said(it) == "media output" }) { panelOpen = true; tries = 0 }
+                        h.postDelayed(this, 150); return
+                    }
+                    if (clickIn { said(it) in want }) {
+                        h.postDelayed({
+                            s.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
+                            if (viaPanel && Build.VERSION.SDK_INT >= 31) h.postDelayed({ instance?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_DISMISS_NOTIFICATION_SHADE) }, 350)
+                        }, 700)
+                        return
+                    }
+                    h.postDelayed(this, 150)
+                }
+            }
+            h.postDelayed(step, 250)
+        }
+        private fun said(n: android.view.accessibility.AccessibilityNodeInfo) = (n.text ?: n.contentDescription ?: "").toString().trim().lowercase()
+        /** Taps the first visible node in the phone's output switcher / panel that matches (or the row holding it). */
+        private fun clickIn(match: (android.view.accessibility.AccessibilityNodeInfo) -> Boolean): Boolean {
+            val s = instance ?: return false
+            val ws = runCatching { s.windows }.getOrNull() ?: return false
+            for (w in ws) {
+                val r = runCatching { w.root }.getOrNull() ?: continue
+                if (!OUT_PKGS.containsMatchIn(r.packageName?.toString() ?: "")) continue
+                var hit: android.view.accessibility.AccessibilityNodeInfo? = null
+                find(r, 0, intArrayOf(0)) { n -> if (match(n)) { hit = n; true } else false }
+                var c = hit ?: continue
+                var up = 0
+                while (!c.isClickable && up < 6) { c = c.parent ?: break; up++ }
+                if (c.isClickable && c.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK)) return true
+            }
+            return false
+        }
         private val STORY_WIDGET = Regex("^(?:Lockedintool|STORY) .+ widget #(\\d+)$")
         /** Where each STORY widget is on the home screen right now (widget id -> its place on the screen). */
         fun storyWidgets(home: String): Map<Int, android.graphics.Rect> {
