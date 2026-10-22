@@ -2158,6 +2158,17 @@
   body.s3-only.s3-dash .station3-bar-card{ border-radius:0 !important; padding:0 10px; }
   body.s3-only.s3-dash .station3-bar{ justify-content:space-evenly; }
   body.s3-only.s3-dash .station3-quick-row{ display:none !important; }
+  /* The Dashboard's Station 3 FOLLOWS the system theme (owner: 'make it go with the system theme and not oppose it'):
+     black band with white icons in Black, white band with black icons in White. Written in Station 3's own colours and
+     listed in FOLLOW_SEL, so the theme swap turns them the other way round from the rest of Station 3. */
+  body.s3-only.s3-dash .station3-btn{ color:#000; background:rgba(0,0,0,0.05); border-color:rgba(0,0,0,0.08); }
+  body.s3-only.s3-dash .station3-btn:active{ background:rgba(0,0,0,0.14); }
+  body.s3-only.s3-dash .station3-btn-chevron{ color:#000; background:rgba(0,0,0,0.05); border:1px solid rgba(0,0,0,0.08); }
+  body.s3-only.s3-dash .station3-btn-chevron:active{ background:rgba(0,0,0,0.14); }
+  body.s3-only.s3-dash .station3-btn-plus{ color:#fff; background:#000; border-color:#000; }
+  /* All evenly spaced (owner's choice): every button the same size, the same distance apart - the + too. */
+  body.s3-only.s3-dash .station3-bar > button{ width:32px; height:32px; box-sizing:border-box; }
+  body.s3-only.s3-dash .station3-btn-plus:active{ background:#2b2b2b; }
   body.s3-only .station3-dialpad-card{ border-radius:20px !important; }
   body.s3-dial .station3-corner-arrow, body.s3-dial .station3-bar-card{ display:none !important; }
   /* Over other apps the Station 3 button itself is drawn by the app, always the same, on top -- the page
@@ -3876,7 +3887,7 @@
   }
   // The dial pad is the one thing that FOLLOWS the theme instead of opposing it (owner): its own colours are the
   // reverse of what it's drawn with - black dial pad in Black, white dial pad in White (the green call stays green).
-  const FOLLOW_SEL = /station3-(dialpad|call-btn|newcontact|backspace-btn)/;
+  const FOLLOW_SEL = /station3-(dialpad|call-btn|newcontact|backspace-btn)|\.s3-dash \.station3-btn/;   // + the Dashboard's Station 3 (owner)
   function themeSheets(white){
     for(const r of sheetRules()){
       const flipIt = FOLLOW_SEL.test(r.selectorText) ? !white : white;
