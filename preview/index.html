@@ -10870,7 +10870,7 @@ function actRefresh(){
   let msgs = 0, changed = false;
   for(const c of msgChats()){
     if(c.readAt === undefined){ c.readAt = Date.now(); changed = true; }   // older chats start as read
-    if(c.archived) continue;
+    if(c.archived || c.kind === 'system' || c.id === 'lit-reminder') continue;   // the dot / number are for real messages from people (owner)
     msgs += (c.messages || []).filter(m=>m.from !== 'me' && (m.at || 0) > c.readAt).length;
   }
   if(changed) saveMsgChats();
@@ -10903,8 +10903,8 @@ async function upDeleteShown(){
   if(!v.items.length) upCloseView(); else { v.i = Math.min(v.i, v.items.length - 1); upShowItem(); }
   upLoad();
 }
-// ---- Every day (owner): if you haven't posted a status in the last 24 hours, Lockedintool sends you a message
-//      (its own chat 'lit-reminder' in Messages, plus a notification) to post one, so people who don't know you can
+// ---- Every day (owner): if you haven't posted a status in the last 24 hours, Lockedintool sends you a NOTIFICATION
+//      to post one (owner: a notification, not a message in Lockedintool's chat), so people who don't know you can
 //      catch up and see what you're up to. Checked when the app connects and once more at the next 10:00 - no loop.
 const UP_REMIND_KEY = 'story-status-remind', UP_REMIND_TEXT = 'Post a status today so people who don’t know you can catch up and see what you’re up to. Tap + on Station 3, choose Profile, then Status.';
 let upRemindT = 0, upLoadedAt = 0;
@@ -10933,10 +10933,17 @@ async function upReminder(){
   try{ mine = (await msgApi('/v1/profile')).statuses || []; }catch(e){ return; }   // no connection: try again later
   try{ localStorage.setItem(UP_REMIND_KEY, day); }catch(e){}
   if(mine.some(s=>Date.now() - s.at < 86400000)) return;   // you already have one up
-  const c = chatFor('lit-reminder', { name:'Lockedintool' }); c.kind = 'system';
-  c.messages = (c.messages || []).concat({ id:'r' + Date.now(), from:'them', text: UP_REMIND_TEXT, at: Date.now() }).slice(-30);
-  c.unread = (c.unread || 0) + 1; saveMsgChats(); renderMsgList();
+  // Only a notification (owner: 'these should be notifications - it's annoying, every time I need to open the chat so it
+  // disappears') - never a message in Lockedintool's chat.
   if(NATIVE && window.StoryNative.msgNotify) try{ window.StoryNative.msgNotify('Lockedintool', 'Post a status today so people can catch up with you'); }catch(e){}
+}
+// The reminders that used to land in Lockedintool's chat are taken out of it (the chat goes if nothing else is in it).
+function upReminderTidy(){
+  const all = msgChats(), c = all.find(x=>x.id === 'lit-reminder'); if(!c) return;
+  const keep = (c.messages || []).filter(m=>m.text !== UP_REMIND_TEXT);
+  if(keep.length === (c.messages || []).length) return;
+  if(keep.length) c.messages = keep; else all.splice(all.indexOf(c), 1);
+  saveMsgChats(); if(typeof renderMsgList === 'function') renderMsgList();
 }
 // ---- Putting your pictures / videos on Lockedintool's server (posts, statuses, your profile picture). ----
 const UP_QUEUE = 'story-upost-queue';
@@ -11307,7 +11314,7 @@ function msgConnect(){
   clearTimeout(msgWsTimer);
   let ws; try{ ws = new WebSocket(MSG_API.replace(/^http/, 'ws') + '/v1/ws?token=' + encodeURIComponent(a.token)); }catch(e){ return msgRetry(); }
   msgWs = ws;
-  ws.onopen = ()=>{ msgWsOpen = true; msgWsTry = 0; clearInterval(msgPing); msgPing = setInterval(()=>{ try{ ws.send('{"t":"ping"}'); }catch(e){} }, 25000); msgFlush(); msgSyncProfile(); msgSyncGroups(); upFlush(); upReminder(); litWelcomePrice(); upLoad(); actRefreshSoon(); callIce(); };
+  ws.onopen = ()=>{ msgWsOpen = true; msgWsTry = 0; clearInterval(msgPing); msgPing = setInterval(()=>{ try{ ws.send('{"t":"ping"}'); }catch(e){} }, 25000); msgFlush(); msgSyncProfile(); msgSyncGroups(); upFlush(); upReminderTidy(); upReminder(); litWelcomePrice(); upLoad(); actRefreshSoon(); callIce(); };
   ws.onmessage = e=>{ let m; try{ m = JSON.parse(e.data); }catch(err){ return; } msgOnServer(m).catch(()=>{}); };
   ws.onclose = e=>{ msgWsOpen = false; clearInterval(msgPing); if(e && (e.code === 4001 || e.code === 4003)){ msgWs = null; litAccountGone(e.code === 4003 ? 'banned' : 'deleted'); return; }
     if(e && e.code === 4002){ msgWs = null; showToast('You logged in on another phone'); litSignedOut(); return; }
