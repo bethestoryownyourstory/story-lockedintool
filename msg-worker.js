@@ -1324,7 +1324,7 @@ export class Hub {
       } catch (e) {}
     }
     const what = (t.plan === 'premium' ? 'Premium' : 'Basic') + ' · R' + (t.cents / 100).toFixed(2), forget = 'littry=; Path=/v1/pay/return; Max-Age=0; HttpOnly; Secure; SameSite=Lax';
-    if (t.status === 'paid') return this.tryPage('<p style="font-size:20px;font-weight:700;margin:18px 0 6px">Paid ✓</p><p style="color:#8b8b92;margin:0 0 22px">' + what + ' was paid. In the Lockedintool app this switches the plan on.</p>' + this.tryBtn('/v1/try-pay', 'Pay again'), false, forget);
+    if (t.status === 'paid') return this.tryPage('<p style="font-size:20px;font-weight:700;margin:18px 0 6px">Paid ✓</p><p style="color:#8b8b92;margin:0 0 22px">' + what + ' was paid. In the Lockedintool app this switches the plan on.</p>' + this.tryBtn('/v1/try-pay', 'Start another payment'), false, forget);
     if (t.status !== 'pending') return this.tryPage('<p style="font-size:20px;font-weight:700;margin:18px 0 6px">Not paid</p><p style="color:#8b8b92;margin:0 0 22px">' + what + (t.status === 'cancelled' ? ' - the payment was cancelled.' : ' - the payment wasn’t finished in time.') + ' Nothing was paid.</p>' + this.tryBtn('/v1/try-pay', 'Try again'), false, forget);
     return this.tryPage('<p style="font-size:20px;font-weight:700;margin:18px 0 6px">Waiting for your bank</p><p style="color:#8b8b92;margin:0 0 22px">' + what + ' - this page updates by itself.</p>' + this.tryBtn('/v1/try-pay', 'Start a new payment'), now - t.created < 10 * 60000);
   }
@@ -1430,6 +1430,16 @@ export class Hub {
     }
     return p.status;
   }
+  // A plan paid at Stitch counts even when the app stopped asking (owner: they paid and it showed they had to pay again -
+  // the app reloaded while they were in their bank, or they came back later): sub/info asks Stitch about your unpaid
+  // plan payments from the last day itself, at most every 15 s.
+  async subPending(me) {
+    const now = Date.now(), look = (this.subLook = this.subLook || {});
+    if (!this.expressReady() || look[me.id] > now - 15000) return;
+    look[me.id] = now;
+    const open = this.sql.exec("SELECT * FROM payments WHERE uid = ? AND kind LIKE 'sub:%' AND status = 'pending' AND created > ? ORDER BY created DESC LIMIT 3", me.id, now - 86400000).toArray();
+    for (const p of open) if (!String(p.stitch || '').startsWith('ls:')) { try { await this.subCheck(me, p); } catch (e) {} }
+  }
   // Cancel a plan payment that isn't paid yet. Stitch: POST payment-links/{id}/cancel (the link can't be paid any more;
   // if it's already paid / going through, the real state is read instead - paid still counts).
   async subCancel(me, p) {
@@ -1444,7 +1454,7 @@ export class Hub {
   }
   async sub(me, op, b, url) {
     const now = Date.now();
-    if (op === 'info') { await this.lsRefresh(me); return json(this.subView(me)); }
+    if (op === 'info') { await this.lsRefresh(me); await this.subPending(me); return json(this.subView(me)); }
     if (op === 'buy') {
       const plans = this.subPlans(), plan = String(b.plan || '');
       if (!plans[plan]) return json({ error: 'plan' }, 400);
