@@ -9,6 +9,8 @@
 //  - Live delivery over a WebSocket (Delivered / Seen / Read, typing), and a queue for phones that are offline.
 //  - Calls: it only passes the call set-up between the two phones (WebRTC offer / answer / network paths) - the
 //    call itself goes phone to phone, encrypted. "Who can call you" / "who can message you" are checked here.
+//    Phones that can't reach each other directly (mobile data, carrier NAT) go through Cloudflare's TURN relay: /v1/ice
+//    hands signed-in phones short-lived relay passwords (TURN_KEY_ID / TURN_KEY_TOKEN, made by deploy-msg.yml).
 //  - Groups (owner): public groups (Community - anyone can find and join them) and private groups (made in Messages -
 //    only people a leader adds; never listed anywhere). Private group messages are locked for each member; public
 //    group posts and chat are public by nature (anyone can join).
@@ -228,7 +230,7 @@ export class Hub {
         // Payments: can the server really sign in to Stitch? (just a sign-in - no payment is made)
         let pay = this.expressReady() ? 'keys' : 'no-keys';
         if (url.searchParams.get('pay') === '1' && this.expressReady()) { try { await this.expressToken(); pay = 'ok'; } catch (e) { pay = String(e.message || e).slice(0, 160); } }
-        return json({ ok: true, sms: !!(this.env.TWILIO_VERIFY_SID || this.env.TWILIO_FROM), mail: this.mailReady(), resetSms: this.smsLinkReady(), plans: this.subPlans(), pay, subs: this.subReady(), transfers: this.payReady(), live: this.liveReady() });
+        return json({ ok: true, sms: !!(this.env.TWILIO_VERIFY_SID || this.env.TWILIO_FROM), mail: this.mailReady(), resetSms: this.smsLinkReady(), plans: this.subPlans(), pay, subs: this.subReady(), transfers: this.payReady(), live: this.liveReady(), turn: this.turnReady() });
       }
       if (path === '/v1/pay/return') return new Response('<!doctype html><meta name=viewport content="width=device-width,initial-scale=1"><body style="margin:0;background:#000;color:#fff;font:600 18px system-ui;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center;padding:24px;box-sizing:border-box">Done - go back to Lockedintool to see your payment.</body>', { headers: { 'content-type': 'text/html; charset=utf-8' } });
       if (path === '/v1/bank/return') return this.bankReturn(url);
@@ -251,6 +253,7 @@ export class Hub {
       if (path === '/v1/verify') return this.verify(me, body);
       if (path === '/v1/me') return this.saveMe(me, body);
       if (path === '/v1/find') return this.find(me, url.searchParams.get('q') || '');
+      if (path === '/v1/ice') return json({ iceServers: await this.iceServers() });
       if (path.startsWith('/v1/groups/')) return this.groups(me, path.slice(11), body, url.searchParams);
       if (path.startsWith('/v1/pay/')) return this.pay(me, path.slice(8), body, url);
       if (path.startsWith('/v1/sub/')) return this.sub(me, path.slice(8), body, url);
@@ -1597,6 +1600,42 @@ export class Hub {
       if (!this.one("SELECT 1 AS x FROM gcparts WHERE gid = ? AND uid = ? AND role = 'ask'", gid, id)) return;
       this.sql.exec("UPDATE gcparts SET role = 'in' WHERE gid = ? AND uid = ?", gid, id);
       for (const p of this.gcallParts(gid)) this.sendTo(p.id, { t: 'gcall', kind: 'role', group: gid, id, role: 'in' });
+    }
+  }
+  // ---- Calls relay: two phones on mobile data (behind their carrier's NAT) often can't reach each other with STUN
+  // alone, so Cloudflare's TURN relays the call's packets (still locked end to end - the relay can't open them). The
+  // TURN key is made by deploy-msg.yml ('Calls relay'); its short-lived passwords (24 h) are asked for here and kept
+  // for 12 h, so Cloudflare is asked about twice a day, not on every call. Any problem -> the plain STUN list. ----
+  turnReady() { return !!(this.env.TURN_KEY_ID && this.env.TURN_KEY_TOKEN); }
+  async iceServers() {
+    const stun = [{ urls: ['stun:stun.cloudflare.com:3478', 'stun:stun.l.google.com:19302'] }];
+    if (!this.turnReady()) return stun;
+    const now = Date.now();
+    if (this.iceCache && now < this.iceCache.until) return this.iceCache.list;
+    if (!this.iceWait) this.iceWait = this.iceFetch(stun, now).finally(() => { this.iceWait = null; });   // one ask at a time
+    return this.iceWait;
+  }
+  async iceFetch(stun, now) {
+    try {
+      const r = await fetch((this.env.TURN_BASE || 'https://rtc.live.cloudflare.com/v1') + '/turn/keys/' + encodeURIComponent(this.env.TURN_KEY_ID) + '/credentials/generate-ice-servers',
+        { method: 'POST', headers: { authorization: 'Bearer ' + this.env.TURN_KEY_TOKEN, 'content-type': 'application/json' }, body: JSON.stringify({ ttl: 86400 }), signal: AbortSignal.timeout(5000) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error('turn ' + r.status);
+      // Cloudflare answers { iceServers: [...] } (older keys: one object { urls, username, credential }).
+      const raw = Array.isArray(j.iceServers) ? j.iceServers : j.iceServers && typeof j.iceServers === 'object' ? [j.iceServers] : [];
+      const turn = [];
+      for (const s of raw) {
+        // Only the relay addresses (the STUN ones are in the list already); port 53 is left out (browsers refuse that port - it would only slow the set-up).
+        const urls = [].concat(s && s.urls || []).filter(u => typeof u === 'string' && /^turns?:/.test(u) && !/:53(\?|$)/.test(u));
+        if (urls.length && s.username && s.credential) turn.push({ urls, username: String(s.username), credential: String(s.credential) });
+      }
+      if (!turn.length) throw new Error('turn: no relay servers');
+      const list = stun.concat(turn);
+      this.iceCache = { list, until: now + 12 * 3600000 };
+      return list;
+    } catch (e) {
+      this.iceCache = { list: stun, until: now + 60000 };   // ask Cloudflare again in a minute
+      return stun;
     }
   }
   // ---- Live (owner): go live from Create; your followers are told; anyone allowed to see your profile can watch,

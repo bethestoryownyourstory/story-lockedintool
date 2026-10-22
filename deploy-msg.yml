@@ -15,6 +15,8 @@ name: Deploy STORY message server
 #                until the LIVE Stitch keys are in.
 #   REALTIME_APP_ID + REALTIME_APP_SECRET (optional) - Live video (Cloudflare Realtime). Without them the deploy makes the
 #     app itself, which needs the Cloudflare token to have the 'Calls' (Realtime): Edit permission.
+#   TURN_KEY_ID + TURN_KEY_TOKEN (optional) - the calls relay (Cloudflare TURN), so calls connect on mobile data. Without
+#     them the deploy makes the TURN key itself, which needs the same 'Calls' (Realtime): Edit permission.
 #   STITCH_REDIRECT (optional) - the page Stitch returns to after you approve a payment (default: this server's /v1/pay/return).
 on:
   push:
@@ -70,8 +72,10 @@ jobs:
           MAIL_FROM: ${{ secrets.MAIL_FROM }}
           REALTIME_APP_ID: ${{ secrets.REALTIME_APP_ID }}
           REALTIME_APP_SECRET: ${{ secrets.REALTIME_APP_SECRET }}
+          TURN_KEY_ID: ${{ secrets.TURN_KEY_ID }}
+          TURN_KEY_TOKEN: ${{ secrets.TURN_KEY_TOKEN }}
         run: |
-          for k in TWILIO_ACCOUNT_SID TWILIO_AUTH_TOKEN TWILIO_FROM TWILIO_VERIFY_SID PHONE_SALT STITCH_CLIENT_ID STITCH_CLIENT_SECRET STITCH_REDIRECT STITCH_ENT_CLIENT_ID STITCH_ENT_CLIENT_SECRET SUB_BASIC_ZAR SUB_PREMIUM_ZAR SUB_ENFORCE RESEND_API_KEY MAIL_FROM REALTIME_APP_ID REALTIME_APP_SECRET; do
+          for k in TWILIO_ACCOUNT_SID TWILIO_AUTH_TOKEN TWILIO_FROM TWILIO_VERIFY_SID PHONE_SALT STITCH_CLIENT_ID STITCH_CLIENT_SECRET STITCH_REDIRECT STITCH_ENT_CLIENT_ID STITCH_ENT_CLIENT_SECRET SUB_BASIC_ZAR SUB_PREMIUM_ZAR SUB_ENFORCE RESEND_API_KEY MAIL_FROM REALTIME_APP_ID REALTIME_APP_SECRET TURN_KEY_ID TURN_KEY_TOKEN; do
             v="${!k}"
             if [ -n "$v" ]; then printf '%s' "$v" | npx --yes wrangler@4 secret put "$k" -c msg-wrangler.toml >/dev/null && echo "$k set"; fi
           done
@@ -104,6 +108,36 @@ jobs:
           echo "::add-mask::$SEC"
           printf '%s' "$APP" | npx --yes wrangler@4 secret put REALTIME_APP_ID -c msg-wrangler.toml >/dev/null && echo "REALTIME_APP_ID set"
           printf '%s' "$SEC" | npx --yes wrangler@4 secret put REALTIME_APP_SECRET -c msg-wrangler.toml >/dev/null && echo "REALTIME_APP_SECRET set"
+      - name: Calls relay (Cloudflare TURN) - made once on this Cloudflare account
+        if: steps.ready.outputs.ok == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          # Calls on mobile data need a relay (the carrier's NAT stops two phones reaching each other with STUN alone).
+          # The server says whether it already has its TURN key; if not, one is made (any old one with the same name is
+          # removed first, since its secret can't be read back) and its id + secret go to the server. Never fails the deploy.
+          set +e
+          SUB=$(curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/subdomain | python3 -c 'import sys,json; print(json.load(sys.stdin)["result"]["subdomain"])' 2>/dev/null)
+          TURN=$(curl -s https://story-msg.$SUB.workers.dev/v1/health | python3 -c 'import sys,json; print(json.load(sys.stdin).get("turn"))' 2>/dev/null)
+          if [ "$TURN" = "True" ]; then echo "Calls relay: already set up"; exit 0; fi
+          if [ -z "$TURN" ]; then echo "Calls relay: the server didn't answer - it is set up on the next deploy" | tee -a "$GITHUB_STEP_SUMMARY"; exit 0; fi
+          API=https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/calls/turn_keys
+          for id in $(curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" $API | python3 -c 'import sys,json; d=json.load(sys.stdin); print(" ".join(k["uid"] for k in (d.get("result") or []) if k.get("name")=="lockedintool-turn"))' 2>/dev/null); do
+            curl -s -X DELETE -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" $API/$id >/dev/null
+          done
+          R=$(curl -s -X POST -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'content-type: application/json' -d '{"name":"lockedintool-turn"}' $API)
+          KID=$(echo "$R" | python3 -c 'import sys,json; d=json.load(sys.stdin); print((d.get("result") or {}).get("uid",""))' 2>/dev/null)
+          KEY=$(echo "$R" | python3 -c 'import sys,json; d=json.load(sys.stdin); print((d.get("result") or {}).get("key",""))' 2>/dev/null)
+          if [ -z "$KID" ] || [ -z "$KEY" ]; then
+            echo "Calls relay could not be set up: the Cloudflare API token needs the 'Calls' (Realtime): Edit permission." | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "Cloudflare said: $(echo "$R" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("errors"))' 2>/dev/null)"
+            exit 0
+          fi
+          echo "::add-mask::$KEY"
+          printf '%s' "$KID" | npx --yes wrangler@4 secret put TURN_KEY_ID -c msg-wrangler.toml >/dev/null && echo "TURN_KEY_ID set"
+          printf '%s' "$KEY" | npx --yes wrangler@4 secret put TURN_KEY_TOKEN -c msg-wrangler.toml >/dev/null && echo "TURN_KEY_TOKEN set"
+          exit 0
       - name: Check it answers
         if: steps.ready.outputs.ok == 'true'
         run: |
