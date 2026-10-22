@@ -71,7 +71,8 @@ nav a:hover{color:var(--text)}
 .btns{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:28px}
 .btn{display:inline-block;min-width:200px;padding:15px 22px;border-radius:14px;background:var(--btn);color:var(--btn-text);font-weight:700;font-size:16px;text-decoration:none;text-align:center}
 .btn.line{background:transparent;color:var(--text);border:1px solid #444}
-#get[hidden]{display:none}
+#get[hidden],#soon[hidden]{display:none}
+.soon{display:inline-block;margin-top:22px;padding:8px 14px;border:1px solid #444;border-radius:999px;color:var(--dim);font-size:14px}
 h2.sec{margin:46px 0 12px;font-size:13px;letter-spacing:1.4px;color:var(--dim);font-weight:700}
 .grid{display:grid;grid-template-columns:1fr;gap:12px}
 @media (min-width:760px){.grid.two{grid-template-columns:1fr 1fr}}
@@ -163,6 +164,7 @@ const home = page('Lockedintool', 'Lockedintool works as one with your phone - y
   <h1>Lockedintool</h1>
   <p class="tag">Works as one with your phone.</p>
   <p class="lead">Your money, your cards, your trading, your notes and your people - without switching between apps.</p>
+  <p class="soon" id="soon">Lockedintool is not yet available to the public.</p>
   <div class="btns"><a class="btn" href="#plans">See the plans</a><a class="btn line" id="get" href="${GET}" hidden>Download for Android</a></div>
 </section>
 ${info}
@@ -181,9 +183,10 @@ ${info}
   <div class="card"><h3>Lockedintool</h3><p>South Africa · <a href="mailto:${MAIL}">${MAIL}</a></p></div>
 </section>
 <script>
-  // 'Download for Android' only once Lockedintool is out for everyone (owner: nothing goes public before the launch).
+  // Owner: 'Lockedintool is not yet available for the public' - the site says so, and 'Download for Android' only shows
+  // once the owner has launched it (gh-pages launched.txt, made by the launch); then the line goes away by itself.
   fetch('https://bethestoryownyourstory.github.io/story-lockedintool/launched.txt', { cache: 'no-store' })
-    .then(function (r) { if (r.ok) document.getElementById('get').hidden = false; }).catch(function () {});
+    .then(function (r) { if (r.ok) { document.getElementById('get').hidden = false; document.getElementById('soon').hidden = true; } }).catch(function () {});
 </script>`);
 
 const legal = key => { const L = LEGAL[key]; return page(L.title + ' - Lockedintool', L.title + ' for Lockedintool.', '../', `
