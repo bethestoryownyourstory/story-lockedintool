@@ -8581,7 +8581,7 @@ function subRefresh(force){
   if(!force && s && Date.now() - (s.checked || 0) < 3 * 3600000) return;
   msgApi('/v1/sub/info').then(i=>{ const was = subLocked(); subSave(i); subApplyMode(); syncAppPages(); if(was !== subLocked() || state.current === 'subscription') renderDevice(); }).catch(()=>{});
 }
-setTimeout(()=>subRefresh(false), 4000);
+setTimeout(()=>{ subWaitLoad(); subRefresh(!!state.sub.waiting); }, 4000);   // a plan payment you started: the server checks it now
 const SUB_PLANS = [
   { key:'basic', name:'Basic', tag:'Your essentials. Stay locked in.', badge:'',
     text:'Get the core LOCKED IN TOOL experience with your three essential pages: Money, Home/Wallet, and Focus. Keep your finances, wallet, and goals in one place, with the freedom to build your daily routine around what matters most.',
@@ -8591,14 +8591,28 @@ const SUB_PLANS = [
     list:['Unlimited pages', 'Expanded layouts and customization', 'More tools for your goals', 'Greater workspace flexibility', 'Access to premium features as they become available'] },
 ];
 state.sub = { waiting:null, busy:false, msg:'' };
+// The plan payment you started stays on the phone until it's finished (owner: paying must never end on 'choose a plan'
+// again) - new screens can reload this window while you're in your bank, and you may only come back later.
+const SUB_WAIT_KEY = 'story-sub-wait';
+function subWaitSave(){ try{ const w = state.sub.waiting; if(w && w.status === 'pending') localStorage.setItem(SUB_WAIT_KEY, JSON.stringify(w)); else localStorage.removeItem(SUB_WAIT_KEY); }catch(e){} }
+function subWaitLoad(){
+  if(state.sub.loaded) return;
+  state.sub.loaded = true;
+  try{
+    const w = JSON.parse(localStorage.getItem(SUB_WAIT_KEY) || 'null'), a = msgAccount();
+    if(!state.sub.waiting && w && a && w.uid === a.id && w.status === 'pending' && Date.now() - w.started < 86400000) state.sub.waiting = w;
+  }catch(e){}
+}
 function subscriptionScreen(){
   const s = subState() || {};
   if(!state.sub.asked){ state.sub.asked = true; subRefresh(true); }
+  subWaitLoad();
   const plans = s.plans || { basic:{ usd:5, zar:95 }, premium:{ usd:15, zar:285 } };
   const viaStitch = s.provider === 'stitch';   // South African users pay in rand through Stitch (owner); everyone else through Lemon Squeezy
   const locked = subLocked(), active = subActive();
   const until = s.until ? new Date(s.until).toLocaleDateString('en-ZA', { day:'numeric', month:'short', year:'numeric' }) : '';
   const w = state.sub.waiting;
+  if(w && w.status === 'pending' && !state.sub.polling){ state.sub.polling = true; subPollT = setTimeout(subPoll, 400); }   // checked while this page shows
   const status = active ? 'Your plan: ' + (s.plan === 'premium' ? 'Premium' : 'Basic') + ' · ' + subOptName(s.mode) + ' · paid until ' + until
     : s.connected ? (locked ? 'Free: the Dashboard. Choose a plan for the Pages.' : 'Choose a plan to use LOCKED IN TOOL.') : 'Subscriptions open once LOCKED IN TOOL’s payments are set up.';
   if(state.sub.optView) return subOptionScreen(locked);
@@ -8690,16 +8704,26 @@ function sysModeAsk(){
 }
 function sysModeOff(){ try{ if(NATIVE && window.StoryNative.systemModeSet) window.StoryNative.systemModeSet(false, 'LOGGED-OUT'); }catch(e){} try{ syncAppPages(); }catch(e){} }
 let subPollT = 0;
+// Asks the server about the payment you started while the Subscription page is on screen (cool phone: nothing runs
+// while you're away - it starts again when the page shows or Lockedintool comes back), for up to a day.
 function subPoll(){
-  clearTimeout(subPollT);
+  clearTimeout(subPollT); state.sub.polling = false;
   const w = state.sub.waiting;
-  if(!w || w.status !== 'pending' || Date.now() - w.started > 20 * 60000) return;
-  if(document.visibilityState === 'hidden' || state.current !== 'subscription'){ subPollT = setTimeout(subPoll, 4000); return; }
+  if(!w || w.status !== 'pending' || Date.now() - w.started > 86400000) return;
+  if(document.visibilityState === 'hidden' || state.current !== 'subscription') return;
+  const again = ms=>{ state.sub.polling = true; subPollT = setTimeout(subPoll, ms); };
+  state.sub.polling = true;
   msgApi('/v1/sub/status?id=' + encodeURIComponent(w.id)).then(r=>{
+    state.sub.polling = false;
     if(state.sub.waiting !== w) return;
-    if(r.status !== 'pending'){ w.status = r.status; subSave(r); if(r.status === 'paid'){ showToast(w.name + ' is on - thank you'); subApplyMode(); } renderDevice(); }
-    else subPollT = setTimeout(subPoll, 3000);
-  }).catch(()=>{ subPollT = setTimeout(subPoll, 5000); });
+    if(r.status !== 'pending'){ w.status = r.status; subWaitSave(); subSave(r); if(r.status === 'paid'){ showToast(w.name + ' is on - thank you'); subApplyMode(); } renderDevice(); }
+    else again(3000);
+  }).catch(e=>{
+    state.sub.polling = false;
+    if(state.sub.waiting !== w) return;
+    if(e && e.code === 'notfound'){ state.sub.waiting = null; subWaitSave(); renderDevice(); return; }   // not this account's payment
+    again(5000);
+  });
 }
 function subBuy(plan){
   const s = subState() || {};
@@ -8711,8 +8735,9 @@ function subBuy(plan){
   const mode = subMode();
   msgApi('/v1/sub/buy', { plan, mode }).then(r=>{
     state.sub.busy = false;
-    state.sub.waiting = { id:r.id, url:r.url, plan, mode, name:p.name, usd:pr.usd, zar:pr.zar, provider:s.provider || '', status:'pending', started:Date.now() };
-    payOpenBank(r.url); renderDevice(); subPollT = setTimeout(subPoll, 4000);
+    state.sub.waiting = { id:r.id, url:r.url, plan, mode, name:p.name, usd:pr.usd, zar:pr.zar, provider:s.provider || '', status:'pending', started:Date.now(), uid:(msgAccount() || {}).id };
+    subWaitSave();
+    payOpenBank(r.url); renderDevice(); clearTimeout(subPollT); state.sub.polling = true; subPollT = setTimeout(subPoll, 4000);
   }).catch(e=>{ state.sub.busy = false; state.sub.msg = e.code === 'not-connected' ? 'Subscriptions open once LOCKED IN TOOL’s payments are set up.' : 'Couldn’t start the payment - try again.'; renderDevice(); });
 }
 // Changed your mind before paying (owner: a customer must be able to go back and pick the other plan): the plan you
@@ -8721,15 +8746,16 @@ function subBuy(plan){
 function subCancel(){
   const w = state.sub.waiting;
   if(!w || w.status !== 'pending' || state.sub.busy) return;
-  clearTimeout(subPollT);
+  clearTimeout(subPollT); state.sub.polling = true;   // (the page doesn't start another check while this one runs)
   state.sub.busy = true; state.sub.msg = ''; renderDevice();
   msgApi('/v1/sub/cancel', { id:w.id }).then(r=>{
     state.sub.busy = false;
     if(state.sub.waiting !== w) return;
     subSave(r);
-    if(r.status === 'cancelled' || r.status === 'expired'){ state.sub.waiting = null; showToast('Cancelled - nothing was paid. Choose a plan.'); }
-    else if(r.status === 'paid'){ w.status = 'paid'; showToast(w.name + ' was already paid - it’s on'); }
+    if(r.status === 'cancelled' || r.status === 'expired'){ state.sub.waiting = null; state.sub.polling = false; showToast('Cancelled - nothing was paid. Choose a plan.'); }
+    else if(r.status === 'paid'){ w.status = 'paid'; state.sub.polling = false; showToast(w.name + ' was already paid - it’s on'); }
     else { state.sub.msg = 'Your bank is already processing this payment - wait for it to finish.'; subPollT = setTimeout(subPoll, 3000); }
+    subWaitSave();
     renderDevice();
   }).catch(()=>{ state.sub.busy = false; state.sub.msg = 'Couldn’t cancel - check your connection and try again.'; subPollT = setTimeout(subPoll, 3000); renderDevice(); });
 }
@@ -17757,7 +17783,7 @@ function attachHandlers(){
         case 'sub-opt-back': state.sub.optView = null; renderDevice(); break;
         case 'sub-opt-ok': subOptConfirm(); break;
         case 'sub-reopen': if(state.sub.waiting) payOpenBank(state.sub.waiting.url); break;
-        case 'sub-done': state.sub.waiting = null; break;
+        case 'sub-done': state.sub.waiting = null; subWaitSave(); break;
         case 'sub-cancel': subCancel(); break;
         case 'legal-open': state.legalFrom = el.getAttribute('data-from') || 'information'; state.current = el.getAttribute('data-v'); break;
         case 'pay-mode': state.pay.mode = el.getAttribute('data-v'); state.pay.msg = ''; break;
