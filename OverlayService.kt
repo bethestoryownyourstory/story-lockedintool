@@ -1648,8 +1648,8 @@ class OverlayService : Service(), StoryBridge.Host {
             setShown(p, want)
             if (!want && p.stale) reload(p)  // new screens were published while it was up: pick them up now it's hidden
         }
-        // The Wallet page button: on the Always On Display only where Station 3 shows there too.
-        val wallet = walletCan && !lockDialAway && !lockDialPeek && entry != true && !shade && (if (onAod) QuickAccess.s3Aod(this) else true)
+        // The Wallet page button (Settings > QUICK ACCESS): on the Always On Display only when its own Always On Display is on.
+        val wallet = walletCan && !lockDialAway && !lockDialPeek && entry != true && !shade && (if (onAod) QuickAccess.walletAod(this) else true)
         showWalletBtn(wallet)
         // While it's up, keep checking: the moment the phone unlocks (by any route) it goes.
         // (and while the PIN page is up, it comes back as soon as you drag that away).
@@ -1905,7 +1905,7 @@ class OverlayService : Service(), StoryBridge.Host {
         return natural.coerceAtMost(maxOf(max, (paint.measureText("Wallet page") + 16 * dp).toInt()))
     }
     /** Could it show now (the lock screen, nothing of Lockedintool's open over it)? */
-    private fun walletBtnCan(locked: Boolean) = locked && walletOk() && walletBtn != null && !WidgetMode.on(this) && !walletOpening && !callActive && !createActive &&
+    private fun walletBtnCan(locked: Boolean) = locked && QuickAccess.walletLock(this) && walletOk() && walletBtn != null && !WidgetMode.on(this) && !walletOpening && !callActive && !createActive &&
         s3Pane?.shown != true && profilePane?.let { it.shown && it.wm === layerWm } != true   // (the Pages / a normal-layer Profile are under the lock screen)
     private fun showWalletBtn(on: Boolean) {
         val v = walletBtn ?: return; val lp = walletBtnLp ?: return

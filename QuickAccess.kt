@@ -11,7 +11,9 @@ import org.json.JSONObject
  *  aod       = Station 3 on STORY's Always On Display (the same switch the setup screen always had)
  *  lockDial  = the dial pad on the lock screen (always open, flush to the bottom) - separate / dial pad only
  *  dialAod   = the dial pad on the Always On Display too
- *  dash      = Station 3 on the Dashboard: always open at the bottom of the Dashboard, no button there (owner) */
+ *  dash      = Station 3 on the Dashboard: always open at the bottom of the Dashboard, no button there (owner)
+ *  wallet    = the Wallet page button on the lock screen (owner: 'put the wallet button for lock screen under quick access')
+ *  walletAod = the Wallet page button on the Always On Display too (owner: 'and also add Always On Display for it') */
 object QuickAccess {
     private fun p(c: Context) = c.getSharedPreferences("story", Context.MODE_PRIVATE)
     fun mode(c: Context) = p(c).getString("qa_mode", "s3dial") ?: "s3dial"
@@ -21,15 +23,18 @@ object QuickAccess {
     fun dialAod(c: Context) = lockDial(c) && p(c).getBoolean("aod_dial", false)
     fun station3On(c: Context) = mode(c) != "dialonly"
     fun s3Dash(c: Context) = station3On(c) && p(c).getBoolean("qa_dash", true)
+    fun walletLock(c: Context) = p(c).getBoolean("qa_wallet", true)
+    fun walletAod(c: Context) = walletLock(c) && p(c).getBoolean("aod_wallet", false)
     /** Station 3's dial pad button only in "Station 3 with dial pad". */
     fun dialInStation3(c: Context) = mode(c) == "s3dial"
     /** STORY's Always On Display screen runs when anything is meant to show on it. */
-    fun aodScreen(c: Context) = (station3On(c) && s3Aod(c)) || dialAod(c)
+    fun aodScreen(c: Context) = (station3On(c) && s3Aod(c)) || dialAod(c) || walletAod(c)
 
     fun json(c: Context): String = JSONObject()
         .put("mode", mode(c)).put("where", where(c)).put("s3Aod", s3Aod(c))
         .put("lockDial", p(c).getBoolean("qa_lockdial", false)).put("dialAod", p(c).getBoolean("aod_dial", false))
         .put("dash", p(c).getBoolean("qa_dash", true))
+        .put("wallet", walletLock(c)).put("walletAod", p(c).getBoolean("aod_wallet", false))
         .toString()
 
     fun save(c: Context, s: String) {
@@ -41,6 +46,8 @@ object QuickAccess {
         if (j.has("lockDial")) e.putBoolean("qa_lockdial", j.optBoolean("lockDial"))
         if (j.has("dialAod")) e.putBoolean("aod_dial", j.optBoolean("dialAod"))
         if (j.has("dash")) e.putBoolean("qa_dash", j.optBoolean("dash"))
+        if (j.has("wallet")) e.putBoolean("qa_wallet", j.optBoolean("wallet"))
+        if (j.has("walletAod")) e.putBoolean("aod_wallet", j.optBoolean("walletAod"))
         e.apply()
     }
 }

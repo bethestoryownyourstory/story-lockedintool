@@ -8835,12 +8835,20 @@ function quickAccessSettingsHTML(){
     <div class="set2-row set2-link qa-pick" data-action="qa-mode" data-v="${m}">
       <div class="set2-text"><div class="set2-name">${name}</div></div><span class="qa-radio${q.mode===m?' on':''}"></span>
     </div>` + (q.mode === m ? body : '');
+  // The lock screen's Wallet page button (owner: under Quick Access, with its own Always On Display) - whatever the mode.
+  const wallet = `
+    <div class="set2-row">
+      <div class="set2-text"><div class="set2-name">Wallet page on lock screen</div><div class="set2-sub">The Wallet page button beside Station 3’s button on your lock screen</div></div>
+      <button class="toggle-switch${q.wallet?' on':''}" data-action="qa-toggle" data-k="wallet"><span class="toggle-knob"></span></button>
+    </div>
+    ${q.wallet ? toggle('walletAod', 'Always On Display') : ''}`;
   return `
     <div class="section-title">QUICK ACCESS</div>
     <div class="set2-card">
       ${opt('s3dial', 'Station 3 with dial pad')}
       ${opt('separate', 'Station 3 dial pad separate')}
       ${opt('dialonly', 'Dial pad only')}
+      ${wallet}
     </div>`;
 }
 // Only use widgets (owner): Lockedintool is only its home screen widgets - the Pages, Station 3, the bottom line and
@@ -14226,7 +14234,7 @@ function station3CornerArrowHTML(){
 function quickAccess(){
   let q = {};
   try{ q = JSON.parse((window.StoryNative && window.StoryNative.getQuickAccess) ? window.StoryNative.getQuickAccess() : (localStorage.getItem('story-quick-access') || '{}')) || {}; }catch(e){}
-  return Object.assign({ mode:'s3dial', where:'both', s3Aod:false, lockDial:false, dialAod:false, dash:true }, q);
+  return Object.assign({ mode:'s3dial', where:'both', s3Aod:false, lockDial:false, dialAod:false, dash:true, wallet:true, walletAod:false }, q);
 }
 // Station 3 on the Dashboard (owner's full layout): held open at the bottom of the Dashboard by the app, with no
 // button there and no Rows / Page Styles; the Dashboard keeps its bottom free for it. The Pages tell the app when
