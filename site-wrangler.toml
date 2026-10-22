@@ -1,10 +1,11 @@
 # Lockedintool's website (site-build.mjs builds it into _site; deploy-site.yml puts it on Cloudflare).
-# https://lockedintool.com (the owner's own domain, bought on Cloudflare - owner: 'I bought the domain lockedintool.com'),
-# www.lockedintool.com and https://lockedintool.<workers subdomain>.workers.dev.
+# https://lockedintool.com and www.lockedintool.com (the owner's own domain, bought on Cloudflare - owner: 'I bought the
+# domain lockedintool.com') and https://lockedintool.<workers subdomain>.workers.dev. The domain is attached in
+# Cloudflare itself (Workers & Pages > lockedintool > Settings > Domains & Routes > Custom domain): the deploy key can't
+# manage domains, so there are no routes here - a deploy without routes leaves the attached domain as it is.
 name = "lockedintool"
 compatibility_date = "2025-01-01"
 workers_dev = true
-routes = [{ pattern = "lockedintool.com", custom_domain = true, zone_name = "lockedintool.com" }, { pattern = "www.lockedintool.com", custom_domain = true, zone_name = "lockedintool.com" }]
 
 [assets]
 directory = "./_site"

@@ -45,20 +45,11 @@ jobs:
           echo "Nameservers: $(dig +short NS lockedintool.com | tr '\n' ' ')" | tee -a "$GITHUB_STEP_SUMMARY"
           curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/zones?name=lockedintool.com" | python3 -c 'import sys, json, os; d = json.load(sys.stdin); r = d.get("result") or []; print("Zones the token sees:", len(r), [(z.get("status"), (z.get("account") or {}).get("id") == os.environ.get("A")) for z in r], d.get("errors") or "")' | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Put it on Cloudflare
-        id: put
         if: steps.ready.outputs.ok == 'true'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          # With the owner's domain (routes in site-wrangler.toml). If Cloudflare won't attach it (the token can't, or the
-          # domain isn't in this account), the website still goes up without it and the summary says what to do.
-          set -o pipefail
-          if npx --yes wrangler@4 deploy -c site-wrangler.toml 2>&1 | tee deploy.log; then echo "domain=ok" >> "$GITHUB_OUTPUT"; exit 0; fi
-          grep -v '^routes' site-wrangler.toml > site-nodomain.toml
-          npx --yes wrangler@4 deploy -c site-nodomain.toml
-          { echo "### The website is up, but Cloudflare didn't attach the domain:"; grep -iE 'error|denied|not found|authentication' deploy.log | head -5
-            echo "Add it in Cloudflare: Workers & Pages > lockedintool > Settings > Domains & Routes > Add > Custom domain (lockedintool.com, then www.lockedintool.com)."; } >> "$GITHUB_STEP_SUMMARY"
+        run: npx --yes wrangler@4 deploy -c site-wrangler.toml
       - name: Check it answers
         if: steps.ready.outputs.ok == 'true'
         run: |
@@ -67,9 +58,9 @@ jobs:
           for p in / /privacy/ /terms/; do echo "$p $(curl -s -o /dev/null -w '%{http_code}' "$U$p")"; done
           T=$(curl -s "$U/" | grep -o '<title>[^<]*</title>' || true)
           echo "### Website: $U ($T)" | tee -a "$GITHUB_STEP_SUMMARY"
-          # The owner's domain, once attached (its certificate can take a few minutes the first time).
-          [ "${{ steps.put.outputs.domain }}" = ok ] || exit 0
+          # The owner's domain (attached in Cloudflare - see site-wrangler.toml; a new certificate can take a few minutes).
           for d in lockedintool.com www.lockedintool.com; do
-            c=000; for i in $(seq 1 30); do c=$(curl -s -o /dev/null -w '%{http_code}' "https://$d/" || true); [ "$c" = 200 ] && break; sleep 10; done
-            echo "### https://$d/ answers $c" | tee -a "$GITHUB_STEP_SUMMARY"
+            c=000; for i in $(seq 1 6); do c=$(curl -s -o /dev/null -w '%{http_code}' "https://$d/" || true); [ "$c" = 200 ] && break; sleep 10; done
+            t=$(curl -s "https://$d/" | grep -o '<title>[^<]*</title>' || true)
+            echo "### https://$d/ answers $c $t" | tee -a "$GITHUB_STEP_SUMMARY"
           done
