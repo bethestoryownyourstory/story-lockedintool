@@ -1236,11 +1236,14 @@ class OverlayService : Service(), StoryBridge.Host {
         val barH = (26 * dp).toInt()
         val bottom = if (gesture) Math.round(sysUiDim("navigation_handle_bottom", 6f)) else (6 * dp).toInt() + barH - h - (barH - h) / 2
         // The phone's own line colours: dark on a white background, light on a black one.
-        val c = if (th(Color.WHITE) == Color.WHITE) Color.parseColor("#99000000") else Color.parseColor("#EBFFFFFF")
+        val c = if (barBgColor() == Color.WHITE) Color.parseColor("#99000000") else Color.parseColor("#EBFFFFFF")
         line.background = GradientDrawable().apply { cornerRadius = r; setColor(c) }
         line.layoutParams = FrameLayout.LayoutParams(w, h, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = bottom }
         line.visibility = View.VISIBLE
     }
+    /** Station 3's bar colour: the opposite of the system theme (white in Black) - except on the Dashboard, where it FOLLOWS
+     *  the theme (owner: 'make it go with the system theme and not oppose it'): black in Black, white in White. */
+    private fun barBgColor() = if (dashGeom) th(Color.BLACK) else th(Color.WHITE)
     /** The room (CSS px) the Dashboard keeps at its bottom: the bottom line's area, Station 3's 40dp band and 6dp. */
     private fun dashPadJs(): String {
         val pagesBottom = if (phoneHasGestureLine()) 0 else navBarHeightPx()   // the Pages stop above 3-button navigation
@@ -1266,6 +1269,7 @@ class OverlayService : Service(), StoryBridge.Host {
             lp.height = (40 * dp).toInt() + under
             lp.width = if (dash) resources.displayMetrics.widthPixels else getSharedPreferences("story", MODE_PRIVATE).getInt("bar_w", (220 * dp).toInt())
             (v.background as? GradientDrawable)?.cornerRadii = if (dash) FloatArray(8) else floatArrayOf(20 * dp, 20 * dp, 0f, 0f, 0f, 0f, 0f, 0f)
+            (v.background as? GradientDrawable)?.setColor(barBgColor())
             runCatching { (barBgWm ?: wm).updateViewLayout(v, lp) }
         } }
         dialPane?.let { p -> p.lp.y = y + (52 * dp).toInt(); runCatching { p.wm.updateViewLayout(p.frame, p.lp) } }
@@ -1525,7 +1529,7 @@ class OverlayService : Service(), StoryBridge.Host {
         if (StoryTheme.get(this) == t) return@post
         StoryTheme.set(this, t)
         (bubble as? TextView)?.let { b -> b.setTextColor(th(Color.WHITE)); (b.background as? GradientDrawable)?.setColor(th(Color.parseColor("#FF000000"))) }
-        (barBg?.background as? GradientDrawable)?.setColor(th(Color.WHITE))
+        (barBg?.background as? GradientDrawable)?.setColor(barBgColor())
         (barLine?.background as? GradientDrawable)?.setColor(th(Color.parseColor("#B3FFFFFF")))
         dashLineSync()
         pagesPane?.let { it.frame.setBackgroundColor(th(Color.BLACK)); it.web.setBackgroundColor(th(Color.BLACK)) }
