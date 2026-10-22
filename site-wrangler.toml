@@ -4,7 +4,7 @@
 name = "lockedintool"
 compatibility_date = "2025-01-01"
 workers_dev = true
-routes = [{ pattern = "lockedintool.com", custom_domain = true }, { pattern = "www.lockedintool.com", custom_domain = true }]
+routes = [{ pattern = "lockedintool.com", custom_domain = true, zone_name = "lockedintool.com" }, { pattern = "www.lockedintool.com", custom_domain = true, zone_name = "lockedintool.com" }]
 
 [assets]
 directory = "./_site"
