@@ -135,6 +135,8 @@ export class Hub {
     try { this.sql.exec(`ALTER TABLE payments ADD COLUMN mode TEXT`); } catch (e) {}
     try { this.sql.exec(`ALTER TABLE payments ADD COLUMN payfrom TEXT`); } catch (e) {}   // which of your accounts you chose to pay from (Pay with)
     this.sql.exec(`CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT)`);
+    // Stitch's review link (tryPay): each payment started from it, so the page you come back to shows its real state.
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS trypays (id TEXT PRIMARY KEY, stitch TEXT, plan TEXT, cents INTEGER, status TEXT, created INTEGER, looked INTEGER)`);
     // Problem reports from every phone (owner: something always running that keeps Lockedintool working): grouped by
     // what went wrong; phones are counted by a random install id only (never an account, never personal data).
     this.sql.exec(`CREATE TABLE IF NOT EXISTS problems (sig TEXT PRIMARY KEY, kind TEXT, msg TEXT, place TEXT, app TEXT, scr TEXT, device TEXT, n INTEGER, first INTEGER, last INTEGER, fixed INTEGER DEFAULT 0, fixapp TEXT, note TEXT)`);
@@ -236,7 +238,9 @@ export class Hub {
         if (url.searchParams.get('pay') === '1' && this.expressReady()) { try { await this.expressToken(); stitch = 'ok'; } catch (e) { stitch = String(e.message || e).slice(0, 160); } }
         return json({ ok: true, stitch, sms: !!(this.env.TWILIO_VERIFY_SID || this.env.TWILIO_FROM), mail: this.mailReady(), resetSms: this.smsLinkReady(), plans: this.subPlans(), pay, subs: this.subReady(), transfers: this.payReady(), live: this.liveReady(), turn: this.turnReady() });
       }
-      if (path === '/v1/pay/return') return new Response('<!doctype html><meta name=viewport content="width=device-width,initial-scale=1"><body style="margin:0;background:#000;color:#fff;font:600 18px system-ui;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center;padding:24px;box-sizing:border-box">Done - go back to Lockedintool to see your payment.</body>', { headers: { 'content-type': 'text/html; charset=utf-8' } });
+      if (path === '/v1/try-pay') return this.tryPay();
+      if (path === '/v1/try-pay/start') return this.tryPayStart(req, url);
+      if (path === '/v1/pay/return') return (await this.tryPayDone(req)) || new Response('<!doctype html><meta name=viewport content="width=device-width,initial-scale=1"><body style="margin:0;background:#000;color:#fff;font:600 18px system-ui;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center;padding:24px;box-sizing:border-box">Done - go back to Lockedintool to see your payment.</body>', { headers: { 'content-type': 'text/html; charset=utf-8' } });
       if (path === '/v1/bank/return') return this.bankReturn(url);
       if (path === '/v1/delete') return this.deletePage(req, url);
       if (path === '/v1/login/salt') return this.loginSalt(url.searchParams.get('u') || '');
@@ -1259,6 +1263,70 @@ export class Hub {
     const cur = this.one('SELECT * FROM subs WHERE uid = ?', uid);
     const from = cur && cur.plan === plan && cur.until > now ? cur.until : now;
     this.sql.exec('INSERT OR REPLACE INTO subs (uid, plan, until, updated, mode) VALUES (?, ?, ?, ?, ?)', uid, plan, from + 30 * 86400000, now, mode === 'only' ? 'only' : 'second');
+  }
+  // ---- Stitch's review (owner, Oct 2026: 'a link that Stitch can use almost non stop so that they can get this
+  // verified') - <server>/v1/try-pay: the plan payment exactly as a South African user makes it in the app (a Stitch
+  // Express payment link in rand at the plans' prices). Every tap makes a NEW payment link, so it works again and again;
+  // when Stitch's page sends you back, the page shows that payment's real state from Stitch and 'Pay again'. Not tied
+  // to any account - a payment here gives nobody a plan. 20 payments started an hour per network, 60 an hour in all.
+  tryPage(body, refresh, cookie) {
+    const h = { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' };
+    if (cookie) h['set-cookie'] = cookie;
+    return new Response('<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">' + (refresh ? '<meta http-equiv=refresh content=3>' : '') +
+      '<title>Lockedintool</title><body style="margin:0;background:#000;color:#fff;font:16px/1.45 system-ui,sans-serif"><div style="max-width:420px;margin:0 auto;padding:44px 20px">' +
+      '<div style="font-weight:800;font-size:26px;margin-bottom:8px">LOCKED IN TOOL</div>' + body + '</div></body>', { headers: h });
+  }
+  tryBtn(href, text) { return '<a href="' + href + '" style="display:block;margin:12px 0;padding:15px;border-radius:12px;background:#fff;color:#000;text-align:center;font-weight:700;text-decoration:none">' + text + '</a>'; }
+  tryPay() {
+    if (!this.expressReady()) return this.tryPage('<p style="color:#8b8b92">Payments aren’t connected right now - try again later.</p>');
+    const p = this.subPlans(), b = k => this.tryBtn('/v1/try-pay/start?plan=' + k, (k === 'premium' ? 'Premium' : 'Basic') + ' · R' + Number(p[k].zar).toFixed(2) + ' a month');
+    return this.tryPage('<p style="color:#8b8b92;margin:0 0 22px">Choose a plan and pay in rand from your own bank on Stitch’s secure page - the same payment a South African user makes in the Lockedintool app.</p>' + b('basic') + b('premium'));
+  }
+  async tryPayStart(req, url) {
+    if (!this.expressReady()) return this.tryPay();
+    const again = this.tryBtn('/v1/try-pay', 'Back');
+    const hour = Math.floor(Date.now() / 3600000), lim = [[await sha('try|' + (req.headers.get('cf-connecting-ip') || '')), 20], ['try|all', 60]];
+    const ns = lim.map(([k]) => { const j = this.one('SELECT * FROM joins WHERE ip = ?', k); return j && j.hour === hour ? j.n + 1 : 1; });
+    if (ns.some((n, i) => n > lim[i][1])) return this.tryPage('<p style="color:#8b8b92">Too many payments were started - try again in an hour.</p>' + again);
+    lim.forEach(([k], i) => this.sql.exec('INSERT OR REPLACE INTO joins (ip, hour, n) VALUES (?, ?, ?)', k, hour, ns[i]));
+    const plan = url.searchParams.get('plan') === 'premium' ? 'premium' : 'basic', id = 't' + rand(9), now = Date.now();
+    const cents = Math.round(Number(this.subPlans()[plan].zar) * 100);
+    let link;
+    try {
+      const d = await this.express('POST', '/api/v1/payment-links', { amount: cents, payerName: 'LOCKED IN member',
+        merchantReference: ('LIT-try-' + plan + '-' + id).replace(/[^A-Za-z0-9 -]/g, '').slice(0, 50) });
+      link = d.payment || {};
+      if (!link.id || !link.link) throw new Error('no payment link');
+    } catch (e) { return this.tryPage('<p style="color:#8b8b92">Stitch couldn’t start the payment just now - try again.</p>' + again); }
+    this.sql.exec('DELETE FROM trypays WHERE created < ?', now - 30 * 86400000);
+    this.sql.exec('INSERT INTO trypays (id, stitch, plan, cents, status, created, looked) VALUES (?, ?, ?, ?, ?, ?, 0)', id, link.id, plan, cents, 'pending', now);
+    // Always this server's own return page (where the cookie below is read), registered with Express once.
+    const back = url.origin + '/v1/pay/return';
+    if (!this.tryBackDone) { try { await this.express('POST', '/api/v1/redirect-urls', { redirectUrl: back }); } catch (e) {} this.tryBackDone = true; }
+    return new Response(null, { status: 302, headers: { location: link.link + (link.link.includes('?') ? '&' : '?') + 'redirect_url=' + encodeURIComponent(back),
+      'set-cookie': 'littry=' + id + '; Path=/v1/pay/return; Max-Age=3600; HttpOnly; Secure; SameSite=Lax', 'cache-control': 'no-store' } });
+  }
+  // Back from Stitch's page: only for a payment started from the review link (its cookie) - anything else gets the
+  // usual 'go back to Lockedintool' page. Stitch is asked at most every 2.5 s, and only in the payment's first 2 hours;
+  // a finished payment lets go of the cookie.
+  async tryPayDone(req) {
+    const m = /(?:^|;\s*)littry=([A-Za-z0-9_-]{1,20})/.exec(req.headers.get('cookie') || '');
+    const t = m ? this.one('SELECT * FROM trypays WHERE id = ?', m[1]) : null;
+    if (!t) return null;
+    const now = Date.now();
+    if (t.status === 'pending' && this.expressReady() && now - t.created < 2 * 3600000 && now - (t.looked || 0) > 2500) {
+      this.sql.exec('UPDATE trypays SET looked = ? WHERE id = ?', now, t.id);
+      try {
+        const d = await this.express('GET', '/api/v1/payment-links/' + encodeURIComponent(t.stitch));
+        const ls = (d.payment && d.payment.status) || 'PENDING';
+        const st = ls === 'PAID' ? 'paid' : ls === 'CANCELLED' ? 'cancelled' : ls === 'EXPIRED' || ls === 'FAILED' ? 'expired' : 'pending';
+        if (st !== 'pending') { this.sql.exec('UPDATE trypays SET status = ? WHERE id = ?', st, t.id); t.status = st; }
+      } catch (e) {}
+    }
+    const what = (t.plan === 'premium' ? 'Premium' : 'Basic') + ' · R' + (t.cents / 100).toFixed(2), forget = 'littry=; Path=/v1/pay/return; Max-Age=0; HttpOnly; Secure; SameSite=Lax';
+    if (t.status === 'paid') return this.tryPage('<p style="font-size:20px;font-weight:700;margin:18px 0 6px">Paid ✓</p><p style="color:#8b8b92;margin:0 0 22px">' + what + ' was paid. In the Lockedintool app this switches the plan on.</p>' + this.tryBtn('/v1/try-pay', 'Pay again'), false, forget);
+    if (t.status !== 'pending') return this.tryPage('<p style="font-size:20px;font-weight:700;margin:18px 0 6px">Not paid</p><p style="color:#8b8b92;margin:0 0 22px">' + what + (t.status === 'cancelled' ? ' - the payment was cancelled.' : ' - the payment wasn’t finished in time.') + ' Nothing was paid.</p>' + this.tryBtn('/v1/try-pay', 'Try again'), false, forget);
+    return this.tryPage('<p style="font-size:20px;font-weight:700;margin:18px 0 6px">Waiting for your bank</p><p style="color:#8b8b92;margin:0 0 22px">' + what + ' - this page updates by itself.</p>' + this.tryBtn('/v1/try-pay', 'Start a new payment'), now - t.created < 10 * 60000);
   }
   lsReady() { return !!this.env.LEMONSQUEEZY_API_KEY; }
   async ls(method, path, body) {
