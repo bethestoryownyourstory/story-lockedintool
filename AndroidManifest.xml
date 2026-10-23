@@ -205,6 +205,13 @@
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />
         </provider>
 
+        <!-- The adult-content block screen shown over any app (owner: adult content is blocked across the phone). -->
+        <activity android:name=".BlockActivity" android:exported="false"
+            android:theme="@android:style/Theme.Material.NoActionBar"
+            android:excludeFromRecents="true" android:noHistory="true"
+            android:launchMode="singleTask" android:taskAffinity=""
+            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout" />
+
         <!-- The overlay: Station 3 button + the bottom STORY bar, drawn over every app. -->
         <service
             android:name=".OverlayService"
