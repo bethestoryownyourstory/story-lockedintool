@@ -4602,8 +4602,10 @@ function pageStyleContentScreen(){
 // system or a live connection to Google, so it can only catch a query that contains one of these
 // literal words/names, not the underlying idea in general).
 const ADULT_SEARCH_TERMS = [
-  'porn','pornography','pornhub','xvideos','xxxvideos','xxx','nude','nudes','naked pics','thirst trap',
-  'sex video','sex videos','nsfw','hentai','onlyfans','fansly','erotic','fetish','escort','sexting',
+  'porn','pornography','pornhub','porno','xvideos','xxxvideos','xnxx','xhamster','redtube','spankbang',
+  'xxx','nude','nudes','naked pics','naked girls','naked women','thirst trap','twerk','twerking','tweaking',
+  'sex video','sex videos','sextape','sex tape','nsfw','hentai','onlyfans','fansly','brazzers','chaturbate',
+  'stripchat','camgirl','blowjob','handjob','erotic','fetish','escort','sexting',
 ];
 const UNSAFE_SEARCH_TERMS = [
   'hack tool','hacking tool','ddos','keygen','crack software','malware','virus download','ransomware',
@@ -4669,6 +4671,20 @@ function searchStepGo(inputId){
     if(inputId === 'dash-search-input') litRecentWriting.web = true;
     again.readOnly = false; again.focus(); again.setSelectionRange(again.value.length, again.value.length); litKeyboard(true);
   }
+}
+
+// Block the view the moment an adult word is typed (owner: even before you search), and clear the box so you're not
+// stuck on the block each time. Used live by both search bars; searchStepGo still blocks on Enter too.
+function searchLiveBlock(inputEl){
+  const ctx = searchBlockContext(inputEl ? inputEl.value : '');
+  if(!ctx) return false;
+  if(inputEl) inputEl.value = '';
+  state.searchQuery = '';
+  state.contentBlock = { context: ctx };
+  state.searchBlocked = false;
+  state.pendingSearchQuery = null;
+  renderDevice();
+  return true;
 }
 
 function closePool(){
@@ -16452,6 +16468,7 @@ function attachHandlers(){
   if(searchInput){
     searchInput.addEventListener('input', ()=>{
       state.searchQuery = searchInput.value;
+      if(searchLiveBlock(searchInput)) return;
       if(state.searchBlocked){
         state.searchBlocked = false;
         renderDevice();
@@ -16486,6 +16503,7 @@ function attachHandlers(){
     dashSearchInput.style.height = dashSearchInput.scrollHeight + 'px';
     dashSearchInput.addEventListener('input', ()=>{
       state.searchQuery = dashSearchInput.value;
+      if(searchLiveBlock(dashSearchInput)) return;
       dashSearchInput.style.height = 'auto';
       dashSearchInput.style.height = dashSearchInput.scrollHeight + 'px';
       if(state.searchBlocked || state.pendingSearchQuery){
