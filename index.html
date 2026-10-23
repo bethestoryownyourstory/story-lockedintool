@@ -1862,6 +1862,12 @@
   .row-sub{ font-size:10px; color:var(--muted); margin-top:2px; }
   .app-row{ -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; }
 
+  .lit-block{ position:fixed; inset:0; z-index:100001; background:#000; color:#fff; display:flex; align-items:center; justify-content:center; text-align:center; padding:34px 28px; box-sizing:border-box; cursor:pointer; }
+  .lit-block-inner{ max-width:320px; }
+  .lit-block-title{ font-size:19px; font-weight:700; line-height:1.32; }
+  .lit-block-ctx{ margin-top:10px; font-size:13px; color:#9a9aa2; }
+  .lit-block-more{ margin-top:22px; display:inline-block; background:none; border:none; color:#0a84ff; font-size:13px; text-decoration:underline; cursor:pointer; padding:6px 4px; }
+  .lit-block-hint{ margin-top:18px; font-size:11px; color:#5a5a62; }
   .modal-overlay{
     position:fixed; inset:0; background:rgba(0,0,0,0.72); display:flex;
     align-items:flex-end; justify-content:center; z-index:20; border-radius:inherit;
@@ -3881,7 +3887,7 @@
   // A note's own colours (its paper, cover, ink and the swatches that pick them) are the owner's writing,
   // not STORY's look -- they never swap (nor anything marked data-keep-color).
   // The payment cards in Wallet are printed like the real cards, so they keep their own look too.
-  const KEEP_SEL = /\.cr-shutter|\.note-(card|content|page-counter)|\.notes-(swatch|preview-page)|\.canvas-(page|swatch)|\.inline-task|\.draw-canvas|^\.realcard$|\.realcard-(chase|amex|top|brand|chip|num|bottom|label|name|logo)/;
+  const KEEP_SEL = /\.cr-shutter|\.note-(card|content|page-counter)|\.notes-(swatch|preview-page)|\.canvas-(page|swatch)|\.inline-task|\.draw-canvas|^\.realcard$|\.realcard-(chase|amex|top|brand|chip|num|bottom|label|name|logo)|\.lit-block/;
   const KEEP_EL = '[data-keep-color], .note-card, .note-content-wrap, .canvas-page-wrap, .notes-swatch, .canvas-swatch, .notes-preview-page, .realcard-chase, .realcard-amex';
   function flip(t){
     const k = t.toLowerCase();
@@ -4592,16 +4598,41 @@ function isBlockedSearchQuery(q){
   const lower = q.toLowerCase();
   return ADULT_SEARCH_TERMS.some(term => lower.includes(term)) || UNSAFE_SEARCH_TERMS.some(term => lower.includes(term));
 }
+// The context line on the block screen - what was blocked (owner: "Context: nudity / adult content").
+function searchBlockContext(q){
+  const lower = (q || '').toLowerCase();
+  if(ADULT_SEARCH_TERMS.some(term => lower.includes(term))) return 'nudity / adult content';
+  if(UNSAFE_SEARCH_TERMS.some(term => lower.includes(term))) return 'harmful or unsafe content';
+  return '';
+}
+// The block screen (owner's words): a plain black screen shown when adult content is blocked across Lockedintool.
+// No ban, no counting, no warning - just this; "Find out more" opens the Safety & Rules page. Tap anywhere to go back.
+// (Stays black in the White theme - .lit-block is in KEEP_SEL. The native, phone-wide block screen will look the same.)
+function contentBlockOverlay(b){
+  const ctx = (b && b.context) || 'nudity / adult content';
+  return `
+    <div class="lit-block" data-keep-color data-action="lit-block-close">
+      <div class="lit-block-inner">
+        <div class="lit-block-title">Locked by Lockedintool from viewing this</div>
+        <div class="lit-block-ctx">Context: ${escText(ctx)}</div>
+        <button class="lit-block-more" data-action="lit-block-info">Find out more about Lockedintool’s privacy and rules</button>
+        <div class="lit-block-hint">Tap anywhere to go back</div>
+      </div>
+    </div>`;
+}
 
 function searchStepGo(inputId){
   inputId = inputId || 'search-input';
   const inputEl = document.getElementById(inputId);
   const q = (inputEl?.value || '').trim();
   if(!q) return;
-  if(isBlockedSearchQuery(q)){
-    state.searchBlocked = true;
+  const blockCtx = searchBlockContext(q);
+  if(blockCtx){
+    // Adult content is blocked across Lockedintool - the plain black block screen (owner); no ban, no counting, no warning.
+    state.contentBlock = { context: blockCtx };
+    state.searchBlocked = false;
+    state.searchOpen = false;
     state.pendingSearchQuery = null;
-    recordPolicyStrike('a blocked search');
     renderDevice();
     return;
   }
@@ -4828,6 +4859,7 @@ let state = {
   recentSearches:[],
   pendingSearchQuery:null,
   searchBlocked:false,
+  contentBlock:null,
   // Account-wide standing under STORY's content policy. status: 'active' | 'warned' | 'suspended'.
   accountStatus:{ strikes:0, status:'active', lastReason:'', warningDeadline:null },
   groupBrowseFilter:{ category:'All', country:'All' },
@@ -9219,6 +9251,16 @@ function privacySettingsHTML(){
 //      Subscription page (must be readable by someone without a plan, before they agree to it).
 const LEGAL_UPDATED = '22 October 2026';
 const LEGAL = {
+  'legal-safety': { title:'Safety & Rules', sections:[
+    ['Adult content is blocked', [
+      'Lockedintool blocks nudity and adult content. This comes built in - it’s part of Lockedintool and can’t be switched off.',
+      'When something is blocked you see a plain black screen: “Locked by Lockedintool from viewing this”. Nothing else happens - Lockedintool doesn’t ban you, count it or warn you. You simply can’t view it.' ]],
+    ['Across your phone', [
+      'The block is for Lockedintool and, as it rolls out, for your whole phone - every app, every search and every website - not only inside Lockedintool.',
+      'No filter is ever perfect, but Lockedintool blocks the normal ways this content is reached and is the strongest a phone app can do.' ]],
+    ['Your privacy', [
+      'The filter runs on your phone. Lockedintool doesn’t keep a list of what you searched or send it anywhere.' ]],
+  ] },
   'legal-privacy': { title:'Privacy Policy', sections:[
     ['Who we are', [
       'Lockedintool ("we", "us") makes the Lockedintool app, from South Africa. Contact: lockedintool@gmail.com.',
@@ -9365,6 +9407,7 @@ function informationScreen(){
     ])}
     <div class="section-title">LEGAL</div>
     <div class="set2-card">
+      <div class="set2-row legal-link" data-action="legal-open" data-v="legal-safety" data-from="information"><div class="set2-text"><div class="set2-name">Safety &amp; Rules</div><div class="set2-sub">How Lockedintool blocks adult content for your safety.</div></div><span class="legal-arrow">›</span></div>
       <div class="set2-row legal-link" data-action="legal-open" data-v="legal-privacy" data-from="information"><div class="set2-text"><div class="set2-name">Privacy Policy</div><div class="set2-sub">What Lockedintool collects, where it’s kept and who sees it.</div></div><span class="legal-arrow">›</span></div>
       <div class="set2-row legal-link" data-action="legal-open" data-v="legal-terms" data-from="information"><div class="set2-text"><div class="set2-name">Terms of Service</div><div class="set2-sub">The agreement for using Lockedintool, plans and trading.</div></div><span class="legal-arrow">›</span></div>
     </div>
@@ -14352,7 +14395,7 @@ function renderScreenContent(){
     case 'tx-history': return txHistoryScreen();
     case 'layouts': return layoutsScreen();
     case 'information': return informationScreen();
-    case 'legal-privacy': case 'legal-terms': return legalScreen(state.current);
+    case 'legal-privacy': case 'legal-terms': case 'legal-safety': return legalScreen(state.current);
     case 'subscription': return subscriptionScreen();
     case 'layouts-dashboard': return layoutsDashboardScreen();
     case 'layouts-homescreen': return layoutsHomeScreenScreen();
@@ -15490,7 +15533,7 @@ function renderDevice(){
   lastScreenKey = newScreenKey;
   const wrap = document.getElementById('device-wrap');
   wrap.innerHTML = state.device==='phone' ? buildPhone() : buildLaptop();
-  document.getElementById('content-area').innerHTML = renderScreenContent();
+  document.getElementById('content-area').innerHTML = renderScreenContent() + (state.contentBlock ? contentBlockOverlay(state.contentBlock) : '');
   fitPageToScreen(document.getElementById('content-area'));
   // Any interaction that doesn't actually change which screen is showing (toggling a
   // switch, picking a filter, tapping a button anywhere on the page, etc.) restores exactly
@@ -17199,6 +17242,8 @@ function attachHandlers(){
         case 'open-tx-from-overview': state.txHistoryBackTarget = 'wallet-overview'; state.current = 'tx-history'; break;
         case 'search-open': state.searchOpen = true; state.searchQuery = ''; state.pendingSearchQuery = null; state.searchBlocked = false; break;
         case 'search-bg': state.searchOpen = false; state.pendingSearchQuery = null; break;
+        case 'lit-block-close': state.contentBlock = null; break;
+        case 'lit-block-info': state.contentBlock = null; state.legalFrom = 'dashboard'; state.current = 'legal-safety'; break;
         case 'brightness-menu-toggle': state.brightnessMenuOpen = !state.brightnessMenuOpen; break;
         case 'brightness-menu-bg': state.brightnessMenuOpen = false; break;
         case 'controls-expand': state.controlsExpanded = true; break;
