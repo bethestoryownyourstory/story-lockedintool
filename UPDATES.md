@@ -110,3 +110,4 @@ commits, pushed as a new update) - nothing else changes.
 | 102 | 2026-10-22 | The Lockedintool website: what Lockedintool is, the plans (Basic $5 / Premium $15, R95 / R285 in South Africa) with Second system / Only system, Privacy Policy, Terms of Service and contact - at https://lockedintool.percyjuniormaseko0.workers.dev until your own domain is added | 39cb2e3 |
 | 103 | 2026-10-22 | Website: says 'Lockedintool is not yet available to the public' (no download) until the launch, when the line goes away and Download for Android shows | 419f645 |
 | 104 | 2026-10-22 | The website is on your own domain: https://lockedintool.com (and www.lockedintool.com) | e20f948 |
+| 105 | 2026-10-23 | Security (Stitch's Node.js notice): the tools that upload Lockedintool's server and website now use the newest Node.js security release (Node 24, always the latest) instead of Node 20. The server itself runs on Cloudflare, not Node.js | f98332a |
