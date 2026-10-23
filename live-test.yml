@@ -12,7 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: 20 }
+        with: { node-version: 24, check-latest: true }
       - name: Tools
         run: |
           npm i --no-save playwright@1.48.2 wrangler@4
