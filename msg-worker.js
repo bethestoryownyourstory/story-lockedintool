@@ -235,8 +235,9 @@ export class Hub {
         if (url.searchParams.get('pay') === '1' && this.lsReady()) { try { const c = await this.lsSetup(); pay = 'ok - store ' + c.store + ', basic ' + (c.basic || 'MISSING') + ', premium ' + (c.premium || 'MISSING') + ', notifications ' + (c.hook ? 'on' : 'off'); } catch (e) { pay = String(e.message || e).slice(0, 160); } }
         // South Africa (Stitch Express): can the server really sign in? (just a sign-in - no payment is made)
         let stitch = this.expressReady() ? 'keys' : 'no-keys';
-        if (url.searchParams.get('pay') === '1' && this.expressReady()) { try { await this.expressToken(); stitch = 'ok'; } catch (e) { stitch = String(e.message || e).slice(0, 160); } }
-        return json({ ok: true, stitch, sms: !!(this.env.TWILIO_VERIFY_SID || this.env.TWILIO_FROM), mail: this.mailReady(), resetSms: this.smsLinkReady(), plans: this.subPlans(), pay, subs: this.subReady(), transfers: this.payReady(), live: this.liveReady(), turn: this.turnReady() });
+        let stitchHook = this.expressReady() ? 'keys' : 'no-keys';
+        if (url.searchParams.get('pay') === '1' && this.expressReady()) { try { await this.expressToken(); stitch = 'ok'; stitchHook = await this.expressHook(); } catch (e) { stitch = String(e.message || e).slice(0, 160); } }
+        return json({ ok: true, stitch, stitchHook, sms: !!(this.env.TWILIO_VERIFY_SID || this.env.TWILIO_FROM), mail: this.mailReady(), resetSms: this.smsLinkReady(), plans: this.subPlans(), pay, subs: this.subReady(), transfers: this.payReady(), live: this.liveReady(), turn: this.turnReady() });
       }
       if (path === '/v1/try-pay') return this.tryPay();
       if (path === '/v1/try-pay/start') return this.tryPayStart(req, url);
@@ -247,6 +248,7 @@ export class Hub {
       if (path === '/v1/reset') return this.resetPage(req, url);
       if (path === '/v1/reset/options') return this.resetOptions(url.searchParams.get('u') || '', req.headers.get('cf-connecting-ip') || '');
       if (path === '/v1/lemonsqueezy/hook' && req.method === 'POST') return this.lsHook(await req.text(), req.headers.get('x-signature') || '');
+      if (/^\/v1\/stitch\/hook(\/\d+)?$/.test(path) && req.method === 'POST') return this.stitchHook(await req.text(), req.headers);
       const body = req.method === 'POST' ? await req.json().catch(() => ({})) : {};
       if (path === '/v1/problems' && req.method === 'POST') return this.problemsIn(body, req.headers.get('cf-connecting-ip') || '');
       if (path === '/v1/problems/list') return this.problemsList(body, url);
@@ -1256,7 +1258,80 @@ export class Hub {
   async expressBack(url) {
     const back = this.env.STITCH_REDIRECT || (url.origin + '/v1/pay/return');
     if (!this.exBackDone) { try { await this.express('POST', '/api/v1/redirect-urls', { redirectUrl: back }); } catch (e) {} this.exBackDone = true; }
+    await this.expressHook().catch(() => {});
     return back;
+  }
+  // A payment link's state at Stitch: paid / cancelled / expired / pending.
+  async exLinkState(id) {
+    const d = await this.express('GET', '/api/v1/payment-links/' + encodeURIComponent(id));
+    const ls = (d.payment && d.payment.status) || 'PENDING';
+    return ls === 'PAID' ? 'paid' : ls === 'CANCELLED' ? 'cancelled' : ls === 'EXPIRED' || ls === 'FAILED' ? 'expired' : 'pending';
+  }
+  // Stitch's payment notification (owner: 'if the webhook is needed then you can add it' - Stitch recommends it): the
+  // server registers itself with Express once per client id (POST /api/v1/webhook) and every 'payment.paid' then turns
+  // the plan on at once, even while nobody has Lockedintool open. Express gives the Svix signing secret only once, so
+  // it's kept in meta ('exhook:<client id>'); one address can't be registered twice (409), so each registration gets the
+  // next number (/v1/stitch/hook/<n>). Stitch refusing = asked again at most every 10 minutes. The app's own checks
+  // (sub/info -> subPending, the Subscription page's subPoll) stay as they were.
+  expressHook() {   // (one registration at a time - two at once would each make an address)
+    if (!this.exHookP) this.exHookP = this.expressHookGo().finally(() => { this.exHookP = null; });
+    return this.exHookP;
+  }
+  async expressHookGo() {
+    if (!this.expressReady() || !this.origin) return 'off';
+    const k = 'exhook:' + this.env.STITCH_CLIENT_ID;
+    if (this.one('SELECT v FROM meta WHERE k = ?', k)) return 'on';
+    if (this.exHookTried > Date.now() - 600000) return 'off: ' + (this.exHookWhy || 'waiting');
+    this.exHookTried = Date.now();
+    let n = +((this.one("SELECT v FROM meta WHERE k = 'exhookn'") || {}).v || 0);
+    for (let i = 0; i < 5; i++) {
+      n++;
+      const url = this.origin + '/v1/stitch/hook/' + n;
+      const go = async () => fetch(this.expressBase() + '/api/v1/webhook', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + await this.expressToken() }, body: JSON.stringify({ url }) });
+      let r = await go();
+      if (r.status === 401) { this.exTok = null; r = await go(); }
+      this.sql.exec("INSERT OR REPLACE INTO meta (k, v) VALUES ('exhookn', ?)", String(n));
+      if (r.status === 409) continue;   // that address is taken already - the next number
+      const j = await r.json().catch(() => ({}));
+      const secret = j && j.data && j.data.secret;
+      if (!r.ok || !secret) { this.exHookWhy = String(r.status) + ' ' + String(((j.generalErrors || [])[0]) || '').slice(0, 80); return 'off: ' + this.exHookWhy; }
+      this.sql.exec('INSERT OR REPLACE INTO meta (k, v) VALUES (?, ?)', k, JSON.stringify({ url, secret, at: Date.now() }));
+      return 'on';
+    }
+    this.exHookWhy = 'every address taken';
+    return 'off: ' + this.exHookWhy;
+  }
+  // Svix's signature: HMAC SHA-256 (key = the secret after 'whsec_', base64) of '<svix-id>.<svix-timestamp>.<body>',
+  // base64, in 'v1,<sig>' (space separated); the timestamp must be within 5 minutes.
+  async svixOk(raw, h, secrets) {
+    const id = h.get('svix-id') || '', ts = h.get('svix-timestamp') || '', sig = h.get('svix-signature') || '';
+    if (!id || !/^\d{1,12}$/.test(ts) || !sig || Math.abs(Date.now() / 1000 - Number(ts)) > 300) return false;
+    const same = (a, b) => { if (a.length !== b.length) return false; let x = 0; for (let i = 0; i < a.length; i++) x |= a.charCodeAt(i) ^ b.charCodeAt(i); return x === 0; };
+    for (const sec of secrets) {
+      let kb; try { kb = Uint8Array.from(atob(String(sec).replace(/^whsec_/, '')), c => c.charCodeAt(0)); } catch (e) { continue; }
+      const key = await crypto.subtle.importKey('raw', kb, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+      const mac = btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.sign('HMAC', key, enc.encode(id + '.' + ts + '.' + raw)))));
+      for (const part of sig.split(' ')) { const [v, s2] = part.split(','); if (v === 'v1' && s2 && same(s2, mac)) return true; }
+    }
+    return false;
+  }
+  // 'payment.paid' from Stitch: checked with every secret Lockedintool was given (old registrations keep delivering),
+  // then Stitch's own word on the link decides (never the notification alone) - a plan payment = 30 days, a review-link
+  // payment = Paid. Anything else that's paid (not a link of ours) is just acknowledged. Retries are harmless.
+  async stitchHook(raw, h) {
+    const secrets = this.sql.exec("SELECT v FROM meta WHERE k LIKE 'exhook:%'").toArray().map(r => { try { return JSON.parse(r.v).secret; } catch (e) { return ''; } }).filter(Boolean);
+    if (!secrets.length || !(await this.svixOk(raw, h, secrets))) return new Response('bad signature', { status: 401 });
+    let ev = {}; try { ev = JSON.parse(raw) || {}; } catch (e) {}
+    const d = ev.linkId === undefined && ev.data && typeof ev.data === 'object' ? ev.data : ev;   // (the payment itself, or wrapped)
+    const link = typeof d.linkId === 'string' ? d.linkId : '';
+    if (!link || !this.expressReady()) return new Response('ok');
+    try {
+      const p = this.one("SELECT * FROM payments WHERE stitch = ? AND kind LIKE 'sub:%'", link);
+      if (p && p.status === 'pending') await this.subCheck({ id: p.uid }, p);
+      const t = this.one('SELECT * FROM trypays WHERE stitch = ?', link);
+      if (t && t.status === 'pending') { const st = await this.exLinkState(link); if (st !== 'pending') this.sql.exec('UPDATE trypays SET status = ? WHERE id = ?', st, t.id); }
+    } catch (e) { return new Response('later', { status: 500 }); }   // Stitch tries again (for about a day)
+    return new Response('ok');
   }
   // 30 more days of a plan paid through Stitch (same plan adds on, a different plan starts now).
   subCredit(uid, plan, mode, now) {
@@ -1303,6 +1378,7 @@ export class Hub {
     // Always this server's own return page (where the cookie below is read), registered with Express once.
     const back = url.origin + '/v1/pay/return';
     if (!this.tryBackDone) { try { await this.express('POST', '/api/v1/redirect-urls', { redirectUrl: back }); } catch (e) {} this.tryBackDone = true; }
+    await this.expressHook().catch(() => {});
     return new Response(null, { status: 302, headers: { location: link.link + (link.link.includes('?') ? '&' : '?') + 'redirect_url=' + encodeURIComponent(back),
       'set-cookie': 'littry=' + id + '; Path=/v1/pay/return; Max-Age=3600; HttpOnly; Secure; SameSite=Lax', 'cache-control': 'no-store' } });
   }
@@ -1317,9 +1393,7 @@ export class Hub {
     if (t.status === 'pending' && this.expressReady() && now - t.created < 2 * 3600000 && now - (t.looked || 0) > 2500) {
       this.sql.exec('UPDATE trypays SET looked = ? WHERE id = ?', now, t.id);
       try {
-        const d = await this.express('GET', '/api/v1/payment-links/' + encodeURIComponent(t.stitch));
-        const ls = (d.payment && d.payment.status) || 'PENDING';
-        const st = ls === 'PAID' ? 'paid' : ls === 'CANCELLED' ? 'cancelled' : ls === 'EXPIRED' || ls === 'FAILED' ? 'expired' : 'pending';
+        const st = await this.exLinkState(t.stitch);
         if (st !== 'pending') { this.sql.exec('UPDATE trypays SET status = ? WHERE id = ?', st, t.id); t.status = st; }
       } catch (e) {}
     }
@@ -1420,9 +1494,7 @@ export class Hub {
       return p.status;
     }
     if (p.status !== 'pending' || !this.expressReady()) return p.status;
-    const d = await this.express('GET', '/api/v1/payment-links/' + encodeURIComponent(p.stitch));
-    const ls = (d.payment && d.payment.status) || 'PENDING';
-    const st = ls === 'PAID' ? 'paid' : ls === 'CANCELLED' ? 'cancelled' : ls === 'EXPIRED' || ls === 'FAILED' ? 'expired' : 'pending';
+    const st = await this.exLinkState(p.stitch);
     if (st !== 'pending') {
       this.sql.exec('UPDATE payments SET status = ?, updated = ? WHERE id = ?', st, now, p.id);
       p.status = st;
