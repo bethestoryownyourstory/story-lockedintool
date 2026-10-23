@@ -18,6 +18,16 @@ object ContentGuard {
     private val APP_TOKENS = listOf(
         "porn", "pornhub", "xvideos", "xnxx", "xhamster", "redtube", "youporn", "spankbang",
         "hentai", "onlyfans", "brazzers", "chaturbate", "stripchat")
+    // Clearly-adult words / phrases caught in text TYPED anywhere on the phone (owner: block the moment the word is
+    // typed, in any app incl. the Settings search). Tight list on purpose - matching typed WORDS (not sites) can
+    // false-block normal text, so only clearly-adult terms + the owner's named slang are here; widen as real gaps show.
+    // Ambiguous single words (sex, nude, naked) are only caught as PHRASES, never alone, so everyday text isn't trapped.
+    private val WORD_TOKENS = listOf(
+        "porn", "pornhub", "pornography", "porno", "xvideos", "xnxx", "xhamster", "redtube", "youporn", "spankbang",
+        "hentai", "nhentai", "rule34", "onlyfans", "fansly", "brazzers", "chaturbate", "stripchat", "camsoda",
+        "bongacams", "livejasmin", "xxx", "nsfw", "blowjob", "handjob", "creampie", "cumshot", "deepthroat",
+        "gangbang", "masturbat", "twerk", "twerking", "tweaking", "nudes", "camgirl", "sex video", "sex videos",
+        "sextape", "sex tape", "nude pic", "naked girls", "naked women", "naked men", "naked pics", "thirst trap")
     // Known browsers and the view id of their address bar.
     private val BROWSER_URL_IDS = mapOf(
         "com.android.chrome" to "com.android.chrome:id/url_bar",
@@ -57,6 +67,14 @@ object ContentGuard {
     fun appBlocked(pkg: String): Boolean {
         val p = pkg.lowercase()
         return APP_TOKENS.any { p.contains(it) }
+    }
+
+    /** True when TYPED text (a search box, the Settings search, any field) holds a clearly-adult word. Tight list -
+     *  only ever matches what was typed, never page content. */
+    fun typedBlocked(raw: String?): Boolean {
+        val t = (raw ?: "").lowercase()
+        if (t.length < 3) return false
+        return WORD_TOKENS.any { t.contains(it) }
     }
 
     /** The text in a browser's address bar, if Lockedintool can read it. */

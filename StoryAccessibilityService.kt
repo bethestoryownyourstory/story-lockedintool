@@ -9,7 +9,9 @@ import android.media.session.MediaController
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
 import android.os.Build
+import android.os.Bundle
 import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityNodeInfo
 import java.util.concurrent.ConcurrentHashMap
 
 class StoryAccessibilityService : AccessibilityService() {
@@ -68,8 +70,10 @@ class StoryAccessibilityService : AccessibilityService() {
     private var lastUrlCheckAt = 0L
     private var lastBlockKey = ""
     private var lastBlockAt = 0L
+    private var lastTypedCheckAt = 0L
     private fun contentGuard(e: AccessibilityEvent, pkg: String) {
         val et = e.eventType
+        if (et == AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED) { typedGuard(e); return }
         if (et == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && ContentGuard.appBlocked(pkg)) { contentBlock(pkg); return }
         if (et != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && et != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) return
         if (!ContentGuard.isBrowser(pkg)) return
@@ -85,6 +89,27 @@ class StoryAccessibilityService : AccessibilityService() {
         lastBlockKey = key; lastBlockAt = now
         runCatching { performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME) }
         runCatching { startActivity(Intent(this, BlockActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+    }
+
+    /** An adult word TYPED in any app's text box (search, the Settings search, a message...): block the view and clear
+     *  the typed word, so the person isn't stuck on the block each time that screen reopens (owner). Never touches a
+     *  PIN / password field (never get locked out), throttled, best-effort on the clear. */
+    private fun typedGuard(e: AccessibilityEvent) {
+        if (e.isPassword) return
+        val now = System.currentTimeMillis()
+        if (now - lastTypedCheckAt < 350) return
+        lastTypedCheckAt = now
+        val text = e.text.joinToString(" ").ifBlank { e.source?.text?.toString() ?: "" }
+        if (!ContentGuard.typedBlocked(text)) return
+        runCatching {
+            val node = e.source
+            if (node != null && node.isEditable && !node.isPassword) {
+                val b = Bundle()
+                b.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, "")
+                node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, b)
+            }
+        }
+        contentBlock("typed")
     }
 
     override fun onUnbind(intent: Intent?): Boolean { instance = null; refreshOverlay(); return super.onUnbind(intent) }
