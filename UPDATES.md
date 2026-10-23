@@ -111,3 +111,4 @@ commits, pushed as a new update) - nothing else changes.
 | 103 | 2026-10-22 | Website: says 'Lockedintool is not yet available to the public' (no download) until the launch, when the line goes away and Download for Android shows | 419f645 |
 | 104 | 2026-10-22 | The website is on your own domain: https://lockedintool.com (and www.lockedintool.com) | e20f948 |
 | 105 | 2026-10-23 | Security (Stitch's Node.js notice): the tools that upload Lockedintool's server and website now use the newest Node.js security release (Node 24, always the latest) instead of Node 20. The server itself runs on Cloudflare, not Node.js | f98332a |
+| 106 | 2026-10-23 | Plans paid in rand: Stitch now tells Lockedintool's server the moment a payment is made (Stitch's recommended payment notification), so the plan switches on straight away - even if the app is closed. Every notification is checked: signed by Stitch and confirmed with Stitch before it counts | b75d61b |
