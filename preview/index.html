@@ -1862,6 +1862,20 @@
   .row-sub{ font-size:10px; color:var(--muted); margin-top:2px; }
   .app-row{ -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; }
 
+  .sub-perm{ margin:14px 0 2px; }
+  .sub-perm-row{ display:flex; align-items:flex-start; gap:10px; width:100%; text-align:left; background:rgba(127,127,127,0.08); border:1px solid rgba(127,127,127,0.25); border-radius:12px; padding:12px 14px; cursor:pointer; }
+  .sub-perm-row.on{ border-color:#0a84ff; }
+  .sub-perm-mark{ width:18px; height:18px; flex:0 0 18px; border:1.5px solid rgba(127,127,127,0.5); border-radius:5px; display:flex; align-items:center; justify-content:center; font-size:12px; color:#0a84ff; margin-top:1px; }
+  .sub-perm-row.on .sub-perm-mark{ border-color:#0a84ff; }
+  .sub-perm-txt{ display:flex; flex-direction:column; gap:3px; }
+  .sub-perm-sub{ font-size:11.5px; opacity:0.7; }
+  .perm-sheet{ max-width:340px; }
+  .perm-head{ font-size:18px; font-weight:700; margin-bottom:10px; }
+  .perm-scroll{ max-height:46vh; overflow-y:auto; font-size:13px; line-height:1.5; text-align:left; -webkit-overflow-scrolling:touch; }
+  .perm-scroll p{ margin:0 0 10px; }
+  .perm-agree.hidden{ display:none; }
+  .perm-hint{ font-size:11px; opacity:0.6; text-align:center; margin-top:10px; }
+  .perm-cancel{ margin-top:8px; }
   .lit-block{ position:fixed; inset:0; z-index:100001; background:#000; color:#fff; display:flex; align-items:center; justify-content:center; text-align:center; padding:34px 28px; box-sizing:border-box; cursor:pointer; }
   .lit-block-inner{ max-width:320px; }
   .lit-block-title{ font-size:19px; font-weight:700; line-height:1.32; }
@@ -8623,6 +8637,7 @@ const SUB_PLANS = [
     list:['Unlimited pages', 'Expanded layouts and customization', 'More tools for your goals', 'Greater workspace flexibility', 'Access to premium features as they become available'] },
 ];
 state.sub = { waiting:null, busy:false, msg:'' };
+state.permAgree = { open:false, scrolled:false };
 // The plan payment you started stays on the phone until it's finished (owner: paying must never end on 'choose a plan'
 // again) - new screens can reload this window while you're in your bank, and you may only come back later.
 const SUB_WAIT_KEY = 'story-sub-wait';
@@ -8651,6 +8666,7 @@ function subscriptionScreen(){
     : s.connected ? (locked ? 'Free: the Dashboard. Choose a plan for the Pages.' : 'Choose a plan to use LOCKED IN TOOL.') : 'Subscriptions open once LOCKED IN TOOL’s payments are set up.';
   if(state.sub.optView) return subOptionScreen(locked);
   const mode = subMode();
+  const permOn = !!(NATIVE && window.StoryNative.permanentState && (()=>{ try{ return window.StoryNative.permanentState(); }catch(e){ return false; } })());
   return `
     <div class="page-shell sub-page">
     ${topBar('Subscription', false, '', 'dashboard', '', false)}
@@ -8678,6 +8694,38 @@ function subscriptionScreen(){
     <div class="note" style="margin:12px 0 4px;">Both plans are designed to help you stay organized, focused, and consistent.</div>
     <div class="sub-norefund">No refunds - payments can’t be refunded once made.</div>
     <div class="legal-links">By choosing a plan you agree to the <button data-action="legal-open" data-v="legal-terms" data-from="subscription">Terms of Service</button> and <button data-action="legal-open" data-v="legal-privacy" data-from="subscription">Privacy Policy</button>.</div>
+    <div class="sub-perm">
+      <button class="sub-perm-row${permOn ? ' on' : ''}" data-action="perm-toggle">
+        <span class="sub-perm-mark">${permOn ? '✓' : ''}</span>
+        <span class="sub-perm-txt"><b>Make Lockedintool permanent</b><span class="sub-perm-sub">${permOn ? 'On — Lockedintool stays on this phone and can’t be removed the normal way' : 'Keep Lockedintool on this phone — it can’t be uninstalled or switched off'}</span></span>
+      </button>
+    </div>
+    ${state.permAgree.open ? permAgreeModal() : ''}
+    </div>`;
+}
+// "Make Lockedintool permanent" (owner): the user must scroll through the whole message before "I understand" shows.
+// Honest about the limit (a factory reset / reflash by someone with the phone still removes any app).
+function permAgreeModal(){
+  const canAgree = state.permAgree.scrolled;
+  return `
+    <div class="modal-overlay" data-action="perm-bg">
+      <div class="confirm-sheet perm-sheet" onclick="event.stopPropagation()">
+        <div class="perm-head">Make Lockedintool permanent</div>
+        <div class="perm-scroll" id="perm-scroll">
+          <p>Read this all the way to the end.</p>
+          <p>If you turn this on, <b>Lockedintool stays on this phone</b>. It can’t be uninstalled or switched off the normal way — it becomes part of the phone.</p>
+          <p><b>This is meant to be permanent.</b> Think carefully before you agree.</p>
+          <p><b>What stays on, always:</b></p>
+          <p>• Lockedintool runs every time the phone is on and keeps itself up to date.<br>• The adult-content block stays on.<br>• Your privacy protection stays on.</p>
+          <p><b>The honest truth:</b></p>
+          <p>Nothing on a phone is truly impossible to remove forever. Lockedintool blocks the normal and most of the clever ways to remove it, but someone with the phone in their hands and the right tools could still wipe the whole phone (a factory reset, which erases everything) or re-flash it. That removes any app, not just Lockedintool.</p>
+          <p>A factory reset wipes the whole phone — Lockedintool and everything else on it.</p>
+          <p>By agreeing, you choose to keep Lockedintool on this phone.</p>
+        </div>
+        <button class="btn-wide btn-primary perm-agree${canAgree ? '' : ' hidden'}" data-action="perm-agree">I understand — make it permanent</button>
+        ${canAgree ? '' : '<div class="perm-hint">Scroll to the end to continue</div>'}
+        <button class="btn-wide perm-cancel" data-action="perm-bg">Cancel</button>
+      </div>
     </div>`;
 }
 // ---- Lockedintool as your system (owner, a section in the plans): your phone only uses Lockedintool - no other app at
@@ -16423,6 +16471,12 @@ function attachHandlers(){
   if(searchActionBtn){ searchActionBtn.addEventListener('click', searchStepGo); }
   const searchGoArrow = document.getElementById('search-go-arrow');
   if(searchGoArrow){ searchGoArrow.addEventListener('click', searchStepGo); }
+  const permScroll = document.getElementById('perm-scroll');
+  if(permScroll && !state.permAgree.scrolled){
+    const check = ()=>{ if(permScroll.scrollTop + permScroll.clientHeight >= permScroll.scrollHeight - 8){ state.permAgree.scrolled = true; permScroll.removeEventListener('scroll', check); renderDevice(); } };
+    permScroll.addEventListener('scroll', check);
+    if(permScroll.scrollHeight <= permScroll.clientHeight + 8){ state.permAgree.scrolled = true; setTimeout(renderDevice, 0); }
+  }
 
   const dashSearchInput = document.getElementById('dash-search-input');
   // A recent search tapped = searched again at once (no 'Press Enter again' - you already chose it).
@@ -17244,6 +17298,9 @@ function attachHandlers(){
         case 'search-bg': state.searchOpen = false; state.pendingSearchQuery = null; break;
         case 'lit-block-close': state.contentBlock = null; break;
         case 'lit-block-info': state.contentBlock = null; state.legalFrom = 'dashboard'; state.current = 'legal-safety'; break;
+        case 'perm-toggle': { const on = !!(NATIVE && window.StoryNative.permanentState && (()=>{ try{ return window.StoryNative.permanentState(); }catch(e){ return false; } })()); if(on) showToast('Lockedintool is set to stay on this phone'); else state.permAgree = { open:true, scrolled:false }; break; }
+        case 'perm-bg': state.permAgree = { open:false, scrolled:false }; break;
+        case 'perm-agree': { state.permAgree = { open:false, scrolled:false }; if(NATIVE && window.StoryNative.permanentSet){ try{ window.StoryNative.permanentSet(true); }catch(e){} showToast('Follow the phone’s prompt to keep Lockedintool on'); } else showToast('This works in the Lockedintool app'); break; }
         case 'brightness-menu-toggle': state.brightnessMenuOpen = !state.brightnessMenuOpen; break;
         case 'brightness-menu-bg': state.brightnessMenuOpen = false; break;
         case 'controls-expand': state.controlsExpanded = true; break;
