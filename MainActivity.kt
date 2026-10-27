@@ -73,9 +73,6 @@ class MainActivity : Activity() {
         col.addView(btn("Stop Lockedintool") {
             // Lockedintool as your system only goes off by logging out or deleting your account (owner).
             if (SystemMode.on(this)) { android.widget.Toast.makeText(this, "Lockedintool is your system - log out of your account to turn it off", android.widget.Toast.LENGTH_LONG).show(); return@btn }
-            // "Make Lockedintool permanent" is on (Device Admin active): it can't be stopped or removed from here - only
-            // logging out or deleting your account takes it off (owner: block the stop/delete option while permanent is on).
-            if (DeviceLock.active(this)) { android.widget.Toast.makeText(this, "Lockedintool is set to stay on this phone - log out or delete your account to remove it", android.widget.Toast.LENGTH_LONG).show(); return@btn }
             getSharedPreferences("story", MODE_PRIVATE).edit().putBoolean("enabled", false).apply(); stopService(Intent(this, OverlayService::class.java)) })
         // Only use widgets (owner): Lockedintool becomes only its home screen widgets; the app then shows just this switch.
         col.addView(btn("Only use widgets: off  -  tap to turn on") {

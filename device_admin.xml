@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- Lockedintool as a device administrator ("Make Lockedintool permanent"): being an active admin is what stops a
-     normal uninstall. No policies are used - Lockedintool doesn't manage the phone, it only keeps itself on it. -->
-<device-admin xmlns:android="http://schemas.android.com/apk/res/android">
-    <uses-policies>
-    </uses-policies>
-</device-admin>

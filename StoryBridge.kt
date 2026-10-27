@@ -263,20 +263,13 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         OverlayService.instance?.systemModeChanged()
     }
 
-    // "Make Lockedintool permanent" (owner): device admin so Lockedintool can't be uninstalled the normal way.
+    // "Make Lockedintool permanent" (Device Admin) was REMOVED (owner, 27 Oct 2026: it kept Google Play Protect
+    // flagging the app as "Harmful" - blocking your own uninstall is the #1 stalkerware signal). These stay as inert
+    // no-ops so any old Pages code can still call them safely; the tick-box itself is gone from the Subscription page.
     @JavascriptInterface
-    fun permanentState(): Boolean = DeviceLock.active(ctx)
+    fun permanentState(): Boolean = false
     @JavascriptInterface
-    fun permanentSet(on: Boolean) {
-        if (widget) return
-        DeviceLock.setWanted(ctx, on)
-        if (on && !DeviceLock.active(ctx)) {
-            host.hidePanel()
-            runCatching { ctx.startActivity(DeviceLock.requestIntent(ctx).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-        }
-        // Turning it off isn't an in-app switch (owner: it's meant to be permanent). Android's own Security settings
-        // let the user switch the admin off if they really need to - the honest way out, not advertised here.
-    }
+    fun permanentSet(on: Boolean) { /* no-op: the unremovable feature was removed to clear the Play Protect flag */ }
 
     @JavascriptInterface
     fun confirmIdentity(title: String) { if (profile || pages) host.confirmIdentity(title) }

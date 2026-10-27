@@ -17,7 +17,7 @@ jobs:
           mkdir -p $M/java/com/story/launcher $M/res/values $M/res/xml $M/res/drawable $M/res/drawable-nodpi $M/res/layout $M/assets
           cp AndroidManifest.xml $M/
           cp *.kt $M/java/com/story/launcher/
-          cp accessibility_config.xml device_admin.xml file_paths.xml widget_dashboard.xml widget_money.xml widget_wallet.xml widget_focus.xml widget_notes.xml widget_community.xml $M/res/xml/
+          cp accessibility_config.xml file_paths.xml widget_dashboard.xml widget_money.xml widget_wallet.xml widget_focus.xml widget_notes.xml widget_community.xml $M/res/xml/
           cp widget_page.xml $M/res/layout/
           cp strings.xml themes.xml $M/res/values/
           cp ic_launcher.png $M/res/drawable-nodpi/
