@@ -8679,7 +8679,6 @@ function subscriptionScreen(){
     : s.connected ? (locked ? 'Free: the Dashboard. Choose a plan for the Pages.' : 'Choose a plan to use LOCKED IN TOOL.') : 'Subscriptions open once LOCKED IN TOOL’s payments are set up.';
   if(state.sub.optView) return subOptionScreen(locked);
   const mode = subMode();
-  const permOn = !!(NATIVE && window.StoryNative.permanentState && (()=>{ try{ return window.StoryNative.permanentState(); }catch(e){ return false; } })());
   return `
     <div class="page-shell sub-page">
     ${topBar('Subscription', false, '', 'dashboard', '', false)}
@@ -8708,12 +8707,6 @@ function subscriptionScreen(){
     <div class="note" style="margin:12px 0 4px;">Both plans are designed to help you stay organized, focused, and consistent.</div>
     <div class="sub-norefund">No refunds - payments can’t be refunded once made.</div>
     <div class="legal-links">By choosing a plan you agree to the <button data-action="legal-open" data-v="legal-terms" data-from="subscription">Terms of Service</button> and <button data-action="legal-open" data-v="legal-privacy" data-from="subscription">Privacy Policy</button>.</div>
-    <div class="sub-perm">
-      <button class="sub-perm-row${permOn ? ' on' : ''}" data-action="perm-toggle">
-        <span class="sub-perm-mark">${permOn ? '✓' : ''}</span>
-        <span class="sub-perm-txt"><b>Make Lockedintool permanent</b><span class="sub-perm-sub">${permOn ? 'On — Lockedintool stays on this phone and can’t be removed the normal way' : 'Keep Lockedintool on this phone — it can’t be uninstalled or switched off'}</span></span>
-      </button>
-    </div>
     ${state.sub.endConfirm ? subEndConfirmTemplate(s, until) : ''}
     ${state.permAgree.open ? permAgreeModal() : ''}
     </div>`;
@@ -9349,9 +9342,9 @@ const LEGAL = {
     ['Adult content is blocked', [
       'Lockedintool blocks nudity and adult content. This comes built in - it’s part of Lockedintool and can’t be switched off.',
       'When something is blocked you see a plain black screen: “Locked by Lockedintool from viewing this”. Nothing else happens - Lockedintool doesn’t ban you, count it or warn you. You simply can’t view it.' ]],
-    ['Across your phone', [
-      'The block is for Lockedintool and, as it rolls out, for your whole phone - every app, every search and every website - not only inside Lockedintool.',
-      'No filter is ever perfect, but Lockedintool blocks the normal ways this content is reached and is the strongest a phone app can do.' ]],
+    ['Inside Lockedintool', [
+      'The block works inside Lockedintool - its own search bars won’t open adult or unsafe content; you see the plain black screen instead.',
+      'No filter is ever perfect, but Lockedintool blocks the normal ways this content is reached inside the app.' ]],
     ['Your privacy', [
       'The filter runs on your phone. Lockedintool doesn’t keep a list of what you searched or send it anywhere.' ]],
   ] },
