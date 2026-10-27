@@ -1567,6 +1567,19 @@ export class Hub {
       if (op === 'cancel') await this.subCancel(me, p); else await this.subCheck(me, p);
       return json(Object.assign({ status: p.status }, this.subView(me)));
     }
+    // Cancel the plan you're on (owner: add a cancel-current-plan option). Lemon Squeezy subscriptions auto-renew, so
+    // they're told not to renew (the plan stays on until the month you paid for ends - lsApply reads it back). Stitch
+    // plans are a single 30-day payment that never renews on its own, so there's nothing to cancel - they just end.
+    if (op === 'endplan') {
+      const r = this.one('SELECT * FROM subs WHERE uid = ?', me.id);
+      if (!r || r.until <= now) return json({ error: 'noplan' }, 400);
+      if (r.lssub) {
+        try { if (!this.lsCache) await this.lsSetup(); const d = await this.ls('DELETE', '/subscriptions/' + encodeURIComponent(r.lssub)); if (d && d.data) this.lsApply(d.data, {}, now); }
+        catch (e) { return json({ error: 'cancel-failed' }, 502); }
+        return json(Object.assign({ ok: true, ended: 'renew-off' }, this.subView(me)));
+      }
+      return json(Object.assign({ ok: true, ended: 'no-renew' }, this.subView(me)));
+    }
     return json({ error: 'notfound' }, 404);
   }
 
