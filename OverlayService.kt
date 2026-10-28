@@ -1310,6 +1310,11 @@ class OverlayService : Service(), StoryBridge.Host {
         val over = !keyguardLocked() && StoryAccessibilityService.panelInFront() == true
         if (over != panelOver) { panelOver = over; updateBubble() }
         if (panelOver) { ui.removeCallbacks(panelRecheck); ui.postDelayed(panelRecheck, 1000) }
+        // The phone's Recents (overview) is a SystemUI screen, so it never counted as "an app" and the Pages stayed on
+        // top of it (owner: swiping up to see opened apps showed nothing). When Recents appears, step the Pages aside so
+        // the swipe-up actually shows the opened apps - like Lockedintool already steps aside when you open an app. The
+        // owner comes back to Lockedintool the usual way (the Apps | Lockedintool switch), same as leaving for any app.
+        if (!keyguardLocked() && pagesPane?.shown == true && StoryAccessibilityService.recentsInFront()) hidePanel()
     }
     private val panelRecheck = Runnable { windowsMoved() }
     private fun updateBubble() {

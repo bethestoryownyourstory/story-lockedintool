@@ -157,6 +157,30 @@ class StoryAccessibilityService : AccessibilityService() {
             return ws.any { w -> w.isFocused && w.type == android.view.accessibility.AccessibilityWindowInfo.TYPE_SYSTEM &&
                 runCatching { w.root?.packageName?.toString() }.getOrNull() == "com.android.systemui" }
         }
+        // The phone's RECENTS / overview screen (owner: 'i swipe up to see my opened apps and its not working'): it's a
+        // SystemUI / launcher screen, NOT an app, so Lockedintool never stepped its Pages aside for it and they stayed on
+        // top, hiding the recents. Detect it (its own text, only in SystemUI / the launcher - never Lockedintool's own
+        // window, which has 'Clear all' in recent searches) so the Pages can step aside and the swipe-up really shows it.
+        private val RECENTS_HINT = Regex("(?i)\\b(close all|clear all|recent apps|recently used|active apps?|no recent)\\b")
+        fun recentsInFront(): Boolean {
+            val s = instance ?: return false
+            val ws = runCatching { s.windows }.getOrNull() ?: return false
+            for (w in ws) {
+                val r = runCatching { w.root }.getOrNull() ?: continue
+                val pk = runCatching { r.packageName?.toString() }.getOrNull() ?: continue
+                if (pk == s.packageName) continue                                   // never Lockedintool's own screens
+                if (pk != "com.android.systemui" && !pk.contains("launcher", true)) continue
+                if (recentsNode(r, 0)) return true
+            }
+            return false
+        }
+        private fun recentsNode(n: android.view.accessibility.AccessibilityNodeInfo?, depth: Int): Boolean {
+            if (n == null || depth > 7) return false
+            val t = ((n.text ?: "").toString() + " " + (n.contentDescription ?: "")).trim()
+            if (t.isNotEmpty() && RECENTS_HINT.containsMatchIn(t)) return true
+            for (i in 0 until n.childCount) if (recentsNode(runCatching { n.getChild(i) }.getOrNull(), depth + 1)) return true
+            return false
+        }
         // The phone's own output switcher / Media output panel (SystemUI, or Samsung's media panel) - never Settings.
         private val OUT_PKGS = Regex("^com\\.android\\.systemui$|^com\\.samsung\\.android\\..*(mdx|quickboard|media)")
         /** Media output (OutputSwitchActivity): the phone's own list is up - tap the output picked in Lockedintool (an
