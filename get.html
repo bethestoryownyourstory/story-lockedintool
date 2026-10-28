@@ -29,8 +29,6 @@
   .small{color:var(--dim);font-size:13px;display:block;margin-top:3px}
   footer{margin-top:28px;text-align:center;color:var(--dim);font-size:13px;line-height:1.6}
   footer a{color:var(--text)}
-  .ios{display:none;margin-top:14px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;color:var(--dim);font-size:14px;text-align:center}
-  .ios.on{display:block}
 </style>
 </head>
 <body>
@@ -41,7 +39,6 @@
 
   <a class="dl" id="dl" href="https://github.com/bethestoryownyourstory/story-lockedintool/releases/download/live/app-debug.apk">Download for Android</a>
   <p class="note">Android 8 or newer · free download · updates itself</p>
-  <p class="ios" id="ios">Lockedintool is on Android for now. Open this page on an Android phone to install it.</p>
 
   <section class="card">
     <h2>HOW TO INSTALL</h2>
@@ -58,8 +55,5 @@
     Using Lockedintool means you agree to its Terms of Service and Privacy Policy (in the app under Information &rsaquo; Legal).
   </footer>
 </main>
-<script>
-  if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) document.getElementById('ios').classList.add('on');
-</script>
 </body>
 </html>
