@@ -40,7 +40,7 @@ import androidx.webkit.WebViewAssetLoader
  *    It stays open (over any app, through Home / Apps / app launches) until you tap its corner arrow.
  *  - The STORY bar: sits on the phone's own gesture line (or draws a line on phones that don't
  *    have one). It is the ONE bottom line, everywhere, including while STORY pages are open.
- *      tap = Apps | Pages, swipe up = real home screen, hold then swipe up = real recents.
+ *      tap = Apps | Pages, swipe up = real home screen, swipe up and hold (pause at the top) = real recents.
  *  - The STORY panel: full-screen Money / Wallet / Focus pages, shown only when you pick Pages.
  */
 class OverlayService : Service(), StoryBridge.Host {
@@ -451,20 +451,22 @@ class OverlayService : Service(), StoryBridge.Host {
         val v: View = FrameLayout(this).apply { addView(line, FrameLayout.LayoutParams(lineW, lineH, Gravity.CENTER)) }
         barLine = line; barHasLine = hasLine
         updateBarLine()
-        var downT = 0L; var downY = 0f; var downX = 0f; var moved = false; var held = false
+        // Match Android's gesture nav exactly (owner: 'everything works the same'): tap = the Apps | Lockedintool switch;
+        // a quick swipe up = Home; swipe up and HOLD (pause at the top before lifting) = Recent apps. (Before, Recents
+        // needed a press-and-hold BEFORE the swipe - an obscure gesture - so a normal swipe up never reached recents.)
+        var downT = 0L; var downY = 0f; var downX = 0f; var moved = false; var lastMoveT = 0L
         v.setOnTouchListener { _, e ->
             when (e.action) {
-                MotionEvent.ACTION_DOWN -> { downT = System.currentTimeMillis(); downX = e.rawX; downY = e.rawY; moved = false; held = false; hidePicker() }
+                MotionEvent.ACTION_DOWN -> { downT = System.currentTimeMillis(); downX = e.rawX; downY = e.rawY; moved = false; lastMoveT = downT; hidePicker() }
                 MotionEvent.ACTION_MOVE -> {
-                    if (!moved && Math.hypot((e.rawX - downX).toDouble(), (e.rawY - downY).toDouble()) > touch) {
-                        moved = true; held = System.currentTimeMillis() - downT >= 350
-                    }
+                    if (Math.hypot((e.rawX - downX).toDouble(), (e.rawY - downY).toDouble()) > touch) { moved = true; lastMoveT = System.currentTimeMillis() }
                 }
                 MotionEvent.ACTION_UP -> {
                     val dy = downY - e.rawY
-                    if (!moved) showPicker()                                     // tap
-                    else if (dy > 60 * dp) {                                      // swipe up
+                    if (!moved) showPicker()                                     // tap = Apps | Lockedintool switch
+                    else if (dy > 60 * dp) {                                      // swipe up from the bottom
                         hidePanel()
+                        val held = System.currentTimeMillis() - lastMoveT >= 200   // finger paused at the top before lifting = Recents (like Android)
                         val a = if (held) AccessibilityService.GLOBAL_ACTION_RECENTS else AccessibilityService.GLOBAL_ACTION_HOME
                         StoryAccessibilityService.instance?.performGlobalAction(a)
                     }
