@@ -76,6 +76,7 @@ nav a:hover{color:var(--text)}
 h2.sec{margin:46px 0 12px;font-size:13px;letter-spacing:1.4px;color:var(--dim);font-weight:700}
 .grid{display:grid;grid-template-columns:1fr;gap:12px}
 @media (min-width:760px){.grid.two{grid-template-columns:1fr 1fr}}
+@media (min-width:760px){.grid.three{grid-template-columns:1fr 1fr 1fr}}
 .card{border:1px solid var(--line);border-radius:16px;padding:16px 18px}
 .card h3{margin:0 0 4px;font-size:16px}
 .card p{margin:0;color:var(--dim);font-size:15px;line-height:1.5}
@@ -149,7 +150,15 @@ const info = INFO.map(([t, rows]) => `<h2 class="sec">${esc(t)}</h2>
 
 const options = OPTIONS.map(o => `<div class="card opt"><h3>${esc(o.name)}</h3><p>${esc(o.text)}</p><ul>${o.list.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>`).join('');
 
-const plans = PLANS.map(p => { const pr = PRICES[p.key] || {}; return `<div class="plan${p.badge ? ' top' : ''}">
+// The Free plan (owner, 28 Oct 2026: 'Free plan should also be on our website'). Free = no plan: the Dashboard only
+// (Pages, Apps and Layouts come with a plan). It costs nothing and needs no payment details, so it has no price line.
+const freeCard = `<div class="plan">
+  <div class="name"><h3>Free</h3><div class="price">Free</div></div>
+  <div class="t">Start here. Your Dashboard, free.</div>
+  <p class="x">Everything on your Dashboard at no cost - your home screen, Notes, Community and Messages, search, your phone's own controls, music and notifications, all in one place. No card needed.</p>
+  <ul><li>Dashboard home screen</li><li>Notes</li><li>Community &amp; Messages</li><li>Search, phone controls, music &amp; notifications</li><li>Pages, Apps and Layouts come with a plan</li></ul>
+</div>`;
+const plans = freeCard + PLANS.map(p => { const pr = PRICES[p.key] || {}; return `<div class="plan${p.badge ? ' top' : ''}">
   <div class="name"><h3>${esc(p.name)}</h3><div class="price">${money('$', pr.usd)}<small>/month</small></div></div>
   ${p.badge ? `<div class="badge">${esc(p.badge)}</div>` : ''}
   <div class="t">${esc(p.tag)}</div>
@@ -173,7 +182,7 @@ ${info}
   <h2 class="sec">TWO WAYS TO USE IT</h2>
   <div class="grid two">${options}</div>
   <h2 class="sec">PLANS</h2>
-  <div class="grid two">${plans}</div>
+  <div class="grid three">${plans}</div>
   <p class="how">You choose your plan inside the Lockedintool app: create your account, then open Subscriptions on the Dashboard. You pay on the payment provider’s own secure page.</p>
   <p class="norefund">No refunds - payments can’t be refunded once made.</p>
   <p class="agree">By choosing a plan you agree to the <a href="terms/">Terms of Service</a> and <a href="privacy/">Privacy Policy</a>.</p>

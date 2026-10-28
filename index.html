@@ -5367,8 +5367,7 @@ function dashboardScreen(){
         <div class="story-title-row">
           <span class="story-title" aria-label="Lockedintool"><span class="story-title-l">Locked</span><span class="story-title-l">intool</span></span>
           ${state.homeScreen==='dashboard' ? homeBadge() : ''}
-          <span class="story-divider-v"></span>
-          <button class="layouts-btn" data-nav="layouts">LAYOUTS</button>
+          ${planFree() ? '' : '<span class="story-divider-v"></span><button class="layouts-btn" data-nav="layouts">LAYOUTS</button>'}
         </div>
         <div class="story-status-right">
           <button class="arrow-btn" data-nav="${state.lastPage}"${planFree() ? ' style="visibility:hidden;pointer-events:none;"' : ''}>→</button>
@@ -5392,7 +5391,7 @@ function dashboardScreen(){
           <div class="sidebar-item" data-dash="camera">CAMERA</div>
           <div class="sidebar-item" data-dash="gallery">GALLERY</div>
           <div class="sidebar-item" data-dash="alarm">ALARM</div>
-          ${sysOn() ? '' : '<div class="sidebar-item" data-nav="apps">APPS</div>'}
+          ${sysOn() || planFree() ? '' : '<div class="sidebar-item" data-nav="apps">APPS</div>'}
         </div>
         <div class="quotes-card">
           <div class="quotes-title">QUOTES</div>
@@ -15759,8 +15758,11 @@ function renderDevice(){
   // An app page that isn't in your rows any more (Only system, Basic plan, the app uninstalled) never shows either.
   if(isAppPage(state.current) && !IN_STATION3_WINDOW){ const r = rowOfPage(state.current); if(!r) state.current = PAGES[0] || 'dashboard'; else if(r !== curRow){ curRow = r; syncAppPages(); } }
   if(isAppPage(state.lastPage) && !rowOfPage(state.lastPage)) state.lastPage = PAGES[0] || 'wallet';
-  // No plan (once subscriptions are really on) = Free: the Dashboard only, the Pages hidden (owner's full layout).
-  if(planFree() && isPagesScreen(state.current) && !IN_STATION3_WINDOW){ state.current = 'dashboard'; state.rowsViewOpen = false; state.pageStyleViewOpen = false; }
+  // No plan (once subscriptions are really on) = Free: the Dashboard only - the Pages, the Apps screen and Layouts are
+  // all hidden (owner, 28 Oct 2026: 'apps button on the dashboard and layouts, and pages, won't be available on the free').
+  if(planFree() && !IN_STATION3_WINDOW && (isPagesScreen(state.current) || state.current === 'apps' || state.current === 'layouts' || state.current.indexOf('layouts-') === 0)){
+    state.current = 'dashboard'; state.rowsViewOpen = false; state.pageStyleViewOpen = false;
+  }
   // A live home screen widget never leaves its page (owner: the Money widget stays on Money, the Dashboard widget on
   // the Dashboard): anything that would go to another page opens STORY full screen on it instead.
   if(window.__storyWidgetPinned && state.current !== window.__storyWidget){
