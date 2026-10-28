@@ -8813,7 +8813,7 @@ function subscriptionScreen(){
   if(!state.sub.asked){ state.sub.asked = true; subRefresh(true); }
   subWaitLoad();
   const plans = s.plans || { basic:{ usd:5, zar:95 }, premium:{ usd:15, zar:285 } };
-  const viaStitch = s.provider === 'stitch';   // South African users pay in rand through Stitch (owner); everyone else through Lemon Squeezy
+  const viaStitch = s.provider === 'stitch', viaPayfast = s.provider === 'payfast', viaRand = viaStitch || viaPayfast;   // South African users pay in rand (PayFast; Stitch is out); everyone else through Lemon Squeezy in dollars
   const locked = subLocked(), active = subActive();
   const until = s.until ? new Date(s.until).toLocaleDateString('en-ZA', { day:'numeric', month:'short', year:'numeric' }) : '';
   const w = state.sub.waiting;
@@ -8836,7 +8836,7 @@ function subscriptionScreen(){
     ${active ? `<button class="sub-end-btn" data-action="sub-endask">Cancel plan</button>` : ''}
     ${w ? `<div class="row-card pay-wait">
       <div class="pay-wait-amt">${escText(w.name)}</div>
-      <div class="pay-wait-who">${subOptName(w.mode)} · $${w.usd}/month${w.provider === 'stitch' && w.zar ? ' · R' + Number(w.zar).toFixed(2) : ''}</div>
+      <div class="pay-wait-who">${subOptName(w.mode)} · $${w.usd}/month${(w.provider === 'stitch' || w.provider === 'payfast') && w.zar ? ' · R' + Number(w.zar).toFixed(2) : ''}</div>
       <div class="pay-wait-status">${w.status === 'paid' ? 'Paid - your plan is on.' : w.status === 'pending' ? (w.provider === 'stitch' ? 'Approve it in your bank’s page that opened. This updates by itself.' : 'Pay on the payment page that opened. This updates by itself.') : w.status === 'cancelled' ? 'Cancelled in your bank' : 'Not approved in time - nothing was paid'}</div>
       ${w.status === 'pending' ? `<button class="btn-wide" data-action="sub-reopen">${w.provider === 'stitch' ? 'Open my bank’s page again' : 'Open the payment page again'}</button>
       <button class="btn-wide" data-action="sub-cancel"${state.sub.busy ? ' disabled' : ''}>Cancel - nothing is paid</button>` : `<button class="btn-wide btn-primary" data-action="sub-done">Done</button>`}
@@ -8852,7 +8852,7 @@ function subscriptionScreen(){
           ? `<button class="btn-wide" disabled style="opacity:0.7;">Coming soon</button>
         <div class="sub-zar">Basic and Premium are coming soon. The Free version — your Dashboard — is ready now.</div>`
           : `<button class="btn-wide btn-primary" data-action="sub-buy" data-plan="${p.key}"${state.sub.busy || (w && w.status === 'pending' && w.plan === p.key) ? ' disabled' : ''}>${w && w.status === 'pending' && w.plan === p.key ? (w.provider === 'stitch' ? 'Waiting for your bank' : 'Waiting for your payment') : w && w.status === 'pending' ? 'Switch to ' + p.name : 'Choose ' + p.name}</button>
-        <div class="sub-zar">${viaStitch ? `Paid in rand: R${Number(pr.zar || 0).toFixed(2)} a month, approved in your own bank` : `$${pr.usd || p.usd || ''} a month on Lemon Squeezy’s secure page - card, PayPal, Apple Pay or Google Pay. Renews every month.`}</div>`}
+        <div class="sub-zar">${viaRand ? `Paid in rand: R${Number(pr.zar || 0).toFixed(2)} a month${viaPayfast ? ' — card or instant EFT on PayFast’s secure page' : ', approved in your own bank'}` : `$${pr.usd || p.usd || ''} a month on Lemon Squeezy’s secure page - card, PayPal, Apple Pay or Google Pay. Renews every month.`}</div>`}
       </div>`; }).join('')}
     ${state.sub.msg ? `<div class="note pay-msg">${escText(state.sub.msg)}</div>` : ''}
     <div class="note" style="margin:12px 0 4px;">Both plans are designed to help you stay organized, focused, and consistent.</div>
@@ -8866,7 +8866,7 @@ function subscriptionScreen(){
 // doesn't renew on its own, so there's nothing to cancel (it just ends on the paid date) - the sheet says so honestly.
 function subEndConfirmTemplate(s, until){
   const planName = s.plan === 'premium' ? 'Premium' : 'Basic';
-  const stitch = s.provider === 'stitch';
+  const stitch = s.provider === 'stitch' || s.provider === 'payfast';   // both are a single 30-day payment that doesn't auto-renew - nothing to cancel, it just ends
   return `
     <div class="modal-overlay" data-action="sub-end-bg">
       <div class="confirm-sheet" onclick="event.stopPropagation()">
