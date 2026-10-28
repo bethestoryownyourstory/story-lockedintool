@@ -4057,6 +4057,7 @@
     document.documentElement.classList.toggle('theme-white', white);
     themeSheets(white);
     themeTree(document.documentElement, white);
+    if(window.applyS3DashColors) window.applyS3DashColors();   // the Dashboard band's custom colours flip with the theme too
     if(white && !observer){
       observer = new MutationObserver(list=>{
         if(current !== 'white') return;
@@ -9899,6 +9900,7 @@ window.storyStation3Only = function(){
   if(state.current==='dashboard') state.current = state.lastPage || 'wallet';
   state.station3Open = true;
   renderDevice();
+  if(window.applyS3DashColors) window.applyS3DashColors();
 };
 // The dial pad on its own (Android overlay, its own still window above Station 3).
 window.storyDialOnly = function(){
@@ -9927,7 +9929,41 @@ window.storyS3Context = function(onPages, onDash){
   document.body.classList.toggle('s3-pages', !!onPages);
   document.body.classList.toggle('s3-dash', !!onDash);
   if(document.body.classList.contains('s3-only')) renderDevice();
+  if(window.applyS3DashColors) window.applyS3DashColors();
 };
+// Colour customization reaches the Dashboard's Station 3 band (owner: 'the colour under station 3 didn't change').
+// When a Dashboard colour system is on, the band's icons follow the custom text colour (they use currentColor) and the
+// native band background is painted the custom background (StoryBridge.dashBandColor). Off the Dashboard, or with no
+// colour system, nothing is touched - the band keeps following the Black / White system theme exactly as before.
+function s3DashBandColors(){
+  if(typeof litColorSystemFor !== 'function') return null;
+  const sys = litColorSystemFor('dashboard');
+  if(!sys || !sys.bg || !sys.text) return null;
+  const white = !!(window.storyTheme && window.storyTheme() === 'white');
+  return { bg: white ? sys.text : sys.bg, icon: white ? sys.bg : sys.text };   // band is black-ish -> bg (text in White)
+}
+function s3RgbA(hex, a){ const c = litHexRgb(hex); return `rgba(${c.r}, ${c.g}, ${c.b}, ${a})`; }
+window.applyS3DashColors = function(){
+  if(!document.body.classList.contains('s3-only')) return;   // only Station 3's own window draws the band
+  // Only colour the icons when the app can ALSO paint the band background, so the two always match (an older app without
+  // this bridge keeps the plain Black / White themed band until it updates - never dark icons on a still-black band).
+  const canNative = !!(NATIVE && window.StoryNative.dashBandColor);
+  let st = document.getElementById('s3-dash-color');
+  const c = (canNative && document.body.classList.contains('s3-dash')) ? s3DashBandColors() : null;
+  if(!c){
+    if(st) st.textContent = '';
+    if(canNative) try{ window.StoryNative.dashBandColor(''); }catch(e){}
+    return;
+  }
+  if(!st){ st = document.createElement('style'); st.id = 's3-dash-color'; document.head.appendChild(st); }
+  st.textContent =
+    `body.s3-only.s3-dash .station3-btn,body.s3-only.s3-dash .station3-btn-chevron{color:${c.icon}!important;background:${s3RgbA(c.icon,0.07)}!important;border-color:${s3RgbA(c.icon,0.12)}!important;}`+
+    `body.s3-only.s3-dash .station3-btn-plus{color:${c.bg}!important;background:${c.icon}!important;border-color:${c.icon}!important;}`+
+    `body.s3-only.s3-dash .s3-lbl{color:${c.icon}!important;}`;
+  try{ window.StoryNative.dashBandColor(c.bg); }catch(e){}
+};
+// Re-apply when the colour system is edited in another window (the Pages write 'story-color-systems').
+window.addEventListener('storage', (e)=>{ if(!e || e.key === 'story-color-systems' || e.key === null) window.applyS3DashColors(); });
 window.storyPagesAction = function(a){
   if(planGateRows(a)){ state.station3Open = false; renderDevice(); return; }
   if(a === 'page-quick-rows') state.rowsViewOpen = true;
