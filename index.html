@@ -1907,6 +1907,13 @@
   .order-sheet-overlay .order-sheet{ max-height:56%; }
   .order-sheet-grab{ display:flex; justify-content:center; align-items:center; padding:0 0 8px; margin:-6px 0 0; cursor:grab; touch-action:none; }
   .order-sheet-grab span{ width:40px; height:4px; border-radius:2px; background:rgba(127,127,127,0.6); display:block; }
+  /* Layouts > Color customization (owner): preview + colour swatches + save-name input. */
+  .litcolor-preview{ border-radius:16px; padding:22px 16px; margin:4px 0 2px; display:flex; align-items:center; justify-content:center; min-height:96px; box-shadow:inset 0 0 0 1px rgba(127,127,127,0.18); }
+  .litcolor-prev-card{ border-radius:12px; padding:14px 18px; text-align:center; min-width:150px; }
+  .litcolor-swatch{ width:26px; height:26px; border-radius:8px; display:inline-block; box-shadow:inset 0 0 0 1px rgba(127,127,127,0.5); flex:none; }
+  .litcolor-swatch.sm{ width:20px; height:20px; border-radius:6px; }
+  .litcolor-name-input{ flex:1; min-width:0; background:transparent; border:none; outline:none; color:var(--text); font-size:13.5px; padding:4px 2px; }
+  .litcolor-name-input::placeholder{ color:var(--muted); }
   .order-type-grid{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
   .order-type-btn{
     text-align:center; padding:10px 0; border-radius:10px; background:var(--card); border:1px solid var(--line); font-size:11.5px; font-weight:700; cursor:pointer;
@@ -4184,6 +4191,92 @@ function rowMovePage(rowIndex, key, by){
   Object.keys(NEIGHBORS).forEach(k=>{ if(NEIGHBORS[k].host.parentNode) NEIGHBORS[k].host.remove(); delete NEIGHBORS[k]; });
 }
 function rowOfPage(key){ const rows = rowsList(); for(let i = 0; i < rows.length; i++) if(rows[i].some(it=>it.key === key)) return i + 1; return 0; }
+
+// ===== COLOUR CUSTOMIZATION (Layouts > Dashboard / Pages) - owner =====
+// Owner: "anything that's black will be the colour that you place it to, and anything that's white will be the colour
+// that you place it to. It's like system theme - it works only for the background and the texts." Each scope (the
+// Dashboard, a whole row, one page, or ALL pages) can carry its own saved colour system {bg, text} with a name, shown
+// as "color system: <name>". OFF by default: with nothing saved the app looks exactly as before. It recolours only the
+// CURRENT screen's content (#content-area), the same near-black / near-white tokens the System theme swaps, so mid-greys
+// and real colours (green Buy, red Sell, the real card art...) are left alone. Stored in 'story-color-systems'.
+function litColors(){ try{ return JSON.parse(localStorage.getItem('story-color-systems') || '{}') || {}; }catch(e){ return {}; } }
+function litColorsSave(o){ try{ localStorage.setItem('story-color-systems', JSON.stringify(o)); }catch(e){} }
+// Which system applies to a screen ('dashboard' or a page key): a page falls back page -> its row -> all pages.
+function litColorSystemFor(screen){
+  const o = litColors();
+  if(screen === 'dashboard') return o.dash || null;
+  const pg = (o.pages || {})[screen]; if(pg) return pg;
+  const r = rowOfPage(screen), row = r ? (o.rows || {})[String(r)] : null; if(row) return row;
+  return o.all || null;
+}
+// Read / write one scope's assignment. target: 'dashboard' | 'all' | 'row:<id>' | 'page:<key>'. val = {bg,text,name} or null.
+function litScopeGet(target){
+  const o = litColors();
+  if(target === 'dashboard') return o.dash || null;
+  if(target === 'all') return o.all || null;
+  if(target.indexOf('row:') === 0) return (o.rows || {})[target.slice(4)] || null;
+  if(target.indexOf('page:') === 0) return (o.pages || {})[target.slice(5)] || null;
+  return null;
+}
+function litScopeSet(target, val){
+  const o = litColors();
+  if(target === 'dashboard'){ if(val) o.dash = val; else delete o.dash; }
+  else if(target === 'all'){ if(val) o.all = val; else delete o.all; }
+  else if(target.indexOf('row:') === 0){ o.rows = o.rows || {}; const k = target.slice(4); if(val) o.rows[k] = val; else delete o.rows[k]; }
+  else if(target.indexOf('page:') === 0){ o.pages = o.pages || {}; const k = target.slice(5); if(val) o.pages[k] = val; else delete o.pages[k]; }
+  litColorsSave(o);
+}
+function litSaveSystem(name, bg, text){ const o = litColors(); o.systems = o.systems || {}; o.systems[name] = { bg, text }; litColorsSave(o); }
+function litSystemList(){ const o = litColors(); return Object.keys(o.systems || {}).map(n=>({ name:n, bg:o.systems[n].bg, text:o.systems[n].text })); }
+function litScopeLabel(target){ const v = litScopeGet(target); return !v ? 'Default' : v.name ? 'color system: ' + v.name : 'Custom colours'; }
+function litPageName(key){ const it = PAGE_SWITCH_ITEMS.find(x=>x.key === key) || CORE_ITEMS.find(x=>x.key === key); if(it) return it.label; if(key.indexOf('app:') === 0){ const a = appPagesStored().find(x=>'app:' + x.pkg === key); if(a) return a.name; } return PAGE_LABEL[key] || key; }
+
+// --- the recolour pass: run once at the end of renderDevice ---
+const LIT_C_KEEP = '[data-keep-color], .note-card, .note-content-wrap, .canvas-page-wrap, .notes-swatch, .canvas-swatch, .notes-preview-page, .realcard, .realcard-chase, .realcard-amex, .lit-block, .music-card, .colorpicker-sheet, .notes-popover-overlay, .modal-overlay, .lit-sheet, .cr-shutter, .spotify-visualizer';
+const LIT_C_PROPS = ['color', 'background-color', 'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color', 'outline-color', 'fill', 'stroke', 'caret-color'];
+function litHexRgb(h){ h = String(h || ''); if(h[0] === '#') h = h.slice(1); if(h.length === 3) h = h.split('').map(c=>c + c).join(''); if(h.length < 6) return { r:0, g:0, b:0 }; return { r:parseInt(h.slice(0,2),16), g:parseInt(h.slice(2,4),16), b:parseInt(h.slice(4,6),16) }; }
+function litParseRGB(v){ const m = String(v).match(/^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)\s*(?:[,/]\s*([\d.]+%?))?\s*\)$/i); return m ? { r:+m[1], g:+m[2], b:+m[3], a:m[4] == null ? null : m[4] } : null; }
+// Same rule as the System theme: black-ish or white-ish greys only; mid greys and real colours stay as they are.
+function litNeutralC(r, g, b){ if(Math.max(r,g,b) - Math.min(r,g,b) > 16) return false; const avg = (r + g + b) / 3; return avg <= 56 || avg >= 200; }
+function litMapToken(c, bg, text, white){
+  const avg = (c.r + c.g + c.b) / 3; let role;
+  if(avg <= 56) role = white ? 'text' : 'bg';
+  else if(avg >= 200) role = white ? 'bg' : 'text';
+  else return null;
+  const col = role === 'bg' ? bg : text;
+  return c.a == null ? `rgb(${col.r}, ${col.g}, ${col.b})` : `rgba(${col.r}, ${col.g}, ${col.b}, ${c.a})`;
+}
+// Recolour one rendered screen container ('area') for a given screen key. Reused for the live #content-area and for
+// the hidden neighbour pages built for a swipe, so a swipe into a coloured page never flashes its plain look first.
+function litRecolorArea(area, screen){
+  if(!area) return;
+  area.style.removeProperty('background-color');   // inline overrides inside the area vanish on each re-render
+  const sys = screen ? litColorSystemFor(screen) : null;
+  if(!sys || !sys.bg || !sys.text) return;
+  const bg = litHexRgb(sys.bg), text = litHexRgb(sys.text), white = !!(window.storyTheme && window.storyTheme() === 'white');
+  area.style.setProperty('background-color', sys.bg, 'important');
+  const els = area.querySelectorAll('*');
+  for(let i = 0; i < els.length; i++){
+    const el = els[i];
+    if(el.closest(LIT_C_KEEP)) continue;
+    const cs = getComputedStyle(el);
+    for(const p of LIT_C_PROPS){
+      if((p === 'fill' || p === 'stroke') && !(el instanceof SVGElement)) continue;
+      const c = litParseRGB(cs.getPropertyValue(p));
+      if(!c || c.a === '0' || c.a === 0) continue;         // none / fully transparent stays as it is
+      if(!litNeutralC(c.r, c.g, c.b)) continue;            // real colours untouched
+      const mapped = litMapToken(c, bg, text, white);
+      if(mapped) el.style.setProperty(p, mapped, 'important');
+    }
+  }
+}
+function litApplyColors(){
+  const area = document.getElementById('content-area');
+  if(!area) return;
+  if(document.querySelector('.lit-auth') || (state.pageStyleOn && state.pageStyleViewOpen) || state.rowsViewOpen){ area.style.removeProperty('background-color'); return; }
+  const screen = state.current === 'dashboard' ? 'dashboard' : (PAGES.includes(state.current) ? state.current : null);
+  litRecolorArea(area, screen);
+}
 function syncAppPages(){
   const rows = rowsList();
   if(!curRow || curRow > rows.length) curRow = 1;
@@ -5019,6 +5112,8 @@ let state = {
   colorPickerSat:0,
   colorPickerVal:100,
   colorPickerHex:'#ffffff',
+  colorScope:null,        // Layouts colour customization: 'dashboard' | 'pages' (which Layouts tab opened it)
+  colorEditTarget:null,   // which scope is being edited: 'dashboard' | 'all' | 'row:<id>' | 'page:<key>'
   highlighterSize:2,
   plusMenuOpen:false,
   moreMenuOpen:false,
@@ -8946,10 +9041,16 @@ function layoutsScreen(){
       <div class="row-card" style="cursor:pointer;" data-nav="layouts-music">
         <div class="row"><div class="row-left"><div class="row-name">Music player</div><div class="row-sub">${escText(musicNow().chosenName || 'Whatever is playing')}</div></div><span class="chev-right">›</span></div>
       </div>
+      <div class="row-card" style="cursor:pointer;" data-nav="layouts-color" data-scope="dashboard">
+        <div class="row"><div class="row-left"><div class="row-name">Color customization</div><div class="row-sub">${litScopeLabel('dashboard') === 'Default' ? 'Pick your own background and text colours' : litScopeLabel('dashboard')}</div></div><span class="chev-right">›</span></div>
+      </div>
     ` : `
       <div class="section-title">PAGES</div>
       <div class="row-card" style="cursor:pointer;" data-nav="layouts-homescreen">
         <div class="row"><div class="row-left"><div class="row-name">Home Screen</div></div><span class="chev-right">›</span></div>
+      </div>
+      <div class="row-card" style="cursor:pointer;" data-nav="layouts-color" data-scope="pages">
+        <div class="row"><div class="row-left"><div class="row-name">Color customization</div><div class="row-sub">Your own colours - a whole row, one page, or all pages</div></div><span class="chev-right">›</span></div>
       </div>
       <div class="row-card" style="cursor:pointer;" data-nav="layouts-pagelayout">
         <div class="row"><div class="row-left"><div class="row-name">Page layout</div><div class="row-sub">The order of the pages in each row</div></div><span class="chev-right">›</span></div>
@@ -9063,6 +9164,63 @@ function layoutsMusicScreen(){
     ${opt('', 'Whatever is playing', 'Follows any player that is playing')}
     ${list.length ? list.map(p=>opt(p.pkg, p.name, '')).join('') : `<div class="row-sub" style="padding:10px 4px;">${NATIVE ? 'No music players found on your phone.' : 'Your phone’s music players show here in the Lockedintool app.'}</div>`}
     </div>`;
+}
+// Layouts > Color customization (owner): the Dashboard has its own, the Pages have their own (a whole row, each page,
+// or all pages). You pick a Background and a Text colour from the colour wheel; anything black becomes your background,
+// anything white becomes your text - like the System theme. Save a named "colour system" to reuse it anywhere.
+function layoutsColorScreen(){
+  if(state.colorEditTarget) return colorEditorHTML(state.colorEditTarget);
+  // Pages: the list of scopes (all pages, each row, each page in the row).
+  const rows = rowsList(), ids = rowIds();
+  return `
+    <div class="page-shell layouts-shell">
+    ${topBar('Color customization', false, '', 'layouts', '', false, true)}
+    <div class="note">Make anything black your own background colour and anything white your own text colour - just the background and the texts, like the System theme.</div>
+    <div class="row-card" style="cursor:pointer;" data-action="color-edit" data-t="all">
+      <div class="row"><div class="row-left"><div class="row-name">Apply colours to all pages</div><div class="row-sub">${litScopeLabel('all')}</div></div><span class="chev-right">›</span></div>
+    </div>
+    ${rows.map((items, i)=>`
+      <div class="section-title">ROW ${i + 1}</div>
+      <div class="row-card">
+        <div class="row" style="cursor:pointer;" data-action="color-edit" data-t="row:${ids[i]}"><div class="row-left"><div class="row-name">Whole row</div><div class="row-sub">${litScopeLabel('row:' + ids[i])}</div></div><span class="chev-right">›</span></div>
+        ${items.map(it=>`<div class="row" style="cursor:pointer;" data-action="color-edit" data-t="page:${escText(it.key)}"><div class="row-left"><div class="row-name">${it.label}</div><div class="row-sub">${litScopeLabel('page:' + it.key)}</div></div><span class="chev-right">›</span></div>`).join('')}
+      </div>
+    `).join('')}
+    </div>
+  `;
+}
+function colorEditorHTML(target){
+  const v = litScopeGet(target) || { bg:'#000000', text:'#f3f2ee', name:'' };
+  const bg = v.bg || '#000000', text = v.text || '#f3f2ee';
+  const title = target === 'dashboard' ? 'Dashboard colours' : target === 'all' ? 'All pages'
+    : target.indexOf('row:') === 0 ? 'Row ' + (rowIds().indexOf(+target.slice(4)) + 1) : litPageName(target.slice(5));
+  const where = target === 'dashboard' ? 'the Dashboard' : target === 'all' ? 'all pages' : target.indexOf('row:') === 0 ? 'this row' : 'this page';
+  const systems = litSystemList();
+  const set = litScopeGet(target);
+  const pickerOpen = state.colorPickerTarget === 'litcolor-bg' || state.colorPickerTarget === 'litcolor-text';
+  return `
+    <div class="page-shell layouts-shell">
+    <div class="topbar"><button class="dash-back" data-action="color-editback">‹</button><div class="topbar-title">${escText(title)}</div><span style="width:30px;"></span></div>
+    <div class="note">Tap Background or Text, then pick your colour from the wheel. Anything black becomes your background, anything white becomes your text.</div>
+    <div class="litcolor-preview" data-keep-color style="background:${bg};">
+      <div class="litcolor-prev-card" data-keep-color style="border:1px solid ${text}2e;">
+        <div data-keep-color style="color:${text};font-weight:700;font-size:15px;">Aa 1 2 3</div>
+        <div data-keep-color style="color:${text};opacity:0.55;font-size:11px;margin-top:3px;">How ${escText(where)} will look</div>
+      </div>
+    </div>
+    <div class="section-title">COLOURS</div>
+    <div class="row-card">
+      <div class="row" style="cursor:pointer;" data-openpicker="litcolor-bg"><div class="row-left"><div class="row-name">Background</div></div><span class="litcolor-swatch" data-keep-color style="background:${bg};"></span></div>
+      <div class="row" style="cursor:pointer;" data-openpicker="litcolor-text"><div class="row-left"><div class="row-name">Text</div></div><span class="litcolor-swatch" data-keep-color style="background:${text};"></span></div>
+    </div>
+    ${set ? `<div class="section-title">SAVE AS A COLOUR SYSTEM</div>
+    <div class="row-card"><div class="row"><input id="litcolor-name" class="litcolor-name-input" placeholder="Name your colour system" maxlength="24" spellcheck="false" value="${escText(v.name || '')}"><button class="edit-remove edit-add" data-action="color-save">Save</button></div></div>` : ''}
+    ${systems.length ? `<div class="section-title">YOUR SAVED COLOUR SYSTEMS</div>
+    <div class="row-card">${systems.map(s=>`<div class="row" style="cursor:pointer;" data-action="color-apply" data-name="${escText(s.name)}"><div class="row-left"><div class="row-name">${escText(s.name)}</div></div><span style="display:flex;gap:5px;align-items:center;"><span class="litcolor-swatch sm" style="background:${s.bg};"></span><span class="litcolor-swatch sm" style="background:${s.text};"></span></span></div>`).join('')}</div>` : ''}
+    ${set ? `<div class="row-card" style="cursor:pointer;" data-action="color-remove"><div class="row"><div class="row-left"><div class="row-name" style="color:#ff453a;">Remove colours from ${escText(where)}</div></div></div></div>` : ''}
+    </div>
+    ${pickerOpen ? colorPickerTemplate() : ''}
+  `;
 }
 function layoutsDashboardScreen(){
   return `
@@ -13710,6 +13868,8 @@ function colorPickerCurrentHex(target){
     case 'fontcolor': return state.fontColor;
     case 'stickycolor': return state.stickyNoteColor;
     case 'pencolor': return /^#[0-9a-f]{6}$/i.test(state.canvasPenColor) ? state.canvasPenColor : '#000000';
+    case 'litcolor-bg': return (litScopeGet(state.colorEditTarget) || {}).bg || '#000000';
+    case 'litcolor-text': return (litScopeGet(state.colorEditTarget) || {}).text || '#f3f2ee';
     default: return '#ffffff';
   }
 }
@@ -14525,6 +14685,7 @@ function renderScreenContent(){
     case 'layouts-homescreen': return layoutsHomeScreenScreen();
     case 'layouts-pagelayout': return layoutsPageLayoutScreen();
     case 'layouts-music': return layoutsMusicScreen();
+    case 'layouts-color': return layoutsColorScreen();
     case 'layouts-arrangement': return layoutsArrangementScreen();
     case 'settings': return settingsHubScreen();
     case 'notes': return notesScreen();
@@ -15702,6 +15863,7 @@ function renderDevice(){
   if(fsLive){ const lock = state.current === 'trading' && state.chartFullscreen; fsLive.classList.toggle('fs-lock', lock); if(lock) fsLive.scrollTop = 0; }
   positionStation3();
   dashTellNative();
+  litApplyColors();   // owner: Layouts colour customization - recolour this screen if it (or its row / all pages) has a colour system
   placeAllCardsBtn();
   saveSettings();
   walletBtnTell();
@@ -16077,6 +16239,7 @@ function attachHandlers(){
       // Pressing Community (not coming back from one of its groups): the choose screen, or Your Community (owner).
       if(target === 'community' && state.current !== 'community-group' && state.current !== 'community') state.communityMode = cmStartMode();
       if(target === 'layouts-pagelayout') state.layoutRowEdit = null;   // Page layout opens on its list of rows
+      if(target === 'layouts-color'){ state.colorScope = el.getAttribute('data-scope') || 'pages'; state.colorEditTarget = state.colorScope === 'dashboard' ? 'dashboard' : null; }   // Dashboard: one scope, open its editor straight away
       state.moneyTransferOpen = false;   // Money's Transfer Money pop-up (its Wallet Overview button) never stays open behind
       state.current = target;
       if(PAGES.includes(target)) state.lastPage = target;
@@ -17266,6 +17429,28 @@ function attachHandlers(){
         case 'app-row-pick': { const p = state.appRowPick; state.appRowPick = null; if(p){ const v = el.getAttribute('data-v'); toggleAppPage(p, v === 'new' ? 'new' : +v); } break; }
         case 'app-row-close': state.appRowPick = null; break;
         case 'row-edit': state.layoutRowEdit = +el.getAttribute('data-v'); break;
+        // Layouts > Color customization
+        case 'color-edit': state.colorEditTarget = el.getAttribute('data-t'); break;
+        case 'color-editback':
+          if(state.colorScope === 'dashboard'){ state.current = 'layouts'; state.layoutsTab = 'dashboard'; state.colorEditTarget = null; }
+          else state.colorEditTarget = null;
+          break;
+        case 'color-apply': {
+          const s = litSystemList().find(x=>x.name === el.getAttribute('data-name'));
+          if(s){ litScopeSet(state.colorEditTarget, { bg:s.bg, text:s.text, name:s.name }); showToast('Colours applied'); }
+          break;
+        }
+        case 'color-save': {
+          const inp = document.getElementById('litcolor-name'), name = (inp ? inp.value : '').trim();
+          const cur = litScopeGet(state.colorEditTarget);
+          if(!cur){ showToast('Pick your colours first'); break; }
+          if(!name){ showToast('Name your colour system'); if(inp) inp.focus(); return; }
+          litSaveSystem(name, cur.bg, cur.text);
+          litScopeSet(state.colorEditTarget, { bg:cur.bg, text:cur.text, name });
+          showToast('Saved as "' + name + '"');
+          break;
+        }
+        case 'color-remove': litScopeSet(state.colorEditTarget, null); showToast('Colours removed'); break;
         case 'row-remove': { rowRemovePage(state.layoutRowEdit, el.getAttribute('data-k')); if(!rowsList()[state.layoutRowEdit]) state.layoutRowEdit = null; break; }
         case 'row-addback': rowAddBack(el.getAttribute('data-k')); break;
         case 'row-move': rowMovePage(state.layoutRowEdit, el.getAttribute('data-k'), +el.getAttribute('data-by')); break;
@@ -17544,6 +17729,15 @@ function attachHandlers(){
             }
             case 'stickycolor': state.stickyNoteColor = hex; break;
             case 'pencolor': state.canvasPenColor = hex; if(state.canvasTool === 'eraser') state.canvasTool = 'pen'; break;
+            // Layouts colour customization: picking Background or Text writes this scope's colours live (now "Custom"
+            // until you Save it as a named colour system).
+            case 'litcolor-bg': case 'litcolor-text': {
+              const cur = litScopeGet(state.colorEditTarget) || {};
+              const next = { bg: cur.bg || '#000000', text: cur.text || '#f3f2ee', name: '' };
+              if(state.colorPickerTarget === 'litcolor-bg') next.bg = hex; else next.text = hex;
+              litScopeSet(state.colorEditTarget, next);
+              break;
+            }
           }
           state.colorPickerTarget = null;
           break;
@@ -19992,7 +20186,7 @@ function buildNeighbor(pg){
   host.innerHTML = frameHTML;
   document.body.appendChild(host);
   const area = host.querySelector('#content-area');
-  if(area){ area.innerHTML = contentHTML; try{ fitPageToScreen(area, null, pg); }catch(e){} }
+  if(area){ area.innerHTML = contentHTML; try{ fitPageToScreen(area, null, pg); }catch(e){} try{ litRecolorArea(area, pg); }catch(e){} }   // recolour the neighbour so a swipe never flashes its plain look
   NEIGHBORS[pg] = { host, w:r.width, h:r.height };
   return NEIGHBORS[pg];
 }
