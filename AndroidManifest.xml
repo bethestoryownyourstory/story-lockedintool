@@ -59,6 +59,24 @@
             </intent-filter>
         </activity>
 
+        <!-- Optional Home app (owner: 'Lockedintool as your Home app') - lets the owner set Lockedintool as the phone's
+             home in Settings so the phone's OWN gestures (home / recents) work inside it. Nothing changes until the owner
+             picks it; reversible in Settings, never a trap. Transparent; the real home is the Dashboard overlay. -->
+        <activity
+            android:name=".LockedintoolHome"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:stateNotNeeded="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
         <!-- "Update available" for Live users (Update now / Later; required after 3 days). -->
         <activity
             android:name=".UpdateActivity"
