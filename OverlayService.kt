@@ -1518,6 +1518,21 @@ class OverlayService : Service(), StoryBridge.Host {
 
     override fun hidePanel() { ui.post { pagesPane?.takeIf { it.shown }?.let { hideOne(it) }; updateBubble() } }
 
+    /** The phone's OWN navigation (gesture or buttons) took the owner Home or to Recents while they were on the Pages.
+     *  Home / Recents are SystemUI / launcher screens that float UNDER Lockedintool's Pages overlay, so the owner saw
+     *  nothing happen (owner: 'i swipe up to see my opened apps and its not working' / 'that bottom button should work
+     *  like how your phone set it to normally work'). Step the Pages aside - exactly like Lockedintool already steps
+     *  aside when an app opens - so the home screen / opened apps show; the owner comes back the usual way (the
+     *  Apps | Lockedintool switch). Not in Only system (the Dashboard IS your home there) or Only use widgets, and not
+     *  while Lockedintool is opening one of its own screens / apps. */
+    fun recentsShown(pkg: String, cls: String) { ui.post {
+        if (pagesPane?.shown != true || keyguardLocked() || SystemMode.on(this) || WidgetMode.on(this)) return@post
+        if (pickerHid.isNotEmpty() || openingPkg != null || createActive || appPagePkg != null) return@post
+        val recents = StoryAccessibilityService.RECENTS_CLASS.containsMatchIn(cls)
+        val home = pkg == homePkg()          // One UI's Recents is the launcher itself, so this catches Recents too
+        if (recents || home) hidePanel()
+    } }
+
     /** One of the phone's apps was opened from the Pages (an app, ALARM, CAMERA, GALLERY): it opens UNDER the Pages, and
      *  the Pages step aside the moment it is in front - never a flash of whatever was underneath while it starts (owner).
      *  At most 1.5 s (0.4 s when Lockedintool can't see which app is in front). */

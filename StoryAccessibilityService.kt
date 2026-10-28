@@ -36,6 +36,13 @@ class StoryAccessibilityService : AccessibilityService() {
                 val activity = runCatching { packageManager.getActivityInfo(ComponentName(pkg, cls), 0) }.isSuccess
                 if (activity) frontPkg = pkg   // Lockedintool's own screens too (Lockedintool as your system)
                 if (pkg == packageName) return
+                // The phone's OWN nav (gesture or buttons) took the owner Home or to Recents while they were on the Pages.
+                // Those are SystemUI / launcher screens that float UNDER Lockedintool's Pages overlay, so the owner saw
+                // nothing happen (owner: 'i swipe up to see my opened apps and its not working'). Tell Lockedintool to step
+                // the Pages aside - on One UI, Recents IS the launcher coming forward, so matching the launcher package
+                // catches it without needing to know Samsung's exact class name.
+                if (RECENTS_CLASS.containsMatchIn(cls) || pkg == "com.android.systemui" || pkg.contains("launcher", true))
+                    OverlayService.instance?.recentsShown(pkg, cls)
                 if (activity) { foregroundPkg = pkg; OverlayService.instance?.foregroundChanged(pkg) }
             }
             // The home screen moved (swiping between screens, the app drawer...) or windows changed: STORY's live
@@ -162,6 +169,8 @@ class StoryAccessibilityService : AccessibilityService() {
         // top, hiding the recents. Detect it (its own text, only in SystemUI / the launcher - never Lockedintool's own
         // window, which has 'Clear all' in recent searches) so the Pages can step aside and the swipe-up really shows it.
         private val RECENTS_HINT = Regex("(?i)\\b(close all|clear all|recent apps|recently used|active apps?|no recent)\\b")
+        // The recents / overview SCREEN by its class name - the most reliable signal (One UI / stock / Pixel all carry one of these).
+        val RECENTS_CLASS = Regex("(?i)recents|overview|taskview|task_view|RecentsActivity")
         fun recentsInFront(): Boolean {
             val s = instance ?: return false
             val ws = runCatching { s.windows }.getOrNull() ?: return false
