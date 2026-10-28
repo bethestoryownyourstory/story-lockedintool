@@ -465,10 +465,12 @@ class OverlayService : Service(), StoryBridge.Host {
                     val dy = downY - e.rawY
                     if (!moved) showPicker()                                     // tap = Apps | Lockedintool switch
                     else if (dy > 60 * dp) {                                      // swipe up from the bottom
-                        hidePanel()
-                        val held = System.currentTimeMillis() - lastMoveT >= 200   // finger paused at the top before lifting = Recents (like Android)
-                        val a = if (held) AccessibilityService.GLOBAL_ACTION_RECENTS else AccessibilityService.GLOBAL_ACTION_HOME
-                        StoryAccessibilityService.instance?.performGlobalAction(a)
+                        // Home = Lockedintool (owner: Lockedintool is your home - swiping home keeps you IN Lockedintool,
+                        // not the stock launcher; you leave only by switching to Apps). Swipe up and HOLD (pause at the
+                        // top before lifting) = the phone's Recent apps, exactly like Android.
+                        val held = System.currentTimeMillis() - lastMoveT >= 200
+                        if (held) { hidePanel(); StoryAccessibilityService.instance?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_RECENTS) }
+                        else showPanel(station3Only = false)
                     }
                 }
             }
