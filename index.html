@@ -3395,9 +3395,11 @@
   .quote-lock{ background:transparent; border:none; color:inherit; padding:1px 2px; line-height:0; cursor:pointer; opacity:.8; }
   .quote-text{ font-size:12.5px; line-height:1.35; margin:0 0 6px; font-family:var(--font-body); }
   .quote-author{ font-size:10.5px; color:var(--muted); }
-  .quote-edit{ width:100%; box-sizing:border-box; background:transparent; border:1px solid #555; border-radius:8px; color:inherit; font-size:12.5px; line-height:1.35; font-family:var(--font-body); padding:6px 7px; resize:none; min-height:62px; }
-  .quote-author-edit{ width:100%; box-sizing:border-box; background:transparent; border:1px solid #555; border-radius:8px; color:inherit; font-size:11px; font-family:var(--font-body); padding:5px 7px; margin-top:6px; }
-  .quote-save{ align-self:flex-start; margin-top:7px; padding:5px 15px; font-size:11.5px; border-radius:8px; background:transparent; border:1px solid #555; color:inherit; font-family:var(--font-display); font-weight:700; cursor:pointer; }
+  .quote-ed{ outline:none; cursor:text; -webkit-user-modify:read-write-plaintext-only; word-break:break-word; }
+  .quote-ed:empty:before{ content:attr(data-ph); color:var(--muted); pointer-events:none; }
+  .quote-text.quote-ed{ min-height:1.35em; margin:0 0 6px; }
+  .quote-author-ed{ display:inline-block; min-width:36px; }
+  .quote-save{ align-self:flex-start; margin-top:10px; padding:4px 15px; font-size:11.5px; border-radius:8px; background:transparent; border:1px solid #555; color:inherit; font-family:var(--font-display); font-weight:700; cursor:pointer; }
   .story-bottom{ display:grid; grid-template-columns:minmax(0, 1.4fr) 1fr; gap:7px; margin-top:6px; flex-shrink:0; }
   .media-card, .brightness-card, .spotify-card, .controls-card{
     background:var(--card); border-radius:13px; padding:8px 11px; box-shadow:var(--lev1);
@@ -4157,14 +4159,16 @@ const LOCK_CLOSED_SVG = '<svg width="15" height="15" viewBox="0 0 24 24" fill="n
 const LOCK_OPEN_SVG = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 10.5V7a4 4 0 0 1 7.6-1.7"/></svg>';
 function quoteGet(){ try{ const q = JSON.parse(localStorage.getItem('story-quote') || 'null'); if(q && typeof q === 'object') return { text: q.text || '', author: (q.author != null ? q.author : 'Unknown'), locked: q.locked !== false }; }catch(e){} return { text:'', author:'Unknown', locked:true }; }
 function quoteSet(patch){ const q = Object.assign(quoteGet(), patch); try{ localStorage.setItem('story-quote', JSON.stringify(q)); }catch(e){} return q; }
-function quoteSaveFromInputs(){ const t = document.getElementById('quote-edit'), a = document.getElementById('quote-author-edit'); if(!t) return; const text = (t.value || '').trim(); const author = (a && a.value != null ? a.value : '').trim(); quoteSet({ text:text, author: author || 'Unknown' }); }
+function quoteSaveFromInputs(){ const t = document.getElementById('quote-edit'), a = document.getElementById('quote-author-edit'); if(!t) return; const text = (t.innerText || t.textContent || '').replace(/ /g, ' ').trim(); const author = (a ? (a.innerText || a.textContent || '') : '').replace(/ /g, ' ').trim(); quoteSet({ text:text, author: author || 'Unknown' }); }
 function quotesCardHTML(){
   const q = quoteGet();
   const lockBtn = `<button class="quote-lock" data-action="quote-lock" aria-label="${q.locked ? 'Unlock quote' : 'Lock quote'}">${q.locked ? LOCK_CLOSED_SVG : LOCK_OPEN_SVG}</button>`;
   if(state.quoteEditing){
+    // Edit in place (owner, 28 Oct 2026: 'I can type on it ... everything stays on that space nothing cuts'): the quote
+    // itself is editable, no boxes - it looks exactly like the quote, you just type on it.
     return `<div class="quotes-card" id="quotes-card"><div class="quotes-head"><div class="quotes-title">QUOTES</div>${lockBtn}</div>`
-      + `<textarea class="quote-edit" id="quote-edit" maxlength="240" placeholder="Your quote…">${escText(q.text || '')}</textarea>`
-      + `<input class="quote-author-edit" id="quote-author-edit" maxlength="40" placeholder="Author" value="${escText(q.author || '').replace(/"/g, '&quot;')}">`
+      + `<p class="quote-text quote-ed" id="quote-edit" contenteditable="true" data-ph="Your quote…">${escText(q.text || '')}</p>`
+      + `<span class="quote-author">— <span class="quote-ed quote-author-ed" id="quote-author-edit" contenteditable="true" data-ph="Author">${escText(q.author || '')}</span></span>`
       + `<button class="quote-save" data-action="quote-save">Save</button></div>`;
   }
   return `<div class="quotes-card" id="quotes-card"><div class="quotes-head"><div class="quotes-title">QUOTES</div>${lockBtn}</div>`
@@ -9796,13 +9800,15 @@ const NATIVE = (typeof window !== 'undefined') && !!window.StoryNative;
       holdT = null;
       if(quoteGet().locked){ showToast('Tap the lock to edit the quote'); return; }
       state.quoteEditing = true; renderDevice();
-      setTimeout(()=>{ const el = document.getElementById('quote-edit'); if(el){ try{ el.focus(); const n = el.value.length; el.setSelectionRange(n, n); }catch(_){} } }, 70);
+      setTimeout(()=>{ const el = document.getElementById('quote-edit'); if(el){ try{ el.focus(); const r = document.createRange(); r.selectNodeContents(el); r.collapse(false); const s = window.getSelection(); s.removeAllRanges(); s.addRange(r); }catch(_){} } }, 70);
     }, 480);
   }, true);
   const cancel = (e)=>{ if(!holdT) return; if(e && e.type === 'pointermove' && Math.abs(e.clientX - hx) < 10 && Math.abs(e.clientY - hy) < 10) return; clearTimeout(holdT); holdT = null; };
   document.addEventListener('pointermove', cancel, true);
   document.addEventListener('pointerup', cancel, true);
   document.addEventListener('pointercancel', cancel, true);
+  // Type right on the quote: save as you type (so nothing is lost even without tapping Save), no re-render (keeps the caret).
+  document.addEventListener('input', (e)=>{ if(e.target && (e.target.id === 'quote-edit' || e.target.id === 'quote-author-edit')) quoteSaveFromInputs(); });
 })();
 // Pages in the Android app: tell the app when a text box is being typed in, so the keyboard shows above the Pages.
 if(NATIVE && window.StoryNative.setTyping && !/[?&]s3=1/.test(location.search)){
