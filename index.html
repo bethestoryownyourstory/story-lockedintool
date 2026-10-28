@@ -8943,8 +8943,16 @@ function layoutsPageLayoutScreen(){
     ${topBar('Row ' + (r + 1), false, '', 'layouts-pagelayout', '', false, true)}
     <div class="note">Move each page left or right. The first page is on the left of the row, the last on the right.</div>
     <div class="row-card">
-      ${items.map((it, i)=>`<div class="row"><div class="row-left"><div class="row-name">${i + 1}. ${it.label}</div><div class="row-sub">${i === 0 ? 'Left' : i === items.length - 1 ? 'Right' : 'Middle'}</div></div>
-        <span style="display:flex;gap:6px;"><button class="edit-remove" data-action="row-remove" data-k="${escText(it.key)}">Remove</button><button class="order-corner-btn" data-action="row-move" data-k="${escText(it.key)}" data-by="-1" title="Move left"${i === 0 ? ' disabled style="opacity:0.3;"' : ''}>‹</button><button class="order-corner-btn" data-action="row-move" data-k="${escText(it.key)}" data-by="1" title="Move right"${i === items.length - 1 ? ' disabled style="opacity:0.3;"' : ''}>›</button></span></div>`).join('')}
+      ${items.map((it, i)=>{
+        const posSub = i === 0 ? 'Left' : i === items.length - 1 ? 'Right' : 'Middle';
+        // Owner (28 Oct 2026): remove just what's ADDED on a page (the add-on / app) without removing the whole page.
+        // Focus is the page you add to (Trading Page add-on, or an app). "Clear" empties it (the Focus page stays);
+        // "Remove" still removes the whole page.
+        const fc = it.key === 'trading' ? focusAddon() : '';
+        const fcLabel = fc === 'trading' ? 'Trading Page' : fc.indexOf('app:') === 0 ? 'an app' : '';
+        return `<div class="row"><div class="row-left"><div class="row-name">${i + 1}. ${it.label}</div><div class="row-sub">${posSub}${fcLabel ? ' · has ' + fcLabel : ''}</div></div>
+        <span style="display:flex;gap:6px;">${fcLabel ? `<button class="edit-remove" data-action="focus-clear" title="Take the add-on / app off Focus - the Focus page stays (empty)">Clear</button>` : ''}<button class="edit-remove" data-action="row-remove" data-k="${escText(it.key)}">Remove</button><button class="order-corner-btn" data-action="row-move" data-k="${escText(it.key)}" data-by="-1" title="Move left"${i === 0 ? ' disabled style="opacity:0.3;"' : ''}>‹</button><button class="order-corner-btn" data-action="row-move" data-k="${escText(it.key)}" data-by="1" title="Move right"${i === items.length - 1 ? ' disabled style="opacity:0.3;"' : ''}>›</button></span></div>`;
+      }).join('')}
     </div>
     </div>`;
   }
@@ -17232,6 +17240,7 @@ function attachHandlers(){
         case 'row-remove': { rowRemovePage(state.layoutRowEdit, el.getAttribute('data-k')); if(!rowsList()[state.layoutRowEdit]) state.layoutRowEdit = null; break; }
         case 'row-addback': rowAddBack(el.getAttribute('data-k')); break;
         case 'row-move': rowMovePage(state.layoutRowEdit, el.getAttribute('data-k'), +el.getAttribute('data-by')); break;
+        case 'focus-clear': { focusSet(''); state.focusAdd = null; showToast('Focus is empty now'); renderDevice(); break; }   // owner: remove what's on Focus, keep the Focus page
         case 'app-page-open': {
           const pkg = el.getAttribute('data-pkg');
           if(NATIVE && window.StoryNative.appPageOpen) window.StoryNative.appPageOpen(pkg); else showToast('Opens the app on your phone');
