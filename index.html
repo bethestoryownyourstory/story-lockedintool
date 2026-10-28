@@ -4167,8 +4167,8 @@ function quotesCardHTML(){
     // Edit in place (owner, 28 Oct 2026: 'I can type on it ... everything stays on that space nothing cuts'): the quote
     // itself is editable, no boxes - it looks exactly like the quote, you just type on it.
     return `<div class="quotes-card" id="quotes-card"><div class="quotes-head"><div class="quotes-title">QUOTES</div>${lockBtn}</div>`
-      + `<p class="quote-text quote-ed" id="quote-edit" contenteditable="true" data-ph="Your quote…">${escText(q.text || '')}</p>`
-      + `<span class="quote-author">— <span class="quote-ed quote-author-ed" id="quote-author-edit" contenteditable="true" data-ph="Author">${escText(q.author || '')}</span></span>`
+      + `<p class="quote-text quote-ed" id="quote-edit" contenteditable="true" data-ph="Your quote…">${escText(q.text || QUOTE_DEFAULT)}</p>`
+      + `<span class="quote-author">— <span class="quote-ed quote-author-ed" id="quote-author-edit" contenteditable="true" data-ph="Author">${escText(q.author || 'Unknown')}</span></span>`
       + `<button class="quote-save" data-action="quote-save">Save</button></div>`;
   }
   return `<div class="quotes-card" id="quotes-card"><div class="quotes-head"><div class="quotes-title">QUOTES</div>${lockBtn}</div>`
@@ -4265,7 +4265,9 @@ function litScopeLabel(target){ const v = litScopeGet(target); return !v ? 'Defa
 function litPageName(key){ const it = PAGE_SWITCH_ITEMS.find(x=>x.key === key) || CORE_ITEMS.find(x=>x.key === key); if(it) return it.label; if(key.indexOf('app:') === 0){ const a = appPagesStored().find(x=>'app:' + x.pkg === key); if(a) return a.name; } return PAGE_LABEL[key] || key; }
 
 // --- the recolour pass: run once at the end of renderDevice ---
-const LIT_C_KEEP = '[data-keep-color], .note-card, .note-content-wrap, .canvas-page-wrap, .notes-swatch, .canvas-swatch, .notes-preview-page, .realcard, .realcard-chase, .realcard-amex, .lit-block, .music-card, .colorpicker-sheet, .notes-popover-overlay, .modal-overlay, .lit-sheet, .cr-shutter, .spotify-visualizer';
+// The music card recolours like the other Dashboard cards (owner: its colour 'didn't change') - black card -> bg colour,
+// white text / play button / visualizer bars -> text colour, same as the System theme swaps them.
+const LIT_C_KEEP = '[data-keep-color], .note-card, .note-content-wrap, .canvas-page-wrap, .notes-swatch, .canvas-swatch, .notes-preview-page, .realcard, .realcard-chase, .realcard-amex, .lit-block, .colorpicker-sheet, .notes-popover-overlay, .modal-overlay, .lit-sheet, .cr-shutter';
 const LIT_C_PROPS = ['color', 'background-color', 'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color', 'outline-color', 'fill', 'stroke', 'caret-color'];
 function litHexRgb(h){ h = String(h || ''); if(h[0] === '#') h = h.slice(1); if(h.length === 3) h = h.split('').map(c=>c + c).join(''); if(h.length < 6) return { r:0, g:0, b:0 }; return { r:parseInt(h.slice(0,2),16), g:parseInt(h.slice(2,4),16), b:parseInt(h.slice(4,6),16) }; }
 function litParseRGB(v){ const m = String(v).match(/^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)\s*(?:[,/]\s*([\d.]+%?))?\s*\)$/i); return m ? { r:+m[1], g:+m[2], b:+m[3], a:m[4] == null ? null : m[4] } : null; }
@@ -9169,7 +9171,11 @@ function musicPaint(m){
     const p = card.querySelector('[data-music="toggle"]'); if(p) p.textContent = m.playing ? '❚❚' : '▶';
     card.setAttribute('data-pkg', m.pkg || '');
     let v = card.querySelector('.spotify-visualizer');
-    if(m.playing && !v){ v = document.createElement('div'); v.className = 'spotify-visualizer'; v.innerHTML = [1,2,3,4,5].map(i=>`<span style="animation-delay:${i*0.11}s;"></span>`).join(''); card.appendChild(v); }
+    if(m.playing && !v){ v = document.createElement('div'); v.className = 'spotify-visualizer'; v.innerHTML = [1,2,3,4,5].map(i=>`<span style="animation-delay:${i*0.11}s;"></span>`).join(''); card.appendChild(v);
+      // Bars added after a render (music just started): colour them to the Dashboard's text colour if a colour system is on.
+      const sys = (typeof litColorSystemFor === 'function') ? litColorSystemFor('dashboard') : null;
+      if(sys && sys.text){ v.querySelectorAll('span').forEach(s=>s.style.setProperty('background-color', sys.text, 'important')); }
+    }
     else if(!m.playing && v) v.remove();
   });
 }
