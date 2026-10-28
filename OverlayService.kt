@@ -88,7 +88,7 @@ class OverlayService : Service(), StoryBridge.Host {
     }
     // Screen on: the lock screen may be showing -> the lock screen dial pad (Settings > QUICK ACCESS).
     private val screenOn = object : android.content.BroadcastReceiver() {
-        override fun onReceive(c: Context, i: Intent) { ui.post { syncLockDial() }; ui.postDelayed({ syncLockDial() }, 400) }
+        override fun onReceive(c: Context, i: Intent) { ui.post { syncLockDial(); updateBubble() }; ui.postDelayed({ syncLockDial(); updateBubble() }, 400) }   // on the lock screen the Dashboard band must step out (keyguardLocked)
     }
     // Always On Display: the moment the screen goes off, switch it straight back on with Station 3
     // showing. Android's display watcher usually reports "off" before the screen-off broadcast does,
@@ -1312,7 +1312,10 @@ class OverlayService : Service(), StoryBridge.Host {
     private val panelRecheck = Runnable { windowsMoved() }
     private fun updateBubble() {
         val pagesUp = pagesPane?.shown == true
-        val dash = (pagesUp || (s3Held && pagesAside())) && dashUp && QuickAccess.s3Dash(this) && !WidgetMode.on(this) && !aodShowing() && !panelOver
+        // The Dashboard's Station 3 band shows only while the Dashboard itself is up and the phone is unlocked - never on
+        // the lock screen / AOD / under the phone's own panel (owner, 28 Oct 2026: 'the dashboard station 3 pops up
+        // everywhere ... is not fixed'). The lock screen has its own Station 3 rules.
+        val dash = (pagesUp || (s3Held && pagesAside())) && dashUp && QuickAccess.s3Dash(this) && !WidgetMode.on(this) && !aodShowing() && !panelOver && !keyguardLocked()
         if (dash) {
             s3Held = true
             val p = s3Pane
