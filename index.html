@@ -1900,6 +1900,13 @@
     box-shadow:var(--lev1); transition:transform 0.1s ease;
   }
   .modal-close:active{ transform:scale(0.9); box-shadow:var(--press1); }
+  /* New Order sheet (owner, 28 Oct 2026): a bottom sheet with a grab handle you swipe DOWN to close. A lighter, shorter
+     sheet so more of the chart shows above it. (Making the live chart interactive BEHIND the sheet needs the native
+     TradingView view to be re-sized to sit above it - done separately.) */
+  .order-sheet-overlay{ background:rgba(0,0,0,0.5); }
+  .order-sheet-overlay .order-sheet{ max-height:56%; }
+  .order-sheet-grab{ display:flex; justify-content:center; align-items:center; padding:0 0 8px; margin:-6px 0 0; cursor:grab; touch-action:none; }
+  .order-sheet-grab span{ width:40px; height:4px; border-radius:2px; background:rgba(127,127,127,0.6); display:block; }
   .order-type-grid{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
   .order-type-btn{
     text-align:center; padding:10px 0; border-radius:10px; background:var(--card); border:1px solid var(--line); font-size:11.5px; font-weight:700; cursor:pointer;
@@ -7575,8 +7582,9 @@ function orderPanelTemplate(){
   ];
   const activeLabel = types.find(t=>t.id===state.orderType).label;
   return `
-    <div class="modal-overlay" data-action="order-panel-bg">
-      <div class="modal-sheet" onclick="event.stopPropagation()">
+    <div class="modal-overlay order-sheet-overlay" data-action="order-panel-bg">
+      <div class="modal-sheet order-sheet" onclick="event.stopPropagation()">
+        <div class="order-sheet-grab" data-ordersheet-drag title="Swipe down to close"><span></span></div>
         <div class="modal-head">
           <span class="modal-title">New Order</span>
           <button class="modal-close" data-action="order-panel-close">×</button>
@@ -7602,6 +7610,28 @@ function orderPanelTemplate(){
   `;
 }
 
+// New Order sheet: swipe the grab handle down to close it (owner, 28 Oct 2026 - keep the chart usable, drag the sheet
+// away instead of a full-screen cover).
+(function(){
+  let sheet = null, startY = 0, dragging = false;
+  addEventListener('pointerdown', e=>{
+    const g = e.target.closest && e.target.closest('[data-ordersheet-drag]');
+    if(!g) return;
+    sheet = g.closest('.order-sheet'); if(!sheet) return;
+    dragging = true; startY = e.clientY; sheet.style.transition = 'none';
+    try{ g.setPointerCapture(e.pointerId); }catch(err){}
+  });
+  addEventListener('pointermove', e=>{ if(dragging && sheet) sheet.style.transform = 'translateY(' + Math.max(0, e.clientY - startY) + 'px)'; });
+  const end = e=>{
+    if(!dragging || !sheet) return;
+    const dy = Math.max(0, (e.clientY || 0) - startY);
+    dragging = false; sheet.style.transition = '';
+    if(dy > 80){ state.orderPanelOpen = false; if(typeof renderDevice === 'function') renderDevice(); }
+    else sheet.style.transform = '';
+    sheet = null;
+  };
+  addEventListener('pointerup', end); addEventListener('pointercancel', end);
+})();
 function launchPopupTemplate(){
   const isApp = state.launchPopup === 'mt5';
   const acc = activeTradeAccount();
@@ -7660,9 +7690,8 @@ function chartFullscreenTemplate(){
           <div class="tv-slot tv-slot-fs"></div>
         </div>
         <div class="chart-fs-controls">
-          ${isLandscape ? fsOrderHTML() : ''}
           <div class="btn-row chart-fs-btnrow">
-            <div class="fs-side fs-hide-land">
+            <div class="fs-side">
               <button class="order-corner-btn" data-action="order-panel" title="New order">⋯</button>
               <button class="tv-sltp-btn tv-sltp-fs${state.draftSLTP ? ' on' : ''}" data-action="draft-sltp">SL/TP</button>
             </div>
