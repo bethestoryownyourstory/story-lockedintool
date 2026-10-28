@@ -1590,9 +1590,12 @@
   .tp-sheet{ text-align:center; }
   .tp-card{ display:flex; align-items:center; justify-content:space-between; margin:8px auto 4px; max-width:260px; padding:16px 18px; border-radius:14px; background:#000000; border:1px solid rgba(255,255,255,0.18); color:#ffffff; font-weight:700; }
   .tp-card b{ font-family:var(--font-mono, monospace); letter-spacing:0.08em; }
-  .tp-ring{ display:flex; justify-content:center; margin:18px 0 10px; color:var(--text); opacity:0.7; }
-  .tp-ring.on{ opacity:1; animation:tppulse 1.6s ease-in-out infinite; }
-  @keyframes tppulse{ 50%{ transform:scale(1.06); opacity:0.75; } }
+  /* Tap to Pay sheet graphic (owner, 28 Oct 2026 - the plain static icon looked "not nice"): the SAME animated
+     contactless symbol as the Wallet card button (one thing everywhere), bigger - the signal arcs ripple into the
+     phone on a gentle loop while it waits, so the screen reads as "ready, tap now". No fake approval tick (the real
+     approval is the phone's own wallet). The ripple only runs while NFC is actually ready (.tp-ring.on). */
+  .tp-ring{ display:flex; justify-content:center; margin:18px 0 12px; color:var(--text); }
+  .tp-ring svg{ opacity:0.9; }
   .tp-t{ font-size:17px; font-weight:800; margin:4px 0 6px; }
   .tp-d{ font-size:13px; color:var(--muted); line-height:1.45; margin-bottom:6px; }
   /* A sheet open over Wallet: the Transfer Money bar steps away so it never covers the sheet's buttons. */
@@ -8460,12 +8463,26 @@ const PAY_BANK_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="non
 // ---- Tap to Pay (owner: it must work, no other app opening): Lockedintool's own screen - your card, and "hold your
 // phone near the card reader". The phone's own wallet (the default under Contactless payments) makes the payment in
 // the background as you tap; Lockedintool itself can't be the card until a bank / card partner issues its cards. ----
+// The Tap to Pay sheet's contactless graphic (owner, 28 Oct 2026: the old static icon's "animation is not nice"):
+// the SAME animated contactless symbol as the Wallet card button (one thing everywhere), bigger - the three signal
+// arcs ripple into the phone on a gentle loop while `active` (NFC ready). No fake approval tick.
+function tapPayGraphic(active){
+  const w = active ? 'ttp-wave ' : '';
+  return `<svg viewBox="0 0 70 46" width="150" height="98" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true">
+      <path class="${w}ttp-wave-1" d="M13 9A14 14 0 0 1 13 37" stroke-width="2.4"></path>
+      <path class="${w}ttp-wave-2" d="M13 13.5A9.5 9.5 0 0 1 13 32.5" stroke-width="2.6"></path>
+      <path class="${w}ttp-wave-3" d="M13 18A5 5 0 0 1 13 28" stroke-width="2.8"></path>
+      <rect x="35" y="3" width="23" height="40" rx="5.5" stroke-width="2.2"></rect>
+      <rect x="38" y="8.5" width="17" height="29" rx="2.5" fill="currentColor" stroke="none" opacity="0.08"></rect>
+      <circle cx="46.5" cy="23" r="3" fill="currentColor" stroke="none" opacity="0.55"></circle>
+    </svg>`;
+}
 function tapPayTemplate(){
   let st = 'app', wallet = '';
   if(NATIVE && window.StoryNative.nfcState){ const v = String(window.StoryNative.nfcState()).split('|'); st = v[0]; wallet = v[2] || ''; }
   const c = activeCard();
   const card = c ? `<div class="tp-card"><span>${escText(c.bank || 'Card')}</span><b>•••• ${escText(c.last4 || '')}</b></div>` : '';
-  const ring = `<div class="tp-ring${st === 'on' ? ' on' : ''}"><svg viewBox="0 0 70 46" width="120" height="80" fill="none" stroke="currentColor" stroke-linecap="round"><path d="M14 13a14 14 0 0 1 0 20" stroke-width="2.4"/><path d="M8 8a21 21 0 0 1 0 30" stroke-width="2.4"/><rect x="35" y="4" width="22" height="38" rx="5" stroke-width="2.4"/></svg></div>`;
+  const ring = `<div class="tp-ring${st === 'on' ? ' on' : ''}">${tapPayGraphic(st === 'on')}</div>`;
   const body = st === 'nonfc' ? '<div class="tp-t">This phone can’t tap to pay</div><div class="tp-d">It has no NFC.</div>'
     : st === 'off' ? '<div class="tp-t">Turn on NFC to tap to pay</div><button class="btn-wide btn-primary" data-action="tap-pay-nfc">Turn on NFC</button>'
     : st === 'app' ? '<div class="tp-t">Tap to Pay works in the Lockedintool app</div>'
