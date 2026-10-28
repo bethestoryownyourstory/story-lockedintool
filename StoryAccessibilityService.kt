@@ -21,9 +21,8 @@ class StoryAccessibilityService : AccessibilityService() {
         // phone's own panel is in front (OverlayService.windowsMoved - one short look, after things settle).
         if (e.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED || e.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) OverlayService.instance?.windowsMoved()
         val pkg = e.packageName?.toString() ?: return
-        // (The phone-wide adult-content filter that read other apps' browser address bars was REMOVED here - owner,
-        //  27 Oct 2026 - because reading other apps' screen content is a stalkerware signal that kept Google Play
-        //  Protect flagging the app as "Harmful". Adult content is still blocked inside Lockedintool's own search.)
+        // Adult-content filter (owner: part of Lockedintool, always on): block adult apps / websites across the phone.
+        if (pkg != packageName && pkg != "com.android.systemui") runCatching { contentGuard(e, pkg) }
         // The lock screen asks for your PIN / password / pattern: STORY's lock screen dial pad gets out of the way
         // at once, so it can never cover it (owner: never get locked out of your own phone).
         if (pkg == "com.android.systemui") {
@@ -64,11 +63,29 @@ class StoryAccessibilityService : AccessibilityService() {
     }
     override fun onInterrupt() {}
 
-    // (The phone-wide adult-content filter that lived here - reading other apps' browser address bars and blocking
-    //  adult apps by package - was REMOVED on 27 Oct 2026 to clear Google Play Protect's "Harmful app" flag, since an
-    //  unremovable app that reads what you do in other apps is the stalkerware fingerprint. Adult content is still
-    //  blocked inside Lockedintool's own search bars - that never leaves the app, so it's safe. ContentGuard.kt and
-    //  BlockActivity.kt are no longer used by this service.)
+    // ---- Adult-content filter (owner: part of Lockedintool, always on; the strongest a phone app can do - matches
+    //      the app package and the browser address bar only, never page text, so it never false-blocks normal sites). ----
+    private var lastUrlCheckAt = 0L
+    private var lastBlockKey = ""
+    private var lastBlockAt = 0L
+    private fun contentGuard(e: AccessibilityEvent, pkg: String) {
+        val et = e.eventType
+        if (et == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && ContentGuard.appBlocked(pkg)) { contentBlock(pkg); return }
+        if (et != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && et != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) return
+        if (!ContentGuard.isBrowser(pkg)) return
+        val now = System.currentTimeMillis()
+        if (now - lastUrlCheckAt < 600) return   // cool phone: browsers only, at most ~1.5x a second
+        lastUrlCheckAt = now
+        val url = ContentGuard.browserUrl(rootInActiveWindow, pkg) ?: return
+        if (ContentGuard.hostBlocked(url)) contentBlock(pkg + "|" + url.take(60))
+    }
+    private fun contentBlock(key: String) {
+        val now = System.currentTimeMillis()
+        if (key == lastBlockKey && now - lastBlockAt < 4000) return   // don't re-launch for the same thing
+        lastBlockKey = key; lastBlockAt = now
+        runCatching { performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME) }
+        runCatching { startActivity(Intent(this, BlockActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+    }
 
     override fun onUnbind(intent: Intent?): Boolean { instance = null; refreshOverlay(); return super.onUnbind(intent) }
 

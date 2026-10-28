@@ -9342,9 +9342,9 @@ const LEGAL = {
     ['Adult content is blocked', [
       'Lockedintool blocks nudity and adult content. This comes built in - it’s part of Lockedintool and can’t be switched off.',
       'When something is blocked you see a plain black screen: “Locked by Lockedintool from viewing this”. Nothing else happens - Lockedintool doesn’t ban you, count it or warn you. You simply can’t view it.' ]],
-    ['Inside Lockedintool', [
-      'The block works inside Lockedintool - its own search bars won’t open adult or unsafe content; you see the plain black screen instead.',
-      'No filter is ever perfect, but Lockedintool blocks the normal ways this content is reached inside the app.' ]],
+    ['Across your phone', [
+      'The block is for Lockedintool and, as it rolls out, for your whole phone - every app, every search and every website - not only inside Lockedintool.',
+      'No filter is ever perfect, but Lockedintool blocks the normal ways this content is reached and is the strongest a phone app can do.' ]],
     ['Your privacy', [
       'The filter runs on your phone. Lockedintool doesn’t keep a list of what you searched or send it anywhere.' ]],
   ] },
@@ -14552,7 +14552,8 @@ if(window.__s3DashPad) document.documentElement.style.setProperty('--s3-dash-pad
 let dashToldNative = null;
 function dashTellNative(){
   if(!NATIVE || IN_STATION3_WINDOW || document.documentElement.classList.contains('story-widget') || !window.StoryNative.dashShown) return;
-  const on = state.current === 'dashboard' && !state.rowsViewOpen && !(state.pageStyleOn && state.pageStyleViewOpen);
+  const authUp = !!document.querySelector('.lit-auth');   // the login / unlock gate is up over the Dashboard - Station 3 must NOT be the Dashboard band under it (owner: 'the dashboard station 3 pops up everywhere')
+  const on = state.current === 'dashboard' && !state.rowsViewOpen && !(state.pageStyleOn && state.pageStyleViewOpen) && !authUp;
   document.documentElement.classList.toggle('s3-dash-on', on && dashS3On());   // its pop-ups end on top of Station 3
   if(on === dashToldNative) return;
   dashToldNative = on;
@@ -19178,8 +19179,9 @@ function litAuthOpen(mode){
     (litAuthMode === 'setpw' ? '' : '<button class="lit-auth-link" data-auth="to-login">I already have an account</button>') +
     '<div class="lit-auth-note">Your password locks your chat backup. If you forget it, you can reset it with the private email or phone number you add in Edit profile.</div></div>';
   el.hidden = false; el.scrollTop = 0; litAuthCheck();
+  if(typeof dashTellNative === 'function') dashTellNative();   // the gate is up over the Dashboard - tell the app so Station 3's Dashboard band steps away (owner: it was popping up everywhere)
 }
-function litAuthClose(){ const el = document.querySelector('.lit-auth'); if(el) el.remove(); litAuthTemp = null; }
+function litAuthClose(){ const el = document.querySelector('.lit-auth'); if(el) el.remove(); litAuthTemp = null; if(typeof dashTellNative === 'function') dashTellNative(); }
 function litAuthCheck(){
   const el = document.querySelector('.lit-auth'); if(!el) return;
   const go = el.querySelector('.lit-auth-go'), msg = el.querySelector('.lit-auth-msg'); if(!go) return;
