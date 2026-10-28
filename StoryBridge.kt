@@ -98,6 +98,8 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
     @JavascriptInterface fun musicState(): String = MusicPlayer.state(ctx)
     @JavascriptInterface fun musicChoose(pkg: String) { MusicPlayer.choose(ctx, pkg) }
     @JavascriptInterface fun musicCmd(cmd: String) { MusicPlayer.command(ctx, cmd) }
+    /** Colour customization (Layouts): the Dashboard's Station 3 band background colour, or '' to clear it (owner). */
+    @JavascriptInterface fun dashBandColor(hex: String?) { OverlayService.instance?.setDashBandColor(hex) }
     /** A window's page hit a problem (an error, something that didn't work): sent to Lockedintool's server, scrubbed of anything personal. */
     @JavascriptInterface fun problem(json: String) {
         runCatching { val o = JSONObject(json); ProblemLog.record(ctx, o.optString("kind", "js"), o.optString("msg"), o.optString("place")) }

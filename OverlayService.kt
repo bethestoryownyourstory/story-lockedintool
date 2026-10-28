@@ -1243,15 +1243,27 @@ class OverlayService : Service(), StoryBridge.Host {
         val (w, h, r) = phoneLineSize()
         val barH = (26 * dp).toInt()
         val bottom = if (gesture) Math.round(sysUiDim("navigation_handle_bottom", 6f)) else (6 * dp).toInt() + barH - h - (barH - h) / 2
-        // The phone's own line colours: dark on a white background, light on a black one.
-        val c = if (barBgColor() == Color.WHITE) Color.parseColor("#99000000") else Color.parseColor("#EBFFFFFF")
+        // The phone's own line colours: dark on a light background, light on a dark one (works for a custom band colour too).
+        val bg = barBgColor()
+        val lum = 0.299 * Color.red(bg) + 0.587 * Color.green(bg) + 0.114 * Color.blue(bg)
+        val c = if (lum > 160) Color.parseColor("#99000000") else Color.parseColor("#EBFFFFFF")
         line.background = GradientDrawable().apply { cornerRadius = r; setColor(c) }
         line.layoutParams = FrameLayout.LayoutParams(w, h, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = bottom }
         line.visibility = View.VISIBLE
     }
+    /** The Dashboard band's custom colour from a colour system (Layouts > Colour customization), set by the page; null = none. */
+    private var dashBandColor: Int? = null
     /** Station 3's bar colour: the opposite of the system theme (white in Black) - except on the Dashboard, where it FOLLOWS
-     *  the theme (owner: 'make it go with the system theme and not oppose it'): black in Black, white in White. */
-    private fun barBgColor() = if (dashGeom) th(Color.BLACK) else th(Color.WHITE)
+     *  the theme (owner: 'make it go with the system theme...'), or takes the Dashboard colour system's background when one is on. */
+    private fun barBgColor() = if (dashGeom) (dashBandColor ?: th(Color.BLACK)) else th(Color.WHITE)
+    /** The Station 3 page tells us the Dashboard band's custom background (owner: 'the colour under station 3 didn't change').
+     *  '' / null clears it and the band goes back to the plain Black / White theme. Only ever affects the Dashboard band. */
+    fun setDashBandColor(hex: String?) { ui.post {
+        val c = try { if (hex.isNullOrBlank()) null else Color.parseColor(hex.trim()) } catch (e: Exception) { null }
+        if (c == dashBandColor) return@post
+        dashBandColor = c
+        if (dashGeom) { (barBg?.background as? GradientDrawable)?.setColor(barBgColor()); dashLineSync() }
+    } }
     /** The room (CSS px) the Dashboard keeps at its bottom: the bottom line's area, Station 3's 40dp band and 6dp. */
     private fun dashPadJs(): String {
         val pagesBottom = if (phoneHasGestureLine()) 0 else navBarHeightPx()   // the Pages stop above 3-button navigation
