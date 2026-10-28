@@ -8762,13 +8762,18 @@ function subActive(){ const s = subState(); return !!(s && s.plan && s.until > D
 // The paywall only shows once the owner switches it on (server secret SUB_ENFORCE=1, with the live payment keys - owner).
 function subLocked(){ const s = subState(); return !!(s && s.connected && s.enforced) && !subActive() && !STORY_OWNER; }
 function subPremium(){ const s = subState(); return STORY_OWNER || !(s && s.connected) || (subActive() && s.plan === 'premium'); }
+// FREE-ONLY LAUNCH (owner, 28 Oct 2026: 'only the free' - launch the Free tier; Basic & Premium show "Coming soon",
+// not for sale yet). Flip PLANS_ON_SALE to true the day the owner says to start selling the plans. The owner's own
+// phone (STORY_OWNER) can still open the buy flow so they can keep testing payments.
+const PLANS_ON_SALE = false;
+function plansOnSale(){ return PLANS_ON_SALE || STORY_OWNER; }
 // Plans (owner's 'Full layout of Lockedintool'): FREE (no plan) = the Dashboard only - the Pages are hidden; BASIC =
 // the Dashboard + Money, Wallet and Focus only (Focus can be Trading Page or one app) - no app pages, no rows;
 // PREMIUM = everything. Only once subscriptions are really on (enforced), never on the owner's phone.
 function planFree(){ return subLocked(); }
 // Free has no Pages (so no Rows / Page Styles); Basic has its 3 pages but no Rows (owner). Returns true when stopped.
 function planGateRows(a){
-  if(planFree()){ showToast('The Pages come with a plan'); state.current = 'subscription'; return true; }
+  if(planFree()){ showToast(plansOnSale() ? 'The Pages come with a plan' : 'The Pages come with Basic or Premium — coming soon'); state.current = 'subscription'; return true; }
   if(a === 'page-quick-rows' && planBasicOnly()){ showToast('Rows come with Premium'); state.current = 'subscription'; return true; }
   return false;
 }
@@ -8815,8 +8820,11 @@ function subscriptionScreen(){
   // Owner: a plan you've paid for isn't listed any more - you have it (the line above the plans says so); only the
   // other plans show. It comes back when it runs out.
   if(w && w.status === 'pending' && !state.sub.polling){ state.sub.polling = true; subPollT = setTimeout(subPoll, 400); }   // checked while this page shows
+  const soon = !plansOnSale();   // FREE-ONLY launch (owner): Basic & Premium show "Coming soon", not for sale yet
   const status = active ? 'Your plan: ' + (s.plan === 'premium' ? 'Premium' : 'Basic') + ' · ' + subOptName(s.mode) + ' · paid until ' + until
-    : s.connected ? (locked ? 'Free: the Dashboard. Choose a plan for the Pages.' : 'Choose a plan to use LOCKED IN TOOL.') : 'Subscriptions open once LOCKED IN TOOL’s payments are set up.';
+    : !s.connected ? 'Subscriptions open once LOCKED IN TOOL’s payments are set up.'
+    : soon ? 'Free: the Dashboard is yours. Basic & Premium are coming soon.'
+    : locked ? 'Free: the Dashboard. Choose a plan for the Pages.' : 'Choose a plan to use LOCKED IN TOOL.';
   if(state.sub.optView) return subOptionScreen(locked);
   const mode = subMode();
   return `
@@ -8840,7 +8848,10 @@ function subscriptionScreen(){
         <div class="sub-tag">${p.tag}</div>
         <div class="sub-text">${p.text}</div>
         <ul class="sub-list">${p.list.map(x=>`<li>${x}</li>`).join('')}</ul>
-        ${`<button class="btn-wide btn-primary" data-action="sub-buy" data-plan="${p.key}"${state.sub.busy || (w && w.status === 'pending' && w.plan === p.key) ? ' disabled' : ''}>${w && w.status === 'pending' && w.plan === p.key ? (w.provider === 'stitch' ? 'Waiting for your bank' : 'Waiting for your payment') : w && w.status === 'pending' ? 'Switch to ' + p.name : 'Choose ' + p.name}</button>
+        ${soon
+          ? `<button class="btn-wide" disabled style="opacity:0.7;">Coming soon</button>
+        <div class="sub-zar">Basic and Premium are coming soon. The Free version — your Dashboard — is ready now.</div>`
+          : `<button class="btn-wide btn-primary" data-action="sub-buy" data-plan="${p.key}"${state.sub.busy || (w && w.status === 'pending' && w.plan === p.key) ? ' disabled' : ''}>${w && w.status === 'pending' && w.plan === p.key ? (w.provider === 'stitch' ? 'Waiting for your bank' : 'Waiting for your payment') : w && w.status === 'pending' ? 'Switch to ' + p.name : 'Choose ' + p.name}</button>
         <div class="sub-zar">${viaStitch ? `Paid in rand: R${Number(pr.zar || 0).toFixed(2)} a month, approved in your own bank` : `$${pr.usd || p.usd || ''} a month on Lemon Squeezy’s secure page - card, PayPal, Apple Pay or Google Pay. Renews every month.`}</div>`}
       </div>`; }).join('')}
     ${state.sub.msg ? `<div class="note pay-msg">${escText(state.sub.msg)}</div>` : ''}
@@ -8976,6 +8987,7 @@ function subPoll(){
 }
 function subBuy(plan){
   const s = subState() || {};
+  if(!plansOnSale()){ showToast('Basic and Premium are coming soon'); return; }   // FREE-ONLY launch (owner): paid plans not for sale yet
   if(!subMode()){ showToast('Choose Second system or Only system first'); return; }   // owner: no plan without an option
   if(!s.connected){ showToast('Subscriptions open once LOCKED IN TOOL’s payments are set up'); return; }
   if(!msgAccount()){ showToast('Your Lockedintool account is being set up - try again in a moment'); return; }
