@@ -237,11 +237,12 @@ export class Hub {
         let stitch = this.expressReady() ? 'keys' : 'no-keys';
         let stitchHook = this.expressReady() ? 'keys' : 'no-keys';
         if (url.searchParams.get('pay') === '1' && this.expressReady()) { try { await this.expressToken(); stitch = 'ok'; stitchHook = await this.expressHook(); } catch (e) { stitch = String(e.message || e).slice(0, 160); } }
-        return json({ ok: true, stitch, stitchHook, sms: !!(this.env.TWILIO_VERIFY_SID || this.env.TWILIO_FROM), mail: this.mailReady(), resetSms: this.smsLinkReady(), plans: this.subPlans(), pay, subs: this.subReady(), transfers: this.payReady(), live: this.liveReady(), turn: this.turnReady() });
+        return json({ ok: true, stitch, stitchHook, payfast: this.pfReady() ? (this.pfSandbox() ? 'sandbox' : 'live') : 'off', sms: !!(this.env.TWILIO_VERIFY_SID || this.env.TWILIO_FROM), mail: this.mailReady(), resetSms: this.smsLinkReady(), plans: this.subPlans(), pay, subs: this.subReady(), transfers: this.payReady(), live: this.liveReady(), turn: this.turnReady() });
       }
       if (path === '/v1/try-pay') return this.tryPay();
       if (path === '/v1/try-pay/start') return this.tryPayStart(req, url);
       if (path === '/v1/pay/return') return (await this.tryPayDone(req)) || new Response('<!doctype html><meta name=viewport content="width=device-width,initial-scale=1"><body style="margin:0;background:#000;color:#fff;font:600 18px system-ui;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center;padding:24px;box-sizing:border-box">Done - go back to Lockedintool to see your payment.</body>', { headers: { 'content-type': 'text/html; charset=utf-8' } });
+      if (path === '/v1/payfast/go') return this.payfastGo(url);
       if (path === '/v1/bank/return') return this.bankReturn(url);
       if (path === '/v1/delete') return this.deletePage(req, url);
       if (path === '/v1/login/salt') return this.loginSalt(url.searchParams.get('u') || '');
@@ -249,6 +250,7 @@ export class Hub {
       if (path === '/v1/reset/options') return this.resetOptions(url.searchParams.get('u') || '', req.headers.get('cf-connecting-ip') || '');
       if (path === '/v1/lemonsqueezy/hook' && req.method === 'POST') return this.lsHook(await req.text(), req.headers.get('x-signature') || '');
       if (/^\/v1\/stitch\/hook(\/\d+)?$/.test(path) && req.method === 'POST') return this.stitchHook(await req.text(), req.headers);
+      if (path === '/v1/payfast/notify' && req.method === 'POST') return this.payfastNotify(req);
       const body = req.method === 'POST' ? await req.json().catch(() => ({})) : {};
       if (path === '/v1/problems' && req.method === 'POST') return this.problemsIn(body, req.headers.get('cf-connecting-ip') || '');
       if (path === '/v1/problems/list') return this.problemsList(body, url);
@@ -1213,11 +1215,12 @@ export class Hub {
     const c = this.lsCache || {};
     return { basic: { usd: c.basicUsd || 5, zar: Number(this.env.SUB_BASIC_ZAR || 95) }, premium: { usd: c.premiumUsd || 15, zar: Number(this.env.SUB_PREMIUM_ZAR || 285) } };
   }
-  subReady() { return this.lsReady() || this.expressReady(); }
+  subReady() { return this.lsReady() || this.expressReady() || this.pfReady(); }
   // South African users (owner chose Stitch back for them): their account's Country (accounts from before Country count
   // too). They pay in rand through Stitch Express; everyone else through Lemon Squeezy in dollars.
   saUser(me) { const c = String((me && me.country) || '').trim().toLowerCase(); return !c || c === 'south africa' || c === 'za'; }
-  subProvider(me) { return this.expressReady() && this.saUser(me) ? 'stitch' : this.lsReady() ? 'ls' : ''; }
+  // South Africa -> PayFast (Stitch is out; owner, 28 Oct 2026). Everyone else -> Lemon Squeezy. (Old Stitch kept only as a fallback if its keys are still set and PayFast is off.)
+  subProvider(me) { if (this.saUser(me)) { if (this.pfReady()) return 'payfast'; if (this.expressReady()) return 'stitch'; } return this.lsReady() ? 'ls' : ''; }
   // Calls cost Lockedintool (owner: 'they won't be available on free plan'): Lockedintool calls (voice, video, group)
   // need Basic or Premium - only once subscriptions are switched on (SUB_ENFORCE + payments connected), never the
   // official accounts. Phone calls from the dial pad are the phone's own and aren't touched.
@@ -1338,6 +1341,68 @@ export class Hub {
     const cur = this.one('SELECT * FROM subs WHERE uid = ?', uid);
     const from = cur && cur.plan === plan && cur.until > now ? cur.until : now;
     this.sql.exec('INSERT OR REPLACE INTO subs (uid, plan, until, updated, mode) VALUES (?, ?, ?, ?, ?)', uid, plan, from + 30 * 86400000, now, mode === 'only' ? 'only' : 'second');
+  }
+  // ---- PayFast (South African users; replaces Stitch after Stitch rejected us - owner, 28 Oct 2026). Card + instant EFT
+  // in rand on PayFast's own secure page; each payment = 30 days, no auto-renew (the same model as Stitch had). TEST with
+  // NO company: PayFast's public sandbox (sandbox.payfast.co.za, demo merchant 10000100 / 46f0cd694581a) is the default
+  // here, so the owner can tap a plan and watch a real test payment go through. For real money later: PAYFAST_SANDBOX=0
+  // plus PAYFAST_MERCHANT_ID / PAYFAST_MERCHANT_KEY / PAYFAST_PASSPHRASE from a sole-proprietor PayFast account (no
+  // company needed). Flow: the phone opens /v1/payfast/go (a tiny auto-submitting form -> PayFast); PayFast calls
+  // /v1/payfast/notify server-to-server (its ITN) and THAT turns the plan on (subCredit), even with nobody looking.
+  pfSandbox() { return this.env.PAYFAST_SANDBOX !== '0'; }
+  pfReady() { return this.pfSandbox() || !!(this.env.PAYFAST_MERCHANT_ID && this.env.PAYFAST_MERCHANT_KEY); }
+  pfHost() { return this.pfSandbox() ? 'https://sandbox.payfast.co.za' : 'https://www.payfast.co.za'; }
+  pfId() { return this.env.PAYFAST_MERCHANT_ID || (this.pfSandbox() ? '10000100' : ''); }
+  pfKey() { return this.env.PAYFAST_MERCHANT_KEY || (this.pfSandbox() ? '46f0cd694581a' : ''); }
+  pfPass() { return String(this.env.PAYFAST_PASSPHRASE || '').trim(); }
+  // PayFast signs with md5 of 'k=urlencode(v)&...' (fields in order, blanks dropped) + '&passphrase=...' when set.
+  // Match PHP urlencode: spaces -> '+', uppercase hex, and encode ! ' ( ) * ~ (which encodeURIComponent leaves alone).
+  pfEnc(v) { return encodeURIComponent(String(v).trim()).replace(/%20/g, '+').replace(/[!'()*~]/g, c => '%' + c.charCodeAt(0).toString(16).toUpperCase()); }
+  async md5hex(s) { return [...new Uint8Array(await crypto.subtle.digest('MD5', enc.encode(s)))].map(b => b.toString(16).padStart(2, '0')).join(''); }
+  async pfSign(fields) {
+    let s = Object.entries(fields).filter(([, v]) => v !== '' && v != null).map(([k, v]) => k + '=' + this.pfEnc(v)).join('&');
+    if (this.pfPass()) s += '&passphrase=' + this.pfEnc(this.pfPass());
+    return this.md5hex(s);
+  }
+  // The phone's browser lands here (GET) and is bounced straight to PayFast via an auto-submitting form.
+  async payfastGo(url) {
+    const pid = (url.searchParams.get('pid') || '').replace(/[^A-Za-z0-9]/g, '');
+    const p = pid ? this.one("SELECT * FROM payments WHERE id = ? AND kind LIKE 'sub:%' AND status = 'pending'", pid) : null;
+    const plain = t => new Response('<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><body style="margin:0;background:#000;color:#fff;font:600 18px system-ui;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center;padding:24px;box-sizing:border-box">' + t + '</body>', { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } });
+    if (!p) return plain('This payment has expired - go back to Lockedintool and choose a plan again.');
+    const plan = p.kind.slice(4);
+    const fields = {
+      merchant_id: this.pfId(), merchant_key: this.pfKey(),
+      return_url: url.origin + '/v1/pay/return', cancel_url: url.origin + '/v1/pay/return?pf=cancel',
+      notify_url: (this.origin || url.origin) + '/v1/payfast/notify',
+      m_payment_id: p.id, amount: (p.cents / 100).toFixed(2),
+      item_name: 'Lockedintool ' + (plan === 'premium' ? 'Premium' : 'Basic'),
+      custom_str1: p.uid, custom_str2: plan, custom_str3: p.mode || 'second' };
+    fields.signature = await this.pfSign(fields);
+    const esc = s => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    const inputs = Object.entries(fields).map(([k, v]) => '<input type="hidden" name="' + k + '" value="' + esc(v) + '">').join('');
+    return new Response('<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><body style="margin:0;background:#000;color:#fff;font:600 16px system-ui;display:flex;align-items:center;justify-content:center;height:100vh">Opening secure payment…<form id="f" action="' + this.pfHost() + '/eng/process" method="post">' + inputs + '</form><script>document.getElementById("f").submit();</script></body>', { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } });
+  }
+  // PayFast's ITN (server to server): check the signature, confirm with PayFast, check the amount, then turn the plan on.
+  async payfastNotify(req) {
+    const raw = await req.text();
+    const ps = new URLSearchParams(raw);
+    const sig = ps.get('signature') || '';
+    const parts = []; for (const [k, v] of ps) { if (k !== 'signature') parts.push(k + '=' + this.pfEnc(v)); }
+    let s = parts.join('&'); if (this.pfPass()) s += '&passphrase=' + this.pfEnc(this.pfPass());
+    if (!sig || (await this.md5hex(s)) !== sig) return new Response('bad signature', { status: 400 });
+    let valid = false;
+    try { const r = await fetch(this.pfHost() + '/eng/query/validate', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: raw }); valid = /^\s*VALID/i.test(await r.text()); } catch (e) {}
+    if (!valid) return new Response('not validated', { status: 400 });
+    const pid = (ps.get('m_payment_id') || '').replace(/[^A-Za-z0-9]/g, '');
+    const p = pid ? this.one("SELECT * FROM payments WHERE id = ? AND kind LIKE 'sub:%'", pid) : null;
+    if (!p) return new Response('ok');
+    if (ps.get('payment_status') === 'COMPLETE' && p.status === 'pending') {
+      if (Number(ps.get('amount_gross') || 0).toFixed(2) !== (p.cents / 100).toFixed(2)) return new Response('amount mismatch', { status: 400 });
+      this.sql.exec("UPDATE payments SET status = 'paid', updated = ? WHERE id = ? AND status = 'pending'", Date.now(), p.id);
+      this.subCredit(p.uid, p.kind.slice(4), p.mode, Date.now());
+    }
+    return new Response('ok');
   }
   // ---- Stitch's review (owner, Oct 2026: 'a link that Stitch can use almost non stop so that they can get this
   // verified') - <server>/v1/try-pay: the plan payment exactly as a South African user makes it in the app (a Stitch
@@ -1489,7 +1554,9 @@ export class Hub {
   // Stitch: its payment link's state; paid = 30 days of that plan.
   async subCheck(me, p) {
     const now = Date.now();
-    if (String(p.stitch || '').startsWith('ls:')) {
+    if (String(p.stitch || '').startsWith('ls:') || String(p.stitch || '').startsWith('pf:')) {
+      // Lemon Squeezy + PayFast are both set by their notification (webhook / ITN), not by polling here; just expire a
+      // payment left unpaid for a day so the Subscription page stops waiting on it.
       if (p.status === 'pending' && now - p.created > 86400000) { this.sql.exec("UPDATE payments SET status = 'expired', updated = ? WHERE id = ?", now, p.id); p.status = 'expired'; }
       return p.status;
     }
@@ -1516,7 +1583,8 @@ export class Hub {
   // if it's already paid / going through, the real state is read instead - paid still counts).
   async subCancel(me, p) {
     if (p.status !== 'pending') return p.status;
-    if (!String(p.stitch || '').startsWith('ls:') && this.expressReady()) {
+    const ext = String(p.stitch || '');
+    if (!ext.startsWith('ls:') && !ext.startsWith('pf:') && this.expressReady()) {   // only a Stitch link is cancelled at Stitch; ls / PayFast just stop locally
       try { await this.express('POST', '/api/v1/payment-links/' + encodeURIComponent(p.stitch) + '/cancel'); }
       catch (e) { try { await this.subCheck(me, p); } catch (e2) {} return p.status; }
     }
@@ -1534,6 +1602,12 @@ export class Hub {
       if (!provider) return json({ error: 'not-connected' }, 503);
       // Changed your mind before paying (owner): any plan you started but didn't pay is let go first.
       for (const old of this.sql.exec("SELECT * FROM payments WHERE uid = ? AND kind LIKE 'sub:%' AND status = 'pending'", me.id).toArray()) await this.subCancel(me, old);
+      if (provider === 'payfast') {   // South Africa: PayFast in rand (card + instant EFT). The phone opens /v1/payfast/go.
+        const cents = Math.round(this.subPlans()[plan].zar * 100), id = 'p' + rand(9), mode = b.mode === 'only' ? 'only' : 'second';
+        this.sql.exec('INSERT INTO payments (id, uid, to_uid, to_name, to_bank, to_mask, cents, ref, stitch, status, created, updated, kind, mode) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          id, me.id, 'LOCKED IN TOOL ' + plan, '', '', cents, 'LIT ' + plan.toUpperCase(), 'pf:' + id, 'pending', now, now, 'sub:' + plan, mode);
+        return json({ id, url: (this.origin || url.origin) + '/v1/payfast/go?pid=' + id });
+      }
       if (provider === 'stitch') {   // South Africa: a Stitch Express payment link in rand (card, Capitec, Apple / Google Pay)
         const cents = Math.round(plans[plan].zar * 100), id = 'p' + rand(9);
         const who = String(me.name || (me.username ? '@' + me.username : '') || 'LOCKED IN member').replace(/[^\p{L}\p{N} .@'_-]/gu, '').trim();
