@@ -97,6 +97,7 @@ ul{margin:10px 0 0;padding-left:20px;line-height:1.7;font-size:15px}
 .plan .price{font-size:24px;font-weight:800;white-space:nowrap}
 .plan .price small{font-size:14px;font-weight:600;color:var(--dim)}
 .badge{align-self:flex-start;margin-top:8px;padding:3px 10px;border-radius:8px;background:rgba(48,209,88,.15);color:var(--green);font-size:13px;font-weight:700}
+.soon{align-self:flex-start;margin-top:8px;padding:3px 10px;border-radius:8px;background:rgba(233,196,106,.16);color:#e9c46a;font-size:13px;font-weight:800;letter-spacing:.3px}
 .plan .t{margin:14px 0 6px;font-weight:700;font-size:17px}
 .plan .x{margin:0;color:#d6d6d6;font-size:15px;line-height:1.55}
 .plan ul{flex:1}
@@ -158,9 +159,11 @@ const freeCard = `<div class="plan">
   <p class="x">Everything on your Dashboard at no cost - your home screen, Notes, Community and Messages, search, your phone's own controls, music and notifications, all in one place. No card needed.</p>
   <ul><li>Dashboard home screen</li><li>Notes</li><li>Community &amp; Messages</li><li>Search, phone controls, music &amp; notifications</li><li>Pages, Apps and Layouts come with a plan</li></ul>
 </div>`;
+// Free-only launch (owner, 28 Oct 2026: 'only the free'): Basic & Premium are shown but marked "Coming soon" - not for
+// sale yet. Remove the `soon` tag + this note the day the owner starts selling the plans.
 const plans = freeCard + PLANS.map(p => { const pr = PRICES[p.key] || {}; return `<div class="plan${p.badge ? ' top' : ''}">
   <div class="name"><h3>${esc(p.name)}</h3><div class="price">${money('$', pr.usd)}<small>/month</small></div></div>
-  ${p.badge ? `<div class="badge">${esc(p.badge)}</div>` : ''}
+  <div class="soon">Coming soon</div>
   <div class="t">${esc(p.tag)}</div>
   <p class="x">${esc(p.text)}</p>
   <ul>${p.list.map(x => `<li>${esc(x)}</li>`).join('')}</ul>
