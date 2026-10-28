@@ -70,12 +70,6 @@ class MainActivity : Activity() {
             startForegroundService(Intent(this, OverlayService::class.java))
             finish()
         })
-        // Optional (owner: 'Lockedintool as your Home app'): set Lockedintool as the phone's home so its own gestures
-        // (swipe up = the Dashboard, swipe up + hold = recents) work inside Lockedintool. Reversible here any time.
-        col.addView(btn("Make Lockedintool your Home screen (optional)") {
-            runCatching { startActivity(Intent(Settings.ACTION_HOME_SETTINGS)) }
-                .onFailure { android.widget.Toast.makeText(this, "Open Settings > Apps > Default apps > Home app and pick Lockedintool", android.widget.Toast.LENGTH_LONG).show() }
-        })
         col.addView(btn("Stop Lockedintool") {
             // Lockedintool as your system only goes off by logging out or deleting your account (owner).
             if (SystemMode.on(this)) { android.widget.Toast.makeText(this, "Lockedintool is your system - log out of your account to turn it off", android.widget.Toast.LENGTH_LONG).show(); return@btn }
