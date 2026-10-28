@@ -452,23 +452,29 @@ class OverlayService : Service(), StoryBridge.Host {
         barLine = line; barHasLine = hasLine
         updateBarLine()
         // Match Android's gesture nav exactly (owner: 'everything works the same'): tap = the Apps | Lockedintool switch;
-        // a quick swipe up = Home; swipe up and HOLD (pause at the top before lifting) = Recent apps. (Before, Recents
-        // needed a press-and-hold BEFORE the swipe - an obscure gesture - so a normal swipe up never reached recents.)
-        var downT = 0L; var downY = 0f; var downX = 0f; var moved = false; var lastMoveT = 0L
+        // swipe up AND HOLD (pause at the top before lifting) = Recent apps (your opened apps); a quick flick up = Home.
+        // Owner (28 Oct 2026) confirmed the mechanism works - a version fired Recents, but only with the awkward 'hold
+        // THEN swipe up'. They want the natural 'swipe up, then hold': 'this one times was working but it wasn't swipe up
+        // hold / It was hold swipe up / rn should work as swipe up hold'. So key off the PAUSE at the end of the swipe:
+        // if the finger dwelt at the top before lifting, it's Recents; a fast release is Home. Both step the Pages aside
+        // first (hidePanel) so whatever the phone's nav opens actually shows - the owner comes back via the switch.
+        var downT = 0L; var downY = 0f; var downX = 0f; var moved = false; var lastMoveT = 0L; var peakUp = 0f
         v.setOnTouchListener { _, e ->
             when (e.action) {
-                MotionEvent.ACTION_DOWN -> { downT = System.currentTimeMillis(); downX = e.rawX; downY = e.rawY; moved = false; lastMoveT = downT; hidePicker() }
+                MotionEvent.ACTION_DOWN -> { downT = System.currentTimeMillis(); downX = e.rawX; downY = e.rawY; moved = false; lastMoveT = downT; peakUp = 0f; hidePicker() }
                 MotionEvent.ACTION_MOVE -> {
+                    val up = downY - e.rawY; if (up > peakUp) peakUp = up            // how far up the finger has gone (its highest point)
                     if (Math.hypot((e.rawX - downX).toDouble(), (e.rawY - downY).toDouble()) > touch) { moved = true; lastMoveT = System.currentTimeMillis() }
                 }
                 MotionEvent.ACTION_UP -> {
-                    val dy = downY - e.rawY
-                    if (!moved) showPicker()                                     // tap = Apps | Lockedintool switch
-                    else if (dy > 50 * dp) {                                      // swipe up from the bottom = see your opened apps (Recents)
-                        // Owner: 'i swipe up to see my opened apps and its not working' - swiping up inside Lockedintool must
-                        // show the phone's recent apps directly, without first switching to Apps. So swipe up = Recents.
-                        hidePanel()
-                        StoryAccessibilityService.instance?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_RECENTS)
+                    val dwell = System.currentTimeMillis() - lastMoveT              // how long the finger paused at the top before lifting
+                    if (!moved) showPicker()                                        // tap = Apps | Lockedintool switch
+                    else if (peakUp > 50 * dp) {
+                        hidePanel()                                                 // step the Pages aside so the phone's own screen shows
+                        if (dwell > 120)                                            // swipe up and HELD = your opened apps (Recents)
+                            StoryAccessibilityService.instance?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_RECENTS)
+                        else                                                        // a quick flick up = the phone's Home screen
+                            StoryAccessibilityService.instance?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME)
                     }
                 }
             }
