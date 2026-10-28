@@ -10,6 +10,11 @@ import path from 'node:path';
 const OUT = process.argv[2] || '_site';
 const SRC = fs.readFileSync(new URL('./index.html', import.meta.url), 'utf8');
 
+// Private build (owner, 28 Oct 2026: 'make all our websites private and not public' - going dark, building in private
+// until launch). false = the WHOLE site (lockedintool.com + the workers.dev copy) is ONE neutral holding page with no
+// brand, plans, legal pages or icons - nothing public. Flip to true on launch day to put the real website back.
+const SITE_PUBLIC = false;
+
 // The value that starts at the bracket right after `marker` (strings and template literals skipped).
 function grab(marker, from = 0) {
   const at = SRC.indexOf(marker, from);
@@ -211,10 +216,26 @@ const legal = key => { const L = LEGAL[key]; return page(L.title + ' - Lockedint
 const notFound = page('Lockedintool', 'Lockedintool', '/', `<section class="hero"><h1>Page not found</h1><p class="tag">This page doesn’t exist.</p><div class="btns"><a class="btn" href="/">Go to Lockedintool</a></div></section>`);
 
 fs.rmSync(OUT, { recursive: true, force: true });
-for (const d of ['', 'privacy', 'terms']) fs.mkdirSync(path.join(OUT, d), { recursive: true });
-fs.writeFileSync(path.join(OUT, 'index.html'), home);
-fs.writeFileSync(path.join(OUT, 'privacy', 'index.html'), legal('legal-privacy'));
-fs.writeFileSync(path.join(OUT, 'terms', 'index.html'), legal('legal-terms'));
-fs.writeFileSync(path.join(OUT, '404.html'), notFound);
-for (const f of ['icon-192.png', 'icon-512.png']) fs.copyFileSync(new URL('./' + f, import.meta.url), path.join(OUT, f));
-console.log('Lockedintool website built in ' + OUT + ': ' + PLANS.length + ' plans, ' + OPTIONS.length + ' options, ' + INFO.length + ' information blocks, prices ' + JSON.stringify(PRICES));
+fs.mkdirSync(OUT, { recursive: true });
+if (!SITE_PUBLIC) {
+  // Private: one neutral holding page for every route. No brand, plans, legal pages or icons - nothing public.
+  const priv = '<!doctype html><html lang="en"><head><meta charset="utf-8">'
+    + '<meta name="viewport" content="width=device-width,initial-scale=1">'
+    + '<meta name="robots" content="noindex,nofollow"><title>Private</title>'
+    + '<style>html,body{height:100%;margin:0;background:#000;color:#6a6a6a;'
+    + 'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}'
+    + 'body{display:flex;align-items:center;justify-content:center;text-align:center;padding:24px}'
+    + 'p{font-size:16px;letter-spacing:.3px;margin:0}</style></head>'
+    + '<body><p>This site is private.</p></body></html>';
+  fs.writeFileSync(path.join(OUT, 'index.html'), priv);
+  fs.writeFileSync(path.join(OUT, '404.html'), priv);
+  console.log('Lockedintool website built in ' + OUT + ': PRIVATE holding page only (SITE_PUBLIC=false).');
+} else {
+  for (const d of ['privacy', 'terms']) fs.mkdirSync(path.join(OUT, d), { recursive: true });
+  fs.writeFileSync(path.join(OUT, 'index.html'), home);
+  fs.writeFileSync(path.join(OUT, 'privacy', 'index.html'), legal('legal-privacy'));
+  fs.writeFileSync(path.join(OUT, 'terms', 'index.html'), legal('legal-terms'));
+  fs.writeFileSync(path.join(OUT, '404.html'), notFound);
+  for (const f of ['icon-192.png', 'icon-512.png']) fs.copyFileSync(new URL('./' + f, import.meta.url), path.join(OUT, f));
+  console.log('Lockedintool website built in ' + OUT + ': ' + PLANS.length + ' plans, ' + OPTIONS.length + ' options, ' + INFO.length + ' information blocks, prices ' + JSON.stringify(PRICES));
+}
