@@ -59,6 +59,25 @@
             </intent-filter>
         </activity>
 
+        <!-- Lockedintool as your phone's HOME app - part of Only system (owner, 28 Oct 2026: 'Make it my real Home app').
+             When the owner picks Lockedintool as the Home app (Only system asks them to), the phone's OWN gestures
+             (home / recents / app-switching) work 100% normally and home -> the Dashboard. Transparent; the real home is
+             the Dashboard overlay. They switch their normal launcher back any time, so it is never a trap. -->
+        <activity
+            android:name=".LockedintoolHome"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:stateNotNeeded="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
         <!-- "Update available" for Live users (Update now / Later; required after 3 days). -->
         <activity
             android:name=".UpdateActivity"

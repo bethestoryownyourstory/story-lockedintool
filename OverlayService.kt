@@ -475,10 +475,8 @@ class OverlayService : Service(), StoryBridge.Host {
                     if (!moved) showPicker()                                        // tap = Apps | Lockedintool switch
                     else if (peakUp > 50 * dp) {
                         hidePanel()                                                 // step the Pages aside so the phone's own screen shows
-                        if (heldStart || dwell > 150) {                             // held before OR paused at the top = your opened apps (Recents)
-                            recentsReqAt = System.currentTimeMillis()               // Only system: don't redirect the launcher's overview back to the Dashboard
+                        if (heldStart || dwell > 150)                               // held before OR paused at the top = your opened apps (Recents)
                             StoryAccessibilityService.instance?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_RECENTS)
-                        }
                         else                                                        // a plain quick flick up = the phone's Home screen
                             StoryAccessibilityService.instance?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME)
                     }
@@ -1161,15 +1159,11 @@ class OverlayService : Service(), StoryBridge.Host {
     //      screen sends you back to the Dashboard. Your apps all still work (owner, 28 Oct 2026: 'apps on dashboard for
     //      only system are not available please fix') - nothing else is sent away; Recents, opening apps and sharing
     //      all work. ----
-    @Volatile private var recentsReqAt = 0L   // set when a Recents gesture fires, so the launcher's overview isn't redirected
-    private fun systemEnforce(pkg: String) {
-        if (!SystemMode.on(this) || pickerHid.isNotEmpty() || createActive || keyguardLocked()) return
-        if (pkg == packageName) return
-        val home = homePkg() ?: return
-        // Only the phone's OWN home screen lands you on the Dashboard. Recents is the launcher too, so skip right after
-        // a Recents gesture; every real app is left to run normally (apps fully work now).
-        if (pkg == home && System.currentTimeMillis() - recentsReqAt > 4000) systemShowPages()
-    }
+    // Only system = Lockedintool is your phone's HOME app now (owner, 28 Oct 2026: 'Make it my real Home app'), so the
+    // SYSTEM takes home to the Dashboard (LockedintoolHome) and the phone's OWN nav - recents, app-switching, the whole
+    // phone - works 100% normally. Lockedintool no longer redirects anything itself (the old overlay trick fought the
+    // phone's nav, so the bottom nav only half-worked). Kept for its callers; it does nothing now.
+    private fun systemEnforce(pkg: String) {}
     private fun systemShowPages() {
         val p = pagesPane ?: return
         hideLiveWidgets()

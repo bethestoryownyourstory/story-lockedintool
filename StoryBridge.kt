@@ -261,6 +261,25 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         if (on) { if (StoryAccessibilityService.instance == null || WidgetMode.on(ctx)) return; SystemMode.set(ctx, true) }
         else if (sure == "LOGGED-OUT") SystemMode.set(ctx, false) else return
         OverlayService.instance?.systemModeChanged()
+        // Only system = Lockedintool is your home screen (owner, 28 Oct 2026: 'Make it my real Home app'): ask the owner
+        // to pick Lockedintool as the phone's Home app, so the phone's OWN nav works 100% normally and home -> Dashboard.
+        if (on) askHomeApp()
+    }
+    /** Ask the owner to set Lockedintool as the phone's Home app (Android's own prompt; Settings as a fallback). */
+    private fun askHomeApp() {
+        runCatching {
+            val cur = ctx.packageManager.resolveActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), 0)
+            if (cur?.activityInfo?.packageName == ctx.packageName) return   // already the home app
+            if (android.os.Build.VERSION.SDK_INT >= 29) {
+                val rm = ctx.getSystemService(android.app.role.RoleManager::class.java)
+                if (rm != null && rm.isRoleAvailable(android.app.role.RoleManager.ROLE_HOME) && !rm.isRoleHeld(android.app.role.RoleManager.ROLE_HOME)) {
+                    ctx.startActivity(rm.createRequestRoleIntent(android.app.role.RoleManager.ROLE_HOME).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    return
+                }
+            }
+            ctx.startActivity(Intent(Settings.ACTION_HOME_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            OverlayService.instance?.showToast("Pick Lockedintool as your Home app so it becomes your home screen")
+        }.onFailure { OverlayService.instance?.showToast("Open Settings > Apps > Default apps > Home app and pick Lockedintool") }
     }
 
     // "Make Lockedintool permanent" (Device Admin) was REMOVED (owner, 27 Oct 2026: it kept Google Play Protect
