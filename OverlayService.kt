@@ -435,10 +435,10 @@ class OverlayService : Service(), StoryBridge.Host {
     @SuppressLint("ClickableViewAccessibility")
     private fun addBar() {
         bar?.let { runCatching { (barWm ?: wm).removeView(it) } }
-        // Only system (owner): the bottom line that switches Apps | Pages (and swipes to the home screen / recent apps)
-        // doesn't exist at all - not shown, not in the background, nowhere.
+        // Only use widgets (owner): the bottom line that switches Apps | Lockedintool doesn't exist at all. (Only system
+        // KEEPS the line now - owner, 28 Oct 2026: apps fully work there, so the switch / swipe-up stay.)
         pagesPane?.web?.evaluateJavascript(dashPadJs(), null)   // with or without the line, the Dashboard keeps the right room
-        if (SystemMode.on(this) || WidgetMode.on(this)) { bar = null; barLine = null; hidePicker(); dashLineSync(); return }   // ... and with Only use widgets
+        if (WidgetMode.on(this)) { bar = null; barLine = null; hidePicker(); dashLineSync(); return }
         val hasLine = phoneHasGestureLine()
         val w = (150 * dp).toInt(); val h = (26 * dp).toInt()
         val touch = ViewConfiguration.get(this).scaledTouchSlop
@@ -475,8 +475,10 @@ class OverlayService : Service(), StoryBridge.Host {
                     if (!moved) showPicker()                                        // tap = Apps | Lockedintool switch
                     else if (peakUp > 50 * dp) {
                         hidePanel()                                                 // step the Pages aside so the phone's own screen shows
-                        if (heldStart || dwell > 150)                               // held before OR paused at the top = your opened apps (Recents)
+                        if (heldStart || dwell > 150) {                             // held before OR paused at the top = your opened apps (Recents)
+                            recentsReqAt = System.currentTimeMillis()               // Only system: don't redirect the launcher's overview back to the Dashboard
                             StoryAccessibilityService.instance?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_RECENTS)
+                        }
                         else                                                        // a plain quick flick up = the phone's Home screen
                             StoryAccessibilityService.instance?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME)
                     }
@@ -527,7 +529,6 @@ class OverlayService : Service(), StoryBridge.Host {
     // ---- Apps | Lockedintool switch (owner: 'rename the word Pages on the switch to Lockedintool') ----
     private fun showPicker() {
         hidePicker()
-        if (SystemMode.on(this)) return
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER
             setPadding((22 * dp).toInt(), (12 * dp).toInt(), (22 * dp).toInt(), (12 * dp).toInt())
@@ -1156,20 +1157,18 @@ class OverlayService : Service(), StoryBridge.Host {
         openingPkg?.let { w -> if (w.isNotEmpty() && pkg == w) { ui.removeCallbacks(openingHide); openingHide.run() } }   // the app just opened is in front
         if (appPagePkg != null && pkg != appPagePkg && pkg != packageName) { appPagePkg = null; removeAppEdge() }; systemEnforce(pkg) } }
 
-    // ---- Lockedintool as your system (SystemMode.kt): no other app, nor the phone's home screen / recent apps - they're
-    //      sent away and you land on the Dashboard - your home. Calls, emergency, the lock screen and what
-    //      Lockedintool itself opens still work. ----
-    private var systemToastAt = 0L
+    // ---- Lockedintool as your system (SystemMode.kt): the DASHBOARD is your home screen, so the phone's own bare home
+    //      screen sends you back to the Dashboard. Your apps all still work (owner, 28 Oct 2026: 'apps on dashboard for
+    //      only system are not available please fix') - nothing else is sent away; Recents, opening apps and sharing
+    //      all work. ----
+    @Volatile private var recentsReqAt = 0L   // set when a Recents gesture fires, so the launcher's overview isn't redirected
     private fun systemEnforce(pkg: String) {
         if (!SystemMode.on(this) || pickerHid.isNotEmpty() || createActive || keyguardLocked()) return
-        val home = homePkg()
-        if (SystemMode.allowed(this, pkg, home)) return
-        if (pkg != home) {
-            StoryAccessibilityService.instance?.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME)
-            val now = System.currentTimeMillis()
-            if (now - systemToastAt > 4000) { systemToastAt = now; showToast("Lockedintool is your system - other apps are off") }
-        }
-        systemShowPages()
+        if (pkg == packageName) return
+        val home = homePkg() ?: return
+        // Only the phone's OWN home screen lands you on the Dashboard. Recents is the launcher too, so skip right after
+        // a Recents gesture; every real app is left to run normally (apps fully work now).
+        if (pkg == home && System.currentTimeMillis() - recentsReqAt > 4000) systemShowPages()
     }
     private fun systemShowPages() {
         val p = pagesPane ?: return
@@ -1229,7 +1228,7 @@ class OverlayService : Service(), StoryBridge.Host {
         else if (phoneHasGestureLine()) 0 else navBarHeightPx()
     /** How far above the screen's bottom edge the Dashboard's Station 3 sits: right above the bottom line's area. */
     private fun dashBandYPx(): Int {
-        val line = if (SystemMode.on(this) || WidgetMode.on(this)) 0
+        val line = if (WidgetMode.on(this)) 0
             else (if (phoneHasGestureLine()) 0 else navBarHeightPx() + (6 * dp).toInt()) + (26 * dp).toInt()
         return maxOf(line, navInsetPx())
     }

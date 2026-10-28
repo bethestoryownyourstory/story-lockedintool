@@ -3390,9 +3390,14 @@
   /* A brief, faint white flash on tap -- a "selection reaction" -- not a loud highlight. */
   .sidebar-item:active{ background:rgba(255,255,255,0.16); }
   .quotes-card{ background:var(--card); border-radius:15px; padding:12px 13px; display:flex; flex-direction:column; overflow-y:auto; box-shadow:var(--lev2); }
-  .quotes-title{ font-family:var(--font-display); font-weight:700; font-size:12.5px; letter-spacing:0.5px; margin-bottom:8px; }
+  .quotes-head{ display:flex; align-items:center; justify-content:space-between; gap:6px; margin-bottom:8px; }
+  .quotes-title{ font-family:var(--font-display); font-weight:700; font-size:12.5px; letter-spacing:0.5px; }
+  .quote-lock{ background:transparent; border:none; color:inherit; padding:1px 2px; line-height:0; cursor:pointer; opacity:.8; }
   .quote-text{ font-size:12.5px; line-height:1.35; margin:0 0 6px; font-family:var(--font-body); }
   .quote-author{ font-size:10.5px; color:var(--muted); }
+  .quote-edit{ width:100%; box-sizing:border-box; background:transparent; border:1px solid #555; border-radius:8px; color:inherit; font-size:12.5px; line-height:1.35; font-family:var(--font-body); padding:6px 7px; resize:none; min-height:62px; }
+  .quote-author-edit{ width:100%; box-sizing:border-box; background:transparent; border:1px solid #555; border-radius:8px; color:inherit; font-size:11px; font-family:var(--font-body); padding:5px 7px; margin-top:6px; }
+  .quote-save{ align-self:flex-start; margin-top:7px; padding:5px 15px; font-size:11.5px; border-radius:8px; background:transparent; border:1px solid #555; color:inherit; font-family:var(--font-display); font-weight:700; cursor:pointer; }
   .story-bottom{ display:grid; grid-template-columns:minmax(0, 1.4fr) 1fr; gap:7px; margin-top:6px; flex-shrink:0; }
   .media-card, .brightness-card, .spotify-card, .controls-card{
     background:var(--card); border-radius:13px; padding:8px 11px; box-shadow:var(--lev1);
@@ -4141,9 +4146,30 @@ function isAppPage(key){ return typeof key === 'string' && key.indexOf('app:') =
 function appPagesStored(){
   try{ const a = JSON.parse(localStorage.getItem('story-app-pages') || '[]'); return Array.isArray(a) ? a.filter(x=>x && x.pkg) : []; }catch(e){ return []; }
 }
-// Lockedintool as your only system (owner): the Apps button and anything involving your apps (Apps, app pages,
-// Open <platform>, sharing to apps, the Apps | Pages picker) aren't there. Asked from the app (SystemMode).
+// Lockedintool as your only system (owner, 28 Oct 2026: apps fully work now): the Dashboard is your home screen, but
+// the Apps button, app pages, Open <platform>, sharing and the Apps | Lockedintool switch all still work. sysOn() is
+// now only used to stop turning on Only use widgets while it's on. Asked from the app (SystemMode).
 function sysOn(){ try{ return !!(window.StoryNative && window.StoryNative.systemModeState && String(window.StoryNative.systemModeState()).indexOf('on|') === 0); }catch(e){ return false; } }
+// Dashboard QUOTES (owner, 28 Oct 2026): your own quote. Hold the whole quotes area to edit it - but only when it's
+// UNLOCKED; a small lock button protects it, so while locked, holding it does nothing and you tap the lock first.
+const QUOTE_DEFAULT = 'Discipline is choosing between what you want now and what you want most.';
+const LOCK_CLOSED_SVG = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
+const LOCK_OPEN_SVG = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 10.5V7a4 4 0 0 1 7.6-1.7"/></svg>';
+function quoteGet(){ try{ const q = JSON.parse(localStorage.getItem('story-quote') || 'null'); if(q && typeof q === 'object') return { text: q.text || '', author: (q.author != null ? q.author : 'Unknown'), locked: q.locked !== false }; }catch(e){} return { text:'', author:'Unknown', locked:true }; }
+function quoteSet(patch){ const q = Object.assign(quoteGet(), patch); try{ localStorage.setItem('story-quote', JSON.stringify(q)); }catch(e){} return q; }
+function quoteSaveFromInputs(){ const t = document.getElementById('quote-edit'), a = document.getElementById('quote-author-edit'); if(!t) return; const text = (t.value || '').trim(); const author = (a && a.value != null ? a.value : '').trim(); quoteSet({ text:text, author: author || 'Unknown' }); }
+function quotesCardHTML(){
+  const q = quoteGet();
+  const lockBtn = `<button class="quote-lock" data-action="quote-lock" aria-label="${q.locked ? 'Unlock quote' : 'Lock quote'}">${q.locked ? LOCK_CLOSED_SVG : LOCK_OPEN_SVG}</button>`;
+  if(state.quoteEditing){
+    return `<div class="quotes-card" id="quotes-card"><div class="quotes-head"><div class="quotes-title">QUOTES</div>${lockBtn}</div>`
+      + `<textarea class="quote-edit" id="quote-edit" maxlength="240" placeholder="Your quote…">${escText(q.text || '')}</textarea>`
+      + `<input class="quote-author-edit" id="quote-author-edit" maxlength="40" placeholder="Author" value="${escText(q.author || '').replace(/"/g, '&quot;')}">`
+      + `<button class="quote-save" data-action="quote-save">Save</button></div>`;
+  }
+  return `<div class="quotes-card" id="quotes-card"><div class="quotes-head"><div class="quotes-title">QUOTES</div>${lockBtn}</div>`
+    + `<p class="quote-text">${escText(q.text || QUOTE_DEFAULT)}</p><span class="quote-author">— ${escText(q.author || 'Unknown')}</span></div>`;
+}
 let curRow = 1;   // the row the Pages show (1 = Row 1)
 // Rows (owner): Row 1 = Money, Home / Wallet, Focus + the apps added to Row 1; Row 2, 3... = the apps added there
 // (each app page keeps its row in story-app-pages .row). Swipe up / down on the Pages to go to the row under / above;
@@ -4152,13 +4178,13 @@ const CORE_ITEMS = PAGE_SWITCH_ITEMS.slice(0, CORE_PAGE_COUNT);
 function appItem(a){ return { key:'app:' + a.pkg, label:escText(a.name || ''), app:a }; }
 // Each row's real id (1 = Row 1, then the stored row numbers in order) - Page layout keeps each row's order by it.
 function rowIds(){
-  const apps = sysOn() || planBasicOnly() ? [] : appPagesStored();
+  const apps = planBasicOnly() ? [] : appPagesStored();
   return [1].concat([...new Set(apps.map(a=>a.row || 1).filter(r=>r > 1))].sort((x, y)=>x - y));
 }
 // Layouts > Pages > Page layout (owner): your own order of the pages in each row ('story-row-order' {rowId: [keys]}).
 function rowOrders(){ try{ return JSON.parse(localStorage.getItem('story-row-order') || '{}') || {}; }catch(e){ return {}; } }
 function rowsList(){
-  const apps = sysOn() || planBasicOnly() ? [] : appPagesStored(), ord = rowOrders();
+  const apps = planBasicOnly() ? [] : appPagesStored(), ord = rowOrders();
   const sorted = (id, items)=>{ const o = ord[id] || []; const at = k=>{ const i = o.indexOf(k); return i < 0 ? 1e6 : i; };
     return items.map((it, i)=>[it, i]).sort((a, b)=>(at(a[0].key) - at(b[0].key)) || (a[1] - b[1])).map(x=>x[0]); };
   const hid = hiddenPages();
@@ -5391,13 +5417,9 @@ function dashboardScreen(){
           <div class="sidebar-item" data-dash="camera">CAMERA</div>
           <div class="sidebar-item" data-dash="gallery">GALLERY</div>
           <div class="sidebar-item" data-dash="alarm">ALARM</div>
-          ${sysOn() || planFree() ? '' : '<div class="sidebar-item" data-nav="apps">APPS</div>'}
+          ${planFree() ? '' : '<div class="sidebar-item" data-nav="apps">APPS</div>'}
         </div>
-        <div class="quotes-card">
-          <div class="quotes-title">QUOTES</div>
-          <p class="quote-text">Discipline is choosing between what you want now and what you want most.</p>
-          <span class="quote-author">— Unknown</span>
-        </div>
+        ${quotesCardHTML()}
       </div>
       <div class="story-bottom">
         <div class="media-card" data-action="media-output-open"><div class="media-label">MEDIA OUTPUT</div><div class="media-sub">${escText(state.activeAudioOutput)}</div></div>
@@ -7591,7 +7613,7 @@ function tradingPageScreen(){
       </div>
       <div class="acct-foot">${acc ? status : `<button class="btn-wide btn-primary acct-add-btn" data-action="add-account-open">Add account</button>`}</div>
       ${state.brokerPanelOpen ? brokerPanelHTML() : ''}
-      <button class="mt5-corner-btn left" data-action="mt5-open"${sysOn() ? ' style="visibility:hidden" tabindex="-1"' : ''}>Open ${acc ? escText(platformAppName(acc)) : 'broker'}</button>
+      <button class="mt5-corner-btn left" data-action="mt5-open">Open ${acc ? escText(platformAppName(acc)) : 'broker'}</button>
       <button class="mt5-corner-btn right" data-action="mt5-switch">Accounts ⌄</button>
     </div>
     ${list.length > 1 ? `<div class="acct-dots">${list.map((a, i)=>`<span class="${i===idx?'on':''}"></span>`).join('')}</div>` : ''}
@@ -8916,9 +8938,9 @@ const SUB_OPTIONS = [
   { key:'second', name:'Second system', short:'Lockedintool works with your phone - your apps stay as they are.',
     text:'Lockedintool works alongside your phone, like a second system. Your phone’s home screen and all your apps stay exactly as they are, and Lockedintool is always there on top of them - the Pages, Station 3 and everything in it.',
     list:['Your apps and home screen stay as they are', 'Lockedintool always there, over everything', 'Switch between Lockedintool and your apps any time'] },
-  { key:'only', name:'Only system', short:'Your phone only uses Lockedintool - the Dashboard becomes your home screen.',
-    text:'Lockedintool becomes your phone’s only system. The Dashboard becomes your home screen and you only stay inside Lockedintool. No other app opens, not even the phone’s own home screen, app list or recent apps.',
-    list:['Everything you do is in Lockedintool', 'Phone calls and emergency calls always still work', 'The lock screen and the phone’s own panel work as always', 'Turns off only when you log out or delete your account'] }
+  { key:'only', name:'Only system', short:'The Dashboard is your home screen - your apps still work.',
+    text:'Lockedintool becomes your phone’s system: the Dashboard is your home screen, so when you press home or leave an app you land back on Lockedintool. Your apps all still work - open them from the Apps button, app pages or your recent apps, and come back to the Dashboard when you’re done.',
+    list:['The Dashboard is your home screen', 'All your apps still work - open them any time', 'Phone calls and emergency calls always work', 'Turns off only when you log out or delete your account'] }
 ];
 function subOptName(k){ const o = SUB_OPTIONS.find(x=>x.key === k); return o ? o.name : SUB_OPTIONS[0].name; }
 // Nothing is chosen until you pick an option (owner: a pre-chosen one was confusing) - except Only system while it's on.
@@ -8959,7 +8981,7 @@ function sysModeAsk(){
   if(!litSignedIn()){ showToast('Log in to your account first'); return; }
   if(!m.ready){ showToast('Turn on Lockedintool system actions first (on the setup screen)'); return; }
   if(wgOn()){ showToast('Turn off Only use widgets first (in the Lockedintool app)'); return; }
-  litSheet({ title:'Make Lockedintool your only system?', text:'Your phone will only use Lockedintool - no other app will open, not even the phone’s home screen or app list. Phone calls and emergency calls still work. The only way to turn it off is to log out or delete your account.',
+  litSheet({ title:'Make Lockedintool your only system?', text:'The Dashboard becomes your home screen - whenever you press home or leave an app you land back on Lockedintool. Your apps all still work: open them from the Apps button, app pages or recent apps. The only way to turn it off is to log out or delete your account.',
     items:[{ label:'Make it my system', fn: ()=>{ try{ window.StoryNative.systemModeSet(true, ''); }catch(e){} setTimeout(()=>{ syncAppPages(); if(sysModeState().on){ showToast('Lockedintool is your system now'); } else showToast('Couldn’t turn it on - check Lockedintool system actions'); renderDevice(); }, 150); } }] });
 }
 function sysModeOff(){ try{ if(NATIVE && window.StoryNative.systemModeSet) window.StoryNative.systemModeSet(false, 'LOGGED-OUT'); }catch(e){} try{ syncAppPages(); }catch(e){} }
@@ -9642,7 +9664,7 @@ const LEGAL = {
       'Before you pay you can cancel or switch plans at any time. Once a payment is made it is not refundable, except where the law requires a refund.',
       'We may change prices or what a plan includes; you will be told in the app before it affects you.' ]],
     ['Lockedintool as your system', [
-      'If you switch on “Lockedintool as your system” (on the Subscription page), your phone only uses Lockedintool: other apps, the phone’s home screen and its app list are closed as soon as they open. Phone calls, emergency calls, the lock screen and the phone’s own panel keep working. It turns off only when you log out or delete your account. It needs Lockedintool system actions switched on.' ]],
+      'If you switch on “Lockedintool as your system” (on the Subscription page), the Dashboard becomes your home screen: whenever you press home or leave an app, you land back on Lockedintool. Your apps all still work - you open them from the Apps button, app pages or your recent apps. Phone calls, emergency calls, the lock screen and the phone’s own panel keep working. It turns off only when you log out or delete your account. It needs Lockedintool system actions switched on.' ]],
     ['Trading - please read', [
       'Lockedintool is not a broker, not a financial adviser and does not give investment advice. It is only a gateway to your own account at your own broker: your broker agreement is between you and your broker, and deposits and withdrawals always stay with them.',
       'Orders you place in Lockedintool are sent to your broker exactly as you place them. You are responsible for every trade. Trading is risky and you can lose more than you put in.',
@@ -9761,6 +9783,27 @@ function settingsHubScreen(){
 // phone's REAL installed apps (real icons), tapping one opens the real app, recents are the
 // phone's own, and Delete uninstalls.
 const NATIVE = (typeof window !== 'undefined') && !!window.StoryNative;
+// Dashboard QUOTES: hold the whole quotes area to edit your own quote - only when it's unlocked (owner, 28 Oct 2026).
+// Locked, holding does nothing: tap the lock first. The textarea's focus brings the keyboard up (focusin -> setTyping).
+(function(){
+  let holdT = null, hx = 0, hy = 0;
+  document.addEventListener('pointerdown', (e)=>{
+    const card = e.target.closest && e.target.closest('#quotes-card');
+    if(!card || state.quoteEditing) return;
+    if(e.target.closest && e.target.closest('[data-action], textarea, input')) return;   // the lock / save button or the edit fields
+    hx = e.clientX; hy = e.clientY; clearTimeout(holdT);
+    holdT = setTimeout(()=>{
+      holdT = null;
+      if(quoteGet().locked){ showToast('Tap the lock to edit the quote'); return; }
+      state.quoteEditing = true; renderDevice();
+      setTimeout(()=>{ const el = document.getElementById('quote-edit'); if(el){ try{ el.focus(); const n = el.value.length; el.setSelectionRange(n, n); }catch(_){} } }, 70);
+    }, 480);
+  }, true);
+  const cancel = (e)=>{ if(!holdT) return; if(e && e.type === 'pointermove' && Math.abs(e.clientX - hx) < 10 && Math.abs(e.clientY - hy) < 10) return; clearTimeout(holdT); holdT = null; };
+  document.addEventListener('pointermove', cancel, true);
+  document.addEventListener('pointerup', cancel, true);
+  document.addEventListener('pointercancel', cancel, true);
+})();
 // Pages in the Android app: tell the app when a text box is being typed in, so the keyboard shows above the Pages.
 if(NATIVE && window.StoryNative.setTyping && !/[?&]s3=1/.test(location.search)){
   const editable = el=>!!el && !el.readOnly && (el.tagName==='INPUT' || el.tagName==='TEXTAREA' || el.isContentEditable);
@@ -9900,7 +9943,6 @@ document.addEventListener('click', (e)=>{
   const el = e.target.closest && e.target.closest('[data-nav="apps"]');
   if(!el) return;
   e.stopPropagation(); e.preventDefault();
-  if(sysOn()) return;
   state.appMenuId = null;
   if(!state.installedApps.some(a=>a.pkg)) loadNativeApps();   // normally already loaded (and kept up to date)
   state.current = 'apps';
@@ -14724,7 +14766,7 @@ function renderScreenContent(){
     case 'notifications': return notificationsPanelScreen();
     case 'notif-settings': return notifSettingsScreen();
     case 'community-guidelines': return communityGuidelinesScreen();
-    case 'apps': if(sysOn()){ state.current = 'dashboard'; return dashboardScreen(); } return appsScreen();
+    case 'apps': return appsScreen();
   }
 }
 
@@ -15398,7 +15440,7 @@ function buildPhone(){
         ${fullScreenTakeoverActive ? '' : station3RegionHTML()}
         ${state.shareSheet ? shareSheetTemplate() : ''}
         ${state.toastMessage ? toastTemplate() : ''}
-        ${fullScreenTakeoverActive || sysOn() ? '' : `
+        ${fullScreenTakeoverActive ? '' : `
           ${state.homePickerOpen ? `<div class="home-picker-backdrop" data-action="home-picker-cancel"></div>` : ''}
           <div class="home-picker-sheet${state.homePickerOpen ? ' open' : ''}" id="home-picker-sheet">
             <div class="home-picker-row">
@@ -17604,6 +17646,8 @@ function attachHandlers(){
         case 'controls-expand-bg': state.controlsExpanded = false; state.controlsEditMode = false; break;
         case 'controls-edit-toggle': state.controlsEditMode = !state.controlsEditMode; break;
         case 'media-output-open': state.mediaOutputOpen = true; break;
+        case 'quote-lock': { const wasLocked = quoteGet().locked; if(state.quoteEditing){ quoteSaveFromInputs(); state.quoteEditing = false; } quoteSet({ locked: !wasLocked }); showToast(!wasLocked ? 'Quote locked' : 'Quote unlocked — hold it to edit'); break; }
+        case 'quote-save': quoteSaveFromInputs(); state.quoteEditing = false; showToast('Quote saved'); break;
         case 'audio-separate-open': try{ window.StoryNative && window.StoryNative.separateSound && window.StoryNative.separateSound(); }catch(e){} break;
         case 'media-output-close':
         case 'media-output-bg': state.mediaOutputOpen = false; break;
@@ -20013,7 +20057,7 @@ function shareSheetTemplate(){
           : `<div class="share-sheet-preview-text">${escText((s.textContent||'').slice(0,180)) || '<span style=\"color:var(--muted);\">(empty note)</span>'}</div>`}
         <div class="plus-menu-list" style="margin-top:8px;">
         </div>
-        ${(()=>{ const apps = sysOn() ? [] : shareTargetsFor(shareSheetType(s)); return apps.length ? `
+        ${(()=>{ const apps = shareTargetsFor(shareSheetType(s)); return apps.length ? `
         <div class="share-apps-title">Share to</div>
         <div class="share-apps">${apps.map((a, i)=>`<button class="share-app" data-action="share-sheet-app" data-i="${i}"><img alt="" src="data:image/png;base64,${a.icon}"><span>${escText(a.label === a.app || !a.app ? a.label : a.app)}</span></button>`).join('')}</div>` : `<div class="plus-menu-list"><div class="plus-menu-list-item" data-action="share-sheet-via">Share via…</div></div>`; })()}
       </div>
