@@ -36,6 +36,13 @@ object Updater {
     @Volatile private var lastCheck = 0L
     // The version Android is already asking to install, so the prompt doesn't pop up again every minute.
     @Volatile private var offered = 0L; @Volatile private var offeredAt = 0L
+    // 'Check for updates now' pressed while a check was already running (e.g. the one the setup screen starts as it
+    // opens): it used to be dropped silently, so the button did nothing (owner, 29 Oct 2026: 'I checked the update
+    // nothing came up'). Now the running check hands over to a 'now' one.
+    @Volatile private var nowWanted = false
+    /** You asked for this update yourself (the button or the 'update ready' notification) in the last 5 minutes:
+     *  if the quiet install is refused, Android's own installer screen opens so you can install it with one tap. */
+    fun userAsked(ctx: Context) = System.currentTimeMillis() - ctx.getSharedPreferences("story", Context.MODE_PRIVATE).getLong("upd_now_at", 0) < 5 * 60_000
 
     private fun open(url: String): HttpURLConnection = (URL(url).openConnection() as HttpURLConnection).apply {
         connectTimeout = 15000; readTimeout = 30000; instanceFollowRedirects = true; useCaches = false
@@ -76,6 +83,7 @@ object Updater {
 
     /** force = you opened STORY yourself: always ask again, even if an install prompt was just shown and missed. */
     fun check(ctx: Context, force: Boolean = false, now: Boolean = false) {
+        if (now) { nowWanted = true; ctx.getSharedPreferences("story", Context.MODE_PRIVATE).edit().putLong("upd_now_at", System.currentTimeMillis()).apply() }
         if (busy || (!force && System.currentTimeMillis() - lastCheck < 15_000)) return
         Thread { checkNow(ctx.applicationContext, force, now) }.start()
     }
@@ -86,6 +94,7 @@ object Updater {
     fun checkNow(ctx: Context, force: Boolean = false, now: Boolean = false) {
         if (busy) return
         busy = true; lastCheck = System.currentTimeMillis()
+        if (now) nowWanted = false
         try {
             val base = Release.base(ctx)
             val latest = JSONObject(open(base + "version.json").inputStream.bufferedReader().use { it.readText() }).getLong("versionCode")
@@ -102,7 +111,10 @@ object Updater {
             if (!ctx.packageManager.canRequestPackageInstalls()) { setStatus(ctx, "Build $latest is ready - tap \"Allow Lockedintool to update itself\""); return }
             if (!force && latest == offered && System.currentTimeMillis() - offeredAt < 10 * 60_000) return
             offered = latest; offeredAt = System.currentTimeMillis()
-            val apk = download(base, ctx, latest)
+            // Already downloaded this version (e.g. it was waiting for the screen to go off): don't fetch it again.
+            val prefs = ctx.getSharedPreferences("story", Context.MODE_PRIVATE)
+            val apk = if (apkFile(ctx).exists() && prefs.getLong("upd_apk_ver", 0) == latest) apkFile(ctx)
+                else download(base, ctx, latest).also { prefs.edit().putLong("upd_apk_ver", latest).apply() }
             doneProgress(ctx)
             // Seamless (owner): installing restarts Lockedintool for a moment, so it waits for the screen to go off
             // (nobody using the phone, no call) - OverlayService's screen-off calls installWaiting.
@@ -118,7 +130,10 @@ object Updater {
         } catch (e: Throwable) {
             doneProgress(ctx)
             setStatus(ctx, "Couldn't check for updates (no internet?)")
-        } finally { busy = false }
+        } finally {
+            busy = false
+            if (nowWanted && !now) { nowWanted = false; Thread { checkNow(ctx, force = true, now = true) }.start() }
+        }
     }
 
     /** The screen just went off: a downloaded update that was waiting installs now, out of sight. */
@@ -250,6 +265,7 @@ class InstallResultReceiver : BroadcastReceiver() {
                 val id = i.getIntExtra(PackageInstaller.EXTRA_SESSION_ID, -1)
                 if (id >= 0) runCatching { c.packageManager.packageInstaller.abandonSession(id) }
                 Updater.doneProgress(c)
+                if (fallback(c)) return
                 // Seamless (owner): no installer screens popping up - it quietly tries again on the next check.
                 Updater.setStatus(c, "This phone needs one tap to allow updates - open Lockedintool's setup screen")
             }
@@ -259,14 +275,28 @@ class InstallResultReceiver : BroadcastReceiver() {
                 val why = i.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)
                 OverlayService.instance?.resumeNow()
                 Updater.setStatus(c, "Quiet update stopped${if (why != null) " ($why)" else ""} - it will try again")
+                fallback(c)
             }
             else -> {
                 Updater.doneProgress(c)
                 val why = i.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: "error $status"
                 Updater.setStatus(c, "Quiet update failed ($why) - it will try again")
                 OverlayService.instance?.resumeNow()
+                fallback(c)
             }
         }
+    }
+
+    /** The quiet install was refused (on the owner's Samsung: INSTALL_FAILED_VERIFICATION_FAILURE, every time, so the
+     *  phone stayed on an old version). If you asked for it yourself, Android's own installer opens now - one tap; if it
+     *  was automatic, a 'Lockedintool update ready - Tap to install' notification waits (never a screen popping up). */
+    private fun fallback(c: Context): Boolean {
+        if (Updater.userAsked(c)) {
+            c.getSharedPreferences("story", Context.MODE_PRIVATE).edit().remove("upd_now_at").apply()
+            if (Updater.installWithSystemInstaller(c)) { Updater.setStatus(c, "Tap Install on Android's screen to update"); return true }
+        }
+        showUpdateNotification(c)
+        return false
     }
 
     companion object {
@@ -275,7 +305,8 @@ class InstallResultReceiver : BroadcastReceiver() {
         fun showUpdateNotification(c: Context) {
             val nm = c.getSystemService(NotificationManager::class.java)
             nm.createNotificationChannel(NotificationChannel("story_update", "Lockedintool updates", NotificationManager.IMPORTANCE_HIGH))
-            val open = PendingIntent.getActivity(c, 0, Intent(c, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+            val open = PendingIntent.getActivity(c, 0, Intent(c, MainActivity::class.java).putExtra(MainActivity.EXTRA_INSTALL, true)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
             val n = Notification.Builder(c, "story_update")
                 .setSmallIcon(android.R.drawable.stat_sys_download_done)
                 .setContentTitle("Lockedintool update ready")

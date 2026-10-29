@@ -174,7 +174,11 @@ class MainActivity : Activity() {
     }
 
     // Opening STORY also checks for a newer version, and brings back an install prompt you missed.
-    override fun onResume() { super.onResume(); Updater.check(applicationContext, force = true); ui.post(refresh) }
+    override fun onResume() { super.onResume(); Updater.check(applicationContext, force = true, now = installAsked()); ui.post(refresh) }
+    override fun onNewIntent(intent: Intent?) { super.onNewIntent(intent); setIntent(intent) }
+    // Opened from the 'Lockedintool update ready - Tap to install' notification: install it now (Android's installer if needed).
+    private fun installAsked(): Boolean = intent?.getBooleanExtra(EXTRA_INSTALL, false) == true && run { intent.removeExtra(EXTRA_INSTALL); true }
+    companion object { const val EXTRA_INSTALL = "install_update" }
     override fun onPause() { super.onPause(); ui.removeCallbacks(refresh) }
 
     // Lockedintool as your system: the setup screen's switches open the phone's Settings only while system actions are
