@@ -158,6 +158,15 @@ class StoryAccessibilityService : AccessibilityService() {
         /** Unlocked: is the phone's own panel (notifications / quick settings - or another SystemUI screen such as the
          *  power menu) in front right now? It takes the screen's focus while it's pulled down and gives it back when
          *  it closes (a notification popping up at the top doesn't). null = can't tell. */
+        /** The phone's own home screen is the app window in front (nothing else open over it). */
+        fun homeInFront(home: String?): Boolean {
+            if (home == null) return false
+            val s = instance ?: return false
+            val ws = runCatching { s.windows }.getOrNull() ?: return false
+            val app = ws.firstOrNull { w -> w.type == android.view.accessibility.AccessibilityWindowInfo.TYPE_APPLICATION && (w.isActive || w.isFocused) &&
+                runCatching { w.root?.packageName?.toString() }.getOrNull().let { it != null && it != s.packageName } } ?: return false
+            return runCatching { app.root?.packageName?.toString() }.getOrNull() == home
+        }
         fun panelInFront(): Boolean? {
             val s = instance ?: return null
             val ws = runCatching { s.windows }.getOrNull() ?: return null

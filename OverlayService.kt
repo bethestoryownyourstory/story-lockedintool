@@ -558,9 +558,9 @@ class OverlayService : Service(), StoryBridge.Host {
             text = t; setTextColor(th(Color.WHITE)); textSize = 18f; setPadding((14 * dp).toInt(), 0, (14 * dp).toInt(), 0); setOnClickListener { hidePicker(); onTap() }
         }
         // Apps = straight back to whatever was underneath (the app you were on, untouched, or the home screen).
-        row.addView(word("Apps") { hidePanel() })
+        row.addView(word("Apps") { setInLit(false); hidePanel() })
         row.addView(TextView(this).apply { text = "|"; setTextColor(th(Color.parseColor("#66FFFFFF"))); textSize = 18f })
-        row.addView(word("Lockedintool") { showPanel(station3Only = false) })  // the only way into Lockedintool itself (owner: it says Lockedintool, not Pages)
+        row.addView(word("Lockedintool") { setInLit(true); showPanel(station3Only = false) })  // the only way into Lockedintool itself (owner: it says Lockedintool, not Pages)
         picker = row; pickerWm = layerWm
         layerWm.addView(row, overlayParams(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL, 0, if (dashGeom) dashBandYPx() + (48 * dp).toInt() else (64 * dp).toInt() + (if (phoneHasGestureLine()) 0 else navBarHeightPx())).also { it.type = layerType })
         ui.postDelayed({ hidePicker() }, 4000)
@@ -900,6 +900,7 @@ class OverlayService : Service(), StoryBridge.Host {
      *  was at first"): the page switches while the window is still hidden, and the window shows once that frame is
      *  drawn (postVisualStateCallback; at most 300 ms). Already showing: just switch. */
     private fun showPagesOn(p: Pane, js: String, after: () -> Unit) {
+        setInLit(true)
         if (p.shown) { p.web.evaluateJavascript(js, null); after(); return }
         runCatching { p.web.onResume() }
         var done = false
@@ -1370,7 +1371,24 @@ class OverlayService : Service(), StoryBridge.Host {
     // covers it (owner, Oct 2026: 'it also overlaps other things - the panel') and comes back the moment it's closed.
     // Checked only when windows change (StoryAccessibilityService), and every second only while the panel is down.
     private var panelOver = false
-    fun windowsMoved() { ui.removeCallbacks(panelCheck); ui.postDelayed(panelCheck, 120) }
+    fun windowsMoved() { ui.removeCallbacks(panelCheck); ui.postDelayed(panelCheck, 120); ui.post { litHomeCheck() } }
+
+    // ---- You stay in the system you switched to (owner, 29 Oct 2026: 'once you switch to lockedintool, even if I swipe
+    //      to see opened apps and swipe or close that area you will always end up in lockedintool and you wont see apps at
+    //      all ... Even if you close all opened apps you will always and must always end up in lockedintool, on your home
+    //      screen in lockedintool. If you want to see apps you switch to Apps, or go to any app in lockedintool'). ----
+    // In Lockedintool = since the switch's Lockedintool (or anything that opened the Pages), until the switch's Apps.
+    // While in it, the phone's own home screen never shows: whenever it would (leaving Recents, Close all, Home from an
+    // app opened in Lockedintool), the Pages come back on your Home Screen. The phone's Recents, apps and gestures are
+    // untouched - Lockedintool only shows itself where the phone's bare home screen would be.
+    private var inLitCache: Boolean? = null
+    private fun inLit(): Boolean = inLitCache ?: getSharedPreferences("story", MODE_PRIVATE).getBoolean("in_lit", false).also { inLitCache = it }
+    private fun setInLit(on: Boolean) { if (inLit() != on) { inLitCache = on; getSharedPreferences("story", MODE_PRIVATE).edit().putBoolean("in_lit", on).apply() } }
+    private fun litHomeCheck() {
+        if (!inLit() || pagesPane == null || pagesPane?.shown == true || keyguardLocked() || WidgetMode.on(this) || SystemMode.on(this)) return
+        if (pickerHid.isNotEmpty() || openingPkg != null || createActive || callActive || picker != null) return
+        if (StoryAccessibilityService.homeInFront(homePkg()) && !StoryAccessibilityService.recentsInFront()) showPanel(station3Only = false)
+    }
     private val panelCheck = Runnable {
         val over = !keyguardLocked() && StoryAccessibilityService.panelInFront() == true
         if (over != panelOver) { panelOver = over; updateBubble() }
@@ -1612,6 +1630,12 @@ class OverlayService : Service(), StoryBridge.Host {
         if (pkg == packageName) return@post
         val recents = StoryAccessibilityService.RECENTS_CLASS.containsMatchIn(cls) || (recentsPkg != null && pkg == recentsPkg)
         val home = !SystemMode.on(this) && pkg == homePkg()          // One UI's Recents is the launcher itself, so this catches Recents too
+        // In Lockedintool the phone's bare home screen never shows - only its Recents makes the Pages step aside.
+        if (home && !recents && inLit() && !StoryAccessibilityService.recentsInFront()) {
+            // It may still be Recents drawing itself (One UI draws it in the home-screen app): look again a moment later.
+            for (d in longArrayOf(150, 350, 700)) ui.postDelayed({ if (pagesPane?.shown == true && StoryAccessibilityService.recentsInFront()) stepAsideForPhoneNav() }, d)
+            return@post
+        }
         if (recents || home) stepAsideForPhoneNav()
     } }
     /** The app Android itself uses to draw Recents (config_recentsComponentName - on One UI the home-screen app). It keeps
@@ -1646,6 +1670,8 @@ class OverlayService : Service(), StoryBridge.Host {
         if (keyguardLocked() || WidgetMode.on(this)) return@post
         if (pickerHid.isNotEmpty() || openingPkg != null || createActive) return@post
         if (SystemMode.on(this)) return@post
+        // In Lockedintool the phone's Home is Lockedintool itself - only its Recents (caught by recentsShown) steps aside.
+        if (inLit()) return@post
         stepAsideForPhoneNav()
     } }
     private fun stepAsideForPhoneNav() {
