@@ -472,7 +472,8 @@ class OverlayService : Service(), StoryBridge.Host {
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> { downX = e.rawX; downY = e.rawY; moved = false }
                 MotionEvent.ACTION_MOVE -> if (Math.hypot((e.rawX - downX).toDouble(), (e.rawY - downY).toDouble()) > touch) moved = true
-                MotionEvent.ACTION_UP -> if (!moved) showPicker()       // tap = Apps | Lockedintool switch; a swipe does nothing here
+                MotionEvent.ACTION_UP -> if (!moved) showPicker()       // tap = Apps | Lockedintool switch
+                    else if (downY - e.rawY > 40 * dp) systemSwipe()      // a swipe up = the phone's own Home / Recents: step aside so it shows
                 MotionEvent.ACTION_CANCEL -> systemSwipe()                // the phone took the swipe (its Home / Recents): step aside
             }
             true
