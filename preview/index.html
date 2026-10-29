@@ -3924,6 +3924,31 @@
     z-index:90; pointer-events:none;
   }
 
+  /* ===== STATION 3 ON THE DASHBOARD IS PART OF THE DASHBOARD (owner, 29 Oct 2026: 'make the dashboard station 3 be
+     attached to the dashboard now its part of the dashboard design'). The Dashboard page draws the bar itself (#dash-s3,
+     dashBandSync), in the same frame as the rest of the Dashboard - it can never come in late or from the side. Same look
+     as before: the whole bottom, square, FOLLOWS the theme (black band + white icons in Black; the theme swap turns it
+     white with black icons in White), 32px buttons evenly spaced with the + in the middle, Messages / Profile as named
+     pills on the right. It sits in the room the Dashboard already keeps at its bottom (--s3-dash-pad): 6px, the 40px bar,
+     then the bottom line's area. ===== */
+  #dash-s3{ position:fixed; left:0; right:0; bottom:0; height:var(--s3-dash-pad, 46px); background:#000; z-index:60; }
+  #dash-s3[hidden]{ display:none !important; }
+  #dash-s3 .station3-bar{ position:absolute; left:0; right:0; top:6px; height:40px; box-sizing:border-box; display:grid; grid-template-columns:repeat(5, 1fr); justify-items:center; align-items:center; padding:4px 0; gap:0; }
+  #dash-s3 .station3-bar:has(> :nth-child(6)){ grid-template-columns:1fr 1fr 1fr 44px 1.5fr 1.5fr; }
+  #dash-s3 .station3-bar > button{ width:32px; height:32px; box-sizing:border-box; border-radius:50%; padding:0; display:flex; align-items:center; justify-content:center; box-shadow:none; -webkit-tap-highlight-color:transparent; }
+  #dash-s3 .station3-btn, #dash-s3 .station3-btn-chevron{ color:#fff; background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.12); }
+  #dash-s3 .station3-btn:active, #dash-s3 .station3-btn-chevron:active{ background:rgba(255,255,255,0.16); }
+  #dash-s3 .station3-btn-plus{ color:#000; background:#fff; border:1px solid #fff; }
+  #dash-s3 .station3-btn-plus:active{ background:#d4d4d4; }
+  #dash-s3 .station3-bar > button:nth-last-child(-n+2){ width:calc(100% - 4px); max-width:110px; border-radius:16px; gap:3px; padding:0 4px; }
+  #dash-s3 .station3-btn .s3-lbl{ display:inline; font-size:10.5px; font-weight:700; white-space:nowrap; font-family:var(--font-body); }
+  #dash-s3 .s3-badge{ top:3px; right:3px; min-width:13px; height:13px; line-height:13px; padding:0 3px; border-radius:7px; font-size:8.5px; }
+  #dash-s3 .station3-bar > button:nth-last-child(-n+2) .s3-badge{ position:static; order:-1; flex-shrink:0; min-width:14px; height:14px; line-height:14px; border-radius:7px; font-size:9px; }
+  #dash-s3 .station3-bar > button:nth-last-child(-n+2):has(.s3-badge:not([hidden])) svg{ display:none; }
+  #dash-s3 .station3-bar > button:nth-last-child(-n+2):has(.s3-badge:not([hidden])){ gap:2px; padding:0 2px; }
+  #dash-s3 .station3-bar > button:nth-last-child(-n+2) svg{ flex-shrink:0; width:14px; height:14px; }
+  @media (max-width:419px){ #dash-s3 .station3-bar > button:nth-last-child(-n+2) svg{ display:none; } }
+
   /* ===== NO MOTION ANYWHERE IN LOCKEDINTOOL (owner, 29 Oct 2026: 'I dont want any animations or transitions or
      delay on the whole app. Nothing in this app should have that. So please fix the whole app if it means to'). Every
      transition and animation snaps straight to its end state, so nothing slides, fades, pulses, bounces or waits -
@@ -14920,6 +14945,7 @@ function dashTellNative(){
   const authUp = !!document.querySelector('.lit-auth');   // the login / unlock gate is up over the Dashboard - Station 3 must NOT be the Dashboard band under it (owner: 'the dashboard station 3 pops up everywhere')
   const on = state.current === 'dashboard' && !state.rowsViewOpen && !(state.pageStyleOn && state.pageStyleViewOpen) && !authUp;
   document.documentElement.classList.toggle('s3-dash-on', on && dashS3On());   // its pop-ups end on top of Station 3
+  if(typeof dashBandSync === 'function') dashBandSync(on);   // the Dashboard's own Station 3 bar - drawn in this same frame
   if(on === dashToldNative) return;
   dashToldNative = on;
   try{ window.StoryNative.dashShown(on); }catch(e){}
@@ -20366,6 +20392,51 @@ let neighborTimer = null, neighborsFor = null;
 // Station 3's own windows (?s3=1) never build these: its locked CSS makes every Station 3 piece visible,
 // which would show a hidden copy's icons as a ghost.
 const IN_STATION3_WINDOW = /[?&]s3=1/.test(location.search);
+
+// ---- Station 3 on the Dashboard, drawn BY the Dashboard (owner, 29 Oct 2026: 'make the dashboard station 3 be attached
+//      to the dashboard now its part of the dashboard design'). One picture with the Dashboard: it shows and hides in the
+//      very frame the Dashboard does, so it can never come in late or from the right. The app keeps its own Station 3
+//      window hidden on the Dashboard once we say we draw it (StoryNative.dashInPage) - only an app that knows how says so,
+//      and the app only hides its bar after we've said so, so there is never no bar and never two. Its buttons open the
+//      same things as before (the dial pad, Call history, Updates, Create, Messages, Profile). ----
+const DASH_BAND_IN_PAGE = typeof NATIVE !== 'undefined' && NATIVE && !IN_STATION3_WINDOW && !/[?&]widget=/.test(location.search)
+  && !document.documentElement.classList.contains('story-widget') && !!(window.StoryNative && window.StoryNative.dashInPage);
+if(DASH_BAND_IN_PAGE){ try{ window.StoryNative.dashInPage(true); }catch(e){} }   // first, before the Dashboard tells the app it's showing
+const DASH_BAND_ACTIONS = { 'station3-dialpad-toggle':'toggleDialpad', 'station3-call-history':'toggleCalls', 'station3-updates':'toggleUpdates',
+  'station3-create-post':'toggleCreate', 'station3-messages':'toggleMessages', 'station3-profile':'toggleProfile' };
+function dashBandClick(e){
+  const b = e.target.closest && e.target.closest('[data-action]'); if(!b) return;
+  e.stopPropagation(); e.preventDefault();
+  const fn = DASH_BAND_ACTIONS[b.getAttribute('data-action')];
+  if(fn && window.StoryNative[fn]) try{ window.StoryNative[fn](); }catch(err){}
+}
+function dashBandColorsApply(el){
+  // A Dashboard colour system (Layouts > Colour customization) paints the bar too, like the rest of the Dashboard.
+  const c = (typeof s3DashBandColors === 'function') ? s3DashBandColors() : null;
+  let st = document.getElementById('dash-s3-color');
+  if(!c){ if(st) st.remove(); return; }
+  if(!st){ st = document.createElement('style'); st.id = 'dash-s3-color'; document.head.appendChild(st); }
+  st.textContent = `#dash-s3{background:${c.bg}!important;}` +
+    `#dash-s3 .station3-btn,#dash-s3 .station3-btn-chevron{color:${c.icon}!important;background:${s3RgbA(c.icon,0.07)}!important;border-color:${s3RgbA(c.icon,0.12)}!important;}` +
+    `#dash-s3 .station3-btn-plus{color:${c.bg}!important;background:${c.icon}!important;border-color:${c.icon}!important;}`;
+}
+function dashBandSync(on){
+  if(!DASH_BAND_IN_PAGE) return;
+  let el = document.getElementById('dash-s3');
+  const show = !!on && dashS3On();
+  if(!el){
+    if(!show) return;
+    el = document.createElement('div'); el.id = 'dash-s3'; el.hidden = true;
+    el.addEventListener('click', dashBandClick, true);
+    document.body.appendChild(el);
+  }
+  if(show){
+    const html = station3BarHTML();
+    if(el.__html !== html){ el.innerHTML = html; el.__html = html; }
+    dashBandColorsApply(el);
+  }
+  if(el.hidden === show) el.hidden = !show;
+}
 function refreshNeighbors(force){
   if(IN_STATION3_WINDOW || state.device !== 'phone' || !PAGES.includes(state.current)) return;
   clearTimeout(neighborTimer);
@@ -20474,7 +20545,7 @@ function adoptSlidFrame(sl){
     applyBrightness();
     // Landing on Trading: its live TradingView chart is laid straight over the box (no waiting for a redraw).
     if(state.current === 'trading') tvMount(); else tvPlace();
-    positionStation3();
+    positionStation3(); if(typeof dashTellNative === 'function') dashTellNative();
     attachPayScroll();
     if(typeof updatePhoneStatusClock === 'function') updatePhoneStatusClock();
     updateScrollHint();
