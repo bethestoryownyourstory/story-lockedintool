@@ -232,6 +232,8 @@ class OverlayService : Service(), StoryBridge.Host {
      *  On for a call, back to the normal type when the call ends. False = Android refused (no screen of ours showing). */
     /** AskActivity has tried to switch the microphone / camera on for the call's foreground service: tell the call page
      *  whether it worked (ok), so it opens them only now (not on a blind timer that could run before Android allowed it). */
+    /** The call page has opened (or failed to open) the mic / camera - let go of the held see-through screen. */
+    override fun callMediaDone() { ui.post { AskActivity.release() } }
     fun callFgReady(ok: Boolean) { ui.post { profilePane?.web?.evaluateJavascript("window.storyCallFgReady&&window.storyCallFgReady($ok)", null) } }
     fun callFg(on: Boolean, video: Boolean): Boolean {
         val n = fgNote ?: return false

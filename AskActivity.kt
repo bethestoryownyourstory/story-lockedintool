@@ -35,7 +35,14 @@ class AskActivity : Activity() {
         val ok = OverlayService.instance?.callFg(true, video) ?: false
         if (ok || attempt >= 8) {
             OverlayService.instance?.callFgReady(ok)
-            finish(); overridePendingTransition(0, 0)
+            if (!ok) { finish(); overridePendingTransition(0, 0); return }
+            // Stay up (see-through, never touched) until the call has really opened the mic / camera: on Samsung /
+            // Android 16 the CAMERA still said 'busy' once this screen was gone (phone report: gum NotReadableError
+            // fg=true v), so Lockedintool stays the app in front for that moment. The page says when (callMediaDone);
+            // 6 s at most.
+            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
+            holding = this
+            window.decorView.postDelayed({ release() }, 6000)
         } else window.decorView.postDelayed({ tryCallFg(video, attempt + 1) }, 150)
     }
 
@@ -51,9 +58,15 @@ class AskActivity : Activity() {
     }
 
     override fun onDestroy() {
+        if (holding === this) holding = null
         if (!reported && isFinishing) { reported = true; OverlayService.instance?.permissionsDone() }
         super.onDestroy()
     }
 
-    companion object { const val EXTRA_PERMS = "perms"; const val EXTRA_FORCE = "force"; const val EXTRA_CALL_FG = "callfg" }
+    companion object {
+        const val EXTRA_PERMS = "perms"; const val EXTRA_FORCE = "force"; const val EXTRA_CALL_FG = "callfg"
+        private var holding: AskActivity? = null
+        /** The call has opened (or given up on) the mic / camera: the held see-through screen can go. */
+        fun release() { holding?.let { holding = null; if (!it.isFinishing) { it.finish(); it.overridePendingTransition(0, 0) } } }
+    }
 }

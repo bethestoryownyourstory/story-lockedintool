@@ -89,6 +89,7 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         fun callRing(on: Boolean, name: String, video: Boolean)
         fun callAudio(on: Boolean, speaker: Boolean)
         fun callAsk(video: Boolean): String
+        fun callMediaDone()
         fun msgNotify(title: String, text: String)
         fun setActivityDot(on: Boolean)
         fun releaseNow()
@@ -485,6 +486,7 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
     @JavascriptInterface fun callRing(on: Boolean, name: String, video: Boolean) { if (profile) host.callRing(on, name, video) }
     @JavascriptInterface fun callAudio(on: Boolean, speaker: Boolean) { if (profile) host.callAudio(on, speaker) }
     @JavascriptInterface fun callAsk(video: Boolean): String = if (profile) host.callAsk(video) else "ok"
+    @JavascriptInterface fun callMediaDone() { if (profile) host.callMediaDone() }
     @JavascriptInterface fun msgNotify(title: String, text: String) { if (profile) host.msgNotify(title, text) }
     /** Missed activity (unread messages / unseen statuses): a dot on Station 3's button (owner). */
     @JavascriptInterface fun setActivityDot(on: Boolean) { if (profile) host.setActivityDot(on) }
