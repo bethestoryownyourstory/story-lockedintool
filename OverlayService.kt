@@ -1248,8 +1248,12 @@ class OverlayService : Service(), StoryBridge.Host {
     private fun dashLineSync() {
         val line = barBgLine ?: return
         val gesture = phoneHasGestureLine()
-        val show = dashGeom && dashUnderPx() > 0 &&
-            (if (gesture) layerType == WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY else bar != null)
+        // Gesture-nav phones draw their OWN gesture line on top of everything (it's SystemUI, above our overlays), so
+        // drawing ours too put TWO lines of different sizes on the Dashboard - ours (narrow, white) over the phone's real
+        // one (wider, grey) - while the Pages showed only the phone's (owner, 29 Oct 2026: 'the difference in sizes of the
+        // bottom button ... my phone's original one is underneath the one Lockedintool uses in the dashboard ... in pages
+        // it's my phone's original one'). So only draw our own line on 3-button phones, which have no gesture line at all.
+        val show = dashGeom && dashUnderPx() > 0 && !gesture && bar != null
         if (!show) { line.visibility = View.GONE; return }
         val (w, h, r) = phoneLineSize()
         val barH = (26 * dp).toInt()
