@@ -470,14 +470,16 @@ class OverlayService : Service(), StoryBridge.Host {
         // Lockedintool only answers a plain TAP (the Apps | Lockedintool switch). Any swipe is ignored here - no Recents /
         // Home of our own, no hold tricks - so the phone's own gesture nav does exactly what it always does; when its Home
         // or Recents comes up, recentsShown just steps the Pages aside so it shows.
-        var downX = 0f; var downY = 0f; var moved = false; var lastMoveT = 0L
+        // Only a REAL tap opens the switch (owner's recording, 29 Oct 2026: the switch kept popping up during the phone's
+        // own swipes): the finger lifts where it went down (no move seen, and the lift itself within the touch slop) and
+        // quickly. Swipes are the phone's - Lockedintool never acts on them except stepping aside when the phone took one.
+        var downX = 0f; var downY = 0f; var downT = 0L; var moved = false
         v.setOnTouchListener { _, e ->
             when (e.actionMasked) {
-                MotionEvent.ACTION_DOWN -> { downX = e.rawX; downY = e.rawY; moved = false; lastMoveT = SystemClock.uptimeMillis() }
-                MotionEvent.ACTION_MOVE -> if (Math.hypot((e.rawX - downX).toDouble(), (e.rawY - downY).toDouble()) > touch) { moved = true; lastMoveT = SystemClock.uptimeMillis() }
-                MotionEvent.ACTION_UP -> if (!moved) showPicker()       // tap = Apps | Lockedintool switch
-                    // A swipe up = the phone's own Home (quick) / Recents (held at the top before letting go).
-                    else if (downY - e.rawY > 40 * dp) phoneSwipe(if (SystemClock.uptimeMillis() - lastMoveT > 150) "hold" else "quick")
+                MotionEvent.ACTION_DOWN -> { downX = e.rawX; downY = e.rawY; downT = SystemClock.uptimeMillis(); moved = false }
+                MotionEvent.ACTION_MOVE -> if (Math.hypot((e.rawX - downX).toDouble(), (e.rawY - downY).toDouble()) > touch) moved = true
+                MotionEvent.ACTION_UP -> if (!moved && Math.hypot((e.rawX - downX).toDouble(), (e.rawY - downY).toDouble()) <= touch &&
+                    SystemClock.uptimeMillis() - downT < 400) showPicker()   // tap = Apps | Lockedintool switch
                 MotionEvent.ACTION_CANCEL -> phoneSwipe("cancel")         // the phone took the swipe (its Home / Recents)
             }
             true
@@ -523,8 +525,10 @@ class OverlayService : Service(), StoryBridge.Host {
     }
 
     // ---- Apps | Lockedintool switch (owner: 'rename the word Pages on the switch to Lockedintool') ----
+    private var pickerAt = 0L
     private fun showPicker() {
         hidePicker()
+        pickerAt = SystemClock.uptimeMillis()
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER
             setPadding((22 * dp).toInt(), (12 * dp).toInt(), (22 * dp).toInt(), (12 * dp).toInt())
@@ -1575,6 +1579,10 @@ class OverlayService : Service(), StoryBridge.Host {
      *  Apps | Lockedintool switch). Not in Only system (the Dashboard IS your home there) or Only use widgets, and not
      *  while Lockedintool is opening one of its own screens / apps. */
     fun recentsShown(pkg: String, cls: String) { if (pkg != packageName && pkg != "com.android.systemui") phoneScreenShown(); ui.post {
+        // The phone's own Home / Recents just came up: a switch that popped up with that same swipe goes away, so only
+        // the phone's screen shows (a switch you opened with a real tap earlier stays).
+        if (picker != null && pkg != packageName && SystemClock.uptimeMillis() - pickerAt < 800 &&
+            (StoryAccessibilityService.RECENTS_CLASS.containsMatchIn(cls) || (recentsPkg != null && pkg == recentsPkg) || pkg == homePkg())) hidePicker()
         // The phone's bottom switch must ALWAYS work inside Lockedintool, whatever the plan or system option (owner, 29 Oct
         // 2026: 'the system switch button ... On lockedintool it's supposed to work. Doesn't matter what system the plans
         // is. This should be a permanent feature'). Lockedintool never does Home / Recents itself - it only steps aside so
