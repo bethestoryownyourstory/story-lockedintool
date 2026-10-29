@@ -1221,7 +1221,13 @@ class OverlayService : Service(), StoryBridge.Host {
     private var dashGeom = false
     private var lastOnDash: Boolean? = null
     private var s3Opening = false
-    override fun dashShown(on: Boolean) { ui.post { if (dashUp != on) { dashUp = on; updateBubble() } } }
+    override fun dashShown(on: Boolean) { ui.post { if (dashUp != on) { dashUp = on
+        // Pre-lay the band in its Dashboard layout the instant the Dashboard page renders (while the band is still
+        // hidden), so when it's revealed it appears WITH the Dashboard instead of ~0.2 s later while it re-lays-out
+        // (owner: the band 'wasn't there, then it's there ... comes in'). No visual effect here - the band stays hidden
+        // until updateBubble's dash branch actually shows it; this only gives its layout a head start.
+        if (on && QuickAccess.s3Dash(this) && !WidgetMode.on(this)) tellS3(onPages = false, onDash = true)
+        updateBubble() } } }
     /** The Pages stepped aside for a moment for Lockedintool's own screens (Create's camera, a system picker): the
      *  Dashboard's Station 3 stays where it is. Not for the phone's own switch screens opened from the Dashboard's
      *  Controls / Media output (sysFromPages) - held there, Station 3 covered their bottom buttons (Wi-Fi panel's Done...). */
