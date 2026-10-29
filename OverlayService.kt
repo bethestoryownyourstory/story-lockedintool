@@ -473,6 +473,7 @@ class OverlayService : Service(), StoryBridge.Host {
                 MotionEvent.ACTION_DOWN -> { downX = e.rawX; downY = e.rawY; moved = false }
                 MotionEvent.ACTION_MOVE -> if (Math.hypot((e.rawX - downX).toDouble(), (e.rawY - downY).toDouble()) > touch) moved = true
                 MotionEvent.ACTION_UP -> if (!moved) showPicker()       // tap = Apps | Lockedintool switch; a swipe does nothing here
+                MotionEvent.ACTION_CANCEL -> systemSwipe()                // the phone took the swipe (its Home / Recents): step aside
             }
             true
         }
@@ -1569,12 +1570,39 @@ class OverlayService : Service(), StoryBridge.Host {
      *  Apps | Lockedintool switch). Not in Only system (the Dashboard IS your home there) or Only use widgets, and not
      *  while Lockedintool is opening one of its own screens / apps. */
     fun recentsShown(pkg: String, cls: String) { ui.post {
-        if (pagesPane?.shown != true || keyguardLocked() || SystemMode.on(this) || WidgetMode.on(this)) return@post
+        // The phone's bottom switch must ALWAYS work inside Lockedintool, whatever the plan or system option (owner, 29 Oct
+        // 2026: 'the system switch button ... On lockedintool it's supposed to work. Doesn't matter what system the plans
+        // is. This should be a permanent feature'). Lockedintool never does Home / Recents itself - it only steps aside so
+        // what the phone opened shows. Only system included: there Home is the Dashboard, so only Recents counts.
+        if ((pagesPane?.shown != true && profilePane?.shown != true) || keyguardLocked() || WidgetMode.on(this)) return@post
         if (pickerHid.isNotEmpty() || openingPkg != null || createActive || appPagePkg != null) return@post
-        val recents = StoryAccessibilityService.RECENTS_CLASS.containsMatchIn(cls)
-        val home = pkg == homePkg()          // One UI's Recents is the launcher itself, so this catches Recents too
-        if (recents || home) hidePanel()
+        if (pkg == packageName) return@post
+        val recents = StoryAccessibilityService.RECENTS_CLASS.containsMatchIn(cls) || (recentsPkg != null && pkg == recentsPkg)
+        val home = !SystemMode.on(this) && pkg == homePkg()          // One UI's Recents is the launcher itself, so this catches Recents too
+        if (recents || home) stepAsideForPhoneNav()
     } }
+    /** The app Android itself uses to draw Recents (config_recentsComponentName - on One UI the home-screen app). It keeps
+     *  drawing Recents even when Lockedintool is the Home app (Only system), so Recents is caught there too. */
+    private val recentsPkg: String? by lazy { runCatching {
+        val r = android.content.res.Resources.getSystem()
+        val id = r.getIdentifier("config_recentsComponentName", "string", "android")
+        if (id == 0) null else android.content.ComponentName.unflattenFromString(r.getString(id))?.packageName
+    }.getOrNull() }
+    /** The phone took a swipe that started at the very bottom of the screen (its own Home / Recents gesture): Lockedintool
+     *  steps aside at once so whatever the phone opens shows - even when it's Recents inside the home-screen app, which
+     *  never comes up as a new screen. Not in Only system: there Home brings the Dashboard back and Recents is caught above. */
+    override fun systemSwipe() { ui.post {
+        if (keyguardLocked() || SystemMode.on(this) || WidgetMode.on(this)) return@post
+        if (pickerHid.isNotEmpty() || openingPkg != null || createActive) return@post
+        stepAsideForPhoneNav()
+    } }
+    private fun stepAsideForPhoneNav() {
+        if (pagesPane?.shown != true && profilePane?.shown != true) return
+        dialPane?.takeIf { it.shown }?.let { hideOne(it) }
+        profilePane?.takeIf { it.shown && !callActive }?.let { hideOne(it) }   // never during a call
+        pagesPane?.takeIf { it.shown }?.let { hideOne(it) }
+        updateBubble()
+    }
 
     /** One of the phone's apps was opened from the Pages (an app, ALARM, CAMERA, GALLERY): it opens UNDER the Pages, and
      *  the Pages step aside the moment it is in front - never a flash of whatever was underneath while it starts (owner).

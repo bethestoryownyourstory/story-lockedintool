@@ -20409,6 +20409,16 @@ const DASH_BAND_IN_PAGE = typeof NATIVE !== 'undefined' && NATIVE && !IN_STATION
 if(DASH_BAND_IN_PAGE){ try{ window.StoryNative.dashInPage(true); }catch(e){} }   // first, before the Dashboard tells the app it's showing
 const DASH_BAND_ACTIONS = { 'station3-dialpad-toggle':'toggleDialpad', 'station3-call-history':'toggleCalls', 'station3-updates':'toggleUpdates',
   'station3-create-post':'toggleCreate', 'station3-messages':'toggleMessages', 'station3-profile':'toggleProfile' };
+// The phone's own bottom swipe (Home / your open apps) inside Lockedintool (owner, 29 Oct 2026: 'the system switch button
+// ... on lockedintool it's supposed to work ... this should be a permanent feature'). When the phone takes over a touch that
+// started at the very bottom edge (the browser gets touchcancel), tell the app so Lockedintool steps aside at once and what
+// the phone opened shows. Lockedintool never does Home / Recents itself.
+if(typeof NATIVE !== 'undefined' && NATIVE && !IN_STATION3_WINDOW && !/[?&]widget=/.test(location.search) && window.StoryNative && window.StoryNative.systemSwipe){
+  let edgeTouch = false;
+  document.addEventListener('touchstart', e=>{ const t = e.touches[0]; edgeTouch = e.touches.length === 1 && !!t && t.clientY >= window.innerHeight - 32; }, { passive:true, capture:true });
+  document.addEventListener('touchcancel', ()=>{ if(edgeTouch){ edgeTouch = false; try{ window.StoryNative.systemSwipe(); }catch(err){} } }, { passive:true, capture:true });
+  document.addEventListener('touchend', ()=>{ edgeTouch = false; }, { passive:true, capture:true });
+}
 function dashBandClick(e){
   const b = e.target.closest && e.target.closest('[data-action]'); if(!b) return;
   e.stopPropagation(); e.preventDefault();

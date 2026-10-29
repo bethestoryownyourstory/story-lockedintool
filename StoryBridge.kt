@@ -29,6 +29,7 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         /** The Dashboard page draws its own Station 3 bar (owner: 'make the dashboard station 3 be attached to the dashboard'). */
         fun dashInPage(on: Boolean)
         fun dashPadPx(): Int
+        fun systemSwipe()
         fun setDialSize(w: Int, h: Int)
         fun setBarWidth(w: Double)
         fun setTyping(on: Boolean)
@@ -633,6 +634,10 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
     fun dashInPage(on: Boolean) { if (pagesWin) host.dashInPage(on) }
 
     /** The room at the Dashboard's bottom for its Station 3 bar, asked for as the page loads (right from the first frame). */
+    /** The phone took a swipe that started at the bottom edge of the Pages (its own Home / Recents): step aside. */
+    @JavascriptInterface
+    fun systemSwipe() { if (pagesWin || profile) host.systemSwipe() }
+
     @JavascriptInterface
     fun dashPad(): Int = if (pagesWin) runCatching { host.dashPadPx() }.getOrDefault(0) else 0
 
