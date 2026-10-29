@@ -375,6 +375,11 @@ class OverlayService : Service(), StoryBridge.Host {
      * them up out of the gesture-bar / system-bar area -- which lifted the corner button off the corner.
      */
     private fun pinToScreen(lp: WindowManager.LayoutParams) {
+        // STORY never animates (owner: "it should be still" / "nothing moves" / "no animation anywhere in Station 3").
+        // Android otherwise slides / fades an overlay window when it's shown or when updateViewLayout moves / resizes it
+        // (the Dashboard band appeared to "animate to the area" sliding from the corner to full width). windowAnimations = 0
+        // turns that off, so every STORY window just appears in place.
+        lp.windowAnimations = 0
         if (Build.VERSION.SDK_INT >= 30) { lp.fitInsetsTypes = 0; lp.fitInsetsSides = 0; lp.isFitInsetsIgnoringVisibility = true }
         if (Build.VERSION.SDK_INT >= 30) lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
         else if (Build.VERSION.SDK_INT >= 28) lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
