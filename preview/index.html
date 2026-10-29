@@ -14941,6 +14941,9 @@ window.storyDashPad = function(px){
   if(state.current === 'dashboard') renderDevice();
 };
 if(window.__s3DashPad) document.documentElement.style.setProperty('--s3-dash-pad', window.__s3DashPad + 'px');
+// Ask the app for that room right away (owner: the bar showed up at a different time) - before, a freshly loaded page used a
+// default until the app told it a moment later, so the Dashboard's bar could first sit lower and then move into place.
+try{ if(window.StoryNative && window.StoryNative.dashPad){ const v = Math.round(+window.StoryNative.dashPad()); if(v >= 46){ document.documentElement.style.setProperty('--s3-dash-pad', v + 'px'); window.__s3DashPad = v; window.__s3DashPadSet = v; } } }catch(e){}
 let dashToldNative = null;
 function dashTellNative(){
   if(!NATIVE || IN_STATION3_WINDOW || document.documentElement.classList.contains('story-widget') || !window.StoryNative.dashShown) return;
