@@ -70,7 +70,7 @@
             android:launchMode="singleTask"
             android:stateNotNeeded="true"
             android:taskAffinity=""
-            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            android:theme="@style/Theme.Story.Clear">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.HOME" />
@@ -85,7 +85,7 @@
             android:excludeFromRecents="true"
             android:launchMode="singleTask"
             android:taskAffinity=""
-            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+            android:theme="@style/Theme.Story.Clear" />
 
         <!-- Edit profile > Change photo: see-through, opens the phone's own photo picker. -->
         <activity
@@ -93,7 +93,7 @@
             android:exported="false"
             android:excludeFromRecents="true"
             android:taskAffinity=""
-            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+            android:theme="@style/Theme.Story.Clear" />
 
         <!-- Delete account: the phone's own fingerprint / face / PIN check (see-through). -->
         <activity
@@ -101,7 +101,7 @@
             android:exported="false"
             android:excludeFromRecents="true"
             android:taskAffinity=""
-            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+            android:theme="@style/Theme.Story.Clear" />
 
         <!-- Chats / groups / community posts: the phone's own picker for a document or audio file to send (see-through). -->
         <activity
@@ -109,7 +109,7 @@
             android:exported="false"
             android:excludeFromRecents="true"
             android:taskAffinity=""
-            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+            android:theme="@style/Theme.Story.Clear" />
 
         <!-- Notes > Print: the phone's own print screen (everything else in Notes happens inside STORY). -->
         <activity
@@ -117,7 +117,7 @@
             android:exported="false"
             android:excludeFromRecents="true"
             android:taskAffinity=""
-            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+            android:theme="@style/Theme.Story.Clear" />
 
         <!-- Dial pad > New contact: the phone's own new-contact screen with the number filled in (see-through). -->
         <activity
@@ -125,7 +125,7 @@
             android:exported="false"
             android:excludeFromRecents="true"
             android:taskAffinity=""
-            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+            android:theme="@style/Theme.Story.Clear" />
 
         <!-- One of the phone's own screens for a Lockedintool feature (Wi-Fi panel, Bluetooth, output switcher...), see-through. -->
         <activity
@@ -133,7 +133,7 @@
             android:exported="false"
             android:excludeFromRecents="true"
             android:taskAffinity=""
-            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+            android:theme="@style/Theme.Story.Clear" />
 
         <!-- Media output: brings up the phone's own output switcher and taps the output picked in Lockedintool (see-through). -->
         <activity
@@ -141,7 +141,7 @@
             android:exported="false"
             android:excludeFromRecents="true"
             android:taskAffinity=""
-            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+            android:theme="@style/Theme.Story.Clear" />
 
         <!-- Asks Android once for a permission STORY needs (see-through). -->
         <activity
@@ -149,7 +149,7 @@
             android:exported="false"
             android:excludeFromRecents="true"
             android:taskAffinity=""
-            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+            android:theme="@style/Theme.Story.Clear" />
 
         <!-- Station 3 > Create: the real camera, full screen under STORY's Create window. -->
         <activity
@@ -171,7 +171,7 @@
             android:showWhenLocked="true"
             android:turnScreenOn="true"
             android:screenOrientation="portrait"
-            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
+            android:theme="@style/Theme.Story.Aod" />
 
         <!-- Restarts STORY after a phone restart or an update. -->
         <receiver android:name=".BootReceiver" android:exported="true">
@@ -225,7 +225,7 @@
 
         <!-- The adult-content block screen shown over any app (owner: adult content is blocked across the phone). -->
         <activity android:name=".BlockActivity" android:exported="false"
-            android:theme="@android:style/Theme.Material.NoActionBar"
+            android:theme="@style/Theme.Story.Block"
             android:excludeFromRecents="true" android:noHistory="true"
             android:launchMode="singleTask" android:taskAffinity=""
             android:configChanges="orientation|screenSize|keyboardHidden|screenLayout" />

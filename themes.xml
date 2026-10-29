@@ -1,8 +1,23 @@
 <resources>
+    <!-- No window animations anywhere in Lockedintool (owner, 29 Oct 2026: 'No entry or exit transitions ... I dont want
+         any animations or transitions or delay on the whole app'): every screen opens and closes instantly. -->
     <style name="Theme.Story" parent="Theme.AppCompat.NoActionBar">
         <item name="android:windowBackground">@android:color/black</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowShowWallpaper">false</item>
+        <item name="android:windowAnimationStyle">@null</item>
+    </style>
+    <!-- The see-through helper screens (permission asks, pickers, camera, the phone's switches...). -->
+    <style name="Theme.Story.Clear" parent="@android:style/Theme.Translucent.NoTitleBar">
+        <item name="android:windowAnimationStyle">@null</item>
+    </style>
+    <!-- The Always On Display. -->
+    <style name="Theme.Story.Aod" parent="@android:style/Theme.Black.NoTitleBar.Fullscreen">
+        <item name="android:windowAnimationStyle">@null</item>
+    </style>
+    <!-- The adult-content block screen. -->
+    <style name="Theme.Story.Block" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowAnimationStyle">@null</item>
     </style>
 </resources>

@@ -462,36 +462,17 @@ class OverlayService : Service(), StoryBridge.Host {
         val v: View = FrameLayout(this).apply { addView(line, FrameLayout.LayoutParams(lineW, lineH, Gravity.CENTER)) }
         barLine = line; barHasLine = hasLine
         updateBarLine()
-        // Tap = the Apps | Lockedintool switch; an upward swipe reaches the phone's own nav. RECENTS (your opened apps)
-        // fires when the finger HELD before swiping (press, pause ~0.3 s, then slide up) OR paused at the top before
-        // lifting; a plain quick flick up = Home. Owner (28 Oct 2026): the ONLY version that ever worked used the hold
-        // BEFORE the swipe ('this one times was working ... It was hold swipe up'). That is the Android reality for an
-        // overlay app: the phone grabs a fast bottom-edge swipe for ITSELF before Lockedintool sees it, so the gesture
-        // that reliably reaches our handler is the one that STARTS with a brief hold (which cancels the system's grab).
-        // So detect the hold at the START (heldStart), and also the pause at the END (dwell) in case that one gets
-        // through. Both step the Pages aside (hidePanel) so the phone's screen shows; the owner returns via the switch.
-        var downT = 0L; var downY = 0f; var downX = 0f; var moved = false; var lastMoveT = 0L; var peakUp = 0f; var heldStart = false
+        // The bottom bar is the PHONE'S (owner, 29 Oct 2026: 'the bottom system switch button - lockedintool shouldn't be in
+        // it at all or control it at all. We just only want it for us to tap it and show us our system switch options').
+        // Lockedintool only answers a plain TAP (the Apps | Lockedintool switch). Any swipe is ignored here - no Recents /
+        // Home of our own, no hold tricks - so the phone's own gesture nav does exactly what it always does; when its Home
+        // or Recents comes up, recentsShown just steps the Pages aside so it shows.
+        var downX = 0f; var downY = 0f; var moved = false
         v.setOnTouchListener { _, e ->
-            when (e.action) {
-                MotionEvent.ACTION_DOWN -> { downT = System.currentTimeMillis(); downX = e.rawX; downY = e.rawY; moved = false; lastMoveT = downT; peakUp = 0f; heldStart = false; hidePicker() }
-                MotionEvent.ACTION_MOVE -> {
-                    val up = downY - e.rawY; if (up > peakUp) peakUp = up            // how far up the finger has gone (its highest point)
-                    if (Math.hypot((e.rawX - downX).toDouble(), (e.rawY - downY).toDouble()) > touch) {
-                        if (!moved) heldStart = System.currentTimeMillis() - downT >= 300   // held still ~0.3 s BEFORE moving = 'hold then swipe up' (the one that works)
-                        moved = true; lastMoveT = System.currentTimeMillis()
-                    }
-                }
-                MotionEvent.ACTION_UP -> {
-                    val dwell = System.currentTimeMillis() - lastMoveT              // how long the finger paused at the top before lifting
-                    if (!moved) showPicker()                                        // tap = Apps | Lockedintool switch
-                    else if (peakUp > 50 * dp) {
-                        hidePanel()                                                 // step the Pages aside so the phone's own screen shows
-                        if (heldStart || dwell > 150)                               // held before OR paused at the top = your opened apps (Recents)
-                            StoryAccessibilityService.instance?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_RECENTS)
-                        else                                                        // a plain quick flick up = the phone's Home screen
-                            StoryAccessibilityService.instance?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME)
-                    }
-                }
+            when (e.actionMasked) {
+                MotionEvent.ACTION_DOWN -> { downX = e.rawX; downY = e.rawY; moved = false }
+                MotionEvent.ACTION_MOVE -> if (Math.hypot((e.rawX - downX).toDouble(), (e.rawY - downY).toDouble()) > touch) moved = true
+                MotionEvent.ACTION_UP -> if (!moved) showPicker()       // tap = Apps | Lockedintool switch; a swipe does nothing here
             }
             true
         }

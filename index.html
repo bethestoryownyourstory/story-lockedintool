@@ -3923,6 +3923,21 @@
     padding:10px 16px; border-radius:20px; border:1px solid var(--line); box-shadow:0 8px 20px rgba(0,0,0,0.35);
     z-index:90; pointer-events:none;
   }
+
+  /* ===== NO MOTION ANYWHERE IN LOCKEDINTOOL (owner, 29 Oct 2026: 'I dont want any animations or transitions or
+     delay on the whole app. Nothing in this app should have that. So please fix the whole app if it means to'). Every
+     transition and animation snaps straight to its end state, so nothing slides, fades, pulses, bounces or waits -
+     screens, bars, pop-ups, page switches all appear instantly. (It completes rather than cancels - 0.001s, not none -
+     so transitionend / animationend still fire and no element is ever left mid-change or invisible.) The window side is
+     already instant natively: windowAnimations = 0 on every Lockedintool window. Keep this; never slow it back down. ===== */
+  *, *::before, *::after{
+    transition-duration:0.001s !important;
+    transition-delay:0s !important;
+    animation-duration:0.001s !important;
+    animation-delay:0s !important;
+    animation-iteration-count:1 !important;
+    scroll-behavior:auto !important;
+  }
 </style>
 <script>
 // ===== SYSTEM THEME (Settings > System theme: Black / White) =====
@@ -13072,7 +13087,9 @@ window.storyProfileGeom = function(){
   }
   window.storyProfileS3 = function(open){
     stop();
-    if(open) return;
+    // No animation anywhere in Lockedintool (owner, 29 Oct 2026: 'Nothing in this app should have that'): the gap stays,
+    // empty and still - the little-men scene no longer plays. (Its code is kept below, unused.)
+    return;
     const el = document.getElementById('story-profile'); if(!el) return;
     const svg = el.querySelector('.pf-gap-clip svg');
     rope = mk('polyline', { stroke:'currentColor', 'stroke-width':1, fill:'none', 'stroke-linecap':'round' }, svg);
@@ -15713,6 +15730,7 @@ function setupCircleAndWheelDrag(){
       wheelAutoSpinRAF = requestAnimationFrame(autoSpinStep);
     };
     const startAutoSpin = ()=>{
+      return;   // no self-turning (owner: no animations anywhere) - the wheel only moves under your finger
       if(wheelAutoSpinRAF) return;
       lastAutoT = 0;
       wheelAutoSpinRAF = requestAnimationFrame(autoSpinStep);
@@ -15781,8 +15799,7 @@ function setupCircleAndWheelDrag(){
         applyTransform();
         wheelMomentumRAF = requestAnimationFrame(step);
       };
-      if(Math.abs(v) > 0.012) wheelMomentumRAF = requestAnimationFrame(step);
-      else startAutoSpin(); // released with barely any speed -- no momentum to wait out
+      void step; void v;   // no coasting after you let go (owner: no animations) - it stays exactly where you left it
     };
     wheelScene.addEventListener('pointerup', endWheelDrag);
     wheelScene.addEventListener('pointercancel', endWheelDrag);
