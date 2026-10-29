@@ -2329,7 +2329,11 @@ class OverlayService : Service(), StoryBridge.Host {
         val ok = android.content.pm.PackageManager.PERMISSION_GRANTED
         val need = listOfNotNull(android.Manifest.permission.RECORD_AUDIO, if (video) android.Manifest.permission.CAMERA else null).filter { checkSelfPermission(it) != ok }
         if (need.isEmpty()) {
-            if (callFg(true, video)) return "ok"
+            // Android 11+ gives the microphone / camera to a foreground service ONLY if it was started while a screen of ours
+            // is actually showing. Started from here (no screen), startForeground still 'works' but the mic stays blocked -
+            // the owner's calls said 'Microphone and camera busy' (phone report: gum NotReadableError fg=null). So always go
+            // through the see-through screen, which turns it on while visible and tells the page when it's really live.
+            if (Build.VERSION.SDK_INT < 30 && callFg(true, video)) return "ok"
             // Android only allows it while a screen of ours is showing: a see-through one opens for a moment and does it.
             ui.post { runCatching { startActivity(Intent(this, AskActivity::class.java).putExtra(AskActivity.EXTRA_CALL_FG, if (video) 2 else 1)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)) } }
