@@ -3,6 +3,10 @@ name = "story-msg"
 main = "msg-worker.js"
 compatibility_date = "2025-01-01"
 
+# What people see in links / pages (owner: no 'story' in anything about Lockedintool) - site-worker.js passes it on here.
+[vars]
+PUBLIC_BASE = "https://api.lockedintool.com"
+
 [[durable_objects.bindings]]
 name = "HUB"
 class_name = "Hub"

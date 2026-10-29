@@ -421,6 +421,9 @@ export class Hub {
 
   // ---- Updates (owner): follow anyone instantly; profile posts; statuses that last 24 hours, seen by who the
   //      owner's privacy setting allows (everyone / followers / no one). ----
+  // The address people SEE in links and pages (owner: no 'story' in anything about Lockedintool) - api.lockedintool.com,
+  // which passes everything on to this server (site-worker.js). Servers' own callbacks keep this server's address.
+  pub(url) { return this.env.PUBLIC_BASE || this.origin || (url && url.origin) || ''; }
   mediaUrl(id) { return id ? (this.origin || '') + '/v1/media/' + id : ''; }
   mediaDone(id, uid) {
     const r = this.one('SELECT COUNT(*) AS c, MAX(n) AS n, MIN(uid) AS u, MAX(uid) AS u2 FROM media WHERE id = ?', id);
@@ -778,7 +781,7 @@ export class Hub {
     this.sql.exec('DELETE FROM resets WHERE uid = ? OR exp < ?', me.id, now);
     const token = rand(24);
     this.sql.exec('INSERT INTO resets (token, uid, exp) VALUES (?, ?, ?)', await sha('rs|' + token), me.id, now + 30 * 60000);
-    const link = (this.origin || '') + '/v1/reset?t=' + token;
+    const link = this.pub() + '/v1/reset?t=' + token;
     const text = 'You asked to reset the password of your Lockedintool account @' + me.username + '. To confirm, open this link, put in your new password, confirm it and tap Apply change:\n' + link + '\nThe link works for 30 minutes. If this wasn’t you, ignore this message - your password stays the same.';
     let sent = 0;
     if ((via === 'email' || via === 'both') && me.remail && await this.sendMail(me.remail, 'Reset your Lockedintool password', text)) sent++;
@@ -848,7 +851,7 @@ export class Hub {
     const token = rand(18), code = String(100000 + (crypto.getRandomValues(new Uint32Array(1))[0] % 900000));
     this.sql.exec('INSERT INTO delreq (token, uid, code, exp, tries, ok, reason, note) VALUES (?, ?, ?, ?, 0, 0, ?, ?)',
       token, me.id, await sha('del|' + token + '|' + code), now + 30 * 60000, reasons.includes(b.reason) ? b.reason : 'other', String(b.note || '').slice(0, 300));
-    const link = (this.origin || '') + '/v1/delete?t=' + token;
+    const link = this.pub() + '/v1/delete?t=' + token;
     const dtext = 'You asked to delete your Lockedintool account. To confirm, open this link and enter the code ' + code + ':\n' + link + '\nThe link and code work for 30 minutes. If this wasn’t you, ignore this message - your account stays.';
     this.alert(me.id, dtext);
     if (me.remail) await this.sendMail(me.remail, 'Confirm deleting your Lockedintool account', dtext);
@@ -1373,7 +1376,7 @@ export class Hub {
     const plan = p.kind.slice(4);
     const fields = {
       merchant_id: this.pfId(), merchant_key: this.pfKey(),
-      return_url: url.origin + '/v1/pay/return', cancel_url: url.origin + '/v1/pay/return?pf=cancel',
+      return_url: this.pub(url) + '/v1/pay/return', cancel_url: this.pub(url) + '/v1/pay/return?pf=cancel',
       notify_url: (this.origin || url.origin) + '/v1/payfast/notify',
       m_payment_id: p.id, amount: (p.cents / 100).toFixed(2),
       item_name: 'Lockedintool ' + (plan === 'premium' ? 'Premium' : 'Basic'),
@@ -1606,7 +1609,7 @@ export class Hub {
         const cents = Math.round(this.subPlans()[plan].zar * 100), id = 'p' + rand(9), mode = b.mode === 'only' ? 'only' : 'second';
         this.sql.exec('INSERT INTO payments (id, uid, to_uid, to_name, to_bank, to_mask, cents, ref, stitch, status, created, updated, kind, mode) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
           id, me.id, 'LOCKED IN TOOL ' + plan, '', '', cents, 'LIT ' + plan.toUpperCase(), 'pf:' + id, 'pending', now, now, 'sub:' + plan, mode);
-        return json({ id, url: (this.origin || url.origin) + '/v1/payfast/go?pid=' + id });
+        return json({ id, url: this.pub(url) + '/v1/payfast/go?pid=' + id });
       }
       if (provider === 'stitch') {   // South Africa: a Stitch Express payment link in rand (card, Capitec, Apple / Google Pay)
         const cents = Math.round(plans[plan].zar * 100), id = 'p' + rand(9);
@@ -1627,7 +1630,7 @@ export class Hub {
       const id = 'p' + rand(9), mode = b.mode === 'only' ? 'only' : 'second';
       const d = await this.ls('POST', '/checkouts', { data: { type: 'checkouts', attributes: {
         checkout_data: { custom: { uid: me.id, plan, mode, pid: id } },
-        product_options: { redirect_url: url.origin + '/v1/pay/return' } },
+        product_options: { redirect_url: this.pub(url) + '/v1/pay/return' } },
         relationships: { store: { data: { type: 'stores', id: String(c.store) } }, variant: { data: { type: 'variants', id: String(variant) } } } } });
       const link = d.data && d.data.attributes && d.data.attributes.url;
       if (!link) throw new Error('lemonsqueezy: no checkout');
