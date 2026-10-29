@@ -9356,7 +9356,11 @@ function quickAccessSettingsHTML(){
         ${[['pages','Pages'],['apps','Apps'],['both','Both']].map(([v,t])=>`<button class="theme-opt${q.where===v?' on':''}" data-action="qa-where" data-v="${v}">${t}</button>`).join('')}
       </div>
     </div>`;
-  const s3Opts = where + toggle('s3Aod', 'Always On Display') + toggle('dash', 'Station 3 on the Dashboard', 'Always open at the bottom of the Dashboard');
+  // Owner (29 Oct 2026): the on/off is for the Station 3 on apps & pages, NOT the Dashboard one (the Dashboard's Station 3
+  // is always on). When off, no Station 3 button over apps or on the Pages; the 'Show Station 3' picker only matters when on.
+  const s3Opts = toggle('s3ap', 'Station 3 on apps & pages', 'The Station 3 button over your apps and on the Pages')
+    + (q.s3ap !== false ? where : '')
+    + toggle('s3Aod', 'Always On Display');
   let body = '';
   if(q.mode === 's3dial') body = s3Opts;
   else if(q.mode === 'separate') body = `
@@ -14866,7 +14870,7 @@ function station3CornerArrowHTML(){
 function quickAccess(){
   let q = {};
   try{ q = JSON.parse((window.StoryNative && window.StoryNative.getQuickAccess) ? window.StoryNative.getQuickAccess() : (localStorage.getItem('story-quick-access') || '{}')) || {}; }catch(e){}
-  return Object.assign({ mode:'s3dial', where:'both', s3Aod:false, lockDial:false, dialAod:false, dash:true, wallet:true, walletAod:false }, q);
+  return Object.assign({ mode:'s3dial', where:'both', s3Aod:false, lockDial:false, dialAod:false, s3ap:true, wallet:true, walletAod:false }, q);
 }
 // Station 3 on the Dashboard (owner's full layout): held open at the bottom of the Dashboard by the app, with no
 // button there and no Rows / Page Styles; the Dashboard keeps its bottom free for it. The Pages tell the app when
@@ -14874,7 +14878,7 @@ function quickAccess(){
 function dashS3On(){
   if(!NATIVE || document.documentElement.classList.contains('story-widget')) return false;
   const q = quickAccess();
-  return q.mode !== 'dialonly' && q.dash !== false && !wgOn();
+  return q.mode !== 'dialonly' && !wgOn();   // the Dashboard's Station 3 is always on (owner, 29 Oct 2026)
 }
 // The app says how much room that is: the bottom line's area (it stays visible under Station 3), the 40px band and 6px.
 window.storyDashPad = function(px){

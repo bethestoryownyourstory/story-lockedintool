@@ -1359,7 +1359,9 @@ class OverlayService : Service(), StoryBridge.Host {
             tellS3(onPages = pagesUp, onDash = false)
         }
         val where = QuickAccess.where(this)
-        var on = QuickAccess.station3On(this) && when (where) { "pages" -> pagesUp; "apps" -> !pagesUp; else -> true }
+        // The Station 3 button over apps / on the Pages: owner's on/off toggle (s3Apps) + where it shows. The Dashboard band
+        // is separate (s3Dash, always on) and overrides this below (dash -> on = false).
+        var on = QuickAccess.s3Apps(this) && when (where) { "pages" -> pagesUp; "apps" -> !pagesUp; else -> true }
         if (aodShowing() && !QuickAccess.s3Aod(this)) on = false
         if (WidgetMode.on(this)) on = false   // Only use widgets: no Station 3
         if (dash) on = false                  // the Dashboard's Station 3 has no button
