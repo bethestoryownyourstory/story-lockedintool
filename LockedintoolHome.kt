@@ -22,6 +22,7 @@ class LockedintoolHome : Activity() {
     override fun onResume() { super.onResume(); showHome() }
 
     private fun showHome() {
+        OverlayService.instance?.phoneScreenShown()   // the phone's Home came up (Only system) - it handled the swipe
         runCatching {
             // Not set up / started yet -> the setup screen, never a blank home.
             if (!getSharedPreferences("story", MODE_PRIVATE).getBoolean("enabled", false)) {

@@ -14,6 +14,7 @@ import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
+import android.os.SystemClock
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
@@ -467,14 +468,15 @@ class OverlayService : Service(), StoryBridge.Host {
         // Lockedintool only answers a plain TAP (the Apps | Lockedintool switch). Any swipe is ignored here - no Recents /
         // Home of our own, no hold tricks - so the phone's own gesture nav does exactly what it always does; when its Home
         // or Recents comes up, recentsShown just steps the Pages aside so it shows.
-        var downX = 0f; var downY = 0f; var moved = false
+        var downX = 0f; var downY = 0f; var moved = false; var lastMoveT = 0L
         v.setOnTouchListener { _, e ->
             when (e.actionMasked) {
-                MotionEvent.ACTION_DOWN -> { downX = e.rawX; downY = e.rawY; moved = false }
-                MotionEvent.ACTION_MOVE -> if (Math.hypot((e.rawX - downX).toDouble(), (e.rawY - downY).toDouble()) > touch) moved = true
+                MotionEvent.ACTION_DOWN -> { downX = e.rawX; downY = e.rawY; moved = false; lastMoveT = SystemClock.uptimeMillis() }
+                MotionEvent.ACTION_MOVE -> if (Math.hypot((e.rawX - downX).toDouble(), (e.rawY - downY).toDouble()) > touch) { moved = true; lastMoveT = SystemClock.uptimeMillis() }
                 MotionEvent.ACTION_UP -> if (!moved) showPicker()       // tap = Apps | Lockedintool switch
-                    else if (downY - e.rawY > 40 * dp) systemSwipe()      // a swipe up = the phone's own Home / Recents: step aside so it shows
-                MotionEvent.ACTION_CANCEL -> systemSwipe()                // the phone took the swipe (its Home / Recents): step aside
+                    // A swipe up = the phone's own Home (quick) / Recents (held at the top before letting go).
+                    else if (downY - e.rawY > 40 * dp) phoneSwipe(if (SystemClock.uptimeMillis() - lastMoveT > 150) "hold" else "quick")
+                MotionEvent.ACTION_CANCEL -> phoneSwipe("cancel")         // the phone took the swipe (its Home / Recents)
             }
             true
         }
@@ -1570,7 +1572,7 @@ class OverlayService : Service(), StoryBridge.Host {
      *  aside when an app opens - so the home screen / opened apps show; the owner comes back the usual way (the
      *  Apps | Lockedintool switch). Not in Only system (the Dashboard IS your home there) or Only use widgets, and not
      *  while Lockedintool is opening one of its own screens / apps. */
-    fun recentsShown(pkg: String, cls: String) { ui.post {
+    fun recentsShown(pkg: String, cls: String) { if (pkg != packageName && pkg != "com.android.systemui") phoneScreenShown(); ui.post {
         // The phone's bottom switch must ALWAYS work inside Lockedintool, whatever the plan or system option (owner, 29 Oct
         // 2026: 'the system switch button ... On lockedintool it's supposed to work. Doesn't matter what system the plans
         // is. This should be a permanent feature'). Lockedintool never does Home / Recents itself - it only steps aside so
@@ -1592,10 +1594,38 @@ class OverlayService : Service(), StoryBridge.Host {
     /** The phone took a swipe that started at the very bottom of the screen (its own Home / Recents gesture): Lockedintool
      *  steps aside at once so whatever the phone opens shows - even when it's Recents inside the home-screen app, which
      *  never comes up as a new screen. Not in Only system: there Home brings the Dashboard back and Recents is caught above. */
-    override fun systemSwipe() { ui.post {
-        if (keyguardLocked() || SystemMode.on(this) || WidgetMode.on(this)) return@post
+    override fun systemSwipe() = phoneSwipe("cancel")
+    override fun systemSwipeKind(kind: String) = phoneSwipe(kind)
+    /** When the phone last showed one of its own screens (Home, Recents, an app) - so we know whether it handled a swipe. */
+    @Volatile private var phoneNavAt = 0L
+    fun phoneScreenShown() { phoneNavAt = SystemClock.uptimeMillis() }
+    /** The phone's bottom switch, in EVERY mode (owner, 29 Oct 2026: 'it doesn't matter what system the plans is ... this
+     *  should be a permanent feature' - the recording showed nothing at all happening in Only system). kind: "cancel" (the
+     *  phone took the touch over - it does its own Home / Recents), "quick" (swipe up = Home), "hold" (swipe up and hold
+     *  = Recents). Lockedintool steps aside so what the phone opens shows; if the phone shows nothing within 0.4 s (some
+     *  phones don't do their gesture over a home app or an overlay), it asks the PHONE for that same screen - its own
+     *  Recents / Home (the phone's own buttons' actions), never anything of Lockedintool's. In Only system Home IS the
+     *  Dashboard, so a quick swipe there just lands on the Dashboard. */
+    private fun phoneSwipe(kind: String) { ui.post {
+        if (keyguardLocked() || WidgetMode.on(this)) return@post
         if (pickerHid.isNotEmpty() || openingPkg != null || createActive) return@post
+        val sys = SystemMode.on(this)
+        val at = SystemClock.uptimeMillis()
+        if (sys && kind != "hold") {
+            // Only system: Home is the Dashboard. The phone's Home brings it back by itself (LockedintoolHome); a quick swipe
+            // we saw ourselves goes straight there. A swipe the phone took may be its Recents - caught by recentsShown.
+            if (kind == "quick") { profilePane?.takeIf { it.shown && !callActive }?.let { hideOne(it) }; openPages("dashboard") }
+            return@post
+        }
         stepAsideForPhoneNav()
+        if (kind == "cancel") return@post
+        ui.postDelayed({
+            if (phoneNavAt >= at) return@postDelayed                    // the phone showed its screen itself
+            val acc = StoryAccessibilityService.instance ?: return@postDelayed
+            if (kind == "hold") { if (!StoryAccessibilityService.recentsInFront()) acc.performGlobalAction(AccessibilityService.GLOBAL_ACTION_RECENTS) }
+            else acc.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME)
+            runCatching { ProblemLog.record(this, "swipe", "phone showed nothing - asked it for ${if (kind == "hold") "Recents" else "Home"}${if (sys) " (Only system)" else ""}", "system switch") }
+        }, 400)
     } }
     private fun stepAsideForPhoneNav() {
         if (pagesPane?.shown != true && profilePane?.shown != true) return

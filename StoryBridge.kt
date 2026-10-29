@@ -30,6 +30,7 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         fun dashInPage(on: Boolean)
         fun dashPadPx(): Int
         fun systemSwipe()
+        fun systemSwipeKind(kind: String)
         fun setDialSize(w: Int, h: Int)
         fun setBarWidth(w: Double)
         fun setTyping(on: Boolean)
@@ -637,6 +638,10 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
     /** The phone took a swipe that started at the bottom edge of the Pages (its own Home / Recents): step aside. */
     @JavascriptInterface
     fun systemSwipe() { if (pagesWin || profile) host.systemSwipe() }
+
+    /** The same, saying what kind: "cancel" (the phone took it), "quick" (Home) or "hold" (Recents). */
+    @JavascriptInterface
+    fun systemSwipeKind(kind: String) { if ((pagesWin || profile) && kind in setOf("cancel", "quick", "hold")) host.systemSwipeKind(kind) }
 
     @JavascriptInterface
     fun dashPad(): Int = if (pagesWin) runCatching { host.dashPadPx() }.getOrDefault(0) else 0
