@@ -12275,11 +12275,23 @@ function callMediaProblem(e){
   return n === 'asking' ? 'Allow the microphone, then try again' : n === 'NotAllowedError' || n === 'SecurityError' ? 'Lockedintool needs the microphone' + (call.video || gcall.video ? ' and camera' : '') + ' - allow it in the phone’s settings' :
     n === 'NotReadableError' || n === 'AbortError' ? 'The microphone or camera is busy in another app' : n === 'NotFoundError' ? 'No microphone or camera found' : 'Couldn’t start the call';
 }
+// The app turns the microphone / camera on for its foreground service, then calls this, so the call opens them only once
+// Android really allows it - a fixed wait could run getUserMedia too early and fail with 'busy' (NotReadableError).
+let callFgWaiter = null;
+window.storyCallFgReady = function(){ const w = callFgWaiter; callFgWaiter = null; if(w) w(); };
+function callGum(video){
+  return navigator.mediaDevices.getUserMedia({ audio:{ echoCancellation:true, noiseSuppression:true, autoGainControl:true }, video: video ? { facingMode:call.facing, width:{ ideal:720 }, height:{ ideal:1280 } } : false });
+}
 async function callMedia(video){
   // Android asks once for the microphone (and camera for video) the first time you call.
   if(NATIVE && window.StoryNative.callAsk){ const ok = callNative('callAsk', video); if(ok === 'asking') throw Object.assign(new Error('asking'), { code:'asking' });
-    if(ok === 'wait') await new Promise(r=>setTimeout(r, 900)); }   // Android turns the microphone on for Lockedintool first
-  return navigator.mediaDevices.getUserMedia({ audio:{ echoCancellation:true, noiseSuppression:true, autoGainControl:true }, video: video ? { facingMode:call.facing, width:{ ideal:720 }, height:{ ideal:1280 } } : false });
+    if(ok === 'wait') await new Promise(r=>{ callFgWaiter = r; setTimeout(()=>{ if(callFgWaiter === r){ callFgWaiter = null; r(); } }, 3500); }); }   // wait for storyCallFgReady, up to 3.5s
+  try{ return await callGum(video); }
+  catch(e){
+    // The microphone foreground service can go live a moment after the wait - one retry before giving up.
+    if(e && (e.name === 'NotReadableError' || e.name === 'AbortError')){ await new Promise(r=>setTimeout(r, 800)); return callGum(video); }
+    throw e;
+  }
 }
 function callPc(ice){
   const pc = new RTCPeerConnection({ iceServers: ice || CALL_ICE });
