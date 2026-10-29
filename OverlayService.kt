@@ -1275,9 +1275,14 @@ class OverlayService : Service(), StoryBridge.Host {
     } }
     /** The room (CSS px) the Dashboard keeps at its bottom: the bottom line's area, Station 3's 40dp band and 6dp. */
     private fun dashPadJs(): String {
-        val pagesBottom = if (phoneHasGestureLine()) 0 else navBarHeightPx()   // the Pages stop above 3-button navigation
-        val pad = Math.round((maxOf(0, dashBandYPx() - pagesBottom) + 46 * dp) / dp)
+        val pad = dashPadPx()
         return "window.__s3DashPad=$pad;window.storyDashPad&&window.storyDashPad($pad)"
+    }
+    /** The room (CSS px) at the Dashboard's bottom for its Station 3 bar. The page also asks for it the moment it loads
+     *  (StoryNative.dashPad), so the bar is in its right place from the very first frame - not at a default first. */
+    override fun dashPadPx(): Int {
+        val pagesBottom = if (phoneHasGestureLine()) 0 else navBarHeightPx()   // the Pages stop above 3-button navigation
+        return Math.round((maxOf(0, dashBandYPx() - pagesBottom) + 46 * dp) / dp)
     }
     /** Tells Station 3's page where it is: on the Pages (Rows / Page Styles column) and / or on the Dashboard (full width). */
     private fun tellS3(onPages: Boolean, onDash: Boolean) {
