@@ -1312,7 +1312,13 @@ class OverlayService : Service(), StoryBridge.Host {
             s3Opening = false
             if (s3Held && !p.shown) setShown(p, true)
         }
-        p.web.evaluateJavascript("0") {
+        // Size the window for the Dashboard band BEFORE it shows (owner, 29 Oct 2026: 'the dashboard station 3 still moves'
+        // - 'it comes from the right then sits in place'). Station 3's window is cut down to what's showing, and the page
+        // used to report its new size a frame later, so the band could be revealed still cut to the corner bar's width
+        // (anchored bottom-right: Messages / Profile first) and then widen. Ask for the size NOW: the report calls
+        // setStation3Size synchronously, whose resize is queued on this thread before this callback - so by the time the
+        // band shows, its window is already the full Dashboard size.
+        p.web.evaluateJavascript("window.__storyS3Report&&window.__storyS3Report(true);0") {
             runCatching { p.web.postVisualStateCallback(2L, object : WebView.VisualStateCallback() { override fun onComplete(requestId: Long) { ui.post(go) } }) }
                 .onFailure { ui.post(go) }
         }
