@@ -20416,11 +20416,13 @@ const DASH_BAND_ACTIONS = { 'station3-dialpad-toggle':'toggleDialpad', 'station3
 if(typeof NATIVE !== 'undefined' && NATIVE && !IN_STATION3_WINDOW && !/[?&]widget=/.test(location.search) && window.StoryNative && window.StoryNative.systemSwipe){
   // Two ways to see it: the phone takes the touch over (touchcancel), or - on phones that do their Home / Recents without
   // taking it over - the touch simply ends after an upward swipe that began at the very bottom edge.
-  let edgeTouch = false, edgeY = 0;
-  const edgeGo = ()=>{ edgeTouch = false; try{ window.StoryNative.systemSwipe(); }catch(err){} };
-  document.addEventListener('touchstart', e=>{ const t = e.touches[0]; edgeTouch = e.touches.length === 1 && !!t && t.clientY >= window.innerHeight - 32; edgeY = t ? t.clientY : 0; }, { passive:true, capture:true });
-  document.addEventListener('touchcancel', ()=>{ if(edgeTouch) edgeGo(); }, { passive:true, capture:true });
-  document.addEventListener('touchend', e=>{ const t = e.changedTouches[0]; if(edgeTouch && t && edgeY - t.clientY > 40) edgeGo(); edgeTouch = false; }, { passive:true, capture:true });
+  let edgeTouch = false, edgeY = 0, edgeMoveT = 0;
+  const edgeGo = kind=>{ edgeTouch = false; try{ if(window.StoryNative.systemSwipeKind) window.StoryNative.systemSwipeKind(kind); else window.StoryNative.systemSwipe(); }catch(err){} };
+  document.addEventListener('touchstart', e=>{ const t = e.touches[0]; edgeTouch = e.touches.length === 1 && !!t && t.clientY >= window.innerHeight - 32; edgeY = t ? t.clientY : 0; edgeMoveT = Date.now(); }, { passive:true, capture:true });
+  document.addEventListener('touchmove', ()=>{ if(edgeTouch) edgeMoveT = Date.now(); }, { passive:true, capture:true });
+  document.addEventListener('touchcancel', ()=>{ if(edgeTouch) edgeGo('cancel'); }, { passive:true, capture:true });
+  // Held still at the top before letting go = Recents; a quick swipe = Home (like the phone's own gesture).
+  document.addEventListener('touchend', e=>{ const t = e.changedTouches[0]; if(edgeTouch && t && edgeY - t.clientY > 40) edgeGo(Date.now() - edgeMoveT > 150 ? 'hold' : 'quick'); edgeTouch = false; }, { passive:true, capture:true });
 }
 function dashBandClick(e){
   const b = e.target.closest && e.target.closest('[data-action]'); if(!b) return;
