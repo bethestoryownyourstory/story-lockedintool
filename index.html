@@ -3931,7 +3931,9 @@
      white with black icons in White), 32px buttons evenly spaced with the + in the middle, Messages / Profile as named
      pills on the right. It sits in the room the Dashboard already keeps at its bottom (--s3-dash-pad): 6px, the 40px bar,
      then the bottom line's area. ===== */
-  #dash-s3{ position:fixed; left:0; right:0; bottom:0; height:var(--s3-dash-pad, 46px); background:#000; z-index:60; }
+  /* No background of its own (owner, 29 Oct 2026: 'since its now part of the dashboard, now it won't have its own
+     background') - the Dashboard's own background shows straight through; only the buttons are drawn. */
+  #dash-s3{ position:fixed; left:0; right:0; bottom:0; height:var(--s3-dash-pad, 46px); background:transparent; z-index:60; }
   #dash-s3[hidden]{ display:none !important; }
   #dash-s3 .station3-bar{ position:absolute; left:0; right:0; top:6px; height:40px; box-sizing:border-box; display:grid; grid-template-columns:repeat(5, 1fr); justify-items:center; align-items:center; padding:4px 0; gap:0; }
   #dash-s3 .station3-bar:has(> :nth-child(6)){ grid-template-columns:1fr 1fr 1fr 44px 1.5fr 1.5fr; }
@@ -20416,8 +20418,7 @@ function dashBandColorsApply(el){
   let st = document.getElementById('dash-s3-color');
   if(!c){ if(st) st.remove(); return; }
   if(!st){ st = document.createElement('style'); st.id = 'dash-s3-color'; document.head.appendChild(st); }
-  st.textContent = `#dash-s3{background:${c.bg}!important;}` +
-    `#dash-s3 .station3-btn,#dash-s3 .station3-btn-chevron{color:${c.icon}!important;background:${s3RgbA(c.icon,0.07)}!important;border-color:${s3RgbA(c.icon,0.12)}!important;}` +
+  st.textContent = `#dash-s3 .station3-btn,#dash-s3 .station3-btn-chevron{color:${c.icon}!important;background:${s3RgbA(c.icon,0.07)}!important;border-color:${s3RgbA(c.icon,0.12)}!important;}` +
     `#dash-s3 .station3-btn-plus{color:${c.bg}!important;background:${c.icon}!important;border-color:${c.icon}!important;}`;
 }
 function dashBandSync(on){
