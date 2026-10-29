@@ -9,7 +9,7 @@ name: Deploy Lockedintool website
 on:
   push:
     branches: [main]
-    paths: ['site-build.mjs', 'site-wrangler.toml', 'site-domain.toml', 'index.html', 'icon-192.png', 'icon-512.png', '.github/workflows/deploy-site.yml']
+    paths: ['site-build.mjs', 'site-worker.js', 'site-wrangler.toml', 'site-domain.toml', 'index.html', 'icon-192.png', 'icon-512.png', '.github/workflows/deploy-site.yml']
   workflow_dispatch:
 jobs:
   deploy:
@@ -71,4 +71,10 @@ jobs:
             echo "### https://$d/ answers $c $t" | tee -a "$GITHUB_STEP_SUMMARY"
             [ "$c" = 200 ] || bad=1
           done
+          # Lockedintool's own addresses (owner: no 'story' anywhere people look): the message server through
+          # api.lockedintool.com and the app at lockedintool.com/download.
+          c=000; for i in $(seq 1 36); do c=$(curl -s -o /dev/null -w '%{http_code}' "https://api.lockedintool.com/v1/health" || true); [ "$c" = 200 ] && break; sleep 10; done
+          echo "### https://api.lockedintool.com/v1/health answers $c" | tee -a "$GITHUB_STEP_SUMMARY"; [ "$c" = 200 ] || bad=1
+          d=$(curl -s -o /dev/null -w '%{http_code} %{content_type} %{size_download}' "https://lockedintool.com/download" || true)
+          echo "### https://lockedintool.com/download answers $d" | tee -a "$GITHUB_STEP_SUMMARY"; case "$d" in "200 application/vnd.android.package-archive"*) ;; *) bad=1;; esac
           exit $bad

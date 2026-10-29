@@ -2,9 +2,12 @@
 # The Lockedintool website in the Cloudflare account with the app's server: https://lockedintool.<workers subdomain>.workers.dev.
 # The owner's domain lockedintool.com is in a second Cloudflare account - site-domain.toml puts the same website there.
 name = "lockedintool"
+main = "site-worker.js"
 compatibility_date = "2025-01-01"
 workers_dev = true
 
 [assets]
 directory = "./_site"
+binding = "ASSETS"
+run_worker_first = true
 not_found_handling = "404-page"
