@@ -232,6 +232,26 @@ class OverlayService : Service(), StoryBridge.Host {
      *  On for a call, back to the normal type when the call ends. False = Android refused (no screen of ours showing). */
     /** AskActivity has tried to switch the microphone / camera on for the call's foreground service: tell the call page
      *  whether it worked (ok), so it opens them only now (not on a blind timer that could run before Android allowed it). */
+    /** Why couldn't the call open the microphone? (owner: calls still say 'busy' on a Samsung A15 / Android 16.) Tries
+     *  the phone's own recorder directly, the way a call would, and says how many other recordings are running, whether
+     *  the phone's mic is muted and the audio mode - so the report shows whose problem it is. Never records anything kept. */
+    override fun micDiag(): String = runCatching {
+        val am = getSystemService(android.media.AudioManager::class.java)
+        val others = runCatching { am.activeRecordingConfigurations.size }.getOrDefault(-1)
+        val rate = 16000
+        val buf = android.media.AudioRecord.getMinBufferSize(rate, android.media.AudioFormat.CHANNEL_IN_MONO, android.media.AudioFormat.ENCODING_PCM_16BIT).coerceAtLeast(2048) * 2
+        val r = runCatching { android.media.AudioRecord(android.media.MediaRecorder.AudioSource.VOICE_COMMUNICATION, rate, android.media.AudioFormat.CHANNEL_IN_MONO, android.media.AudioFormat.ENCODING_PCM_16BIT, buf) }
+        val res = r.fold({ rec ->
+            val init = rec.state == android.media.AudioRecord.STATE_INITIALIZED
+            val start = init && runCatching { rec.startRecording(); true }.getOrDefault(false)
+            val rs = rec.recordingState == android.media.AudioRecord.RECORDSTATE_RECORDING
+            val rd = if (rs) rec.read(ShortArray(512), 0, 512) else 0
+            val silenced = runCatching { if (Build.VERSION.SDK_INT >= 29) rec.activeRecordingConfiguration?.isClientSilenced == true else false }.getOrDefault(false)
+            runCatching { rec.stop() }; rec.release()
+            "init=$init start=$start rec=$rs read=${if (rd > 0) "ok" else rd.toString()} silenced=$silenced"
+        }, { "new=" + it.javaClass.simpleName })
+        "$res others=$others mute=${am.isMicrophoneMute} mode=${am.mode}"
+    }.getOrElse { "diag " + it.javaClass.simpleName }
     /** The call page has opened (or failed to open) the mic / camera - let go of the held see-through screen. */
     override fun callMediaDone() { ui.post { AskActivity.release() } }
     fun callFgReady(ok: Boolean) { ui.post { profilePane?.web?.evaluateJavascript("window.storyCallFgReady&&window.storyCallFgReady($ok)", null) } }
