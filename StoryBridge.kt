@@ -26,6 +26,8 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         fun setStation3Size(w: Int, h: Int)
         fun toggleDialpad()
         fun closeDialpad()
+        /** The Dashboard page draws its own Station 3 bar (owner: 'make the dashboard station 3 be attached to the dashboard'). */
+        fun dashInPage(on: Boolean)
         fun setDialSize(w: Int, h: Int)
         fun setBarWidth(w: Double)
         fun setTyping(on: Boolean)
@@ -620,30 +622,37 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
 
     /** Station 3's dial pad button: show / hide the dial pad's own window (it never moves Station 3). */
     @JavascriptInterface
-    fun toggleDialpad() { if (station3) host.toggleDialpad() }
+    fun toggleDialpad() { if (station3 || pagesWin) host.toggleDialpad() }
+
+    /** The Pages window itself - the Dashboard draws Station 3's bar inside it now, so its buttons may open these too. */
+    private val pagesWin get() = !station3 && !dial && !profile && !lock && !widget
+
+    /** The Dashboard says it draws its own Station 3 bar (part of the Dashboard's design - owner, 29 Oct 2026). */
+    @JavascriptInterface
+    fun dashInPage(on: Boolean) { if (pagesWin) host.dashInPage(on) }
 
     /** Station 3's profile button: Profile opens attached to Station 3 (tap again to close it). */
     @JavascriptInterface
-    fun toggleProfile() { if (station3 || profile) host.toggleProfile() }   // Profile's window: your own profile from a search
+    fun toggleProfile() { if (station3 || profile || pagesWin) host.toggleProfile() }   // Profile's window: your own profile from a search
 
     @JavascriptInterface
     fun closeProfile() { if (station3) host.closeProfile() }
 
     /** Station 3's messages button: Messages opens in the same window as Profile, attached to Station 3. */
     @JavascriptInterface
-    fun toggleMessages() { if (station3) host.toggleMessages() }
+    fun toggleMessages() { if (station3 || pagesWin) host.toggleMessages() }
 
     /** Station 3's + (Create & post): Create opens in the same window, the real camera underneath it. */
     @JavascriptInterface
-    fun toggleCreate() { if (station3 || profile) host.toggleCreate() }
+    fun toggleCreate() { if (station3 || profile || pagesWin) host.toggleCreate() }
 
     /** Station 3's call history button: Call history in the same window; its list (every call made from STORY). */
     @JavascriptInterface
-    fun toggleCalls() { if (station3) host.toggleCalls() }
+    fun toggleCalls() { if (station3 || pagesWin) host.toggleCalls() }
 
     /** Station 3's Updates button: Updates (statuses, profiles, search) in the same window. */
     @JavascriptInterface
-    fun toggleUpdates() { if (station3 || profile) host.toggleUpdates() }
+    fun toggleUpdates() { if (station3 || profile || pagesWin) host.toggleUpdates() }
 
     /** Station 3's Rows / Page Styles buttons (on the Pages): do it on the Pages. */
     @JavascriptInterface

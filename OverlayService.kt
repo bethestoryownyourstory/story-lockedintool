@@ -501,7 +501,7 @@ class OverlayService : Service(), StoryBridge.Host {
     private var barHasLine = false
     // The phone's own line shows everywhere (the Pages sit under it), so STORY only draws one when the phone has none.
     // On the Dashboard Station 3's background covers the line's place, so the line is drawn on it there (dashLineSync).
-    private fun updateBarLine() { barLine?.visibility = if (!barHasLine && !dashGeom) View.VISIBLE else View.INVISIBLE; dashLineSync() }
+    private fun updateBarLine() { barLine?.visibility = if (!barHasLine && !(dashGeom && s3Pane?.shown == true)) View.VISIBLE else View.INVISIBLE; dashLineSync() }
 
     /** Android's gesture line size (width, height, corner radius in px), from the phone's own System UI. */
     private fun phoneLineSize(): Triple<Int, Int, Float> {
@@ -615,6 +615,7 @@ class OverlayService : Service(), StoryBridge.Host {
             override fun onPageStarted(v: WebView, url: String, favicon: android.graphics.Bitmap?) {
                 if (small) paneRef?.let { it.loading = true; it.frame.alpha = 0f; syncBarBg() }
                 if (!small && !dial && !profile) tvView?.place(org.json.JSONObject().put("show", false))  // the page tells it again once loaded
+                if (!small && !dial && !profile && dashBandInPage) { dashBandInPage = false; updateBubble() }   // the new page says again whether it draws the Dashboard's bar
             }
             // Android sometimes shuts the page down to free memory, which leaves a blank white window:
             // build STORY's windows again instead (and don't let it take the app down).
@@ -1202,6 +1203,12 @@ class OverlayService : Service(), StoryBridge.Host {
     private var dashGeom = false
     private var lastOnDash: Boolean? = null
     private var s3Opening = false
+    /** The Dashboard page draws Station 3's bar itself, as part of the Dashboard (owner, 29 Oct 2026: 'make the dashboard
+     *  station 3 be attached to the dashboard now its part of the dashboard design'): one picture, so it can never come in
+     *  late or from the side. Our own Station 3 window then stays hidden on the Dashboard; it's only used when the Pages
+     *  step aside (Create's camera) or on a page from before this change (which never says so). Reset when the Pages reload. */
+    private var dashBandInPage = false
+    override fun dashInPage(on: Boolean) { ui.post { if (dashBandInPage != on) { dashBandInPage = on; updateBubble() } } }
     override fun dashShown(on: Boolean) { ui.post { if (dashUp != on) { dashUp = on
         // Pre-lay the band in its Dashboard layout the instant the Dashboard page renders (while the band is still
         // hidden), so when it's revealed it appears WITH the Dashboard instead of ~0.2 s later while it re-lays-out
@@ -1353,7 +1360,13 @@ class OverlayService : Service(), StoryBridge.Host {
             if (p != null && p.shown && !dashGeom) { dialPane?.takeIf { it.shown }?.let { hideOne(it) }; hideOne(p) }
             tellS3(onPages = false, onDash = true)
             applyS3Geom(true)
-            if (p != null && !p.shown) openHeldS3(p)
+            if (pagesUp && dashBandInPage) {
+                // The Dashboard draws the bar itself: our window stays out of the way (the dial pad / Profile still open
+                // from its buttons, placed for the Dashboard by applyS3Geom).
+                s3Opening = false
+                if (p != null && p.shown) hideOne(p)
+                updateBarLine()
+            } else if (p != null && !p.shown) openHeldS3(p)
         } else {
             if (s3Held) {
                 s3Held = false; s3Opening = false
@@ -1584,7 +1597,7 @@ class OverlayService : Service(), StoryBridge.Host {
     override fun toggleDialpad() { ui.post {
         val d = dialPane ?: return@post
         // Owner: the dial pad shows ON TOP of whatever is open (Call history, Messages, Profile...) - it never closes it.
-        if (d.shown) hideOne(d) else if (s3Pane?.shown == true) setShown(d, true)
+        if (d.shown) hideOne(d) else if (s3Pane?.shown == true || (s3Held && dashGeom)) setShown(d, true)
     } }
 
     // ---- System theme (Settings): Black or White. Only black and white swap -- on the Pages, Station 3
@@ -1811,7 +1824,7 @@ class OverlayService : Service(), StoryBridge.Host {
         val p = profilePane ?: return@post
         if (p.shown && s3Page == which) { hideOne(p); return@post }
         if (p.shown) { s3Page = which; p.web.evaluateJavascript("window.storyS3Page&&window.storyS3Page('$which')", null); syncCreate(); return@post }
-        if (s3Pane?.shown != true) return@post
+        if (s3Pane?.shown != true && !(s3Held && dashGeom)) return@post   // Station 3 open, or the Dashboard's own bar
         secGate(profilePane) { openS3Page(which) }
     } }
     private fun openS3Page(which: String) {
