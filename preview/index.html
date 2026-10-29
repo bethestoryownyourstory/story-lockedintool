@@ -12335,13 +12335,22 @@ async function callMedia(video){
   // Android asks once for the microphone (and camera for video) the first time you call.
   if(NATIVE && window.StoryNative.callAsk){ const ok = callNative('callAsk', video); if(ok === 'asking') throw Object.assign(new Error('asking'), { code:'asking' });
     if(ok === 'wait') await new Promise(r=>{ callFgWaiter = r; setTimeout(()=>{ if(callFgWaiter === r){ callFgWaiter = null; r(); } }, 3500); }); }   // wait for storyCallFgReady, up to 3.5s
+  try{ return await callMediaOpen(video); }
+  finally{ callNative('callMediaDone'); }   // the app's see-through screen held Lockedintool in front while this opened
+}
+async function callMediaOpen(video){
   try{ return await callGum(video); }
   catch(e){
     // The microphone foreground service can go live a moment after the wait - one retry before giving up.
     if(e && (e.name === 'NotReadableError' || e.name === 'AbortError')){
       await new Promise(r=>setTimeout(r, 800));
       try{ return await callGum(video); }
-      catch(e2){ callReport('gum ' + (e2.name || '') + ' fg=' + callFgLast + (video ? ' v' : ' a')); throw e2; }
+      catch(e2){
+        callReport('gum ' + (e2.name || '') + ' fg=' + callFgLast + (video ? ' v' : ' a'));
+        // Only the camera wouldn't open: the call still goes ahead with your voice, camera off (you can try it again).
+        if(video){ try{ const s = await callGum(false); callReport('gum video fell back to voice'); showToast('The camera couldn’t open - the call started with your voice'); call.camOff = true; gcall.camOff = true; return s; }catch(e3){} }
+        throw e2;
+      }
     }
     callReport('gum ' + (e.name || '') + ' fg=' + callFgLast + (video ? ' v' : ' a'));
     throw e;
