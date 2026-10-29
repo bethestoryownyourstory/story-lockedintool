@@ -554,15 +554,21 @@ class OverlayService : Service(), StoryBridge.Host {
             setPadding((22 * dp).toInt(), (12 * dp).toInt(), (22 * dp).toInt(), (12 * dp).toInt())
             background = GradientDrawable().apply { cornerRadius = 28 * dp; setColor(th(Color.parseColor("#F2111111"))); setStroke((1 * dp).toInt(), th(Color.parseColor("#44FFFFFF"))) }
         }
+        // Only the word itself is its button (owner's recording, 29 Oct 2026: a tap beside the switch opened Lockedintool):
+        // the space around the words is margin, not part of them - the switch looks exactly the same.
         fun word(t: String, onTap: () -> Unit) = TextView(this).apply {
-            text = t; setTextColor(th(Color.WHITE)); textSize = 18f; setPadding((14 * dp).toInt(), 0, (14 * dp).toInt(), 0); setOnClickListener { hidePicker(); onTap() }
+            text = t; setTextColor(th(Color.WHITE)); textSize = 18f; setOnClickListener { hidePicker(); onTap() }
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { marginStart = (14 * dp).toInt(); marginEnd = (14 * dp).toInt() }
         }
         // Apps = straight back to whatever was underneath (the app you were on, untouched, or the home screen).
         row.addView(word("Apps") { setInLit(false); hidePanel() })
         row.addView(TextView(this).apply { text = "|"; setTextColor(th(Color.parseColor("#66FFFFFF"))); textSize = 18f })
         row.addView(word("Lockedintool") { setInLit(true); showPanel(station3Only = false) })  // the only way into Lockedintool itself (owner: it says Lockedintool, not Pages)
         picker = row; pickerWm = layerWm
-        layerWm.addView(row, overlayParams(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL, 0, if (dashGeom) dashBandYPx() + (48 * dp).toInt() else (64 * dp).toInt() + (if (phoneHasGestureLine()) 0 else navBarHeightPx())).also { it.type = layerType })
+        // A touch anywhere outside the switch just closes it - nothing is chosen.
+        row.setOnTouchListener { _, e -> if (e.actionMasked == MotionEvent.ACTION_OUTSIDE) hidePicker(); false }
+        layerWm.addView(row, overlayParams(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL, 0, if (dashGeom) dashBandYPx() + (48 * dp).toInt() else (64 * dp).toInt() + (if (phoneHasGestureLine()) 0 else navBarHeightPx()))
+            .also { it.type = layerType; it.flags = it.flags or WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH })
         ui.postDelayed({ hidePicker() }, 4000)
     }
 
@@ -1387,7 +1393,11 @@ class OverlayService : Service(), StoryBridge.Host {
     private fun litHomeCheck() {
         if (!inLit() || pagesPane == null || pagesPane?.shown == true || keyguardLocked() || WidgetMode.on(this) || SystemMode.on(this)) return
         if (pickerHid.isNotEmpty() || openingPkg != null || createActive || callActive || picker != null) return
-        if (StoryAccessibilityService.homeInFront(homePkg()) && !StoryAccessibilityService.recentsInFront()) showPanel(station3Only = false)
+        // Only the phone's OWN home screen counts: the last app Android brought to the front must be the home-screen app
+        // (owner's recording, 29 Oct 2026: Lockedintool opened by itself while they were in another app).
+        val home = homePkg() ?: return
+        if (StoryAccessibilityService.frontPkg != home) return
+        if (StoryAccessibilityService.homeInFront(home) && !StoryAccessibilityService.recentsInFront()) showPanel(station3Only = false)
     }
     private val panelCheck = Runnable {
         val over = !keyguardLocked() && StoryAccessibilityService.panelInFront() == true
