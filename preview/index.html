@@ -12329,7 +12329,11 @@ function callGum(video){
   return navigator.mediaDevices.getUserMedia({ audio:{ echoCancellation:true, noiseSuppression:true, autoGainControl:true }, video: video ? { facingMode:call.facing, width:{ ideal:720 }, height:{ ideal:1280 } } : false });
 }
 // Tells Lockedintool's server WHY a call couldn't open the mic/camera, so it can be fixed for real (owner: still 'busy').
-function callReport(msg){ try{ if(NATIVE && window.StoryNative.problem) window.StoryNative.problem(JSON.stringify({ kind:'call', msg:String(msg).slice(0,140), place:'callMedia' })); }catch(_){} }
+// The app version leads the message so every new version reports afresh (the phone sends the same problem once an hour),
+// and the phone's own recorder test (micDiag) is added for a mic / camera failure - it shows whose problem 'busy' is.
+function callReport(msg){ try{ if(!(NATIVE && window.StoryNative.problem)) return;
+  const v = (callNative('appVersion') || '').split(' ')[0], d = /NotReadable|Abort/.test(msg) ? (callNative('micDiag') || '') : '';
+  window.StoryNative.problem(JSON.stringify({ kind:'call', msg:(v + ' ' + msg + (d ? ' | ' + d : '')).slice(0,240), place:'callMedia' })); }catch(_){} }
 async function callMedia(video){
   callFgLast = null;
   // Android asks once for the microphone (and camera for video) the first time you call.
