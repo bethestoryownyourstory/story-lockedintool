@@ -229,9 +229,9 @@ class OverlayService : Service(), StoryBridge.Host {
     /** Calls (Messages / groups): Android only lets an app use the microphone / camera from the background while its
      *  foreground service says so (type microphone / camera) - without it the call's microphone fails ('busy').
      *  On for a call, back to the normal type when the call ends. False = Android refused (no screen of ours showing). */
-    /** AskActivity has tried to switch the microphone / camera on for the call's foreground service: tell the call page so
-     *  it opens them only now (not on a blind timer that could run before Android allowed it -> 'busy'). */
-    fun callFgReady() { ui.post { profilePane?.web?.evaluateJavascript("window.storyCallFgReady&&window.storyCallFgReady()", null) } }
+    /** AskActivity has tried to switch the microphone / camera on for the call's foreground service: tell the call page
+     *  whether it worked (ok), so it opens them only now (not on a blind timer that could run before Android allowed it). */
+    fun callFgReady(ok: Boolean) { ui.post { profilePane?.web?.evaluateJavascript("window.storyCallFgReady&&window.storyCallFgReady($ok)", null) } }
     fun callFg(on: Boolean, video: Boolean): Boolean {
         val n = fgNote ?: return false
         if (Build.VERSION.SDK_INT < 30) return true
@@ -239,7 +239,10 @@ class OverlayService : Service(), StoryBridge.Host {
         var t = if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE else 0
         if (on && checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == ok) t = t or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
         if (on && video && checkSelfPermission(android.Manifest.permission.CAMERA) == ok) t = t or ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA
-        return runCatching { if (t == 0) startForeground(1, n) else startForeground(1, n, t); true }.getOrDefault(false)
+        return runCatching { if (t == 0) startForeground(1, n) else startForeground(1, n, t); true }
+            // Diagnostic (owner's calls still say 'busy'): record WHY Android refused to start the mic/camera service.
+            .onFailure { if (on) runCatching { ProblemLog.record(this, "callfg", (it.javaClass.simpleName + ": " + (it.message ?: "")).take(140), "sdk" + Build.VERSION.SDK_INT + if (video) " v" else " a") } }
+            .getOrDefault(false)
     }
 
     /** Live screens for everyone; the owner and reviewer phones (Test channel) get the newest copy from /preview/. */

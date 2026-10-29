@@ -12281,19 +12281,27 @@ function callMediaProblem(e){
 }
 // The app turns the microphone / camera on for its foreground service, then calls this, so the call opens them only once
 // Android really allows it - a fixed wait could run getUserMedia too early and fail with 'busy' (NotReadableError).
-let callFgWaiter = null;
-window.storyCallFgReady = function(){ const w = callFgWaiter; callFgWaiter = null; if(w) w(); };
+let callFgWaiter = null, callFgLast = null;
+window.storyCallFgReady = function(ok){ callFgLast = ok; const w = callFgWaiter; callFgWaiter = null; if(w) w(); };
 function callGum(video){
   return navigator.mediaDevices.getUserMedia({ audio:{ echoCancellation:true, noiseSuppression:true, autoGainControl:true }, video: video ? { facingMode:call.facing, width:{ ideal:720 }, height:{ ideal:1280 } } : false });
 }
+// Tells Lockedintool's server WHY a call couldn't open the mic/camera, so it can be fixed for real (owner: still 'busy').
+function callReport(msg){ try{ if(NATIVE && window.StoryNative.problem) window.StoryNative.problem(JSON.stringify({ kind:'call', msg:String(msg).slice(0,140), place:'callMedia' })); }catch(_){} }
 async function callMedia(video){
+  callFgLast = null;
   // Android asks once for the microphone (and camera for video) the first time you call.
   if(NATIVE && window.StoryNative.callAsk){ const ok = callNative('callAsk', video); if(ok === 'asking') throw Object.assign(new Error('asking'), { code:'asking' });
     if(ok === 'wait') await new Promise(r=>{ callFgWaiter = r; setTimeout(()=>{ if(callFgWaiter === r){ callFgWaiter = null; r(); } }, 3500); }); }   // wait for storyCallFgReady, up to 3.5s
   try{ return await callGum(video); }
   catch(e){
     // The microphone foreground service can go live a moment after the wait - one retry before giving up.
-    if(e && (e.name === 'NotReadableError' || e.name === 'AbortError')){ await new Promise(r=>setTimeout(r, 800)); return callGum(video); }
+    if(e && (e.name === 'NotReadableError' || e.name === 'AbortError')){
+      await new Promise(r=>setTimeout(r, 800));
+      try{ return await callGum(video); }
+      catch(e2){ callReport('gum ' + (e2.name || '') + ' fg=' + callFgLast + (video ? ' v' : ' a')); throw e2; }
+    }
+    callReport('gum ' + (e.name || '') + ' fg=' + callFgLast + (video ? ' v' : ' a'));
     throw e;
   }
 }

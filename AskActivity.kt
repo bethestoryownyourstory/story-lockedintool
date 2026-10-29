@@ -25,15 +25,18 @@ class AskActivity : Activity() {
     override fun onResume() {
         super.onResume()
         if (callFgVideo > 0) {
-            val v = callFgVideo; callFgVideo = 0
-            // One frame later the translucent window is really shown, so the mic / camera foreground service is allowed
-            // to start; then tell the call page it can open them, and close.
-            window.decorView.post {
-                OverlayService.instance?.callFg(true, v == 2)
-                OverlayService.instance?.callFgReady()
-                finish(); overridePendingTransition(0, 0)
-            }
+            val v = callFgVideo == 2; callFgVideo = 0
+            tryCallFg(v, 0)   // the translucent window is now shown, so the mic / camera foreground service may start
         }
+    }
+    // Keep this see-through screen up and retry while it's visible - Android 14+ only lets the mic / camera service start
+    // while an activity is actually shown, and the first try can be a frame too early. Then tell the page the result.
+    private fun tryCallFg(video: Boolean, attempt: Int) {
+        val ok = OverlayService.instance?.callFg(true, video) ?: false
+        if (ok || attempt >= 8) {
+            OverlayService.instance?.callFgReady(ok)
+            finish(); overridePendingTransition(0, 0)
+        } else window.decorView.postDelayed({ tryCallFg(video, attempt + 1) }, 150)
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
