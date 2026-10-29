@@ -1608,26 +1608,17 @@ class OverlayService : Service(), StoryBridge.Host {
      *  phones don't do their gesture over a home app or an overlay), it asks the PHONE for that same screen - its own
      *  Recents / Home (the phone's own buttons' actions), never anything of Lockedintool's. In Only system Home IS the
      *  Dashboard, so a quick swipe there just lands on the Dashboard. */
+    // Lockedintool NEVER does Home / Recents itself (owner, 29 Oct 2026: 'it should allow the device to work how it want
+    // to work or how it set up to work ... it receives updates ... it shouldn't try to make something work for the current
+    // time only'). It only steps aside when the PHONE took the swipe ('cancel'); the phone's own Home / Recents screens are
+    // caught by recentsShown. The old fallback that asked the phone for Home / Recents itself (and the Only-system quick
+    // swipe to the Dashboard) is gone - in Only system the phone's own Home brings the Dashboard (LockedintoolHome).
     private fun phoneSwipe(kind: String) { ui.post {
+        if (kind != "cancel") return@post
         if (keyguardLocked() || WidgetMode.on(this)) return@post
         if (pickerHid.isNotEmpty() || openingPkg != null || createActive) return@post
-        val sys = SystemMode.on(this)
-        val at = SystemClock.uptimeMillis()
-        if (sys && kind != "hold") {
-            // Only system: Home is the Dashboard. The phone's Home brings it back by itself (LockedintoolHome); a quick swipe
-            // we saw ourselves goes straight there. A swipe the phone took may be its Recents - caught by recentsShown.
-            if (kind == "quick") { profilePane?.takeIf { it.shown && !callActive }?.let { hideOne(it) }; openPages("dashboard") }
-            return@post
-        }
+        if (SystemMode.on(this)) return@post
         stepAsideForPhoneNav()
-        if (kind == "cancel") return@post
-        ui.postDelayed({
-            if (phoneNavAt >= at) return@postDelayed                    // the phone showed its screen itself
-            val acc = StoryAccessibilityService.instance ?: return@postDelayed
-            if (kind == "hold") { if (!StoryAccessibilityService.recentsInFront()) acc.performGlobalAction(AccessibilityService.GLOBAL_ACTION_RECENTS) }
-            else acc.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME)
-            runCatching { ProblemLog.record(this, "swipe", "phone showed nothing - asked it for ${if (kind == "hold") "Recents" else "Home"}${if (sys) " (Only system)" else ""}", "system switch") }
-        }, 400)
     } }
     private fun stepAsideForPhoneNav() {
         if (pagesPane?.shown != true && profilePane?.shown != true) return
