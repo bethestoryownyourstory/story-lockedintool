@@ -8,6 +8,9 @@
 //  - everything else - the website itself (site-build.mjs).
 const SERVER = 'https://story-msg.percyjuniormaseko0.workers.dev';
 const DOWNLOAD_RELEASE = 'latest';
+// Private until launch (owner's PAUSE rule): the download answers only at /download/<this code>; on launch day set it
+// to '' so the plain lockedintool.com/download works for everyone (and DOWNLOAD_RELEASE to 'live').
+const DOWNLOAD_CODE = 'uje5Mg0x9j7yONbB';
 const APK = 'https://github.com/bethestoryownyourstory/story-lockedintool/releases/download/' + DOWNLOAD_RELEASE + '/app-debug.apk';
 
 export default {
@@ -17,7 +20,8 @@ export default {
       const to = new Request(SERVER + url.pathname + url.search, req);
       return fetch(to);
     }
-    if (url.pathname === '/download' || url.pathname === '/download/') {
+    const dl = DOWNLOAD_CODE ? '/download/' + DOWNLOAD_CODE : '/download';
+    if (url.pathname === dl || url.pathname === dl + '/') {
       const r = await fetch(APK, { redirect: 'follow', cf: { cacheTtl: 60 } });
       if (!r.ok) return new Response('The download isn’t available right now - try again in a minute.', { status: 503, headers: { 'content-type': 'text/plain; charset=utf-8' } });
       const h = new Headers();

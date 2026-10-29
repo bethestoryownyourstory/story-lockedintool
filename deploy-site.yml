@@ -75,6 +75,7 @@ jobs:
           # api.lockedintool.com and the app at lockedintool.com/download.
           c=000; for i in $(seq 1 36); do c=$(curl -s -o /dev/null -w '%{http_code}' "https://api.lockedintool.com/v1/health" || true); [ "$c" = 200 ] && break; sleep 10; done
           echo "### https://api.lockedintool.com/v1/health answers $c" | tee -a "$GITHUB_STEP_SUMMARY"; [ "$c" = 200 ] || bad=1
-          d=$(curl -s -o /dev/null -w '%{http_code} %{content_type} %{size_download}' "https://lockedintool.com/download" || true)
-          echo "### https://lockedintool.com/download answers $d" | tee -a "$GITHUB_STEP_SUMMARY"; case "$d" in "200 application/vnd.android.package-archive"*) ;; *) bad=1;; esac
+          DL=$(grep -o "DOWNLOAD_CODE = '[^']*'" site-worker.js | cut -d"'" -f2); DLP="/download${DL:+/$DL}"
+          d=$(curl -s -o /dev/null -w '%{http_code} %{content_type} %{size_download}' "https://lockedintool.com$DLP" || true)
+          echo "### lockedintool.com download answers $d" | tee -a "$GITHUB_STEP_SUMMARY"; case "$d" in "200 application/vnd.android.package-archive"*) ;; *) bad=1;; esac
           exit $bad
