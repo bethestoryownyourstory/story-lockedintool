@@ -1,0 +1,127 @@
+open: 18
+---
+sig: call|callMedia|gum NotReadableError fg=true a
+kind: call | 2 times | 1 phones | fixed: 0 
+where: callMedia
+what: gum NotReadableError fg=true a
+latest: app 1.276 / screens main 3461031 / samsung SM-A155F · Android 16 (API 36)
+first: 2026-10-29T16:44:16Z last: 2026-10-29T16:44:16Z
+---
+sig: call|callMedia|gum NotReadableError fg=true v
+kind: call | 2 times | 1 phones | fixed: 0 
+where: callMedia
+what: gum NotReadableError fg=true v
+latest: app 1.276 / screens main 590322e / samsung SM-A155F · Android 16 (API 36)
+first: 2026-10-29T16:27:21Z last: 2026-10-29T16:27:21Z
+---
+sig: slow|pages|an app took over #.# s to open
+kind: slow | 5 times | 1 phones | fixed: 0 
+where: pages
+what: an app took over 1.5 s to open
+latest: app 1.276 / screens main 590322e / samsung SM-A155F · Android 16 (API 36)
+first: 2026-10-25T13:51:26Z last: 2026-10-29T16:25:43Z
+---
+sig: window|profile|page stopped (closed by Android for memory)
+kind: window | 23 times | 1 phones | fixed: 0 
+where: profile
+what: page stopped (closed by Android for memory)
+latest: app 1.268 / screens main 22280fb / samsung SM-A155F · Android 16 (API 36)
+first: 2026-10-22T15:56:43Z last: 2026-10-29T14:40:41Z
+---
+sig: window|profile gap|page stopped (closed by Android for memory)
+kind: window | 23 times | 1 phones | fixed: 0 
+where: profile gap
+what: page stopped (closed by Android for memory)
+latest: app 1.268 / screens main 22280fb / samsung SM-A155F · Android 16 (API 36)
+first: 2026-10-22T15:56:43Z last: 2026-10-29T14:40:41Z
+---
+sig: window|station3|page stopped (closed by Android for memory)
+kind: window | 23 times | 1 phones | fixed: 0 
+where: station3
+what: page stopped (closed by Android for memory)
+latest: app 1.268 / screens main 22280fb / samsung SM-A155F · Android 16 (API 36)
+first: 2026-10-22T15:56:43Z last: 2026-10-29T14:40:41Z
+---
+sig: window|pages|page stopped (closed by Android for memory)
+kind: window | 23 times | 1 phones | fixed: 0 
+where: pages
+what: page stopped (closed by Android for memory)
+latest: app 1.268 / screens main 22280fb / samsung SM-A155F · Android 16 (API 36)
+first: 2026-10-22T15:56:43Z last: 2026-10-29T14:40:41Z
+---
+sig: window|lock dial pad|page stopped (closed by Android for memory)
+kind: window | 23 times | 1 phones | fixed: 0 
+where: lock dial pad
+what: page stopped (closed by Android for memory)
+latest: app 1.268 / screens main 22280fb / samsung SM-A155F · Android 16 (API 36)
+first: 2026-10-22T15:56:43Z last: 2026-10-29T14:40:41Z
+---
+sig: window|dial pad|page stopped (closed by Android for memory)
+kind: window | 23 times | 1 phones | fixed: 0 
+where: dial pad
+what: page stopped (closed by Android for memory)
+latest: app 1.268 / screens main 22280fb / samsung SM-A155F · Android 16 (API 36)
+first: 2026-10-22T15:56:43Z last: 2026-10-29T14:40:41Z
+---
+sig: update|updater|Quiet update stopped (INSTALL_FAILED_VERIFICATION_FAILURE: Install not allowed for file:///… - it will try again
+kind: update | 4 times | 1 phones | fixed: 0 
+where: updater
+what: Quiet update stopped (INSTALL_FAILED_VERIFICATION_FAILURE: Install not allowed for file:///… - it will try again
+latest: app 1.265 / screens main 22280fb / samsung SM-A155F · Android 16 (API 36)
+first: 2026-10-22T08:27:26Z last: 2026-10-29T11:14:15Z
+---
+sig: call|callMedia|gum NotReadableError fg=null a
+kind: call | 2 times | 1 phones | fixed: 0 
+where: callMedia
+what: gum NotReadableError fg=null a
+latest: app 1.265 / screens main 22280fb / samsung SM-A155F · Android 16 (API 36)
+first: 2026-10-29T08:33:19Z last: 2026-10-29T08:33:19Z
+---
+sig: slow|pages|an app page took over #.# s to open
+kind: slow | 1 times | 1 phones | fixed: 0 
+where: pages
+what: an app page took over 1.5 s to open
+latest: app 1.261 / screens main 47ad4c7 / samsung SM-A155F · Android 16 (API 36)
+first: 2026-10-28T22:49:40Z last: 2026-10-28T22:49:40Z
+---
+sig: slow|pages|CAMERA took over #.# s to open
+kind: slow | 2 times | 1 phones | fixed: 0 
+where: pages
+what: CAMERA took over 1.5 s to open
+latest: app 1.255 / screens main f3135cf / samsung SM-A155F · Android 16 (API 36)
+first: 2026-10-25T13:46:42Z last: 2026-10-28T16:18:56Z
+---
+sig: slow|pages|ALARM took over #.# s to open
+kind: slow | 3 times | 1 phones | fixed: 0 
+where: pages
+what: ALARM took over 1.5 s to open
+latest: app 1.255 / screens main f3135cf / samsung SM-A155F · Android 16 (API 36)
+first: 2026-10-25T13:48:57Z last: 2026-10-28T16:18:49Z
+---
+sig: update|updater|Quiet update failed (INSTALL_PARSE_FAILED_NOT_APK: Failed to parse /data/app/vmdl#.tmp/story: Failed to load asset path /data/app/vmdl#.tmp/story) - it will try again
+kind: update | 1 times | 1 phones | fixed: 0 
+where: updater
+what: Quiet update failed (INSTALL_PARSE_FAILED_NOT_APK: Failed to parse /data/app/vmdl#.tmp/story: Failed to load asset path /data/app/vmdl#.tmp/story) - it will try again
+latest: app 1.254 / screens main f3135cf / samsung SM-A155F · Android 16 (API 36)
+first: 2026-10-28T14:34:44Z last: 2026-10-28T14:34:44Z
+---
+sig: slow|pages|GALLERY took over #.# s to open
+kind: slow | 2 times | 1 phones | fixed: 0 
+where: pages
+what: GALLERY took over 1.5 s to open
+latest: app 1.245 / screens main 9be5a79 / samsung SM-A155F · Android 16 (API 36)
+first: 2026-10-24T17:02:11Z last: 2026-10-25T13:48:43Z
+---
+sig: music|dashboard music card|prev not done (refused) by com.spotify.music
+kind: music | 1 times | 1 phones | fixed: 0 
+where: dashboard music card
+what: prev not done (refused) by com.spotify.music
+latest: app 1.230 / screens main 7a8d898 / samsung SM-A155F · Android 16 (API 36)
+first: 2026-10-22T12:14:45Z last: 2026-10-22T12:14:45Z
+---
+sig: music|dashboard music card|play not done (refused) by com.spotify.music
+kind: music | 1 times | 1 phones | fixed: 0 
+where: dashboard music card
+what: play not done (refused) by com.spotify.music
+latest: app 1.230 / screens main 7a8d898 / samsung SM-A155F · Android 16 (API 36)
+first: 2026-10-22T12:14:24Z last: 2026-10-22T12:14:24Z
