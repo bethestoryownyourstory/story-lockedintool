@@ -5740,6 +5740,8 @@ function totalsCur(){ try{ const c = localStorage.getItem(TOTAL_CUR_KEY) || ''; 
 function convCur(){ return accountCur() || (curAuto() ? totalsCur() : ''); }
 // How ONE payment is shown: with 'Each payment's own', in the currency it came in (even though its totals are converted).
 function payShown(t){ return curAuto() && t && t.origCur ? { amt:t.origAmt, cur:t.origCur, bal:t.origBal } : t; }
+// What Account currency shows as (Profile menu / Edit profile): never 'Each payment's own' unless you chose it.
+function curLabel(){ let v = ''; try{ v = localStorage.getItem(ACCOUNT_CUR_KEY) || ''; }catch(e){} return v === 'AUTO' ? 'Each payment’s own' : (accountCur() || 'Choose your country'); }
 function accountCur(){ try{ const c = localStorage.getItem(ACCOUNT_CUR_KEY) || ''; if(c === 'AUTO') return ''; if(/^[A-Z]{3}$/.test(c)) return c; return COUNTRY_CURRENCY[accountCountry()] || ''; }catch(e){ return ''; } }
 function fxRates(){ try{ return JSON.parse(localStorage.getItem(FX_KEY) || 'null'); }catch(e){ return null; } }
 let fxBusy = false;
@@ -10227,7 +10229,7 @@ window.storyProfileText = function(){
   el.querySelector('[data-pf="ed-username"] .pf-ed-val').textContent = p.username ? '@' + p.username : '';
   el.querySelector('[data-pf="ed-bio"] .pf-ed-val').textContent = p.bio;
   el.querySelector('[data-pf="ed-about"] .pf-ed-val').textContent = p.about;
-  const cv = el.querySelector('[data-pf="ed-currency"] .pf-ed-val'); if(cv) cv.textContent = accountCur() || 'Each payment’s own';
+  const cv = el.querySelector('[data-pf="ed-currency"] .pf-ed-val'); if(cv) cv.textContent = curLabel();
   const cov = el.querySelector('[data-pf="ed-country"] .pf-ed-val'); if(cov) cov.textContent = accountCountry() || 'Choose';
   // Bio: the word "BIO" shows only while it's empty; once there's text, only the text shows.
   el.querySelector('.pf-bio-l').hidden = !!p.bio;
@@ -10749,14 +10751,14 @@ window.storyProfileOnly = function(){
     else if(k === 'cur-back'){ if(curPickTotals){ curPickTotals = false; curRender(); return; } el.querySelector('.pf-currency').hidden = true; pfMenuOpen(); }
     else if(k === 'cur-total'){ const v = b.getAttribute('data-v') || ''; if(!v) return; try{ localStorage.setItem(TOTAL_CUR_KEY, v); localStorage.setItem(ACCOUNT_CUR_KEY, 'AUTO'); }catch(err){} const cv0 = el.querySelector('[data-pf="ed-currency"] .pf-ed-val'); if(cv0) cv0.textContent = 'Each payment’s own'; curPickTotals = false; moneyCache = null; fxEnsure(); curRender(); showToast('Payments show in their own currency · your money shows in ' + v); }
     else if(k === 'cur-set' && b.getAttribute('data-v') === 'AUTO'){ curPickTotals = true; curRender(); const bx = el.querySelector('.pf-cur-list'); if(bx && bx.parentElement) bx.parentElement.scrollTop = 0; return; }   // nothing changes until a currency is chosen
-    else if(k === 'cur-set'){ const v = b.getAttribute('data-v') || ''; try{ if(v) localStorage.setItem(ACCOUNT_CUR_KEY, v); else localStorage.removeItem(ACCOUNT_CUR_KEY); }catch(err){} moneyCache = null; const now = accountCur(); if(now) fxEnsure(); curPickTotals = v === 'AUTO'; curRender(); if(curPickTotals){ const bx = el.querySelector('.pf-cur-list'); if(bx && bx.parentElement) bx.parentElement.scrollTop = 0; return; } const cv = el.querySelector('[data-pf="ed-currency"] .pf-ed-val'); if(cv) cv.textContent = now || 'Each payment’s own'; showToast(now ? 'Money shows in ' + now : 'Money shows each payment’s own currency'); }
+    else if(k === 'cur-set'){ const v = b.getAttribute('data-v') || ''; try{ if(v) localStorage.setItem(ACCOUNT_CUR_KEY, v); else localStorage.removeItem(ACCOUNT_CUR_KEY); }catch(err){} moneyCache = null; const now = accountCur(); if(now) fxEnsure(); curPickTotals = v === 'AUTO'; curRender(); if(curPickTotals){ const bx = el.querySelector('.pf-cur-list'); if(bx && bx.parentElement) bx.parentElement.scrollTop = 0; return; } const cv = el.querySelector('[data-pf="ed-currency"] .pf-ed-val'); if(cv) cv.textContent = curLabel(); showToast(now ? 'Money shows in ' + now : 'Choose your country in Edit profile for your currency'); }
     else if(k === 'ed-country'){ ed.hidden = true; const pg = el.querySelector('.pf-country'); pg.hidden = false; pg.scrollTop = 0; pg.querySelector('.pf-country-q').value = ''; countryRender(); }
     else if(k === 'country-back'){ el.querySelector('.pf-country').hidden = true; ed.hidden = false; }
     else if(k === 'country-set'){
       const c = b.getAttribute('data-v'); accountCountrySet(c); msgOut({ type:'country', country:c }); moneyCache = null; if(accountCur()) fxEnsure();
       el.querySelector('.pf-country').hidden = true; ed.hidden = false;
       const cov = el.querySelector('[data-pf="ed-country"] .pf-ed-val'); if(cov) cov.textContent = c;
-      const cv = el.querySelector('[data-pf="ed-currency"] .pf-ed-val'); if(cv) cv.textContent = accountCur() || 'Each payment’s own';
+      const cv = el.querySelector('[data-pf="ed-currency"] .pf-ed-val'); if(cv) cv.textContent = curLabel();
       showToast('Country: ' + c);
     }
     else if(k === 'cr-hl-pick') crAddToHighlight(b.getAttribute('data-id'));
@@ -10974,7 +10976,7 @@ function pfMenuOpen(){
   el.querySelector('.pf-home').hidden = true;
   const m = el.querySelector('.pf-menupage'); m.hidden = false; m.scrollTop = 0;
   m.querySelector('.pf-mp-privacy').textContent = profilePrivacy() === 'private' ? 'Private' : 'Public';
-  m.querySelector('.pf-mp-cur').textContent = accountCur() || 'Each payment’s own';
+  m.querySelector('.pf-mp-cur').textContent = curLabel();
   const nc = walletCards().length, nt = tradeAccounts().length;
   m.querySelector('.pf-mp-imp').textContent = (nc ? nc + (nc === 1 ? ' card' : ' cards') : '') + (nc && nt ? ' · ' : '') + (nt ? nt + (nt === 1 ? ' trading account' : ' trading accounts') : '') || 'Cards, trading accounts';
   m.querySelector('[data-pf="menu-reports"]').hidden = !profileLocks().official;
@@ -11358,7 +11360,9 @@ function feedNote(){
   const el = upEl(); if(!el) return; const n = el.querySelector('.pf-updates .up-feed-note'); if(!n) return;
   const searching = UP.q.trim().replace(/^@/, '').length >= 2;
   n.hidden = searching || (!FEED.loading && FEED.loaded && FEED.posts.length > 0 && FEED.more);
-  n.textContent = FEED.loading ? 'Loading…' : FEED.error ? 'No connection right now' : !FEED.posts.length ? (FEED.loaded ? 'No posts yet - be the first to post.' : '') : 'You’re all caught up';
+  // Offline: the Profiles box already says 'No connection right now' - said once, not twice.
+  const upErr = !!(UP.data && UP.data.error);
+  n.textContent = FEED.loading ? 'Loading…' : FEED.error ? (upErr ? '' : 'No connection right now') : !FEED.posts.length ? (FEED.loaded ? 'No posts yet - be the first to post.' : '') : 'You’re all caught up';
 }
 function feedRender(){
   const el = upEl(); if(!el) return;
