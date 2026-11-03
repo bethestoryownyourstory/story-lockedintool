@@ -487,6 +487,32 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         val name = if (pkg.isEmpty()) "" else runCatching { ctx.packageManager.getApplicationLabel(ctx.packageManager.getApplicationInfo(pkg, 0)).toString() }.getOrDefault("")
         return "on|$pkg|$name"
     }
+    /** Settings > SECURITY > Extra protection (owner: 'a second layer ... not removing the phone's protection'; never
+     *  worded as 'unhackable'): what on this phone makes it easier to break into. Lockedintool only LOOKS - it never
+     *  changes any of it. {lock, adb, dev, root, nfc}. */
+    @JavascriptInterface
+    fun phoneCheck(): String {
+        if (!pages) return "{}"
+        val cr = ctx.contentResolver
+        val km = ctx.getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager
+        val adb = runCatching { Settings.Global.getInt(cr, Settings.Global.ADB_ENABLED, 0) == 1 }.getOrDefault(false)
+        val dev = runCatching { Settings.Global.getInt(cr, Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0) == 1 }.getOrDefault(false)
+        // Root: the usual signs - an su binary in the system's paths, or a build signed with test keys.
+        val su = listOf("/system/bin/su", "/system/xbin/su", "/sbin/su", "/system/sbin/su", "/vendor/bin/su", "/su/bin/su", "/data/local/xbin/su", "/data/local/bin/su", "/system/app/Superuser.apk")
+            .any { runCatching { java.io.File(it).exists() }.getOrDefault(false) }
+        val root = su || (android.os.Build.TAGS ?: "").contains("test-keys")
+        val nfc = runCatching { android.nfc.NfcAdapter.getDefaultAdapter(ctx)?.isEnabled == true }.getOrDefault(false)
+        return org.json.JSONObject().put("lock", km.isDeviceSecure).put("adb", adb).put("dev", dev).put("root", root).put("nfc", nfc).toString()
+    }
+    /** Opens the phone's own screen to fix one (Lockedintool steps aside): lock = Security, dev = Developer options. */
+    @JavascriptInterface
+    fun securityOpen(kind: String) {
+        if (!pages) return
+        val a = when (kind) { "lock" -> Settings.ACTION_SECURITY_SETTINGS; "dev" -> Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS; else -> return }
+        host.hidePanel()
+        runCatching { ctx.startActivity(Intent(a).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            .onFailure { runCatching { ctx.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
+    }
     /** Only to switch NFC on (Android doesn't let an app do it itself). */
     @JavascriptInterface
     fun nfcSettings() {

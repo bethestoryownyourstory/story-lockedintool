@@ -1452,6 +1452,9 @@
   .sub-opt{ position:relative; flex:1; padding:12px 8px; border-radius:14px; border:1px solid #2a2a2a; background:#000000; color:#ffffff; font:inherit; font-size:14px; font-weight:800; cursor:pointer; }
   .sub-opt{ display:flex; align-items:center; justify-content:center; gap:6px; }
   .sub-opt.on{ border-color:#ffffff; }
+  .pc-ok{ color:#30d158; font-weight:800; font-size:16px; flex:0 0 auto; }
+  .pc-warn{ color:#ff9f0a; font-weight:900; font-size:16px; flex:0 0 auto; width:18px; text-align:center; }
+  .pc-fix{ flex:0 0 auto; padding:7px 14px; border-radius:10px; border:1px solid #ff9f0a; background:#000000; color:#ff9f0a; font:inherit; font-size:12.5px; font-weight:800; }
   /* Card details (Wallet, after the phone's own unlock) */
   .cardrv-row{ display:flex; flex-wrap:wrap; align-items:center; gap:4px 10px; padding:12px 0; border-bottom:1px solid #1f1f1f; min-width:0; }
   .cardrv-l{ font-size:11px; font-weight:700; letter-spacing:0.06em; color:#8a8a8a; flex:0 0 100%; }
@@ -5346,7 +5349,21 @@ function securitySettingsHTML(){
           <button class="theme-opt${lit ? ' on' : ''}" data-action="sec-mode" data-v="lit">Lockedintool security</button>
         </div>
       </div>
+      ${phoneCheckHTML()}
     </div>`;
+}
+// Extra protection (owner, Oct 2026: 'a real fight ... a second layer of protection ... not removing the phone's
+// protection'; NEVER worded as 'can't be hacked'): Lockedintool looks at what makes this phone easier to break into and
+// says so - it never changes or blocks anything (the phone works as it always does). Fixes open the phone's own screens.
+function phoneCheckHTML(){
+  if(!NATIVE || !window.StoryNative.phoneCheck) return '';
+  let c = {}; try{ c = JSON.parse(window.StoryNative.phoneCheck() || '{}'); }catch(e){}
+  const row = (ok, name, good, bad, fix)=>`<div class="set2-row"><div class="set2-text"><div class="set2-name">${name}</div><div class="set2-sub">${ok ? good : bad}</div></div>${ok ? '<span class="pc-ok">✓</span>' : fix ? `<button class="pc-fix" data-action="pc-fix" data-v="${fix}">Fix</button>` : '<span class="pc-warn">!</span>'}</div>`;
+  return `<div class="set2-row set2-stack"><div class="set2-text"><div class="set2-name">Extra protection</div><div class="set2-sub">Lockedintool checks what makes your phone easier to break into. It only looks - it never changes anything. No phone is impossible to hack; this is a second layer on top of your phone’s own.</div></div></div>` +
+    row(!!c.lock, 'Screen lock', 'On - your phone needs your PIN, pattern or fingerprint', 'Off - anyone holding your phone can open it. Set a PIN, pattern or fingerprint.', 'lock') +
+    row(!c.adb, 'USB debugging', 'Off', 'On - a computer plugged into your phone can control it. Turn it off unless you’re building apps.', 'dev') +
+    row(!c.root, 'Phone’s own protection', 'Intact', 'Signs this phone is rooted - its built-in protection was removed, so apps can reach things they normally can’t.', '') +
+    row(!c.nfc, 'Tap to pay chip (NFC)', 'Off', 'On - only needed while you pay. A locked phone can’t pay just because someone holds a card reader near it.', '');
 }
 function secModeSet(v){
   v = v === 'lit' ? 'lit' : 'phone';
@@ -18553,6 +18570,7 @@ function attachHandlers(){
         case 'receive-open': state.pay.recvFrom = state.current === 'money' ? 'money' : 'wallet'; state.moneyTransferOpen = false; state.favoritesOpen = false; state.current = 'receive-money'; state.pay.info = null; state.pay.loading = false; break;
         case 'sub-buy': subBuy(el.getAttribute('data-plan')); break;
         case 'widgets-only': widgetsOnlyAsk(); break;
+        case 'pc-fix': try{ window.StoryNative.securityOpen(el.getAttribute('data-v')); }catch(e){} return;
         case 'sec-mode': secModeSet(el.getAttribute('data-v')); break;
         case 'sub-opt': state.sub.optView = el.getAttribute('data-v'); renderDevice(); break;
         case 'sub-opt-back': state.sub.optView = null; renderDevice(); break;
@@ -20496,7 +20514,7 @@ function notePageSwipeGo(idx){
 // Apps scrolls (every app on the phone), never shrinks. Settings and Information (+ its Privacy / Terms / Safety pages)
 // scroll at their normal size too (owner, 3 Nov 2026: 'settings and information they can be scrollable so that the texts
 // become more visible' - shrunk to fit they came out at half size).
-const SCROLL_PAGES = new Set(['settings','information','legal-privacy','legal-terms','legal-safety']);
+const SCROLL_PAGES = new Set(['settings','information','legal-privacy','legal-terms','legal-safety','subscription']);   // + Subscription (its plan texts were small too)
 const NO_FIT_SCREENS = new Set(['notes-canvas','scratch-draw','apps', ...SCROLL_PAGES]);
 const FIT_MIN_SCALE = 0.5;
 const FIT_MAX_SCALE = 1.35;
