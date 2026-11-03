@@ -20498,6 +20498,9 @@ const FIT_MAX_SCALE = 1.35;
 const FIT_CACHE = {};
 function fitPageToScreen(area, el, pageKey){
   if(!area) return;
+  // Station 3's windows (bar, dial pad, lock screen dial pad, Profile and its gap) never show the Pages - sizing a page there
+  // was only wasted work (the phone's reports showed them measuring Wallet over and over).
+  if(/[?&]s3=1/.test(location.search)) return;
   el = el || area.firstElementChild;
   // Rows and Page Styles are laid out for the screen themselves: never zoomed (they used to take the zoom of the page
   // they were opened from - the 3D Circle came out 35% bigger from Wallet, smaller from Focus - and the whole 3D
