@@ -2674,6 +2674,15 @@
   #story-profile .up-cell img{ width:100%; height:100%; object-fit:cover; display:block; }
   #story-profile .up-cell-v{ position:absolute; right:6px; top:5px; font-size:11px; color:#fff; text-shadow:0 0 3px #000; }
   #story-profile .pf-ed-note{ font-size:12px; color:var(--pf-muted); line-height:1.4; padding:2px 2px 10px; }
+  #story-profile .pf-imp-card{ cursor:pointer; }
+  #story-profile .pf-imp-open{ padding:2px 2px 10px; }
+  #story-profile .pf-imp-d{ display:flex; flex-wrap:wrap; align-items:center; gap:2px 10px; padding:8px 0; }
+  #story-profile .pf-imp-dl{ flex:0 0 100%; font-size:11px; font-weight:700; letter-spacing:0.05em; text-transform:uppercase; color:var(--pf-muted); }
+  #story-profile .pf-imp-dv{ flex:1; min-width:0; font-size:17px; font-weight:700; letter-spacing:0.04em; white-space:nowrap; font-variant-numeric:tabular-nums; }
+  #story-profile .pf-imp-two{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  #story-profile .pf-imp-copy, #story-profile .pf-imp-keepbtn{ flex:0 0 auto; padding:7px 12px; border-radius:10px; border:1px solid var(--pf-hair); background:transparent; color:inherit; font:inherit; font-size:12.5px; font-weight:700; }
+  #story-profile .pf-imp-pw{ width:100%; box-sizing:border-box; padding:11px 12px; border-radius:10px; border:1px solid var(--pf-hair); background:transparent; color:inherit; font:inherit; font-size:14px; margin:4px 0 10px; }
+  #story-profile .pf-imp-keepbtn{ width:100%; padding:11px; }
   #story-profile .pf-ed-sub{ font-size:12px; font-weight:700; color:var(--pf-muted); letter-spacing:0.4px; text-transform:uppercase; margin:22px 2px 8px; }
   #story-profile .pf-pr-body input{ width:100%; box-sizing:border-box; padding:13px 14px; border-radius:12px; border:1px solid var(--pf-hair); background:transparent; color:var(--pf-fg); font:inherit; font-size:15px; outline:none; margin-top:6px; }
   #story-profile .pf-pr-body input.pf-pr-code{ font-size:22px; letter-spacing:6px; text-align:center; }
@@ -6496,7 +6505,7 @@ function httpReq(method, url, headers, body){
 }
 const parseJ = t=>{ try{ return JSON.parse(t); }catch(e){ return null; } };
 function secretGet(k){ try{ return NATIVE && window.StoryNative.secretGet ? window.StoryNative.secretGet(k) : (localStorage.getItem('sec:' + k) || ''); }catch(e){ return ''; } }
-function secretSet(k, v){ try{ if(NATIVE && window.StoryNative.secretSet) window.StoryNative.secretSet(k, v || ''); else if(v) localStorage.setItem('sec:' + k, v); else localStorage.removeItem('sec:' + k); }catch(e){} }
+function secretSet(k, v){ if(typeof impChanged === 'function') impChanged(); try{ if(NATIVE && window.StoryNative.secretSet) window.StoryNative.secretSet(k, v || ''); else if(v) localStorage.setItem('sec:' + k, v); else localStorage.removeItem('sec:' + k); }catch(e){} }
 
 function tradeAccounts(){ try{ return JSON.parse(localStorage.getItem(TRADE_ACCOUNTS_KEY) || '[]') || []; }catch(e){ return []; } }
 function saveTradeAccounts(list){ try{ localStorage.setItem(TRADE_ACCOUNTS_KEY, JSON.stringify(list)); }catch(e){} }
@@ -8135,6 +8144,7 @@ function cardVaultOk(){ return NATIVE && !!(window.StoryNative && window.StoryNa
 function cardVaultHas(id){ try{ return cardVaultOk() && !!window.StoryNative.cardVaultHas(id); }catch(e){ return false; } }
 function cardVaultSave(id, pan, exp, cvv, net){
   if(!cardVaultOk()) return false;
+  impChanged();
   try{ return !!window.StoryNative.cardVaultSet(id, JSON.stringify({ pan: String(pan).replace(/\D/g, ''), exp, cvv: String(cvv).replace(/\D/g, ''), net })); }catch(e){ return false; }
 }
 let cardRevealTimer = null;
@@ -8148,6 +8158,13 @@ function cardRevealAsk(id){
   try{ window.StoryNative.cardReveal(id); return true; }catch(e){ return false; }
 }
 window.storyCardReveal = function(id, value, result){
+  if(result === 'ok' && value && document.querySelector('#story-profile .pf-important:not([hidden])')){
+    let d = null; try{ d = JSON.parse(value); }catch(e){} if(!d) return;
+    IMP.open = { id, pan: d.pan || '', exp: d.exp || '', cvv: d.cvv || '', net: d.net || '' };
+    try{ window.StoryNative.cardSecure(true); }catch(e){}
+    clearTimeout(IMP.t); IMP.t = setTimeout(()=>{ impHide(); impRender(); }, 120000);
+    impRender(); return;
+  }
   if(result === 'ok' && value){
     let d = null; try{ d = JSON.parse(value); }catch(e){}
     if(!d || state.current !== 'wallet') return;
@@ -10409,7 +10426,12 @@ window.storyProfileOnly = function(){
       <div class="pf-ed-head"><button class="pf-ed-back" data-pf="menu-back" aria-label="Back">‹</button><div class="pf-ed-title">Menu</div></div>
       <div class="pf-ed-row" data-pf="menu-privacy"><span>Profile privacy</span><span class="pf-ed-val pf-mp-privacy"></span></div>
       <div class="pf-ed-row" data-pf="ed-currency"><span>Account currency</span><span class="pf-ed-val pf-mp-cur"></span></div>
+      <div class="pf-ed-row" data-pf="menu-important"><span>Important data</span><span class="pf-ed-val pf-mp-imp"></span></div>
       <div class="pf-ed-row" data-pf="menu-reports" hidden><span>Reports</span><span class="pf-ed-val">Review what people reported</span></div>
+    </div>
+    <div class="pf-scroll pf-important" hidden>
+      <div class="pf-ed-head"><button class="pf-ed-back" data-pf="imp-back" aria-label="Back">‹</button><div class="pf-ed-title">Important data</div></div>
+      <div class="pf-imp-body"></div>
     </div>
     <div class="pf-scroll pf-privacy" hidden>
       <div class="pf-ed-head"><button class="pf-ed-back" data-pf="pv-back" aria-label="Back">‹</button><div class="pf-ed-title">Profile privacy</div></div>
@@ -10601,6 +10623,22 @@ window.storyProfileOnly = function(){
         { label: v.status ? 'Report status' : 'Report post', fn: ()=>litReport(v.status ? 'status' : 'post', it.id, { onClose: ()=>{ if(UP.view === v) upShowItem(); } }) },
         { label: 'Block', danger:true, fn: ()=>{ if(UP.view === v) upShowItem(); litBlock(v.user, true, ()=>{ upCloseView(); upLoad(); }); } }] }); }
     else if(k === 'upv-creport') litReport('comment', b.getAttribute('data-id'));
+    else if(k === 'menu-important'){ el.querySelector('.pf-menupage').hidden = true; main.hidden = true; const pg = el.querySelector('.pf-important'); pg.hidden = false; pg.scrollTop = 0; IMP.open = null; impRender(); }
+    else if(k === 'imp-back'){ impClose(); el.querySelector('.pf-important').hidden = true; pfMenuOpen(); }
+    else if(k === 'imp-card'){
+      const id = b.getAttribute('data-id');
+      if(IMP.open && IMP.open.id === id){ impHide(); impRender(); return; }
+      impHide(); impRender();
+      if(!cardRevealAsk(id)) showToast('This card’s details aren’t saved - hold the card in Wallet and tap Save card details');
+    }
+    else if(k === 'imp-copy'){
+      const r = IMP.open; if(!r) return;
+      const f = b.getAttribute('data-k'), v = f === 'pan' ? r.pan : f === 'exp' ? r.exp : r.cvv;
+      let ok = false; try{ ok = !!window.StoryNative.cardCopy(v); }catch(e){}
+      if(!ok) ok = copyTextFallback(v);
+      showToast(ok ? (f === 'pan' ? 'Card number copied' : f === 'exp' ? 'Expiry copied' : 'CVV copied') : 'Couldn’t copy');
+    }
+    else if(k === 'imp-keep'){ impKeep(); }
     else if(k === 'menu-privacy'){ el.querySelector('.pf-menupage').hidden = true; main.hidden = true; const pv = el.querySelector('.pf-privacy'); pv.hidden = false; pv.scrollTop = 0; pvRender(); }
     else if(k === 'pv-back'){ el.querySelector('.pf-privacy').hidden = true; pfMenuOpen(); }
     else if(k === 'pv-set'){ const p = storyPrivacy(); p.profile = b.getAttribute('data-v') === 'private' ? 'private' : 'public'; setStoryPrivacy(p); pvRender(); msgFlush(); }
@@ -10882,6 +10920,51 @@ function curRender(){
   box.innerHTML = [['', own ? 'Your country’s currency (' + own + ')' : 'Your country’s currency', own ? accountCountry() : 'Choose your country in Edit profile'], ['AUTO', 'Each payment’s own', 'Every payment in the currency it came in' + (sel === 'AUTO' && totalsCur() ? ' · your money shows in ' + totalsCur() : '')]].concat(ACCOUNT_CURRENCIES.map(([c, n])=>[c, c, n])).map(([v, t, d])=>
     '<button class="pf-pv-opt' + (sel === v ? ' on' : '') + '" data-pf="cur-set" data-v="' + v + '"><span class="pf-pv-txt"><div class="pf-pv-t">' + escText(t) + '</div><div class="pf-pv-d">' + escText(d) + '</div></span><span class="pf-pv-dot"></span></button>').join('');
 }
+// ---- Important data (owner, 3 Nov 2026: 'Under profile, Profile menu, then Important data, then you tap it then you have
+// your cards, tap that and their details show'; 'If log back on Lockedintool, data is saved ... also trading data ... accounts').
+// Your cards (tap one -> the phone's own unlock -> its number, expiry, CVV, with Copy) and your trading accounts. Both are in
+// your locked backup, locked AGAIN with a key from your password (the 'pk' key - the server never has it), so logging back in
+// brings them back. A phone signed in before this needs the password typed once here to start keeping them. ----
+const IMP = { open:null, keep:null, t:0 };
+function impHide(){
+  if(!IMP.open) return;
+  IMP.open = null; clearTimeout(IMP.t);
+  try{ if(NATIVE && window.StoryNative.cardSecure) window.StoryNative.cardSecure(false); }catch(e){}
+}
+function impClose(){ impHide(); }
+async function impRender(){
+  const box = document.querySelector('#story-profile .pf-imp-body'); if(!box) return;
+  const cards = walletCards(), accts = tradeAccounts();
+  if(IMP.keep === null){ IMP.keep = !!(await litKeyGet('pk').catch(()=>null)); }
+  const r = IMP.open;
+  const det = (label, val, f)=>'<div class="pf-imp-d"><div class="pf-imp-dl">' + label + '</div><div class="pf-imp-dv">' + escText(val || '—') + '</div><button class="pf-imp-copy" data-pf="imp-copy" data-k="' + f + '">Copy</button></div>';
+  box.innerHTML =
+    '<div class="pf-ed-note">Only on this phone and in your locked backup - nobody else can see them, not even Lockedintool. Card details show after your fingerprint, face or PIN.</div>' +
+    '<div class="pf-ed-sub">Cards</div>' +
+    (cards.length ? cards.map(c=>{
+      const has = cardVaultHas(c.id), on = r && r.id === c.id;
+      return '<div class="pf-ed-row pf-imp-card" data-pf="imp-card" data-id="' + escText(c.id) + '"><span>' + escText(c.bank || c.net || 'Card') + ' ••' + escText(c.last4 || '') + '</span><span class="pf-ed-val">' + (has ? (on ? 'Hide' : 'Show details') : 'Details not saved') + '</span></div>' +
+        (on ? '<div class="pf-imp-open">' + det('Card number', cardPanGroups(r.pan, r.net), 'pan') + '<div class="pf-imp-two">' + det('Expires', r.exp, 'exp') + det('CVV', r.cvv, 'cvv') + '</div></div>' : '');
+    }).join('') : '<div class="pf-ed-note">No cards yet - add one in Wallet.</div>') +
+    '<div class="pf-ed-sub">Trading accounts</div>' +
+    (accts.length ? accts.map(a=>'<div class="pf-ed-row"><span>' + escText(a.name || 'Account') + '</span><span class="pf-ed-val">' + escText(((PLATFORMS[a.platform] || {}).label || '') + (a.env === 'demo' ? ' Demo' : '')) + '</span></div>').join('') : '<div class="pf-ed-note">No trading accounts yet - log in to your broker on the Trading page.</div>') +
+    '<div class="pf-ed-sub">When you log back in</div>' +
+    (IMP.keep ? '<div class="pf-ed-note">Kept in your locked backup - log back in on Lockedintool (this phone or a new one) and they come back.</div>'
+      : '<div class="pf-ed-note">Type your password once so Lockedintool can keep these in your locked backup - then logging back in brings them back.</div>' +
+        '<input class="pf-imp-pw" type="password" placeholder="Your password" autocomplete="current-password" onfocus="profileTypingOn()"><button class="pf-imp-keepbtn" data-pf="imp-keep">Keep in my backup</button>');
+}
+async function impKeep(){
+  const inp = document.querySelector('#story-profile .pf-imp-pw'), pw = inp ? inp.value : ''; if(!pw) return;
+  const btn = document.querySelector('#story-profile .pf-imp-keepbtn'); if(btn){ btn.disabled = true; btn.textContent = 'Checking…'; }
+  try{
+    const j = await msgApi('/v1/backup/get');
+    const wrap = await litBackupKey(pw, j.bksalt || '');
+    await litOpen(wrap, j.mkbox);   // the right password opens your account key - a wrong one throws
+    await litKeyPut('pk', wrap); IMP.keep = true;
+    litBackupAt = 0; await litBackupNow();
+    showToast('Your important data is in your backup'); impRender();
+  }catch(e){ showToast('That password isn’t right'); if(btn){ btn.disabled = false; btn.textContent = 'Keep in my backup'; } }
+}
 // Profile's ⋮ (owner): a full-screen page of its own - Profile privacy, Account currency (and Reports for official).
 function pfMenuOpen(){
   const el = document.getElementById('story-profile'); if(!el) return;
@@ -10889,6 +10972,8 @@ function pfMenuOpen(){
   const m = el.querySelector('.pf-menupage'); m.hidden = false; m.scrollTop = 0;
   m.querySelector('.pf-mp-privacy').textContent = profilePrivacy() === 'private' ? 'Private' : 'Public';
   m.querySelector('.pf-mp-cur').textContent = accountCur() || 'Each payment’s own';
+  const nc = walletCards().length, nt = tradeAccounts().length;
+  m.querySelector('.pf-mp-imp').textContent = (nc ? nc + (nc === 1 ? ' card' : ' cards') : '') + (nc && nt ? ' · ' : '') + (nt ? nt + (nt === 1 ? ' trading account' : ' trading accounts') : '') || 'Cards, trading accounts';
   m.querySelector('[data-pf="menu-reports"]').hidden = !profileLocks().official;
 }
 function countryRender(){
@@ -10960,6 +11045,7 @@ function pfResetView(){
   el.querySelector('.pf-updates .pf-msgs-search input').value = ''; UP.q = ''; UP.found = null;
   el.querySelector('.cr-pick').hidden = true;
   el.querySelector('.pf-menupage').hidden = true; el.querySelector('.pf-privacy').hidden = true; el.querySelector('.pf-reports').hidden = true; el.querySelector('.pf-private').hidden = true; el.querySelector('.pf-currency').hidden = true; el.querySelector('.pf-country').hidden = true;
+  impClose(); el.querySelector('.pf-important').hidden = true;
   el.querySelector('.up-compose').hidden = true; upClosePost(); fcsClose();
   const ms = el.querySelector('.pf-msgs .pf-msgs-search input'); if(ms){ ms.value = ''; } msgView.q = ''; msgView.menuFor = null;
   if(crRecording && NATIVE && window.StoryNative.createVideo) window.StoryNative.createVideo(false);
@@ -19598,6 +19684,35 @@ async function litKeysFromBox(bk, keybox){
 function litSignedIn(){ const a = msgAccount(); return !!(a && a.token && a.pw); }
 // ---- The locked backup: chats, people's keys, call history, privacy, blocks, community choices ----
 const LIT_BACKUP_KEYS = ['story-currency', 'story-currency-total', 'story-country', 'story-messages', 'story-msg-peers', 'story-calls', 'story-privacy', 'story-blocked', 'story-community', 'story-community-chats', 'story-community-always-mine', 'story-status-seen', 'story-profile-locks'];
+// Important data (owner, 3 Nov 2026): cards + trading accounts ride in the backup too, sealed a SECOND time with the 'pk'
+// key made from your password (the server keeps a spare of the account key for resets - it never has this one). A password
+// reset therefore can't bring these back (the old password's key is gone) - chats still come back.
+const IMP_LS_KEYS = ['story-cards', 'story-card-active', 'story-trade-accounts', 'story-trade-active', 'story-trade-last'];
+async function litImpSeal(){
+  const pk = await litKeyGet('pk').catch(()=>null); if(!pk) return null;
+  const ls = {}; IMP_LS_KEYS.forEach(k=>{ try{ const v = localStorage.getItem(k); if(v != null) ls[k] = v; }catch(e){} });
+  let nat = {}; try{ if(NATIVE && window.StoryNative.importantExport) nat = JSON.parse(window.StoryNative.importantExport() || '{}'); }catch(e){}
+  return JSON.stringify(await litSeal(pk, { ls, nat }));
+}
+async function litImpOpen(pk, sealed){
+  if(!pk || !sealed) return;
+  const j = await litOpen(pk, JSON.parse(sealed));
+  const ls = j.ls || {};
+  const mergeById = (k)=>{   // what's already on this phone stays; the backup adds what's missing
+    let here = [], there = [];
+    try{ here = JSON.parse(localStorage.getItem(k) || '[]') || []; }catch(e){}
+    try{ there = JSON.parse(ls[k] || '[]') || []; }catch(e){}
+    if(k === 'story-cards') there = there.map(c=>Object.assign({}, c, { photo:'', photoBack:'' }));   // card pictures stay on the phone that took them
+    const ids = new Set(here.map(x=>x && x.id));
+    localStorage.setItem(k, JSON.stringify(here.concat(there.filter(x=>x && !ids.has(x.id)))));
+  };
+  try{ if(ls['story-cards']) mergeById('story-cards'); }catch(e){}
+  try{ if(ls['story-trade-accounts']) mergeById('story-trade-accounts'); }catch(e){}
+  ['story-card-active', 'story-trade-active', 'story-trade-last'].forEach(k=>{ try{ if(ls[k] != null && localStorage.getItem(k) == null) localStorage.setItem(k, ls[k]); }catch(e){} });
+  try{ if(NATIVE && window.StoryNative.importantImport && j.nat) window.StoryNative.importantImport(JSON.stringify(j.nat)); }catch(e){}
+}
+if(MSG_ENGINE) window.addEventListener('storage', e=>{ if(IMP_LS_KEYS.includes(e.key) || e.key === 'story-imp-at') litBackupSoon(); });
+function impChanged(){ try{ localStorage.setItem('story-imp-at', String(Date.now())); }catch(e){} }
 let litBackupT = 0, litBackupAt = 0, litBackupBusy = false;
 function litBackupSoon(){
   if(!MSG_ENGINE || !litSignedIn()) return;
@@ -19610,6 +19725,7 @@ async function litBackupNow(){
   try{
     const bk = await litKeyGet('bk'); if(!bk) return false;
     const data = {}; LIT_BACKUP_KEYS.forEach(k=>{ try{ const v = localStorage.getItem(k); if(v != null) data[k] = v; }catch(e){} });
+    try{ const imp = await litImpSeal(); if(imp) data.__imp = imp; }catch(e){}
     let bytes = new TextEncoder().encode(JSON.stringify({ v:1, at: Date.now(), data })), z = false;
     if(typeof CompressionStream === 'function'){ bytes = new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer()); z = true; }
     const iv = crypto.getRandomValues(new Uint8Array(12));
@@ -19620,13 +19736,14 @@ async function litBackupNow(){
   }catch(e){ return false; }
   finally{ litBackupBusy = false; }
 }
-async function litBackupRestore(bk, backup){
+async function litBackupRestore(bk, backup, pk){
   if(!backup || !backup.media) return;
   const r = await fetch(MSG_API + '/v1/media/' + backup.media); if(!r.ok) return;
   let bytes = new Uint8Array(await crypto.subtle.decrypt({ name:'AES-GCM', iv: B64.from(backup.iv) }, bk, await r.arrayBuffer()));
   if(backup.z) bytes = new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer());
   const j = JSON.parse(new TextDecoder().decode(bytes));
   for(const k of LIT_BACKUP_KEYS) if(j.data && j.data[k] != null) try{ localStorage.setItem(k, j.data[k]); }catch(e){}
+  if(pk && j.data && j.data.__imp) try{ await litImpOpen(pk, j.data.__imp); }catch(e){}
 }
 // ---- The screens ----
 let litAuthCountry = '';
@@ -19830,14 +19947,14 @@ async function litAuthAct(k, btn){
       if(!mk && j.mk){ mk = j.mk; rewrap = true; }
       const lockKey = mk ? await litMkImport(mk) : wrap;   // accounts from before the account key: locked with the password key
       let jwk = null; if(j.keybox){ try{ jwk = await litOpen(lockKey, j.keybox); }catch(e){} }
-      try{ await litBackupRestore(lockKey, j.backup); }catch(e){ if(j.backup) showToast('Couldn’t bring back your chats this time'); }
+      try{ await litBackupRestore(lockKey, j.backup, wrap); }catch(e){ if(j.backup) showToast('Couldn’t bring back your chats this time'); }
       let mkKey = mk ? lockKey : null, keys = jwk ? await litKeysFromJwk(jwk) : null, newPub = '';
       const mkBody = {};
       if(!mk){ const n = await litMkNew(); mk = n.b64; mkKey = n.key; mkBody.mkspare = mk; rewrap = true; if(jwk) mkBody.keybox = await litSeal(mkKey, jwk); }
       if(!keys){ const nk = await litNewKeys(mkKey); keys = { priv: nk.priv, pub: nk.pub }; mkBody.keybox = nk.keybox; newPub = nk.pub; }
       if(rewrap || mkBody.keybox){ mkBody.mkbox = await litSeal(wrap, { mk }); await call('/v1/auth/mk', mkBody); }
       if(newPub) await call('/v1/me', { pub: newPub });
-      await keysPut({ priv: keys.priv, pub: keys.pub }); await litKeyPut('bk', mkKey);
+      await keysPut({ priv: keys.priv, pub: keys.pub }); await litKeyPut('bk', mkKey); await litKeyPut('pk', wrap);
       // Your profile comes back from the server (bio and About too), so nothing on it is lost.
       let prof = {}; try{ const pr = await fetch(MSG_API + '/v1/profile?id=' + encodeURIComponent(j.id), { headers:{ authorization:'Bearer ' + j.token } }); if(pr.ok) prof = await pr.json(); }catch(e){}
       saveProfileData({ name: j.name || '', username: j.username || username, bio: prof.bio || '', about: prof.about || '' });
@@ -19865,7 +19982,7 @@ async function litAuthAct(k, btn){
       const me = await call('/v1/me', { name, username, pub: keys.pub, country: litAuthCountry });
       accountCountrySet(litAuthCountry);
       await call('/v1/auth/set', { auth, pwsalt, bksalt, keybox: keys.keybox, mkbox: await litSeal(wrap, { mk: mk.b64 }), mkspare: mk.b64 });
-      await keysPut({ priv: keys.priv, pub: keys.pub }); await litKeyPut('bk', mk.key);
+      await keysPut({ priv: keys.priv, pub: keys.pub }); await litKeyPut('bk', mk.key); await litKeyPut('pk', wrap);
       profileLocksSave(me); saveProfileData({ name: me.name || name, username: me.username || username });
       await litAccountSave(acct, null, pw, pwsalt);
       try{ localStorage.removeItem('story-signed-out'); }catch(e){}
