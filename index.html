@@ -20316,7 +20316,7 @@ function fitPageToScreen(area, el, pageKey){
       // Things pinned to the screen (Money's $ transfer button...) aren't part of the page's height: counting them
       // shrank a fresh phone's Money page to ~half with a third of the screen empty (owner, 3 Nov 2026).
       const cs = getComputedStyle(c);
-      if(cs.position === 'fixed' || cs.display === 'none') return;
+      if(cs.position === 'fixed' || cs.position === 'absolute' || cs.display === 'none' || cs.visibility === 'hidden') return;
       const b = c.getBoundingClientRect().bottom + (parseFloat(cs.marginBottom) || 0);
       if(b > cb) cb = b;
     });
@@ -20379,6 +20379,12 @@ function fitPageToScreen(area, el, pageKey){
     m = measure();
   }
   FIT_CACHE[key] = { zoom, limit, bottom:m.bottom, unsure, seen: !unsure };
+  // A page squeezed far smaller than normal on a real phone tells Lockedintool's problem report what it measured,
+  // so a page that doesn't fill the screen can be fixed for every phone (owner: pages always full screen).
+  if(NATIVE && !unsure && zoom < 0.8 && window.litProblem) try{
+    const kids = Array.from(el.children).map(c=>({ c:(c.className || c.tagName).toString().split(' ')[0].slice(0, 24), b:Math.round(c.getBoundingClientRect().bottom), p:getComputedStyle(c).position[0] })).sort((x, y)=>y.b - x.b).slice(0, 3);
+    litProblem('fit', page + ' z' + zoom.toFixed(2) + ' lim' + Math.round(limit) + ' top' + Math.round(m.top) + ' ' + kids.map(k=>k.c + ':' + k.b + k.p).join(' '), 'fit');
+  }catch(e){}
 }
 
 // Works out every swipe page's fit ahead of time, off screen, so even the first swipe to a page
