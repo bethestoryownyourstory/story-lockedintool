@@ -16,10 +16,10 @@ import java.net.URL
  * release.json in the repo, so it can be set or changed without a new build.
  */
 object Release {
-    private const val GH = "https://github.com/bethestoryownyourstory/story-lockedintool/releases/download/"
+    private const val GH = "https://lockedintool.com/releases/"
     const val TEST_BASE = GH + "latest/"
     const val LIVE_BASE = GH + "live/"
-    private const val CONFIG = "https://raw.githubusercontent.com/bethestoryownyourstory/story-lockedintool/main/release.json"
+    private const val CONFIG = "https://lockedintool.com/releases/release.json"
     const val REQUIRED_AFTER_MS = 3 * 24 * 60 * 60_000L
     const val LATER_MS = 24 * 60 * 60_000L
 

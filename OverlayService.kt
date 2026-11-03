@@ -167,7 +167,10 @@ class OverlayService : Service(), StoryBridge.Host {
         addBubble()
         addBar()
         ui.postDelayed(topLayerCheck, 15_000)   // still no accessibility layer by then: say so (Station 3 can't stay on top)
-        ui.post { warmUp() }  // build both panes now so Station 3 and Pages open instantly
+        // The screens' one-time move to Lockedintool's own address (OriginMove) happens before any window loads, so
+        // everything the phone kept comes along; then the windows are built (instantly, as always, once it's done).
+        if (OriginMove.moved(this)) { REMOTE = OriginMove.NEW; ui.post { warmUp() } }
+        else { originMoving = true; OriginMove.run(this) { ok -> originMoving = false; if (ok) REMOTE = OriginMove.NEW; if (instance === this) warmUp() } }
         ui.postDelayed(updateLoop, 15_000)  // then look for a new STORY version in the background
         Updater.schedule(this)              // and keep checking every 15 minutes even if STORY is off
         StoryBridge.refreshApps(this)  // the Apps area's list is ready before it's ever opened
@@ -773,7 +776,9 @@ class OverlayService : Service(), StoryBridge.Host {
         return "window.__s3Gap=$gap;window.__s3Btn=$btn;document.documentElement.classList.add('s3-native-bar');"
     }
 
+    @Volatile private var originMoving = false
     private fun warmUp() {
+        if (originMoving) return   // the screens' one-time move is running: the windows are built when it ends
         val fresh = s3Pane == null || dialPane == null
         if (pagesPane == null) pagesPane = buildPane(false)  // first, so Station 3 stays above the Pages
         if (profilePane == null) profilePane = buildPane(true, profile = true)  // under Station 3's bar, button and dial pad
@@ -2712,7 +2717,9 @@ class OverlayService : Service(), StoryBridge.Host {
 
     companion object {
         const val ACTION_STOP = "com.story.launcher.STOP"
-        const val REMOTE = "https://bethestoryownyourstory.github.io/story-lockedintool/"
+        // Where the screens come from: Lockedintool's own address once the one-time move (OriginMove) is done, the old
+        // one until then (owner: no 'story' in anything about Lockedintool).
+        @Volatile var REMOTE = OriginMove.OLD
         const val LOCAL = "https://appassets.androidplatform.net/assets/index.html"
         const val ACTION_REBUILD = "com.story.launcher.REBUILD"
         @Volatile var instance: OverlayService? = null

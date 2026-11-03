@@ -14,7 +14,7 @@ import org.json.JSONObject
  * connection - nothing runs while there's nothing to send.
  */
 object ProblemLog {
-    private const val URL = "https://story-msg.percyjuniormaseko0.workers.dev/v1/problems"
+    private const val URL = "https://api.lockedintool.com/v1/problems"
     private fun p(c: Context) = c.getSharedPreferences("problems", Context.MODE_PRIVATE)
     @Volatile private var sending = false
 
