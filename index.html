@@ -20489,7 +20489,11 @@ function notePageSwipeGo(idx){
 // its layout height, so the scroll area genuinely has nothing left to scroll). The floor keeps
 // text legible; anything that would need to go below it stays scrollable. Feeds/editors that
 // are meant to scroll (Community, Notes) are left alone via NO_FIT_SCREENS.
-const NO_FIT_SCREENS = new Set(['notes-canvas','scratch-draw','apps']);  // Apps scrolls (every app on the phone), never shrinks
+// Apps scrolls (every app on the phone), never shrinks. Settings and Information (+ its Privacy / Terms / Safety pages)
+// scroll at their normal size too (owner, 3 Nov 2026: 'settings and information they can be scrollable so that the texts
+// become more visible' - shrunk to fit they came out at half size).
+const SCROLL_PAGES = new Set(['settings','information','legal-privacy','legal-terms','legal-safety']);
+const NO_FIT_SCREENS = new Set(['notes-canvas','scratch-draw','apps', ...SCROLL_PAGES]);
 const FIT_MIN_SCALE = 0.5;
 const FIT_MAX_SCALE = 1.35;
 // Each page's fitted zoom is remembered (per page and screen size), so drawing a page again --
@@ -20510,6 +20514,7 @@ function fitPageToScreen(area, el, pageKey){
     return;
   }
   const page = pageKey || state.current;
+  if(el && SCROLL_PAGES.has(page)) el.style.paddingBottom = '64px';   // scrolled to the end, the last row stays clear of Station 3's corner
   if(!el || NO_FIT_SCREENS.has(page)) return;
   if(el.id === 'page-swipe-track') return;
   const topBarEl = el.querySelector(':scope > .page-top');
