@@ -78,4 +78,9 @@ jobs:
           DL=$(grep -o "DOWNLOAD_CODE = '[^']*'" site-worker.js | cut -d"'" -f2); DLP="/download${DL:+/$DL}"
           d=$(curl -s -o /dev/null -w '%{http_code} %{content_type} %{size_download}' "https://lockedintool.com$DLP" || true)
           echo "### lockedintool.com download answers $d" | tee -a "$GITHUB_STEP_SUMMARY"; case "$d" in "200 application/vnd.android.package-archive"*) ;; *) bad=1;; esac
+          for u in "https://lockedintool.com/app/live-source.txt" "https://lockedintool.com/app/preview/source.txt" "https://lockedintool.com/releases/release.json" "https://lockedintool.com/releases/latest/version.json" "https://release.lockedintool.com/" "https://trade.lockedintool.com/"; do
+            c=000; for i in $(seq 1 30); do c=$(curl -s -o /dev/null -w '%{http_code}' "$u" || true); [ "$c" != 000 ] && [ "$c" -lt 500 ] && break; sleep 10; done
+            echo "### $u answers $c" | tee -a "$GITHUB_STEP_SUMMARY"
+            case "$u" in *release.lockedintool.com/|*trade.lockedintool.com/) [ "$c" != 000 ] && [ "$c" -lt 500 ] || bad=1;; *) [ "$c" = 200 ] || bad=1;; esac
+          done
           exit $bad

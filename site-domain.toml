@@ -6,7 +6,7 @@ name = "lockedintool"
 main = "site-worker.js"
 compatibility_date = "2025-01-01"
 workers_dev = false
-routes = [{ pattern = "lockedintool.com", custom_domain = true }, { pattern = "www.lockedintool.com", custom_domain = true }, { pattern = "api.lockedintool.com", custom_domain = true }]
+routes = [{ pattern = "lockedintool.com", custom_domain = true }, { pattern = "www.lockedintool.com", custom_domain = true }, { pattern = "api.lockedintool.com", custom_domain = true }, { pattern = "trade.lockedintool.com", custom_domain = true }, { pattern = "release.lockedintool.com", custom_domain = true }]
 
 [assets]
 directory = "./_site"
