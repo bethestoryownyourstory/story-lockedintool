@@ -813,7 +813,7 @@ class OverlayService : Service(), StoryBridge.Host {
         p.lp.flags = if (p.gap) flagsFor(true, false) else if (p.profile) flagsFor(false, shown) else flagsFor(p.small, shown)
         // Lock screen dial pad: hear touches anywhere else on the lock screen (swipe up to unlock...) to step away.
         if (p.lock && shown) p.lp.flags = p.lp.flags or WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
-        if (p === pagesPane && cardSecureOn) p.lp.flags = p.lp.flags or WindowManager.LayoutParams.FLAG_SECURE   // card details showing
+        if ((p === pagesPane && cardSecureOn) || (p === profilePane && cardSecureProfile)) p.lp.flags = p.lp.flags or WindowManager.LayoutParams.FLAG_SECURE   // card details showing
         // Android 12+ throws away touches that pass through another app's fully opaque window,
         // even an untouchable one. A hidden pane is fully see-through, so apps underneath get every touch.
         p.lp.alpha = if (shown) 1f else 0f
@@ -2006,7 +2006,9 @@ class OverlayService : Service(), StoryBridge.Host {
     //      fingerprint / face / PIN -> the card's full number, expiry and CVV (CardVault, locked on this phone). While
     //      they show, the Pages window is FLAG_SECURE (no screenshots / screen recording / recents picture). ----
     @Volatile private var cardWant: String? = null
-    override fun cardReveal(id: String) { ui.post {
+    @Volatile private var cardFromProfile = false
+    override fun cardReveal(id: String, fromProfile: Boolean) { ui.post {
+        cardFromProfile = fromProfile
         if (!CardVault.has(this, id)) { cardAnswer(id, null, "none"); return@post }
         if (!stepAsideForSystem()) { cardAnswer(id, null, "fail"); return@post }
         cardWant = id
@@ -2020,12 +2022,13 @@ class OverlayService : Service(), StoryBridge.Host {
         else cardAnswer(id, null, result)
     } }
     private fun cardAnswer(id: String, value: String?, result: String) {
-        pagesPane?.web?.evaluateJavascript("window.storyCardReveal&&window.storyCardReveal(" + org.json.JSONObject.quote(id) + "," + (if (value == null) "null" else org.json.JSONObject.quote(value)) + "," + org.json.JSONObject.quote(result) + ")", null)
+        (if (cardFromProfile) profilePane else pagesPane)?.web?.evaluateJavascript("window.storyCardReveal&&window.storyCardReveal(" + org.json.JSONObject.quote(id) + "," + (if (value == null) "null" else org.json.JSONObject.quote(value)) + "," + org.json.JSONObject.quote(result) + ")", null)
     }
     @Volatile private var cardSecureOn = false
-    override fun cardSecure(on: Boolean) { ui.post {
-        cardSecureOn = on
-        val p = pagesPane ?: return@post
+    @Volatile private var cardSecureProfile = false
+    override fun cardSecure(on: Boolean, fromProfile: Boolean) { ui.post {
+        if (fromProfile) cardSecureProfile = on else cardSecureOn = on
+        val p = (if (fromProfile) profilePane else pagesPane) ?: return@post
         val f = p.lp.flags
         p.lp.flags = if (on) f or WindowManager.LayoutParams.FLAG_SECURE else f and WindowManager.LayoutParams.FLAG_SECURE.inv()
         if (p.lp.flags != f) runCatching { p.wm.updateViewLayout(p.frame, p.lp) }

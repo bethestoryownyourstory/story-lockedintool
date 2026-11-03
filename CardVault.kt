@@ -45,6 +45,19 @@ object CardVault {
 
     fun del(ctx: Context, id: String) { if (ID.matches(id)) ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(id).apply() }
 
+    /** Every card's details, for the locked backup only (owner: 'If log back on Lockedintool, data is saved') - the page
+     *  locks them with a key from your password before anything leaves the phone (litBackupNow). */
+    fun all(ctx: Context): org.json.JSONObject {
+        val o = org.json.JSONObject()
+        val p = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        for ((id, box) in p.all) runCatching {
+            val (iv, ct) = (box as String).split(":", limit = 2).map { Base64.decode(it, Base64.NO_WRAP) }
+            val c = Cipher.getInstance("AES/GCM/NoPadding"); c.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, iv))
+            o.put(id, String(c.doFinal(ct), Charsets.UTF_8))
+        }
+        return o
+    }
+
     /** The phone's own unlock just said yes. */
     fun open() { openUntil = System.currentTimeMillis() + OPEN_MS }
     fun close() { openUntil = 0L }

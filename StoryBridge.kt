@@ -69,8 +69,8 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         fun requestPhotoAccess()
         fun chatPick(kind: String)
         fun confirmIdentity(title: String)
-        fun cardReveal(id: String)
-        fun cardSecure(on: Boolean)
+        fun cardReveal(id: String, fromProfile: Boolean)
+        fun cardSecure(on: Boolean, fromProfile: Boolean)
         fun secUnlock()
         fun walletButtonOk(on: Boolean)
         fun wipeAll()
@@ -309,21 +309,40 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
     @JavascriptInterface
     fun cardVaultSet(id: String, value: String): Boolean = pages && CardVault.put(ctx, id, value)
     @JavascriptInterface
-    fun cardVaultHas(id: String): Boolean = pages && CardVault.has(ctx, id)
+    fun cardVaultHas(id: String): Boolean = (pages || profile) && CardVault.has(ctx, id)
     @JavascriptInterface
     fun cardVaultDel(id: String) { if (pages) CardVault.del(ctx, id) }
     /** Copy one card detail; marked sensitive so the phone doesn't show it in its clipboard preview (Android 13+). */
     @JavascriptInterface
-    fun cardCopy(text: String): Boolean = pages && runCatching {
+    fun cardCopy(text: String): Boolean = (pages || profile) && runCatching {
         val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
         val clip = android.content.ClipData.newPlainText("Lockedintool", text)
         clip.description.extras = android.os.PersistableBundle().apply { putBoolean("android.content.extra.IS_SENSITIVE", true) }
         cm.setPrimaryClip(clip); true
     }.getOrDefault(false)
     @JavascriptInterface
-    fun cardReveal(id: String) { if (pages) host.cardReveal(id) }
+    fun cardReveal(id: String) { if (pages || profile) host.cardReveal(id, profile) }
     @JavascriptInterface
-    fun cardSecure(on: Boolean) { if (pages) host.cardSecure(on) }
+    fun cardSecure(on: Boolean) { if (pages || profile) host.cardSecure(on, profile) }
+    /** Important data (owner, 3 Nov 2026: 'If log back on Lockedintool, data is saved ... also trading data, accounts'): the
+     *  card details + the trading logins / keys, handed to the page ONLY to be locked into your backup with a key from your
+     *  password (the server can't open it), and put back after you log in again. */
+    @JavascriptInterface
+    fun importantExport(): String = if (!(pages || profile)) "{}" else runCatching {
+        val sec = org.json.JSONObject()
+        for ((k, v) in ctx.getSharedPreferences("trade_secrets", Context.MODE_PRIVATE).all) if (v is String) sec.put(k, v)
+        org.json.JSONObject().put("cards", CardVault.all(ctx)).put("secrets", sec).toString()
+    }.getOrDefault("{}")
+    @JavascriptInterface
+    fun importantImport(json: String) { if (pages || profile) runCatching {
+        val o = org.json.JSONObject(json)
+        o.optJSONObject("cards")?.let { c -> for (id in c.keys()) if (!CardVault.has(ctx, id)) CardVault.put(ctx, id, c.getString(id)) }
+        o.optJSONObject("secrets")?.let { c ->
+            val p = ctx.getSharedPreferences("trade_secrets", Context.MODE_PRIVATE); val e = p.edit()
+            for (k in c.keys()) if (!p.contains(k)) e.putString(k, c.getString(k))
+            e.apply()
+        }
+    } }
 
     /** Settings > SECURITY (owner): {mode: phone | lit, secure: the phone has a screen lock, open: Lockedintool is unlocked
      *  right now}. Set only from the Pages (Settings); Unlock from the Pages, Profile's window or a live widget. */
