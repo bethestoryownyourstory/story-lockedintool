@@ -31,6 +31,10 @@
     <!-- Station 3 > Create: the camera (pictures, video) and the microphone (video sound). -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Calls (owner, 3 Nov 2026: "microphone or camera is busy in another app"): the WebView only opens the microphone
+         for getUserMedia when the app holds BOTH RECORD_AUDIO and MODIFY_AUDIO_SETTINGS - without the second it fails with
+         NotReadableError ("busy"), even though the phone's own AudioRecord works. A normal permission: no question to the user. -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <!-- Settings > QUICK ACCESS: the dial pad's call button calls straight away (lock screen too). -->
     <uses-permission android:name="android.permission.CALL_PHONE" />
     <!-- Station 3 > Call history: when each call made from STORY ended and how long it lasted; contact names. -->
