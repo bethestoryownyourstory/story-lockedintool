@@ -784,14 +784,9 @@ class OverlayService : Service(), StoryBridge.Host {
         if (profilePane == null) profilePane = buildPane(true, profile = true)  // under Station 3's bar, button and dial pad
         if (profileGapPane == null) { profileGapPane = buildPane(true, profile = true, gap = true); addProfileStrip() }
         // The lock screen dial pad sits UNDER Station 3's windows: Station 3, extended, goes on top of it (owner).
-        if (lockDialPane == null) lockDialPane = buildPane(true, dial = true, lock = true).also { lp ->
-            lp.frame.setOnTouchListener { _, e ->
-                // Android zeroes the position of touches in other apps' / the system's windows; STORY's own windows
-                // (Station 3, the Always On Display) report a real one - those never move the dial pad.
-                if (e.actionMasked == MotionEvent.ACTION_OUTSIDE && e.x == 0f && e.y == 0f) lockScreenTouched()
-                false
-            }
-        }
+        // Memory (Android kept closing Lockedintool's windows on 4 GB phones): it's only built for people who put the dial
+        // pad on the lock screen - turning that on later builds it then (setQuickAccess).
+        if (lockDialPane == null && QuickAccess.lockDial(this)) lockDialPane = buildLockDial()
         if (walletBtn == null) addWalletBtn()   // the lock screen's Wallet page button: under Station 3's windows
         if (s3Pane == null) { addBarBg(); s3Pane = buildPane(true) }  // the white goes in first, so it sits under Station 3's page
         if (dialPane == null) dialPane = buildPane(true, dial = true)
@@ -1836,7 +1831,7 @@ class OverlayService : Service(), StoryBridge.Host {
             s3Pane?.web?.evaluateJavascript("window.storyLockState&&window.storyLockState($locked)", null)
             if (locked && QuickAccess.mode(this) == "separate") dialPane?.takeIf { it.shown }?.let { hideOne(it) }
         }
-        val p = lockDialPane ?: return
+        val p = lockDialPane   // only built for people who put the dial pad on the lock screen (memory)
         val aodUp = aodShowing()
         // The phone's own PIN / password / pattern page is on screen right now: never on top of it.
         val awake = getSystemService(android.os.PowerManager::class.java).isInteractive
@@ -1852,7 +1847,7 @@ class OverlayService : Service(), StoryBridge.Host {
         val onAod = aodUp || (!awake && AodActivity.enabled(this))
         val want = !WidgetMode.on(this) && QuickAccess.lockDial(this) && locked && !lockDialAway && !lockDialPeek && entry != true && !shade &&
             (if (onAod) QuickAccess.dialAod(this) else true)
-        if (want != p.shown) {
+        if (p != null && want != p.shown) {
             if (!want) p.web.evaluateJavascript("window.storyDialClear&&window.storyDialClear()", null)
             setShown(p, want)
             if (!want && p.stale) reload(p)  // new screens were published while it was up: pick them up now it's hidden
@@ -1895,9 +1890,28 @@ class OverlayService : Service(), StoryBridge.Host {
             if (!allowed && !keyguardLocked()) askPermissions(arrayOf(android.Manifest.permission.CALL_PHONE))
         }
     } }
+    private fun buildLockDial(): Pane = buildPane(true, dial = true, lock = true).also { lp ->
+        lp.frame.setOnTouchListener { _, e ->
+            // Android zeroes the position of touches in other apps' / the system's windows; STORY's own windows
+            // (Station 3, the Always On Display) report a real one - those never move the dial pad.
+            if (e.actionMasked == MotionEvent.ACTION_OUTSIDE && e.x == 0f && e.y == 0f) lockScreenTouched()
+            false
+        }
+    }
     /** Settings > QUICK ACCESS changed. */
     override fun setQuickAccess(json: String) { ui.post {
         QuickAccess.save(this, json)
+        // The lock screen dial pad's window exists only while it's switched on (memory). Built now: Station 3's windows
+        // go back on top of it, in their usual order (owner: Station 3, extended, sits on top of the dial pad).
+        if (QuickAccess.lockDial(this) && lockDialPane == null && s3Pane != null) {
+            lockDialPane = buildLockDial()
+            walletBtn?.let { v -> walletBtnLp?.let { lp -> runCatching { (walletBtnWm ?: layerWm).removeView(v); (walletBtnWm ?: layerWm).addView(v, lp) } } }
+            barBg?.let { v -> barBgLp?.let { lp -> runCatching { (barBgWm ?: wm).removeView(v); (barBgWm ?: wm).addView(v, lp) } } }
+            for (q in listOfNotNull(s3Pane, dialPane)) runCatching { q.wm.removeView(q.frame); q.wm.addView(q.frame, q.lp) }
+            raiseBubble(); addBar()
+        } else if (!QuickAccess.lockDial(this)) lockDialPane?.takeIf { !it.shown }?.let { p ->
+            runCatching { p.wm.removeView(p.frame) }; p.web.destroy(); lockDialPane = null
+        }
         s3Pane?.web?.evaluateJavascript("window.storyQuickAccessChanged&&window.storyQuickAccessChanged()", null)
         updateBubble()
         // The lock screen dial pad calls straight away: that needs Android's "make phone calls" once.
