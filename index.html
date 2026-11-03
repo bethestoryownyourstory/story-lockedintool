@@ -20514,7 +20514,7 @@ function notePageSwipeGo(idx){
 // Apps scrolls (every app on the phone), never shrinks. Settings and Information (+ its Privacy / Terms / Safety pages)
 // scroll at their normal size too (owner, 3 Nov 2026: 'settings and information they can be scrollable so that the texts
 // become more visible' - shrunk to fit they came out at half size).
-const SCROLL_PAGES = new Set(['settings','information','legal-privacy','legal-terms','legal-safety','subscription']);   // + Subscription (its plan texts were small too)
+const SCROLL_PAGES = new Set(['settings','information','legal-privacy','legal-terms','legal-safety']);   // NOT Subscription (owner: 'subscription is correct as everything on one full view. No scrolling')
 const NO_FIT_SCREENS = new Set(['notes-canvas','scratch-draw','apps', ...SCROLL_PAGES]);
 const FIT_MIN_SCALE = 0.5;
 const FIT_MAX_SCALE = 1.35;
