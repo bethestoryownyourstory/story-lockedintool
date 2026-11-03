@@ -20312,12 +20312,19 @@ function fitPageToScreen(area, el, pageKey){
     // The Dashboard's bottom space kept for Station 3 counts as filled (it would otherwise zoom the Dashboard in).
     if(el.classList.contains('s3-dash')) return { top: r.top, bottom: r.bottom };
     let cb = r.top;
+    // Phones don't all measure zoomed content the same way (owner's Samsung, Android 16, reported a zoomed page's parts at
+    // their UNzoomed size, so the page kept shrinking / growing to the limit). Work out how this phone measures - the
+    // ratio between a part's measured height and its own layout height - and scale to what's really on screen.
+    const z = parseFloat(el.style.zoom) || 1;
+    let k = z;
+    for(const c of el.children){ if(c === topBarEl || c.style.zoom) continue; const h = c.offsetHeight; if(h > 20){ const gh = c.getBoundingClientRect().height; if(gh > 0){ k = gh / h; break; } } }
+    const f = k > 0 ? z / k : 1;
     Array.from(el.children).forEach(c=>{
       // Things pinned to the screen (Money's $ transfer button...) aren't part of the page's height: counting them
       // shrank a fresh phone's Money page to ~half with a third of the screen empty (owner, 3 Nov 2026).
       const cs = getComputedStyle(c);
       if(cs.position === 'fixed' || cs.position === 'absolute' || cs.display === 'none' || cs.visibility === 'hidden') return;
-      const b = c.getBoundingClientRect().bottom + (parseFloat(cs.marginBottom) || 0);
+      const b = r.top + (c.getBoundingClientRect().bottom - r.top) * f + (parseFloat(cs.marginBottom) || 0) * z;
       if(b > cb) cb = b;
     });
     return { top: r.top, bottom: cb };
