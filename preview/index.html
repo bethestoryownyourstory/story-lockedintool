@@ -19624,7 +19624,9 @@ function litAuthOpen(mode){
     '<label>Password</label><input class="lit-auth-pw" type="password" autocomplete="new-password" maxlength="128" placeholder="At least 8 characters">' +
     '<label>Confirm password</label><input class="lit-auth-pw2" type="password" autocomplete="new-password" maxlength="128">' + litSaveRow() +
     '<div class="lit-auth-msg"></div><button class="lit-auth-go" data-auth="signup" disabled>' + (litAuthMode === 'setpw' ? 'Save' : 'Create account') + '</button>' +
-    (litAuthMode === 'setpw' ? '' : '<button class="lit-auth-link" data-auth="to-login">I already have an account</button>') +
+    // 'Protect your account' too: a phone that made a new account by mistake (e.g. after reinstalling) can still log in to
+    // the real one (owner, 3 Nov 2026: stuck on '@officiallockedintoolprofile is taken' with no way to log in).
+    '<button class="lit-auth-link" data-auth="to-login">I already have an account - Log in</button>' +
     '<div class="lit-auth-note">Your password locks your chat backup. If you forget it, you can reset it with the private email or phone number you add in Edit profile.</div></div>';
   el.hidden = false; el.scrollTop = 0; litAuthCheck();
   if(typeof dashTellNative === 'function') dashTellNative();   // the gate is up over the Dashboard - tell the app so Station 3's Dashboard band steps away (owner: it was popping up everywhere)
