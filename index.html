@@ -10747,7 +10747,8 @@ window.storyProfileOnly = function(){
     else if(k === 'ed-about') openProfileField('about');
     else if(k === 'ed-currency'){ el.querySelector('.pf-menupage').hidden = true; const pg = el.querySelector('.pf-currency'); pg.hidden = false; pg.scrollTop = 0; curRender(); }
     else if(k === 'cur-back'){ if(curPickTotals){ curPickTotals = false; curRender(); return; } el.querySelector('.pf-currency').hidden = true; pfMenuOpen(); }
-    else if(k === 'cur-total'){ const v = b.getAttribute('data-v') || ''; try{ localStorage.setItem(TOTAL_CUR_KEY, v); }catch(err){} curPickTotals = false; moneyCache = null; fxEnsure(); curRender(); showToast('Payments show in their own currency · your money shows in ' + v); }
+    else if(k === 'cur-total'){ const v = b.getAttribute('data-v') || ''; if(!v) return; try{ localStorage.setItem(TOTAL_CUR_KEY, v); localStorage.setItem(ACCOUNT_CUR_KEY, 'AUTO'); }catch(err){} const cv0 = el.querySelector('[data-pf="ed-currency"] .pf-ed-val'); if(cv0) cv0.textContent = 'Each payment’s own'; curPickTotals = false; moneyCache = null; fxEnsure(); curRender(); showToast('Payments show in their own currency · your money shows in ' + v); }
+    else if(k === 'cur-set' && b.getAttribute('data-v') === 'AUTO'){ curPickTotals = true; curRender(); const bx = el.querySelector('.pf-cur-list'); if(bx && bx.parentElement) bx.parentElement.scrollTop = 0; return; }   // nothing changes until a currency is chosen
     else if(k === 'cur-set'){ const v = b.getAttribute('data-v') || ''; try{ if(v) localStorage.setItem(ACCOUNT_CUR_KEY, v); else localStorage.removeItem(ACCOUNT_CUR_KEY); }catch(err){} moneyCache = null; const now = accountCur(); if(now) fxEnsure(); curPickTotals = v === 'AUTO'; curRender(); if(curPickTotals){ const bx = el.querySelector('.pf-cur-list'); if(bx && bx.parentElement) bx.parentElement.scrollTop = 0; return; } const cv = el.querySelector('[data-pf="ed-currency"] .pf-ed-val'); if(cv) cv.textContent = now || 'Each payment’s own'; showToast(now ? 'Money shows in ' + now : 'Money shows each payment’s own currency'); }
     else if(k === 'ed-country'){ ed.hidden = true; const pg = el.querySelector('.pf-country'); pg.hidden = false; pg.scrollTop = 0; pg.querySelector('.pf-country-q').value = ''; countryRender(); }
     else if(k === 'country-back'){ el.querySelector('.pf-country').hidden = true; ed.hidden = false; }
@@ -10910,8 +10911,10 @@ let curPickTotals = false;   // 'Each payment's own' was just chosen: now pick t
 function curRender(){
   const box = document.querySelector('#story-profile .pf-cur-list'); if(!box) return;
   if(curPickTotals){
-    const tc = totalsCur();
-    box.innerHTML = '<div class="pf-ed-note" style="padding:4px 2px 12px;">Each payment’s own: every payment shows in the currency it came in. Now choose the currency your total money shows in.</div>' +
+    // Owner (3 Nov 2026): 'Each payment's own' can't be chosen without choosing a currency - it only turns on once you pick
+    // one here; going back changes nothing. Only a currency you really picked shows as chosen.
+    let tc = ''; try{ if(localStorage.getItem(ACCOUNT_CUR_KEY) === 'AUTO') tc = localStorage.getItem(TOTAL_CUR_KEY) || ''; }catch(e){}
+    box.innerHTML = '<div class="pf-ed-note" style="padding:4px 2px 12px;">Each payment’s own: every payment shows in the currency it came in. Choose the currency your total money shows in - Each payment’s own turns on once you choose one.</div>' +
       ACCOUNT_CURRENCIES.map(([c, n])=>'<button class="pf-pv-opt' + (c === tc ? ' on' : '') + '" data-pf="cur-total" data-v="' + c + '"><span class="pf-pv-txt"><div class="pf-pv-t">' + escText(c) + '</div><div class="pf-pv-d">' + escText(n) + '</div></span><span class="pf-pv-dot"></span></button>').join('');
     return;
   }
