@@ -1452,6 +1452,11 @@
   .sub-opt{ position:relative; flex:1; padding:12px 8px; border-radius:14px; border:1px solid #2a2a2a; background:#000000; color:#ffffff; font:inherit; font-size:14px; font-weight:800; cursor:pointer; }
   .sub-opt{ display:flex; align-items:center; justify-content:center; gap:6px; }
   .sub-opt.on{ border-color:#ffffff; }
+  /* Only system's note, stuck on the option (owner, 3 Nov 2026) */
+  .sub-opts{ align-items:stretch; }
+  .sub-opt{ flex-wrap:wrap; align-content:center; }
+  .sub-opt-note{ flex-basis:100%; margin-top:5px; font-size:10.5px; font-weight:600; line-height:1.3; color:#d4a017; text-align:center; }
+  .sub-opt-note-big{ margin:8px 0 2px; font-size:12.5px; text-align:left; }
   .sub-opt-mark{ display:inline-block; width:14px; font-size:13px; }
   .sub-opt:not(.on) .sub-opt-mark{ display:none; }
   .sub-opt-tip{ display:none; position:absolute; left:0; right:0; top:calc(100% + 8px); z-index:5; padding:10px 12px; border-radius:12px; border:1px solid #2a2a2a; background:#000000; color:#ffffff; font-size:12.5px; font-weight:500; line-height:1.45; text-align:left; box-shadow:0 8px 24px rgba(0,0,0,0.5); }
@@ -8921,7 +8926,7 @@ function subscriptionScreen(){
     <div class="page-shell sub-page">
     ${topBar('Subscription', false, '', 'dashboard', '', false)}
     <div class="sub-head">LOCKED IN TOOL</div>
-    <div class="sub-opts">${SUB_OPTIONS.map(o=>`<button class="sub-opt${mode === o.key ? ' on' : ''}" data-action="sub-opt" data-v="${o.key}"><span class="sub-opt-mark">${mode === o.key ? '✓' : ''}</span>${o.name}<span class="sub-opt-tip"><b>${o.name}</b>${o.short}</span></button>`).join('')}</div>
+    <div class="sub-opts">${SUB_OPTIONS.map(o=>`<button class="sub-opt${mode === o.key ? ' on' : ''}" data-action="sub-opt" data-v="${o.key}"><span class="sub-opt-mark">${mode === o.key ? '✓' : ''}</span>${o.name}${o.note ? `<span class="sub-opt-note">${o.note}</span>` : ''}<span class="sub-opt-tip"><b>${o.name}</b>${o.short}</span></button>`).join('')}</div>
     <div class="sub-status">${escText(status)}</div>
     ${active ? `<button class="sub-end-btn" data-action="sub-endask">Cancel plan</button>` : ''}
     ${w ? `<div class="row-card pay-wait">
@@ -9006,7 +9011,7 @@ const SUB_OPTIONS = [
   { key:'second', name:'Second system', short:'Lockedintool works with your phone - your apps stay as they are.',
     text:'Lockedintool works alongside your phone, like a second system. Your phone’s home screen and all your apps stay exactly as they are, and Lockedintool is always there on top of them - the Pages, Station 3 and everything in it.',
     list:['Your apps and home screen stay as they are', 'Lockedintool always there, over everything', 'Switch between Lockedintool and your apps any time'] },
-  { key:'only', name:'Only system', short:'The Dashboard is your home screen - your apps still work.',
+  { key:'only', name:'Only system', note:'Best experience if you are using two or more phones (if set up on a second phone)', short:'The Dashboard is your home screen - your apps still work.',
     text:'Lockedintool becomes your phone’s system: the Dashboard is your home screen, so when you press home or leave an app you land back on Lockedintool. Your apps all still work - open them from the Apps button, app pages or your recent apps, and come back to the Dashboard when you’re done.',
     list:['The Dashboard is your home screen', 'All your apps still work - open them any time', 'Phone calls and emergency calls always work', 'Turns off only when you log out or delete your account'] }
 ];
@@ -9022,6 +9027,7 @@ function subOptionScreen(locked){
     <div class="sub-card sub-opt-card">
       <div class="sub-top"><div class="sub-name">${o.name}</div></div>
       <div class="sub-tag">${o.short}</div>
+      ${o.note ? `<div class="sub-opt-note sub-opt-note-big">${o.note}</div>` : ''}
       <div class="sub-text">${o.text}</div>
       <ul class="sub-list">${o.list.map(x=>`<li>${x}</li>`).join('')}</ul>
     </div>
