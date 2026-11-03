@@ -20294,7 +20294,11 @@ function fitPageToScreen(area, el, pageKey){
     if(el.classList.contains('s3-dash')) return { top: r.top, bottom: r.bottom };
     let cb = r.top;
     Array.from(el.children).forEach(c=>{
-      const b = c.getBoundingClientRect().bottom + (parseFloat(getComputedStyle(c).marginBottom) || 0);
+      // Things pinned to the screen (Money's $ transfer button...) aren't part of the page's height: counting them
+      // shrank a fresh phone's Money page to ~half with a third of the screen empty (owner, 3 Nov 2026).
+      const cs = getComputedStyle(c);
+      if(cs.position === 'fixed' || cs.display === 'none') return;
+      const b = c.getBoundingClientRect().bottom + (parseFloat(cs.marginBottom) || 0);
       if(b > cb) cb = b;
     });
     return { top: r.top, bottom: cb };
@@ -20311,10 +20315,26 @@ function fitPageToScreen(area, el, pageKey){
     // In the app the page runs right down to the screen's edge, like Station 3 (no 6px gap).
     return (dock ? dockTop : area.getBoundingClientRect().bottom) - (NATIVE ? 0 : 6);
   };
-  const cached = FIT_CACHE[key];
+  // A size worked out while the page wasn't really on screen (ahead of time off screen, while the window rested, or
+  // under the log-in screen) is only a first guess: the first time the page is really shown it's worked out once more
+  // (owner, 3 Nov 2026: a fresh phone's Money page came out small with a third of the screen empty - 'fix it on all
+  // pages'). After that it never changes, as before.
+  const unsure = !!pageKey || document.visibilityState === 'hidden' || !!document.querySelector('.lit-auth');
+  let cached = FIT_CACHE[key];
+  if(cached && cached.unsure && !unsure){ delete FIT_CACHE[key]; cached = null; }
   // Once a page's size is worked out it stays: live changes (prices, a trade flipping from profit to loss,
   // an extra row) never make the page zoom in or out. Only a different screen size works it out again.
-  if(cached){ applyZoom(cached.zoom); return; }
+  if(cached){
+    applyZoom(cached.zoom);
+    // The first time a remembered size is used on screen, make sure it really fits (a size worked out at a bad moment
+    // must never stick - a short page with a big empty gap, or one running off the bottom). Only once per size.
+    if(!unsure && !cached.seen){
+      cached.seen = true;
+      const mm = measure(), lim = limitNow(), gap = lim - mm.bottom;
+      if(mm.bottom > lim + 2 || (NATIVE && gap > lim * 0.1 && cached.zoom < FIT_MAX_SCALE - 0.01)){ delete FIT_CACHE[key]; return fitPageToScreen(area, el, pageKey); }
+    }
+    return;
+  }
   applyZoom(1);
   const limit = limitNow();
   // Zoom doesn't shrink everything linearly (width-driven things like the card's aspect-ratio
@@ -20323,7 +20343,7 @@ function fitPageToScreen(area, el, pageKey){
   let m = measure();
   let zoom = 1;
   if(m.bottom <= limit){
-    if(!NATIVE || m.bottom >= limit - 1){ FIT_CACHE[key] = { zoom:1, limit, bottom:m.bottom }; return; }
+    if(!NATIVE || m.bottom >= limit - 1){ FIT_CACHE[key] = { zoom:1, limit, bottom:m.bottom, unsure, seen: !unsure }; return; }
     // In the app a short page grows to fill the screen right down to the bottom edge -- no empty space.
     for(let i=0; i<6 && m.bottom < limit - 1; i++){
       const next = Math.min(FIT_MAX_SCALE, zoom * (limit - m.top) / (m.bottom - m.top));
@@ -20339,7 +20359,7 @@ function fitPageToScreen(area, el, pageKey){
     applyZoom(zoom);
     m = measure();
   }
-  FIT_CACHE[key] = { zoom, limit, bottom:m.bottom };
+  FIT_CACHE[key] = { zoom, limit, bottom:m.bottom, unsure, seen: !unsure };
 }
 
 // Works out every swipe page's fit ahead of time, off screen, so even the first swipe to a page
