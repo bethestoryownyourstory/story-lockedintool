@@ -813,6 +813,7 @@ class OverlayService : Service(), StoryBridge.Host {
         p.lp.flags = if (p.gap) flagsFor(true, false) else if (p.profile) flagsFor(false, shown) else flagsFor(p.small, shown)
         // Lock screen dial pad: hear touches anywhere else on the lock screen (swipe up to unlock...) to step away.
         if (p.lock && shown) p.lp.flags = p.lp.flags or WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
+        if (p === pagesPane && cardSecureOn) p.lp.flags = p.lp.flags or WindowManager.LayoutParams.FLAG_SECURE   // card details showing
         // Android 12+ throws away touches that pass through another app's fully opaque window,
         // even an untouchable one. A hidden pane is fully see-through, so apps underneath get every touch.
         p.lp.alpha = if (shown) 1f else 0f
@@ -2000,6 +2001,34 @@ class OverlayService : Service(), StoryBridge.Host {
         if (!stepAsideForSystem()) return@post
         runCatching { startActivity(Intent(this, IdentityActivity::class.java).putExtra(IdentityActivity.EXTRA_TITLE, title).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)) }
             .onFailure { identityDone("fail") }
+    } }
+    // ---- Important data saved - card details (owner, 3 Nov 2026): tap your card in Wallet -> the phone's own
+    //      fingerprint / face / PIN -> the card's full number, expiry and CVV (CardVault, locked on this phone). While
+    //      they show, the Pages window is FLAG_SECURE (no screenshots / screen recording / recents picture). ----
+    @Volatile private var cardWant: String? = null
+    override fun cardReveal(id: String) { ui.post {
+        if (!CardVault.has(this, id)) { cardAnswer(id, null, "none"); return@post }
+        if (!stepAsideForSystem()) { cardAnswer(id, null, "fail"); return@post }
+        cardWant = id
+        runCatching { startActivity(Intent(this, IdentityActivity::class.java).putExtra(IdentityActivity.EXTRA_TITLE, "Show your card details").putExtra(IdentityActivity.EXTRA_FOR, "card").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)) }
+            .onFailure { cardDone("fail") }
+    } }
+    fun cardDone(result: String) { ui.post {
+        comeBackFromSystem()
+        val id = cardWant ?: return@post; cardWant = null
+        if (result == "ok") { CardVault.open(); val v = CardVault.read(this, id); CardVault.close(); cardAnswer(id, v, if (v == null) "fail" else "ok") }
+        else cardAnswer(id, null, result)
+    } }
+    private fun cardAnswer(id: String, value: String?, result: String) {
+        pagesPane?.web?.evaluateJavascript("window.storyCardReveal&&window.storyCardReveal(" + org.json.JSONObject.quote(id) + "," + (if (value == null) "null" else org.json.JSONObject.quote(value)) + "," + org.json.JSONObject.quote(result) + ")", null)
+    }
+    @Volatile private var cardSecureOn = false
+    override fun cardSecure(on: Boolean) { ui.post {
+        cardSecureOn = on
+        val p = pagesPane ?: return@post
+        val f = p.lp.flags
+        p.lp.flags = if (on) f or WindowManager.LayoutParams.FLAG_SECURE else f and WindowManager.LayoutParams.FLAG_SECURE.inv()
+        if (p.lp.flags != f) runCatching { p.wm.updateViewLayout(p.frame, p.lp) }
     } }
     fun identityDone(result: String) { ui.post {
         comeBackFromSystem()

@@ -69,6 +69,8 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         fun requestPhotoAccess()
         fun chatPick(kind: String)
         fun confirmIdentity(title: String)
+        fun cardReveal(id: String)
+        fun cardSecure(on: Boolean)
         fun secUnlock()
         fun walletButtonOk(on: Boolean)
         fun wipeAll()
@@ -301,6 +303,27 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
 
     @JavascriptInterface
     fun confirmIdentity(title: String) { if (profile || pages) host.confirmIdentity(title) }
+
+    // ---- Important data saved - card details (owner, 3 Nov 2026; CardVault.kt). Only the Pages (Wallet) use these. The
+    //      details go in locked; they only come back out through cardReveal, after the phone's own unlock. ----
+    @JavascriptInterface
+    fun cardVaultSet(id: String, value: String): Boolean = pages && CardVault.put(ctx, id, value)
+    @JavascriptInterface
+    fun cardVaultHas(id: String): Boolean = pages && CardVault.has(ctx, id)
+    @JavascriptInterface
+    fun cardVaultDel(id: String) { if (pages) CardVault.del(ctx, id) }
+    /** Copy one card detail; marked sensitive so the phone doesn't show it in its clipboard preview (Android 13+). */
+    @JavascriptInterface
+    fun cardCopy(text: String): Boolean = pages && runCatching {
+        val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        val clip = android.content.ClipData.newPlainText("Lockedintool", text)
+        clip.description.extras = android.os.PersistableBundle().apply { putBoolean("android.content.extra.IS_SENSITIVE", true) }
+        cm.setPrimaryClip(clip); true
+    }.getOrDefault(false)
+    @JavascriptInterface
+    fun cardReveal(id: String) { if (pages) host.cardReveal(id) }
+    @JavascriptInterface
+    fun cardSecure(on: Boolean) { if (pages) host.cardSecure(on) }
 
     /** Settings > SECURITY (owner): {mode: phone | lit, secure: the phone has a screen lock, open: Lockedintool is unlocked
      *  right now}. Set only from the Pages (Settings); Unlock from the Pages, Profile's window or a live widget. */

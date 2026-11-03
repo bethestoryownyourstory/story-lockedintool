@@ -1452,6 +1452,12 @@
   .sub-opt{ position:relative; flex:1; padding:12px 8px; border-radius:14px; border:1px solid #2a2a2a; background:#000000; color:#ffffff; font:inherit; font-size:14px; font-weight:800; cursor:pointer; }
   .sub-opt{ display:flex; align-items:center; justify-content:center; gap:6px; }
   .sub-opt.on{ border-color:#ffffff; }
+  /* Card details (Wallet, after the phone's own unlock) */
+  .cardrv-row{ display:flex; flex-wrap:wrap; align-items:center; gap:4px 10px; padding:12px 0; border-bottom:1px solid #1f1f1f; min-width:0; }
+  .cardrv-l{ font-size:11px; font-weight:700; letter-spacing:0.06em; color:#8a8a8a; flex:0 0 100%; }
+  .cardrv-v{ flex:1; min-width:0; font-size:18px; white-space:nowrap; font-weight:700; letter-spacing:0.04em; color:#ffffff; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+  .cardrv-copy{ flex:0 0 auto; padding:7px 12px; border-radius:10px; border:1px solid #2a2a2a; background:#000000; color:#ffffff; font:inherit; font-size:12.5px; font-weight:700; cursor:pointer; }
+  .cardrv-two{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
   /* Only system's note, stuck on the option (owner, 3 Nov 2026) */
   .sub-opts{ align-items:stretch; }
   .sub-opt{ flex-wrap:wrap; align-content:center; }
@@ -8003,7 +8009,7 @@ function addCardTemplate(){
   return `
     <div class="modal-overlay" data-action="add-card-close">
       <div class="modal-sheet" onclick="event.stopPropagation()">
-        <div class="modal-head"><span class="modal-title"><button class="card-back-btn" data-action="card-mode-back" aria-label="Back">‹</button>${scan ? 'Check your details' : 'Add manually'}</span><button class="modal-close" data-action="add-card-close">×</button></div>
+        <div class="modal-head"><span class="modal-title">${f.attach ? 'Save card details' : `<button class="card-back-btn" data-action="card-mode-back" aria-label="Back">‹</button>${scan ? 'Check your details' : 'Add manually'}`}</span><button class="modal-close" data-action="add-card-close">×</button></div>
         ${scan ? `<div class="card-scan-previews" data-keep-color>${f.photo ? `<img src="${escText(f.photo)}" alt="Front">` : ''}${f.photoBack ? `<img src="${escText(f.photoBack)}" alt="Back">` : ''}</div>
         <button class="btn-wide" style="margin-top:10px;" data-action="card-scan">Scan again</button>` : ''}
         <div class="grid2" style="grid-template-columns:1fr 1fr;gap:8px;">
@@ -8012,8 +8018,8 @@ function addCardTemplate(){
           <div><div class="section-title" style="margin-top:12px;">CVV</div><input class="field-input" id="card-cvv" type="password" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="123" value="${escText(f.cvv || '')}"></div>
         </div>
         <div class="acct-msg">${escText(f.msg || '')}</div>
-        <div class="note" style="margin-top:6px;">Only the last 4 digits are kept, on this phone - never the full number or the CVV${scan ? ' (they’re covered on the pictures)' : ''}. Paying uses your phone's own tap to pay.</div>
-        <button class="btn-wide btn-primary" style="margin-top:12px;" data-action="add-card-save"${f.busy ? ' disabled' : ''}>${f.busy ? 'Checking…' : 'Add card'}</button>
+        <div class="note" style="margin-top:6px;">${cardVaultOk() ? `Your card details are kept locked on this phone only - never sent anywhere. Tap your card in Wallet and unlock with your fingerprint, face or PIN to see them${scan ? ' (the pictures keep the number covered)' : ''}.` : `Only the last 4 digits are kept, on this phone - never the full number or the CVV${scan ? ' (they’re covered on the pictures)' : ''}.`} Paying uses your phone's own tap to pay.</div>
+        <button class="btn-wide btn-primary" style="margin-top:12px;" data-action="add-card-save"${f.busy ? ' disabled' : ''}>${f.busy ? 'Checking…' : f.attach ? 'Save details' : 'Add card'}</button>
       </div>
     </div>`;
 }
@@ -8111,10 +8117,63 @@ function cardSheetTemplate(){
       <div class="confirm-sheet" onclick="event.stopPropagation()">
         <div class="confirm-title">${escText(c.bank || 'Card')} ••${escText(c.last4 || '')}</div>
         <div class="confirm-sub">Remove this card from Lockedintool? Nothing changes at your bank.</div>
+        ${cardVaultOk() && !cardVaultHas(c.id) ? `<button class="btn-wide" style="margin:0 0 10px;" data-action="card-details-add">Save card details</button>` : ''}
         <div class="confirm-btn-row">
           <button class="btn-wide" style="margin-top:0;color:var(--red);" data-action="card-remove">Remove card</button>
           <button class="btn-wide btn-primary" style="margin-top:0;" data-action="card-sheet-close">Close</button>
         </div>
+      </div>
+    </div>`;
+}
+// ---- Important data saved - card details (owner, 3 Nov 2026: 'Important data saved - card details'; chose full number +
+// expiry + CVV, shown by tapping the card in Wallet). The details are kept ONLY on this phone, locked by the app with a key
+// in the phone's own key store (CardVault.kt) - never in this page's storage, never sent anywhere, not in the backup. Tap
+// the card that's showing -> the phone's own fingerprint / face / PIN -> its full number, expiry and CVV with Copy. They
+// hide again when you close them, leave Wallet, the Pages close, or after 2 minutes; while they show, the window can't be
+// screenshotted or recorded (FLAG_SECURE). ----
+function cardVaultOk(){ return NATIVE && !!(window.StoryNative && window.StoryNative.cardVaultSet) && !document.documentElement.classList.contains('story-widget'); }
+function cardVaultHas(id){ try{ return cardVaultOk() && !!window.StoryNative.cardVaultHas(id); }catch(e){ return false; } }
+function cardVaultSave(id, pan, exp, cvv, net){
+  if(!cardVaultOk()) return false;
+  try{ return !!window.StoryNative.cardVaultSet(id, JSON.stringify({ pan: String(pan).replace(/\D/g, ''), exp, cvv: String(cvv).replace(/\D/g, ''), net })); }catch(e){ return false; }
+}
+let cardRevealTimer = null;
+function cardRevealClear(){
+  if(!state.cardReveal) return;
+  state.cardReveal = null; clearTimeout(cardRevealTimer);
+  try{ if(NATIVE && window.StoryNative.cardSecure) window.StoryNative.cardSecure(false); }catch(e){}
+}
+function cardRevealAsk(id){
+  if(!cardVaultHas(id)) return false;
+  try{ window.StoryNative.cardReveal(id); return true; }catch(e){ return false; }
+}
+window.storyCardReveal = function(id, value, result){
+  if(result === 'ok' && value){
+    let d = null; try{ d = JSON.parse(value); }catch(e){}
+    if(!d || state.current !== 'wallet') return;
+    state.cardReveal = { id, pan: d.pan || '', exp: d.exp || '', cvv: d.cvv || '', net: d.net || '' };
+    try{ window.StoryNative.cardSecure(true); }catch(e){}
+    clearTimeout(cardRevealTimer); cardRevealTimer = setTimeout(()=>{ cardRevealClear(); renderDevice(); }, 120000);
+    renderDevice();
+  } else if(result === 'nolock') showToast('Set a screen lock on your phone first - your card details only show after it');
+  else if(result !== 'none') showToast('Not unlocked - your card details stay hidden');
+};
+function cardPanGroups(pan, net){
+  const d = String(pan || '');
+  if(net === 'Amex' && d.length === 15) return [d.slice(0, 4), d.slice(4, 10), d.slice(10)].join(' ');
+  return d.replace(/(.{4})/g, '$1 ').trim();
+}
+function cardRevealTemplate(){
+  const r = state.cardReveal, c = r && walletCards().find(x=>x.id === r.id); if(!c) return '';
+  const row = (label, val, k)=>`<div class="cardrv-row"><div class="cardrv-l">${label}</div><div class="cardrv-v">${escText(val || '—')}</div><button class="cardrv-copy" data-action="card-details-copy" data-k="${k}">Copy</button></div>`;
+  return `
+    <div class="modal-overlay" data-action="card-details-close">
+      <div class="modal-sheet" onclick="event.stopPropagation()">
+        <div class="modal-head"><span class="modal-title">${escText(c.bank || r.net || 'Card')} ••${escText(c.last4 || '')}</span><button class="modal-close" data-action="card-details-close">×</button></div>
+        ${row('CARD NUMBER', cardPanGroups(r.pan, r.net), 'pan')}
+        <div class="cardrv-two">${row('EXPIRES', r.exp, 'exp')}${row('CVV', r.cvv, 'cvv')}</div>
+        ${c.photoBack ? `<button class="btn-wide" style="margin-top:12px;" data-action="card-details-flip">Turn card over</button>` : ''}
+        <div class="note" style="margin-top:10px;">Kept locked on this phone only - never sent anywhere. Hidden again when you close this.</div>
       </div>
     </div>`;
 }
@@ -8420,6 +8479,7 @@ function walletScreen(){
     ${state.allCardsOpen ? allCardsTemplate() : ''}
     ${state.notifPopupId ? notifDetailTemplate() : ''}
     ${state.cardSheetId ? cardSheetTemplate() : ''}
+    ${state.cardReveal ? cardRevealTemplate() : ''}
     ${state.moneyAllEdit ? moneyAllEditTemplate() : ''}
   `;
 }
@@ -10045,6 +10105,7 @@ document.addEventListener('click', (e)=>{
 window.storyDialClear = function(){ state.station3DialInput = ''; renderDevice(); };
 window.storyReset = function(){
   state.station3Open = false; state.station3DialpadOpen = false;
+  cardRevealClear();
   renderDevice();
   if(!/[?&]s3=/.test(location.search)){ litLockNow(); litAuthGate(); }   // the Pages closed: log in again next time if you didn't save your login info
 };
@@ -15974,6 +16035,7 @@ notesDb().then(db=>new Promise(res=>{
 }).catch(()=>{ notesLoaded = true; });
 document.addEventListener('visibilitychange', ()=>{ if(document.hidden){ if(noteLiveSaveT){ clearTimeout(noteLiveSaveT); noteLiveSaveT = null; } persistNotesNow(); } });
 function renderDevice(){
+  if(state.cardReveal && state.current !== 'wallet') cardRevealClear();   // card details never follow you off Wallet
   if(CORE_ITEMS.some(it=>it.key === state.current) && hiddenPages().includes(state.current) && PAGES.length) state.current = PAGES[0];   // a removed page (Page layout) never shows
   // An app page that isn't in your rows any more (Only system, Basic plan, the app uninstalled) never shows either.
   if(isAppPage(state.current) && !IN_STATION3_WINDOW){ const r = rowOfPage(state.current); if(!r) state.current = PAGES[0] || 'dashboard'; else if(r !== curRow){ curRow = r; syncAppPages(); } }
@@ -16873,6 +16935,7 @@ function attachHandlers(){
       if(held) return;
       const c = walletCards().find(x=>x.id === id); const i = walletCards().findIndex(x=>x.id === id) + 1;
       if(i !== state.walletCardIndex) setWalletCardIndex(i);
+      else if(cardRevealAsk(id)) return;   // its saved details, after the phone's own unlock
       else if(c && c.photoBack) state.cardFlip = state.cardFlip === id ? null : id;
       else state.cardSheetId = id;
       renderDevice();
@@ -18491,11 +18554,23 @@ function attachHandlers(){
           const chk = cardNumberCheck(f.pan);
           // CVV: 3 digits (4 on Amex) - checked like any card form, never kept anywhere.
           if(!chk || !cardExpiryOk(f.exp) || f.cvv.length !== (chk.net === 'Amex' ? 4 : 3)){ f.msg = 'Invalid card details'; break; }
+          // Important data saved (owner): the full details go into the phone's locked card store - never this page's storage.
+          const vPan = f.pan, vCvv = f.cvv;
           f.cvv = '';
+          if(f.attach){   // Save card details for a card already in Wallet: it must be that card
+            const c0 = walletCards().find(x=>x.id === f.attach);
+            if(!c0 || c0.last4 !== chk.last4){ f.msg = 'That’s not this card’s number (it ends in ' + (c0 ? c0.last4 : '') + ')'; break; }
+            const ok = cardVaultSave(c0.id, vPan, f.exp, vCvv, chk.net);
+            state.addCardOpen = false; state.addCard = null;
+            showToast(ok ? 'Card details saved - tap your card to see them' : 'Couldn’t save the card details');
+            break;
+          }
           f.busy = true;
           cardBankLookup(f.pan).then(bank=>{
             if(state.addCard !== f) return;   // closed while checking: nothing is added
-            const list = walletCards(); list.push({ id:'card' + Date.now(), bank: bank || '', last4:chk.last4, exp:f.exp, net:chk.net, photo:f.photo || '', photoBack:f.photoBack || '', checked:true });
+            const nid = 'card' + Date.now();
+            cardVaultSave(nid, vPan, f.exp, vCvv, chk.net);
+            const list = walletCards(); list.push({ id:nid, bank: bank || '', last4:chk.last4, exp:f.exp, net:chk.net, photo:f.photo || '', photoBack:f.photoBack || '', checked:true });
             saveWalletCards(list);
             state.addCardOpen = false; state.addCard = null; setWalletCardIndex(list.length);
             showToast('Card added'); renderDevice();
@@ -18503,6 +18578,17 @@ function attachHandlers(){
           break;
         }
         case 'card-sheet-close': state.cardSheetId = null; break;
+        case 'card-details-add': { const id = state.cardSheetId; state.cardSheetId = null; state.addCard = { mode:'manual', attach:id }; state.addCardOpen = true; break; }
+        case 'card-details-close': cardRevealClear(); break;
+        case 'card-details-flip': { const r = state.cardReveal; cardRevealClear(); if(r) state.cardFlip = state.cardFlip === r.id ? null : r.id; break; }
+        case 'card-details-copy': {
+          const r = state.cardReveal; if(!r) break;
+          const k = el.getAttribute('data-k'), v = k === 'pan' ? r.pan : k === 'exp' ? r.exp : r.cvv;
+          let ok = false; try{ ok = !!(window.StoryNative && window.StoryNative.cardCopy && window.StoryNative.cardCopy(v)); }catch(e){}
+          if(!ok) ok = copyTextFallback(v);
+          showToast(ok ? (k === 'pan' ? 'Card number copied' : k === 'exp' ? 'Expiry copied' : 'CVV copied') : 'Couldn’t copy');
+          return;
+        }
         case 'cards-edit': state.cardsEditOpen = true; break;
         case 'page-edit': state.pageEdit = el.getAttribute('data-v'); break;
         case 'allcards-open': state.allCardsOpen = true; break;
@@ -18520,6 +18606,7 @@ function attachHandlers(){
         case 'accts-edit-close': state.acctsEditOpen = false; break;
         case 'card-remove': {
           const list = walletCards().filter(c=>c.id !== state.cardSheetId);
+          try{ if(cardVaultOk()) window.StoryNative.cardVaultDel(state.cardSheetId); }catch(e){}
           saveWalletCards(list); state.cardSheetId = null;
           setWalletCardIndex(Math.min(state.walletCardIndex, list.length));
           showToast('Card removed');
