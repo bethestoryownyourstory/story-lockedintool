@@ -8126,7 +8126,7 @@ function cardSheetTemplate(){
       <div class="confirm-sheet" onclick="event.stopPropagation()">
         <div class="confirm-title">${escText(c.bank || 'Card')} ••${escText(c.last4 || '')}</div>
         <div class="confirm-sub">Remove this card from Lockedintool? Nothing changes at your bank.</div>
-        ${cardVaultOk() && !cardVaultHas(c.id) ? `<button class="btn-wide" style="margin:0 0 10px;" data-action="card-details-add">Save card details</button>` : ''}
+        ${NATIVE && !document.documentElement.classList.contains('story-widget') && !cardVaultHas(c.id) ? `<button class="btn-wide" style="margin:0 0 10px;" data-action="card-details-add">Save card details</button>` : ''}
         <div class="confirm-btn-row">
           <button class="btn-wide" style="margin-top:0;color:var(--red);" data-action="card-remove">Remove card</button>
           <button class="btn-wide btn-primary" style="margin-top:0;" data-action="card-sheet-close">Close</button>
@@ -18667,7 +18667,7 @@ function attachHandlers(){
           break;
         }
         case 'card-sheet-close': state.cardSheetId = null; break;
-        case 'card-details-add': { const id = state.cardSheetId; state.cardSheetId = null; state.addCard = { mode:'manual', attach:id }; state.addCardOpen = true; break; }
+        case 'card-details-add': if(!cardVaultOk()){ showToast('Update Lockedintool first - open the Lockedintool app and tap Check for updates now'); break; } { const id = state.cardSheetId; state.cardSheetId = null; state.addCard = { mode:'manual', attach:id }; state.addCardOpen = true; break; }
         case 'card-details-close': cardRevealClear(); break;
         case 'card-details-flip': { const r = state.cardReveal; cardRevealClear(); if(r) state.cardFlip = state.cardFlip === r.id ? null : r.id; break; }
         case 'card-details-copy': {
