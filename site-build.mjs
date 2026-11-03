@@ -154,7 +154,7 @@ ${body}
 const info = INFO.map(([t, rows]) => `<h2 class="sec">${esc(t)}</h2>
 <div class="grid two">${rows.map(([n, s]) => `<div class="card"><h3>${esc(n)}</h3><p>${esc(s)}</p></div>`).join('')}</div>`).join('\n');
 
-const options = OPTIONS.map(o => `<div class="card opt"><h3>${esc(o.name)}</h3><p>${esc(o.text)}</p><ul>${o.list.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>`).join('');
+const options = OPTIONS.map(o => `<div class="card opt"><h3>${esc(o.name)}</h3>${o.note ? `<p style="color:#d4a017;font-weight:600">${esc(o.note)}</p>` : ''}<p>${esc(o.text)}</p><ul>${o.list.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>`).join('');
 
 // The Free plan (owner, 28 Oct 2026: 'Free plan should also be on our website'). Free = no plan: the Dashboard only
 // (Pages, Apps and Layouts come with a plan). It costs nothing and needs no payment details, so it has no price line.
