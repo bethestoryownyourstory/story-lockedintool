@@ -5709,6 +5709,17 @@ function phoneCountryGuess(){
 }
 // The currency every amount shows in: the one you picked in Account currency, else your country's (owner: the
 // default goes with your country), else each payment in its own currency.
+// 'Each payment's own' (owner, 3 Nov 2026: 'when you select that option you should also select your currency - the
+// payments will show how they came in, but the display of your money will show in your selected currency'): every
+// payment row keeps the currency it came in; the totals (the big number, IN / OUT / NET, assets, charts) show in the
+// currency you choose with it (TOTAL_CUR_KEY; your country's currency until you pick one).
+const TOTAL_CUR_KEY = 'story-currency-total';
+function curAuto(){ try{ return localStorage.getItem(ACCOUNT_CUR_KEY) === 'AUTO'; }catch(e){ return false; } }
+function totalsCur(){ try{ const c = localStorage.getItem(TOTAL_CUR_KEY) || ''; if(/^[A-Z]{3}$/.test(c)) return c; }catch(e){} return COUNTRY_CURRENCY[accountCountry()] || ''; }
+// The currency every total is worked out in: the one you picked, or with 'Each payment's own' the one chosen with it.
+function convCur(){ return accountCur() || (curAuto() ? totalsCur() : ''); }
+// How ONE payment is shown: with 'Each payment's own', in the currency it came in (even though its totals are converted).
+function payShown(t){ return curAuto() && t && t.origCur ? { amt:t.origAmt, cur:t.origCur, bal:t.origBal } : t; }
 function accountCur(){ try{ const c = localStorage.getItem(ACCOUNT_CUR_KEY) || ''; if(c === 'AUTO') return ''; if(/^[A-Z]{3}$/.test(c)) return c; return COUNTRY_CURRENCY[accountCountry()] || ''; }catch(e){ return ''; } }
 function fxRates(){ try{ return JSON.parse(localStorage.getItem(FX_KEY) || 'null'); }catch(e){ return null; } }
 let fxBusy = false;
@@ -5735,7 +5746,7 @@ function fxConvert(amt, from, to){
 function fxTx(t, to){
   const a = fxConvert(t.amt, t.cur, to); if(a == null) return t;
   const b = t.bal == null ? t.bal : fxConvert(t.bal, t.cur, to);
-  return Object.assign({}, t, { amt: a, bal: b, cur: to, origAmt: t.amt, origCur: t.cur });
+  return Object.assign({}, t, { amt: a, bal: b, cur: to, origAmt: t.amt, origCur: t.cur, origBal: t.bal });
 }
 // Owner ("I never lost $800"): ONLY bank / payment apps and bank SMS are money - trading, crypto and market apps put
 // prices and profits in their notifications and those are never payments. Same rule as the app (MoneyLog.kt).
@@ -5813,7 +5824,7 @@ function moneyTx(){
   if(linkedIds.length) list = list.filter(t=>!bankIds(String(t.pkg || '') + ' ' + (t.app || '') + (MONEY_SMS.includes(t.pkg) ? ' ' + String(t.text || '').slice(0, 40) : '')).some(i=>linkedIds.includes(i)));
   list = list.concat(bankTx());
   list = moneyDedupe(list.filter(t=>t && isFinite(t.amt) && t.amt && t.ts && moneyCounts(t)).sort((a, b)=>b.ts - a.ts));
-  const to = accountCur();
+  const to = convCur();
   if(to){ if(list.some(t=>t.cur !== to)) fxEnsure(); list = list.map(t=>t.cur === to ? t : fxTx(t, to)); }
   moneyCache = list;
   return moneyCache;
@@ -5834,7 +5845,7 @@ function moneyDedupe(list){
   });
   return out.sort((a, b)=>b.ts - a.ts);
 }
-window.addEventListener('storage', e=>{ if(e.key === ACCOUNT_CUR_KEY || e.key === FX_KEY || e.key === COUNTRY_KEY){ moneyCache = null; if(MONEY_PAGES.includes(state.current)) renderDevice(); } });
+window.addEventListener('storage', e=>{ if(e.key === ACCOUNT_CUR_KEY || e.key === TOTAL_CUR_KEY || e.key === FX_KEY || e.key === COUNTRY_KEY){ moneyCache = null; if(MONEY_PAGES.includes(state.current)) renderDevice(); } });
 const MONEY_PAGES = ['money', 'money-summary', 'wallet', 'wallet-overview', 'tx-history'];
 // The app says when a new payment came in: the money pages update straight away.
 window.storyMoneyNew = function(){
@@ -5895,7 +5906,7 @@ function moneyAccessOk(){ try{ return !NATIVE || !window.StoryNative.moneyAccess
 // The currency most of your payments are in (before any payment: the phone's region).
 function moneyMainCur(){
   // The account currency you picked (owner) - once there are rates for it (until then payments show unconverted).
-  const ac = accountCur();
+  const ac = convCur();
   if(ac){ const fx = fxRates(); if((fx && fx.rates && fx.rates[ac]) || !moneyTx().some(t=>t.cur !== ac)) return ac; }
   const n = {}; (moneyView().length ? moneyView() : moneyTx()).forEach(t=>{ n[t.cur] = (n[t.cur] || 0) + 1; });
   const best = Object.keys(n).sort((a, b)=>n[b] - n[a])[0];
@@ -5989,7 +6000,7 @@ function expensesFor(key, cur){
 }
 // Balances your bank says in its messages (newest per account); a negative one is money you owe.
 function moneyBalances(forCard){
-  const seen = {}, out = [], to = accountCur(), c = forCard && !moneyAllOn() ? activeCard() : null;
+  const seen = {}, out = [], to = convCur(), c = forCard && !moneyAllOn() ? activeCard() : null;
   bankBalances().forEach(b=>{
     if(!walletCards().some(x=>cardMatches(x, b)) || (c && !cardMatches(c, b))) return;
     const a = moneyAcctOf(b); if(seen[a.key]) return; seen[a.key] = 1;
@@ -6008,7 +6019,7 @@ function moneyBalances(forCard){
 const TRADE_LAST_KEY = 'story-trade-last';
 function tradeAssets(){
   let last = {}; try{ last = JSON.parse(localStorage.getItem(TRADE_LAST_KEY) || '{}') || {}; }catch(e){}
-  const to = accountCur();
+  const to = convCur();
   return tradeAccounts().map(a=>{ const l = last[a.id]; if(!(l && l.eq != null)) return null; const cur = a.currency || 'USD', v = to ? fxConvert(+l.eq, cur, to) : null;
     return { key:'t:' + a.id, name:a.name, bal: v == null ? +l.eq : v, cur: v == null ? cur : to, ts:l.ts, icon:'📈' }; }).filter(Boolean);
 }
@@ -6134,7 +6145,7 @@ function paymentCardsHTML(){
             <div class="notif-label">${escText(moneyWho(t))}</div>
           </div>
           <div class="notif-right">
-            <div class="notif-amt"${t.amt < 0 ? ' style="color:var(--red);"' : ''}>${fmtCur(t.amt, t.cur, true)}</div>
+            <div class="notif-amt"${t.amt < 0 ? ' style="color:var(--red);"' : ''}>${fmtCur(payShown(t).amt, payShown(t).cur, true)}</div>
             <div class="notif-time">${moneyWhen(t.ts)}</div>
           </div>
         </div>
@@ -6407,8 +6418,8 @@ function notifDetailTemplate(){
     <div class="modal-overlay" data-action="notif-popup-bg">
       <div class="confirm-sheet" onclick="event.stopPropagation()">
         <div class="pay-detail-ico">${payIconHTML(t)}</div>
-        <div class="confirm-title">${escText(moneyWho(t))} — ${fmtCur(t.amt, t.cur, true)}</div>
-        <div class="confirm-sub">${escText(t.app || '')} · ${moneyDate(t.ts)}${via ? '<br>' + via : ''}${t.bal != null ? '<br>Balance after: ' + fmtCur(t.bal, t.cur) : ''}${t.card ? '<br>Card / account ••' + escText(t.card) : ''}${t.text ? '<br><span style="opacity:0.7;">' + escText(t.text) + '</span>' : ''}</div>
+        <div class="confirm-title">${escText(moneyWho(t))} — ${fmtCur(payShown(t).amt, payShown(t).cur, true)}</div>
+        <div class="confirm-sub">${escText(t.app || '')} · ${moneyDate(t.ts)}${via ? '<br>' + via : ''}${t.bal != null ? '<br>Balance after: ' + fmtCur(payShown(t).bal, payShown(t).cur) : ''}${t.card ? '<br>Card / account ••' + escText(t.card) : ''}${t.text ? '<br><span style="opacity:0.7;">' + escText(t.text) + '</span>' : ''}</div>
         <div class="confirm-btn-row">
           <button class="btn-wide btn-primary" style="margin-top:0;" data-action="notif-popup-close">Close</button>
         </div>
@@ -8304,7 +8315,7 @@ function walletActivityRowsHTML(){
   if(!list.length) return moneyRowsEmpty('Nothing paid with Wallet yet');
   const hide = walletHidden('activity');
   return list.map(t=>({ id: t.id, icon: payIconHTML(t), name: escText(moneyWho(t)), sub: t.via + ' · ' + moneyWhen(t.ts), amt: t.amt, ts: t.ts, cur: t.cur })).map(t=>`
-    <div class="row" data-notif="${escText(t.id)}" style="cursor:pointer;"><div class="row-left"><div class="row-icon">${t.icon}</div><div><div class="row-name">${t.name}</div><div class="row-sub">${walletActivitySubLabel(t)}</div></div></div><div class="row-amt" style="color:${hide ? 'var(--text)' : walletActivityColor(t.amt, t.ts)};">${hide ? HIDDEN_AMT : fmtCur(t.amt, t.cur, true)}</div></div>
+    <div class="row" data-notif="${escText(t.id)}" style="cursor:pointer;"><div class="row-left"><div class="row-icon">${t.icon}</div><div><div class="row-name">${t.name}</div><div class="row-sub">${walletActivitySubLabel(t)}</div></div></div><div class="row-amt" style="color:${hide ? 'var(--text)' : walletActivityColor(t.amt, t.ts)};">${hide ? HIDDEN_AMT : fmtCur(payShown(t).amt, payShown(t).cur, true)}</div></div>
   `).join('');
 }
 // Hide (owner): an eye at the right of Wallet Activity, Memberships and Subscriptions - tap it and what that part shows
@@ -8480,7 +8491,7 @@ function walletOverviewScreen(){
     </div>
     <div class="row-card">
       ${(l=>l.length ? l.map(t=>`
-        <div class="row" data-notif="${escText(t.id)}" style="cursor:pointer;"><div class="row-left"><div class="row-icon">${payIconHTML(t)}</div><div><div class="row-name">${escText(moneyWho(t))}</div><div class="row-sub">${escText(t.via)} · ${moneyDate(t.ts)}</div></div></div><div class="row-amt" style="color:var(--red);">${fmtCur(t.amt, t.cur, true)}</div></div>
+        <div class="row" data-notif="${escText(t.id)}" style="cursor:pointer;"><div class="row-left"><div class="row-icon">${payIconHTML(t)}</div><div><div class="row-name">${escText(moneyWho(t))}</div><div class="row-sub">${escText(t.via)} · ${moneyDate(t.ts)}</div></div></div><div class="row-amt" style="color:var(--red);">${fmtCur(payShown(t).amt, payShown(t).cur, true)}</div></div>
       `).join('') : moneyRowsEmpty('Nothing paid with Wallet yet'))(walletPayments().slice(0, 4))}
     </div>
     </div>
@@ -9124,7 +9135,7 @@ function txHistoryScreen(){
     <div class="section-title">TRANSACTION HISTORY</div>
     <div class="row-card">
       ${(l=>l.length ? l.map(t=>`
-        <div class="row" data-notif="${escText(t.id)}" style="cursor:pointer;"><div class="row-left"><div class="row-icon">${payIconHTML(t)}</div><div><div class="row-name">${escText(moneyWho(t))}</div><div class="row-sub">${escText(t.via)} · ${moneyDate(t.ts)}</div></div></div><div class="row-amt" style="color:var(--red);">${fmtCur(t.amt, t.cur, true)}</div></div>
+        <div class="row" data-notif="${escText(t.id)}" style="cursor:pointer;"><div class="row-left"><div class="row-icon">${payIconHTML(t)}</div><div><div class="row-name">${escText(moneyWho(t))}</div><div class="row-sub">${escText(t.via)} · ${moneyDate(t.ts)}</div></div></div><div class="row-amt" style="color:var(--red);">${fmtCur(payShown(t).amt, payShown(t).cur, true)}</div></div>
       `).join('') : moneyRowsEmpty('Nothing paid with Wallet yet'))(walletPayments().slice(0, 200))}
     </div>
     </div>
@@ -10630,8 +10641,9 @@ window.storyProfileOnly = function(){
     else if(k === 'upv-delete') upDeleteShown();
     else if(k === 'ed-about') openProfileField('about');
     else if(k === 'ed-currency'){ el.querySelector('.pf-menupage').hidden = true; const pg = el.querySelector('.pf-currency'); pg.hidden = false; pg.scrollTop = 0; curRender(); }
-    else if(k === 'cur-back'){ el.querySelector('.pf-currency').hidden = true; pfMenuOpen(); }
-    else if(k === 'cur-set'){ const v = b.getAttribute('data-v') || ''; try{ if(v) localStorage.setItem(ACCOUNT_CUR_KEY, v); else localStorage.removeItem(ACCOUNT_CUR_KEY); }catch(err){} moneyCache = null; const now = accountCur(); if(now) fxEnsure(); curRender(); const cv = el.querySelector('[data-pf="ed-currency"] .pf-ed-val'); if(cv) cv.textContent = now || 'Each payment’s own'; showToast(now ? 'Money shows in ' + now : 'Money shows each payment’s own currency'); }
+    else if(k === 'cur-back'){ if(curPickTotals){ curPickTotals = false; curRender(); return; } el.querySelector('.pf-currency').hidden = true; pfMenuOpen(); }
+    else if(k === 'cur-total'){ const v = b.getAttribute('data-v') || ''; try{ localStorage.setItem(TOTAL_CUR_KEY, v); }catch(err){} curPickTotals = false; moneyCache = null; fxEnsure(); curRender(); showToast('Payments show in their own currency · your money shows in ' + v); }
+    else if(k === 'cur-set'){ const v = b.getAttribute('data-v') || ''; try{ if(v) localStorage.setItem(ACCOUNT_CUR_KEY, v); else localStorage.removeItem(ACCOUNT_CUR_KEY); }catch(err){} moneyCache = null; const now = accountCur(); if(now) fxEnsure(); curPickTotals = v === 'AUTO'; curRender(); if(curPickTotals){ const bx = el.querySelector('.pf-cur-list'); if(bx && bx.parentElement) bx.parentElement.scrollTop = 0; return; } const cv = el.querySelector('[data-pf="ed-currency"] .pf-ed-val'); if(cv) cv.textContent = now || 'Each payment’s own'; showToast(now ? 'Money shows in ' + now : 'Money shows each payment’s own currency'); }
     else if(k === 'ed-country'){ ed.hidden = true; const pg = el.querySelector('.pf-country'); pg.hidden = false; pg.scrollTop = 0; pg.querySelector('.pf-country-q').value = ''; countryRender(); }
     else if(k === 'country-back'){ el.querySelector('.pf-country').hidden = true; ed.hidden = false; }
     else if(k === 'country-set'){
@@ -10789,11 +10801,18 @@ window.storyProfilePhotoChanged = function(){
 // reset a forgotten password (and a copy of the Delete account link). Lockedintool sends a code there to check it's yours. ----
 const PR_KEY = 'story-recovery';
 const PR = { kind:'email', step:'view', value:'' };
+let curPickTotals = false;   // 'Each payment's own' was just chosen: now pick the currency your totals show in
 function curRender(){
   const box = document.querySelector('#story-profile .pf-cur-list'); if(!box) return;
+  if(curPickTotals){
+    const tc = totalsCur();
+    box.innerHTML = '<div class="pf-ed-note" style="padding:4px 2px 12px;">Each payment’s own: every payment shows in the currency it came in. Now choose the currency your total money shows in.</div>' +
+      ACCOUNT_CURRENCIES.map(([c, n])=>'<button class="pf-pv-opt' + (c === tc ? ' on' : '') + '" data-pf="cur-total" data-v="' + c + '"><span class="pf-pv-txt"><div class="pf-pv-t">' + escText(c) + '</div><div class="pf-pv-d">' + escText(n) + '</div></span><span class="pf-pv-dot"></span></button>').join('');
+    return;
+  }
   const cur = accountCur();
   const own = COUNTRY_CURRENCY[accountCountry()] || '', sel = (()=>{ try{ return localStorage.getItem(ACCOUNT_CUR_KEY) || ''; }catch(e){ return ''; } })();
-  box.innerHTML = [['', own ? 'Your country’s currency (' + own + ')' : 'Your country’s currency', own ? accountCountry() : 'Choose your country in Edit profile'], ['AUTO', 'Each payment’s own', 'Every payment in the currency it came in']].concat(ACCOUNT_CURRENCIES.map(([c, n])=>[c, c, n])).map(([v, t, d])=>
+  box.innerHTML = [['', own ? 'Your country’s currency (' + own + ')' : 'Your country’s currency', own ? accountCountry() : 'Choose your country in Edit profile'], ['AUTO', 'Each payment’s own', 'Every payment in the currency it came in' + (sel === 'AUTO' && totalsCur() ? ' · your money shows in ' + totalsCur() : '')]].concat(ACCOUNT_CURRENCIES.map(([c, n])=>[c, c, n])).map(([v, t, d])=>
     '<button class="pf-pv-opt' + (sel === v ? ' on' : '') + '" data-pf="cur-set" data-v="' + v + '"><span class="pf-pv-txt"><div class="pf-pv-t">' + escText(t) + '</div><div class="pf-pv-d">' + escText(d) + '</div></span><span class="pf-pv-dot"></span></button>').join('');
 }
 // Profile's ⋮ (owner): a full-screen page of its own - Profile privacy, Account currency (and Reports for official).
@@ -19485,7 +19504,7 @@ async function litKeysFromBox(bk, keybox){
 }
 function litSignedIn(){ const a = msgAccount(); return !!(a && a.token && a.pw); }
 // ---- The locked backup: chats, people's keys, call history, privacy, blocks, community choices ----
-const LIT_BACKUP_KEYS = ['story-currency', 'story-country', 'story-messages', 'story-msg-peers', 'story-calls', 'story-privacy', 'story-blocked', 'story-community', 'story-community-chats', 'story-community-always-mine', 'story-status-seen', 'story-profile-locks'];
+const LIT_BACKUP_KEYS = ['story-currency', 'story-currency-total', 'story-country', 'story-messages', 'story-msg-peers', 'story-calls', 'story-privacy', 'story-blocked', 'story-community', 'story-community-chats', 'story-community-always-mine', 'story-status-seen', 'story-profile-locks'];
 let litBackupT = 0, litBackupAt = 0, litBackupBusy = false;
 function litBackupSoon(){
   if(!MSG_ENGINE || !litSignedIn()) return;
