@@ -6662,7 +6662,7 @@ async function tlModify(acc, pos, v){
 }
 
 // ---- MT5 (through STORY's MetaApi connection, the only way an app can reach MT5) ----
-const MT5_API = 'https://story-trade.percyjuniormaseko0.workers.dev';   // Lockedintool's trade server (trade-worker.js, MetaApi)
+const MT5_API = 'https://trade.lockedintool.com';   // Lockedintool's trade server (trade-worker.js, MetaApi)
 async function mt5Call(acc, method, path, body){
   if(!MT5_API) throw 'mt5-soon';
   const r = await httpReq(method, MT5_API + path, { 'X-Story-Key': acc ? (secretGet('mt5key:' + acc.accId) || '') : '' }, body);
@@ -11877,7 +11877,7 @@ window.storyImeInset = function(dp){
 // Runs in Profile's main window (Messages and Call history live there; the app keeps it running in the background, so
 // messages and calls reach you any time). Messages are locked on this phone (ECDH P-256 + AES-GCM, a key only the
 // two phones can work out) - the server only ever carries locked boxes. ----
-const MSG_API = (()=>{ try{ return localStorage.getItem('story-msg-api') || 'https://story-msg.percyjuniormaseko0.workers.dev'; }catch(e){ return 'https://story-msg.percyjuniormaseko0.workers.dev'; } })();
+const MSG_API = (()=>{ try{ return localStorage.getItem('story-msg-api') || 'https://api.lockedintool.com'; }catch(e){ return 'https://api.lockedintool.com'; } })();
 const MSG_ACCOUNT_KEY = 'story-msg-account', MSG_PEERS_KEY = 'story-msg-peers';
 const MSG_ENGINE = !!document.querySelector && /[?&]profile=1/.test(location.search) && !PF_GAP_WINDOW;
 function msgAccount(){ try{ return JSON.parse(localStorage.getItem(MSG_ACCOUNT_KEY) || 'null'); }catch(e){ return null; } }
