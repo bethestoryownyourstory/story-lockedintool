@@ -143,7 +143,7 @@ commits, pushed as a new update) - nothing else changes.
 | 135 | 2026-11-04 | Subscription: the rand price is today's conversion of the dollar price, other countries see their own currency too; the price-change note shows under every plan and members are told when a price changes | 234fa93 |
 | 136 | 2026-11-04 | Your phone (the official account) is Premium · Only system - always on, no payment | b38fec9 |
 | 137 | 2026-11-04 | Only system really asks to make Lockedintool your Home app (the question never appeared before), and asks again until it is | f0287b6 |
-| 138 | 2026-11-04 | Your account stays on Only system for good - it can't be switched to Second system | (this) |
+| 138 | 2026-11-04 | Your account stays on Only system for good - it can't be switched to Second system | 697ca34 |
 | 139 | 2026-11-04 | Only system: no Apps | Lockedintool switch any more, and never a frozen old home screen behind Lockedintool | (this) |
 | 140 | 2026-11-04 | Subscriptions moved to the bottom of Settings (out of the Dashboard menu); your Subscription page shows exactly what a customer sees | (this) |
 | 141 | 2026-11-04 | Settings is clean: only the names of the options - tap one to see its choices | (this) |
@@ -157,3 +157,4 @@ commits, pushed as a new update) - nothing else changes.
 | 149 | 2026-11-04 | Only system: no black screen while Lockedintool reloads after Close all - you see Lockedintool's last picture until the Dashboard is ready | (this) |
 | 150 | 2026-11-04 | Only system: the Dashboard comes back by itself after closing an app (no black screen to tap). Colour systems apply instantly and to every screen reached from the Dashboard (Settings, Layouts, Notes, Information...) | (this) |
 | 151 | 2026-11-04 | Layouts > Pages > Color customization shows your colours: the screen in the all-pages colours, each row and page in its own | (this) |
+| 152 | 2026-11-04 | Pages colour screen: its background takes your colours only when every page uses the same ones; otherwise only the options are coloured | (this) |
