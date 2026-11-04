@@ -142,3 +142,4 @@ commits, pushed as a new update) - nothing else changes.
 | 134 | 2026-11-04 | Servers renamed to Lockedintool's own names (lockedintool-msg / -trade / -release) - accounts and chats moved with them; the app (1.307) can now hand everything over to Lockedintool's own Android ID | 51acc43, c15e127, 6e229a3 |
 | 135 | 2026-11-04 | Subscription: the rand price is today's conversion of the dollar price, other countries see their own currency too; the price-change note shows under every plan and members are told when a price changes | (this) |
 | 136 | 2026-11-04 | Your phone (the official account) is Premium · Only system - always on, no payment | (this) |
+| 137 | 2026-11-04 | Only system really asks to make Lockedintool your Home app (the question never appeared before), and asks again until it is | (this) |

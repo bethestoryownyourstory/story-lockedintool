@@ -2700,6 +2700,21 @@ class OverlayService : Service(), StoryBridge.Host {
         pagesPane?.web?.evaluateJavascript(js, null)
         liveWidgets.values.forEach { runCatching { it.web.evaluateJavascript(js, null) } }   // the Dashboard widget's Controls too
     } }
+    /** Android's own 'make Lockedintool your Home app' question (Only system). It only shows when it's asked from a
+     *  screen that's up (startActivityForResult) - asked from the background it never appeared (owner, 4 Nov 2026:
+     *  'Nothing is happening') - so it goes through the see-through SystemScreenActivity like the phone's other screens. */
+    fun askHomeRole() {
+        ui.post {
+            val i = if (android.os.Build.VERSION.SDK_INT >= 29) {
+                val rm = getSystemService(android.app.role.RoleManager::class.java)
+                if (rm != null && rm.isRoleAvailable(android.app.role.RoleManager.ROLE_HOME) && !rm.isRoleHeld(android.app.role.RoleManager.ROLE_HOME))
+                    rm.createRequestRoleIntent(android.app.role.RoleManager.ROLE_HOME) else null
+            } else null
+            openSystemScreen(i ?: Intent(android.provider.Settings.ACTION_HOME_SETTINGS))
+        }
+    }
+    /** Lockedintool is the phone's Home app right now. */
+    fun isHomeApp(): Boolean = runCatching { packageManager.resolveActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), 0)?.activityInfo?.packageName == packageName }.getOrDefault(false)
     private fun openSystemScreen(i: Intent) = openStepAside(Intent(this, SystemScreenActivity::class.java).putExtra(SystemScreenActivity.EXTRA_INTENT, i))
     /** Starts one of Lockedintool's see-through screens for the phone's own screen; the Pages step aside meanwhile. */
     private fun openStepAside(a: Intent) {

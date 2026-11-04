@@ -9053,7 +9053,7 @@ function subRefresh(force){
   if(!force && s && Date.now() - (s.checked || 0) < 3 * 3600000) return;
   msgApi('/v1/sub/info').then(i=>{ const was = subLocked(); subSave(i); subApplyMode(); syncAppPages(); if(was !== subLocked() || state.current === 'subscription') renderDevice(); }).catch(()=>{});
 }
-setTimeout(()=>{ subWaitLoad(); const c = subState() || {}; subRefresh(!!state.sub.waiting || (c.official && !c.officialPlan)); }, 4000);   // ... and the official account picks up its Premium · Only system straight away (#136)   // a plan payment you started: the server checks it now
+setTimeout(()=>{ subWaitLoad(); const c = subState() || {}; subRefresh(!!state.sub.waiting || (c.official && !c.officialPlan)); sysHomeCheck(); }, 4000);   // ... and the official account picks up its Premium · Only system straight away (#136)   // a plan payment you started: the server checks it now
 // Prices can change (owner, 4 Nov 2026: 'the words where I said prices might change - those are permanent and should
 // always be showing underneath each plan'; 'the prices of the plans can increase and can also decrease'; members are
 // notified, never charged extra for a month already paid, and the changed price is for new customers). Shown under
@@ -9192,7 +9192,7 @@ function permAgreeModal(){
 }
 // ---- Lockedintool as your system (owner, a section in the plans): your phone only uses Lockedintool - no other app at
 // all (calls and emergency still work). Off ONLY by logging out or deleting your account (SystemMode.kt). ----
-function sysModeState(){ try{ const v = (NATIVE && window.StoryNative.systemModeState) ? String(window.StoryNative.systemModeState()).split('|') : ['off', 'none']; return { on: v[0] === 'on', ready: v[1] === 'ready', app: v[1] !== 'none' }; }catch(e){ return { on:false, ready:false, app:false }; } }
+function sysModeState(){ try{ const v = (NATIVE && window.StoryNative.systemModeState) ? String(window.StoryNative.systemModeState()).split('|') : ['off', 'none']; return { on: v[0] === 'on', ready: v[1] === 'ready', app: v[1] !== 'none', home: v[2] === 'home', homeKnown: !!v[2] }; }catch(e){ return { on:false, ready:false, app:false, home:false, homeKnown:false }; } }
 // The two options (owner): buttons at the top of the Subscription page - the cursor over one shows what it is; on a
 // phone, tapping shows it with a ✓ at the bottom to choose it. Then you pick a plan: the purchase is made under that
 // option and plan (server payments.mode / subs.mode). 'only' turns Lockedintool as your system on once the plan is paid.
@@ -9239,9 +9239,19 @@ function subOptConfirm(){
   else showToast('Only system - now choose your plan');
 }
 // A plan paid under "Only system" turns it on (here, and whenever Lockedintool sees that plan).
-function subApplyMode(){ const s = subState() || {}; if(s.active && s.mode === 'only' && litSignedIn() && !sysModeState().on && sysModeState().ready){ try{ window.StoryNative.systemModeSet(true, ''); }catch(e){} syncAppPages(); } }
+function subApplyMode(){ const s = subState() || {}; if(s.active && s.mode === 'only' && litSignedIn() && !sysModeState().on && sysModeState().ready){ try{ window.StoryNative.systemModeSet(true, ''); }catch(e){} syncAppPages(); } sysHomeCheck(); }
+// Only system is on but Lockedintool isn't the phone's Home app yet (Android's question was never answered - owner,
+// 4 Nov 2026: 'Nothing is happening'): ask it again, once each time Lockedintool's screens start, from the Pages window.
+let sysHomeAsked = false;
+function sysHomeCheck(force){
+  if(IN_STATION3_WINDOW || !NATIVE || !window.StoryNative.askHome) return;
+  const m = sysModeState(); if(!m.on || !m.homeKnown || m.home) return;
+  if(sysHomeAsked && !force) return; sysHomeAsked = true;
+  try{ window.StoryNative.askHome(); }catch(e){}
+}
 function sysModeAsk(){
   const m = sysModeState();
+  if(m.on && m.homeKnown && !m.home){ sysHomeCheck(true); return; }   // on, but not the Home app yet: just ask that
   if(!m.app){ showToast('Lockedintool as your system works in the Lockedintool app'); return; }
   if(!litSignedIn()){ showToast('Log in to your account first'); return; }
   if(!m.ready){ showToast('Turn on Lockedintool system actions first (on the setup screen)'); return; }

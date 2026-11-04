@@ -260,7 +260,10 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
     /** Lockedintool as your system (owner): on from the Subscription page (signed in); off ONLY by logging out or deleting
      *  your account - the page passes "LOGGED-OUT" then. */
     @JavascriptInterface
-    fun systemModeState(): String = (if (SystemMode.on(ctx)) "on" else "off") + "|" + (if (StoryAccessibilityService.instance != null) "ready" else "noaccess")
+    fun systemModeState(): String = (if (SystemMode.on(ctx)) "on" else "off") + "|" + (if (StoryAccessibilityService.instance != null) "ready" else "noaccess") + "|" + (if (OverlayService.instance?.isHomeApp() == true) "home" else "nohome")
+    /** Only system is on but Lockedintool isn't the Home app yet: ask Android's question again. */
+    @JavascriptInterface
+    fun askHome() { if (!station3 && !dial && SystemMode.on(ctx)) askHomeApp() }
     /** Only use widgets (Settings): on from the Pages; off (or on) from the Lockedintool app's screen. */
     @JavascriptInterface
     fun widgetsOnlyState(): String = if (WidgetMode.on(ctx)) "on" else "off"
@@ -281,13 +284,8 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         runCatching {
             val cur = ctx.packageManager.resolveActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), 0)
             if (cur?.activityInfo?.packageName == ctx.packageName) return   // already the home app
-            if (android.os.Build.VERSION.SDK_INT >= 29) {
-                val rm = ctx.getSystemService(android.app.role.RoleManager::class.java)
-                if (rm != null && rm.isRoleAvailable(android.app.role.RoleManager.ROLE_HOME) && !rm.isRoleHeld(android.app.role.RoleManager.ROLE_HOME)) {
-                    ctx.startActivity(rm.createRequestRoleIntent(android.app.role.RoleManager.ROLE_HOME).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                    return
-                }
-            }
+            val svc = OverlayService.instance
+            if (svc != null) { svc.askHomeRole(); return }
             ctx.startActivity(Intent(Settings.ACTION_HOME_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             OverlayService.instance?.showToast("Pick Lockedintool as your Home app so it becomes your home screen")
         }.onFailure { OverlayService.instance?.showToast("Open Settings > Apps > Default apps > Home app and pick Lockedintool") }
