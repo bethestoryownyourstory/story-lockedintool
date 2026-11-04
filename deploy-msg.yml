@@ -135,15 +135,15 @@ jobs:
           if [ "$TURN" = "True" ]; then echo "Calls relay: already set up"; exit 0; fi
           if [ -z "$TURN" ]; then echo "Calls relay: the server didn't answer - it is set up on the next deploy" | tee -a "$GITHUB_STEP_SUMMARY"; exit 0; fi
           API=https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/calls/turn_keys
-          for id in $(curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" $API | python3 -c 'import sys,json; d=json.load(sys.stdin); print(" ".join(k["uid"] for k in (d.get("result") or []) if k.get("name")=="lockedintool-turn"))' 2>/dev/null); do
+          for id in $(curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" $API | python3 -c 'import sys,json; d=json.load(sys.stdin); print(" ".join(k["uid"] for k in (d.get("result") if isinstance(d.get("result"),list) else (d if isinstance(d,list) else [])) if k.get("name")=="lockedintool-turn"))' 2>/dev/null); do
             curl -s -X DELETE -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" $API/$id >/dev/null
           done
           R=$(curl -s -X POST -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'content-type: application/json' -d '{"name":"lockedintool-turn"}' $API)
-          KID=$(echo "$R" | python3 -c 'import sys,json; d=json.load(sys.stdin); print((d.get("result") or {}).get("uid",""))' 2>/dev/null)
-          KEY=$(echo "$R" | python3 -c 'import sys,json; d=json.load(sys.stdin); print((d.get("result") or {}).get("key",""))' 2>/dev/null)
+          KID=$(echo "$R" | python3 -c 'import sys,json; d=json.load(sys.stdin); r=d.get("result") if isinstance(d.get("result"),dict) else d; print(r.get("uid",""))' 2>/dev/null)
+          KEY=$(echo "$R" | python3 -c 'import sys,json; d=json.load(sys.stdin); r=d.get("result") if isinstance(d.get("result"),dict) else d; print(r.get("key",""))' 2>/dev/null)
           if [ -z "$KID" ] || [ -z "$KEY" ]; then
             echo "Calls relay could not be set up: the Cloudflare API token needs the 'Calls' (Realtime): Edit permission." | tee -a "$GITHUB_STEP_SUMMARY"
-            echo "Cloudflare said: $(echo "$R" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("errors"))' 2>/dev/null)"
+            echo "Cloudflare said: $(echo "$R" | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d.get("errors"), "fields:", sorted(d.keys()))' 2>/dev/null)"
             exit 0
           fi
           echo "::add-mask::$KEY"
