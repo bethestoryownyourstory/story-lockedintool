@@ -175,4 +175,5 @@ commits, pushed as a new update) - nothing else changes.
 | 167 | 2026-11-04 | Dial pad: a black piece fills the space under its left part, beside Station 3's bar, so the dial pad and Station 3 are one piece | d263650 |
 | 168 | 2026-11-04 | Only system: the keyboard comes up when you type on the Dashboard / Pages (editing the quote, search...) | 5be9297 |
 | 169 | 2026-11-04 | Lockedintool security: the Dashboard's bar no longer shows squashed while the unlock prompt is up | 428cfee |
-| 170 | 2026-11-04 | No scrolling anywhere except Settings and Information (and the Apps list / an open note): every other screen is locked to one full screen - it used to move a tiny bit | (this) |
+| 170 | 2026-11-04 | No scrolling anywhere except Settings and Information (and the Apps list / an open note): every other screen is locked to one full screen - it used to move a tiny bit | 9db7691 |
+| 171 | 2026-11-04 | Apps: the Lockedintool app sits first in the LOCKEDINTOOL section, not mixed with the phone's apps | (this) |
