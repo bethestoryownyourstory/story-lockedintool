@@ -135,3 +135,4 @@ commits, pushed as a new update) - nothing else changes.
 | 127 | 2026-11-04 | Only the owner can use Lockedintool until launch - other phones and modified copies start nothing and see only the legal notice (the browser too). The page-size report only fires when a page really doesn't fill the screen; the 43 old reports (calls busy, sizing, slow opens from older versions) marked fixed | 7c25030 |
 | 128 | 2026-11-04 | Trading full-screen: the chart stays live above the New Order sheet (it used to go black). Rotate view (the ⬌ button) removed - the full-screen chart is always upright | 13e6e64 + this |
 | 129 | 2026-11-04 | Dashboard quote: you can delete the name - the "— Unknown" line (dash included) goes away instead of coming back | (this) |
+| 130 | 2026-11-04 | Trading page: title is now "Focus page" with "TRADING" under it; Lockedintool's pair name line removed - the TradingView chart is taller by that space | (this) |
