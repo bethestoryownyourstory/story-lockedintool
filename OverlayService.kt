@@ -852,6 +852,7 @@ class OverlayService : Service(), StoryBridge.Host {
         if (p === pagesPane) p.lp.screenBrightness = if (shown && pagesBright >= 0f) pagesBright else WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
         runCatching { p.wm.updateViewLayout(p.frame, p.lp) }
         if (p === s3Pane) { syncBarBg(); syncBarTouch(); tellProfileStation3() }
+        if (p === dialPane) syncDialStrip()
         if (p === s3Pane || p === profilePane) ui.post { syncLockDial() }   // the lock screen's Wallet page button steps aside / comes back
         if (p === profilePane) {
             syncCreate()
@@ -1397,6 +1398,7 @@ class OverlayService : Service(), StoryBridge.Host {
             runCatching { (barBgWm ?: wm).updateViewLayout(v, lp) }
         } }
         dialPane?.let { p -> p.lp.y = y + (40 * dp).toInt(); runCatching { p.wm.updateViewLayout(p.frame, p.lp) } }   // attached to the bar (owner)
+        syncDialStrip()
         fitProfileGap()
         syncBarTouch()
         updateBarLine()
@@ -1568,8 +1570,46 @@ class OverlayService : Service(), StoryBridge.Host {
     private var barBgWm: WindowManager? = null
     private var barBgLine: View? = null   // the bottom line, drawn on the Dashboard's Station 3 background (dashLineSync)
 
+    // ---- The black piece under the dial pad (owner, 4 Nov 2026, the space left of Station 3's bar under the dial pad:
+    //      'just add a black piece there'): while the dial pad sits on Station 3's bar over apps / the Pages, a plain
+    //      piece in the dial pad's own colour fills the room under the dial pad's left part down to the bottom edge, so
+    //      the dial pad and Station 3 are one piece. It sits UNDER Station 3's bar (added right before it) and reaches a
+    //      little under the bar's rounded corner. Not on the Dashboard (its bar runs the whole width) or the lock screen.
+    private var dialStrip: View? = null
+    private var dialStripLp: WindowManager.LayoutParams? = null
+    private var dialStripWm: WindowManager? = null
+    @SuppressLint("ClickableViewAccessibility")
+    private fun addDialStrip() {
+        removeDialStrip()
+        val v = View(this).apply { setBackgroundColor(th(Color.BLACK)); setOnTouchListener { _, _ -> true }; visibility = View.INVISIBLE }
+        val lp = overlayParams(1, (40 * dp).toInt(), Gravity.BOTTOM or Gravity.START, 0, 0).also {
+            it.type = layerType
+            it.flags = it.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+            it.alpha = 0f
+        }
+        dialStrip = v; dialStripLp = lp; dialStripWm = layerWm
+        runCatching { layerWm.addView(v, lp) }
+    }
+    private fun removeDialStrip() { dialStrip?.let { runCatching { (dialStripWm ?: layerWm).removeView(it) } }; dialStrip = null; dialStripLp = null; dialStripWm = null }
+    private fun syncDialStrip() {
+        val v = dialStrip ?: return; val lp = dialStripLp ?: return
+        val d = dialPane; val barW = barBgLp?.width ?: 0
+        val left = d?.lp?.x ?: 0
+        val w = resources.displayMetrics.widthPixels - barW - left + (20 * dp).toInt()
+        val on = d != null && d.shown && !d.loading && !dashGeom && s3Pane?.shown == true && barW > 0 && w > (20 * dp).toInt()
+        v.visibility = if (on) View.VISIBLE else View.INVISIBLE
+        v.setBackgroundColor(th(Color.BLACK))
+        val a = if (on) 1f else 0f
+        val flags = if (on) lp.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv() else lp.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+        if (lp.alpha != a || lp.flags != flags || (on && (lp.x != left || lp.width != w))) {
+            lp.alpha = a; lp.flags = flags; if (on) { lp.x = left; lp.width = w }
+            runCatching { (dialStripWm ?: layerWm).updateViewLayout(v, lp) }
+        }
+    }
+
     private fun addBarBg() {
         removeBarBg()
+        addDialStrip()   // right under the bar
         val line = View(this).apply { visibility = View.GONE }
         val v = FrameLayout(this).apply {
             background = GradientDrawable().apply {
@@ -1591,6 +1631,7 @@ class OverlayService : Service(), StoryBridge.Host {
     }
 
     private fun removeBarBg() {
+        removeDialStrip()
         barBg?.let { runCatching { (barBgWm ?: wm).removeView(it) } }
         barBg = null; barBgLp = null; barBgLine = null
     }
@@ -1602,6 +1643,7 @@ class OverlayService : Service(), StoryBridge.Host {
         v.visibility = if (on) View.VISIBLE else View.INVISIBLE
         val a = if (on) 1f else 0f
         if (lp.alpha != a) { lp.alpha = a; runCatching { (barBgWm ?: wm).updateViewLayout(v, lp) } }
+        syncDialStrip()
     }
 
     override fun setBarWidth(w: Double) {
@@ -1613,7 +1655,7 @@ class OverlayService : Service(), StoryBridge.Host {
             lp.width = px
             getSharedPreferences("story", MODE_PRIVATE).edit().putInt("bar_w", px).apply()
             runCatching { (barBgWm ?: wm).updateViewLayout(v, lp) }
-            fitProfileGap()
+            fitProfileGap(); syncDialStrip()
         }
     }
 
@@ -1659,7 +1701,7 @@ class OverlayService : Service(), StoryBridge.Host {
     }
 
     private fun applyAodMask() {
-        val views = listOfNotNull(bubble, barBg, s3Pane?.frame, dialPane?.frame, profilePane?.frame, profileGapPane?.frame, profileStrip, lockDialPane?.frame, walletBtn)
+        val views = listOfNotNull(bubble, barBg, dialStrip, s3Pane?.frame, dialPane?.frame, profilePane?.frame, profileGapPane?.frame, profileStrip, lockDialPane?.frame, walletBtn)
         for (v in views) {
             // No layer switching (that made Station 3 / the dial pad redraw late): each is its own window, so the
             // cut-out only ever affects that window's own pixels anyway.
@@ -1899,6 +1941,7 @@ class OverlayService : Service(), StoryBridge.Host {
             profileStrip?.let { v -> profileStripLp?.let { lp -> val sw = profileStripWm ?: layerWm; if (sw === to) runCatching { sw.removeView(v); sw.addView(v, lp) } } }
         }
         lockDialPane?.let { q -> if (q.wm === to) runCatching { q.wm.removeView(q.frame); q.wm.addView(q.frame, q.lp) } }
+        dialStrip?.let { v -> dialStripLp?.let { lp -> val sw = dialStripWm ?: layerWm; if (sw === to) runCatching { sw.removeView(v); sw.addView(v, lp) } } }
         barBg?.let { v -> barBgLp?.let { lp -> val bw = barBgWm ?: wm; if (bw === to) runCatching { bw.removeView(v); bw.addView(v, lp) } } }
         for (q in listOfNotNull(s3Pane, dialPane)) if (q.wm === to) runCatching { q.wm.removeView(q.frame); q.wm.addView(q.frame, q.lp) }
         raiseBubble(); addBar()
@@ -1944,7 +1987,7 @@ class OverlayService : Service(), StoryBridge.Host {
         (barLine?.background as? GradientDrawable)?.setColor(th(Color.parseColor("#B3FFFFFF")))
         dashLineSync()
         pagesPane?.let { it.frame.setBackgroundColor(th(Color.BLACK)); it.web.setBackgroundColor(th(Color.BLACK)) }
-        profileStrip?.setBackgroundColor(th(Color.BLACK))
+        profileStrip?.setBackgroundColor(th(Color.BLACK)); dialStrip?.setBackgroundColor(th(Color.BLACK))
         (walletBtn as? android.widget.TextView)?.let { b -> b.setTextColor(th(Color.BLACK)); (b.background as? GradientDrawable)?.setColor(th(Color.WHITE)) }
         for (p in listOfNotNull(pagesPane, s3Pane, dialPane, profilePane, profileGapPane, lockDialPane))
             p.web.evaluateJavascript("window.storySetTheme&&window.storySetTheme('$t')", null)
@@ -2117,7 +2160,7 @@ class OverlayService : Service(), StoryBridge.Host {
         if (QuickAccess.lockDial(this) && lockDialPane == null && s3Pane != null) {
             lockDialPane = buildLockDial()
             walletBtn?.let { v -> walletBtnLp?.let { lp -> runCatching { (walletBtnWm ?: layerWm).removeView(v); (walletBtnWm ?: layerWm).addView(v, lp) } } }
-            barBg?.let { v -> barBgLp?.let { lp -> runCatching { (barBgWm ?: wm).removeView(v); (barBgWm ?: wm).addView(v, lp) } } }
+            dialStrip?.let { v -> dialStripLp?.let { lp -> runCatching { (dialStripWm ?: layerWm).removeView(v); (dialStripWm ?: layerWm).addView(v, lp) } } }; barBg?.let { v -> barBgLp?.let { lp -> runCatching { (barBgWm ?: wm).removeView(v); (barBgWm ?: wm).addView(v, lp) } } }
             for (q in listOfNotNull(s3Pane, dialPane)) runCatching { q.wm.removeView(q.frame); q.wm.addView(q.frame, q.lp) }
             raiseBubble(); addBar()
         } else if (!QuickAccess.lockDial(this)) lockDialPane?.takeIf { !it.shown }?.let { p ->
@@ -2841,7 +2884,7 @@ class OverlayService : Service(), StoryBridge.Host {
         if (top) {
             profileGapPane?.let { g -> runCatching { g.wm.removeView(g.frame); g.wm.addView(g.frame, g.lp) } }
             profileStrip?.let { v -> profileStripLp?.let { lp -> runCatching { (profileStripWm ?: layerWm).removeView(v); (profileStripWm ?: layerWm).addView(v, lp) } } }
-            barBg?.let { v -> barBgLp?.let { lp -> runCatching { (barBgWm ?: wm).removeView(v); (barBgWm ?: wm).addView(v, lp) } } }
+            dialStrip?.let { v -> dialStripLp?.let { lp -> runCatching { (dialStripWm ?: layerWm).removeView(v); (dialStripWm ?: layerWm).addView(v, lp) } } }; barBg?.let { v -> barBgLp?.let { lp -> runCatching { (barBgWm ?: wm).removeView(v); (barBgWm ?: wm).addView(v, lp) } } }
             for (q in listOfNotNull(s3Pane, dialPane)) runCatching { q.wm.removeView(q.frame); q.wm.addView(q.frame, q.lp) }
             raiseBubble(); addBar()
         }
@@ -2868,7 +2911,7 @@ class OverlayService : Service(), StoryBridge.Host {
         runCatching { p.wm.removeView(p.frame) }
         p.lp.type = layerType; p.wm = layerWm
         runCatching { layerWm.addView(p.frame, p.lp) }
-        barBg?.let { v -> barBgLp?.let { lp -> runCatching { (barBgWm ?: wm).removeView(v); (barBgWm ?: wm).addView(v, lp) } } }
+        dialStrip?.let { v -> dialStripLp?.let { lp -> runCatching { (dialStripWm ?: layerWm).removeView(v); (dialStripWm ?: layerWm).addView(v, lp) } } }; barBg?.let { v -> barBgLp?.let { lp -> runCatching { (barBgWm ?: wm).removeView(v); (barBgWm ?: wm).addView(v, lp) } } }
         for (q in listOfNotNull(s3Pane, dialPane)) runCatching { q.wm.removeView(q.frame); q.wm.addView(q.frame, q.lp) }
         raiseBubble()
         addBar()
@@ -2988,6 +3031,7 @@ class OverlayService : Service(), StoryBridge.Host {
             if (p.lp.width != p.openW || p.lp.height != p.openH || p.lp.x != x) {
                 p.lp.width = p.openW; p.lp.height = p.openH; p.lp.x = x
                 runCatching { p.wm.updateViewLayout(p.frame, p.lp) }
+                syncDialStrip()
             }
         }
     }
