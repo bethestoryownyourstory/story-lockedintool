@@ -51,6 +51,14 @@ class LockedintoolHome : Activity() {
     } } }
     override fun onNewIntent(intent: Intent?) { super.onNewIntent(intent); setIntent(intent); showHome() }
     override fun onResume() { super.onResume(); showHome() }
+    /** Has the screen's focus (nothing of the phone's - Recents, a floating window - is over it). */
+    @Volatile var focused = false
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus); focused = hasFocus
+        // The Dashboard went away while Lockedintool's Home is what you see (black): it comes straight back (owner, 4 Nov
+        // 2026: 'everytime i open lockedintool that black screen pops up and I need to swipe the bottom button up').
+        if (hasFocus) OverlayService.instance?.homeFocused()
+    }
 
     private fun showHome() {
         OverlayService.instance?.phoneScreenShown()   // the phone's Home came up (Only system) - it handled the swipe

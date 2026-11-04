@@ -148,3 +148,4 @@ commits, pushed as a new update) - nothing else changes.
 | 140 | 2026-11-04 | Subscriptions moved to the bottom of Settings (out of the Dashboard menu); your Subscription page shows exactly what a customer sees | (this) |
 | 141 | 2026-11-04 | Settings is clean: only the names of the options - tap one to see its choices | (this) |
 | 142 | 2026-11-04 | Only system: behind a pop-up / floating app window you see Lockedintool, not black - tap it to get the live Dashboard back | (this) |
+| 143 | 2026-11-04 | Only system: opening Lockedintool always lands on the Dashboard - no black screen that needed a swipe up (the phone's Recents app flashing during Home no longer makes the Dashboard step aside for good) | (this) |

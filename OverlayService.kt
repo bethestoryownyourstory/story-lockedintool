@@ -1711,8 +1711,29 @@ class OverlayService : Service(), StoryBridge.Host {
         if (inLit()) return@post
         stepAsideForPhoneNav()
     } }
+    /** When the Pages last stepped aside for the phone's Home / Recents in Only system. On One UI the home-screen app
+     *  (which draws Recents) also flashes up while you go HOME to Lockedintool, so that step aside could leave Lockedintool's
+     *  black Home with no Dashboard (owner, 4 Nov 2026: 'everytime i open lockedintool that black screen pops up and I need to
+     *  swipe the bottom button up to see the dashboard'). If Lockedintool's Home is what really ends up in front, the
+     *  Dashboard comes straight back (homeFocused / the checks below). */
+    @Volatile private var navAsideAt = 0L
+    /** Lockedintool's Home (Only system) got the screen's focus: if the Pages are away and nothing else is up, the Dashboard
+     *  shows. Only right after a Home / Recents step aside, or when the Home has no picture to show - so a floating window
+     *  opened over the Home (owner: Lockedintool stays in the back) is never covered. */
+    fun homeFocused() { ui.post {
+        if (!SystemMode.on(this) || pagesPane?.shown == true || keyguardLocked() || WidgetMode.on(this)) return@post
+        if (pickerHid.isNotEmpty() || openingPkg != null || createActive || callActive) return@post
+        if (StoryAccessibilityService.recentsInFront()) return@post
+        if (SystemClock.uptimeMillis() - navAsideAt > 3000 && homeShot != null) return@post
+        systemShowPages()
+    } }
     private fun stepAsideForPhoneNav() {
         if (pagesPane?.shown != true && profilePane?.shown != true) return
+        if (SystemMode.on(this)) {
+            navAsideAt = SystemClock.uptimeMillis()
+            // Not really Recents (the home-screen app only flashed while going Home): Lockedintool's Home is in front -> back.
+            for (d in longArrayOf(500, 1200)) ui.postDelayed({ if (LockedintoolHome.current?.focused == true) homeFocused() }, d)
+        }
         dialPane?.takeIf { it.shown }?.let { hideOne(it) }
         profilePane?.takeIf { it.shown && !callActive }?.let { hideOne(it) }   // never during a call
         pagesPane?.takeIf { it.shown }?.let { hideOne(it) }
