@@ -9264,7 +9264,7 @@ setTimeout(()=>{ subWaitLoad(); const c = subState() || {}; subRefresh(!!state.s
 // notified, never charged extra for a month already paid, and the changed price is for new customers). Shown under
 // every plan until the owner says the prices stay the same forever. The server tells members when a price changes
 // (msg-worker priceWatch).
-const SUB_PRICE_NOTE = 'Changes of current prices will be announced if made. Prices can go up or down - a month you already paid never costs more; new prices are for new purchases.';
+const SUB_PRICE_NOTE = 'Any change to current prices will be announced. Prices can go up or down - a month you have already paid for never costs more, and new prices apply only to new purchases.';
 // The plan's dollar price in the currency of your country (owner: 'shows the price converted to the currency the person
 // stays in') - the day's rate, '' until it's known or when you're in a dollar country.
 function subLocalPrice(usd){
@@ -9407,7 +9407,7 @@ const SUB_OPTIONS = [
   { key:'second', name:'Second system', short:'Lockedintool works with your phone - your apps stay as they are.',
     text:'Lockedintool works alongside your phone, like a second system. Your phone’s home screen and all your apps stay exactly as they are, and Lockedintool is always there on top of them - the Pages, Station 3 and everything in it.',
     list:['Your apps and home screen stay as they are', 'Lockedintool always there, over everything', 'Switch between Lockedintool and your apps any time'] },
-  { key:'only', name:'Only system', note:'Best experience if you are using two or more phones (if set up on a second phone)', short:'The Dashboard is your home screen - your apps still work.',
+  { key:'only', name:'Only system', note:'Best experience when you use two or more phones (for example, set up on a second phone)', short:'The Dashboard is your home screen - your apps still work.',
     text:'Lockedintool becomes your phone’s system: the Dashboard is your home screen, so when you press home or leave an app you land back on Lockedintool. Your apps all still work - open them from the Apps button, app pages or your recent apps, and come back to the Dashboard when you’re done.',
     list:['The Dashboard is your home screen', 'All your apps still work - open them any time', 'Phone calls and emergency calls always work', 'Turns off only when you log out or delete your account'] }
 ];
@@ -10134,7 +10134,7 @@ function privacySettingsHTML(){
 // ---- Privacy Policy + Terms of Service (owner, under Information). Written from how Lockedintool really works; the
 //      owner's details: Lockedintool, lockedintool@gmail.com, no refunds (except where the law requires). Also reachable from the
 //      Subscription page (must be readable by someone without a plan, before they agree to it).
-const LEGAL_UPDATED = '22 October 2026';
+const LEGAL_UPDATED = '4 November 2026';
 const LEGAL = {
   'legal-safety': { title:'Safety & Rules', sections:[
     ['Adult content is blocked', [
@@ -10157,7 +10157,7 @@ const LEGAL = {
     ['Kept only on your phone', [
       'Money and Wallet: payments read from the notifications and bank SMS your bank and payment apps put on your phone (amount, who, date, balance, the card or account’s last 4 digits). One-time PINs, chats, email and adverts are skipped.',
       'Connect your bank (only if you choose to; South African banks for now): you log in to your own bank on Stitch’s page (Stitch is a licensed open banking provider). Lockedintool then READS your accounts’ names, last 4 digits, balances and transactions to show them in Money and Wallet - it can’t move money with this. Your bank’s sign-in is kept locked on Lockedintool’s server; disconnect any time (Money > Bank connected) and it is deleted, and it is deleted with your account.',
-      'Cards you add: bank name, last 4 digits and expiry. The full card number and CVV are only checked while you add the card and are never kept. Pictures of scanned cards are kept with the long number and CVV covered.',
+      'Cards you add: bank name, last 4 digits and expiry. The full card number, expiry and CVV are kept locked (encrypted with a key in your phone’s own secure key store) on this phone only - never on our server and never in your backup - and they only show after your phone’s own fingerprint, face or PIN. Pictures of scanned cards are kept with the long number and CVV covered.',
       'Notes, drawings, pictures and audio you add to notes; highlights you make with Create; your settings.',
       'Trading: the sign-in tokens and API keys of the broker accounts you add, in Lockedintool’s private storage. Your broker password is never kept.',
       'Call history: calls made with Lockedintool, and contact names if you allow contacts.',
@@ -10173,7 +10173,7 @@ const LEGAL = {
       'Your internet address (IP) for a short time to stop abuse such as mass sign-ups.' ]],
     ['Who we share with', [
       'Lemon Squeezy (lemonsqueezy.com - it sells the plans for us outside South Africa and handles the payment and your country’s sales tax) when you pay a plan: you give your email and pay on Lemon Squeezy’s own page; Lockedintool only learns which plan you have and until when - we never see your card.',
-      'Stitch (a licensed South African payment provider) when you pay a plan in South Africa, send money or connect your bank - you approve it on Stitch’s or your bank’s own page; we never see your card or banking login.',
+      'PayFast (a South African payment provider) when you pay a plan in South Africa - you pay on PayFast’s own secure page; we never see your card or banking login.',
       'Your brokers and exchanges: Lockedintool talks to them straight from your phone with the keys you added.',
       'TradingView: the chart is TradingView’s own website inside Lockedintool; signing in to TradingView is between you and TradingView.',
       'binlist.net: only the first 8 digits of a card you add, to show its bank’s name.',
@@ -10211,7 +10211,7 @@ const LEGAL = {
       'Using Lockedintool means agreeing that it keeps itself up to date: new versions install automatically.' ]],
     ['Subscription', [
       'Without a plan you can use the Dashboard for free. Basic adds the Money, Wallet and Focus page and Lockedintool calls (voice, video and group calls); Premium adds everything else (more pages and rows). Calls aren’t part of the free plan - phone calls from the dial pad are your phone’s own and always work.',
-      'Basic is $5 a month and Premium $15 a month. Prices can change - they can go up or go down. Changes of current prices will be announced if made: everyone with a plan is told, a month you already paid for never costs more and nothing extra is charged for it, and the new price applies to new purchases and your next payment. A price can also come back down before your next payment.',
+      'Basic is $5 a month and Premium $15 a month. Prices can change - they can go up or go down. Any change to current prices will be announced: everyone with a plan is told, a month you have already paid for never costs more and nothing extra is charged for it, and the new price applies to new purchases and your next payment. A price can also come back down before your next payment.',
       'In South Africa plans are charged in rand - the dollar price converted at the day’s rate, shown before you pay - through PayFast, on its own secure page (card or instant EFT). One payment gives 30 days of your plan; paying the same plan again adds 30 days. These plans don’t renew by themselves - you pay each month.',
       'Outside South Africa plans are charged in US dollars (your bank may show it in your own currency) and sold through Lemon Squeezy (lemonsqueezy.com), which takes the payment on its own page - card, PayPal, Apple Pay or Google Pay - and handles your country’s sales tax. A plan renews by itself every month until you cancel; cancel any time with the link in Lemon Squeezy’s email, and your plan runs to the end of the month already paid.',
       'Before you pay you can cancel or switch plans at any time. Once a payment is made it is not refundable, except where the law requires a refund.',
@@ -10285,7 +10285,7 @@ function informationScreen(){
     ${block('YOUR PRIVACY', [
       ['Messages and calls', 'End-to-end encrypted. Your keys are made on your phone and never leave it.'],
       ['Your money, cards and notes', 'Kept only on your phone. Card details are kept locked on your phone only, and only show after your phone\u2019s own unlock.'],
-      ['Your broker logins', 'Kept in Lockedintool\u2019s private storage on your phone - never your password.'],
+      ['Your broker logins', 'Kept in Lockedintool\u2019s private storage on your phone. Your broker password is never stored.'],
     ])}
     ${block('COMING NEXT', [
       ['Subscription', 'One subscription that covers everything Lockedintool connects for you.'],
@@ -20583,7 +20583,7 @@ function cmStartMode(){ return cmPrivate() || cmAlwaysMine() ? 'mine' : null; }
 function cmMode(){ if(cmPrivate()) return 'mine'; if(state.communityMode === undefined) state.communityMode = cmStartMode(); return state.communityMode; }
 function teamChat(){ const me = (msgAccount() || {}).id; return me ? msgChats().find(c=>c.team && c.creator === me) || null : null; }
 function cmSwitchBtn(){
-  return cmPrivate() ? '' : `<button class="cm-switch" data-action="cm-back" aria-label="Your Community or Publics community"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="7.5" height="14" rx="2"/><rect x="13.5" y="5" width="7.5" height="14" rx="2"/></svg></button>`;
+  return cmPrivate() ? '' : `<button class="cm-switch" data-action="cm-back" aria-label="Your Community or Public community"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="7.5" height="14" rx="2"/><rect x="13.5" y="5" width="7.5" height="14" rx="2"/></svg></button>`;
 }
 function communityChooseScreen(){
   const t = teamChat();
@@ -20592,10 +20592,10 @@ function communityChooseScreen(){
     ${topBar('Community', false, '', 'dashboard')}
     <div class="layouts-tabs cm-tabs">
       <div class="layouts-tab" data-action="cm-pick" data-value="mine">${escText(t ? t.name : 'Your Community')}</div>
-      <div class="layouts-tab" data-action="cm-pick" data-value="public">Publics community</div>
+      <div class="layouts-tab" data-action="cm-pick" data-value="public">Public community</div>
     </div>
     <div class="cm-always">
-      <div><div class="cm-always-t">Always start tab in your community</div><div class="cm-always-d">Community opens straight on your community every time you press it.</div></div>
+      <div><div class="cm-always-t">Always open on Your Community</div><div class="cm-always-d">Community opens straight on Your Community every time you tap it.</div></div>
       <button class="toggle-switch${cmAlwaysMine() ? ' on' : ''}" data-action="cm-always"><span class="toggle-knob"></span></button>
     </div>
     </div>`;

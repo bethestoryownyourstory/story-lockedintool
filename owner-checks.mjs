@@ -6,8 +6,8 @@
 import { chromium } from 'playwright';
 const URL = process.argv[2] || 'http://localhost:8800/index.html';
 const SIZES = [[360, 780], [393, 852], [412, 892]];
-const SCREENS = ['dashboard', 'money', 'wallet', 'trading', 'notes', 'apps', 'community', 'layouts', 'subscription', 'settings', 'information'];
-const MAY_SCROLL = new Set(['settings', 'information', 'apps']);   // owner: 'only settings and information' (+ the Apps list)
+const SCREENS = ['dashboard', 'money', 'wallet', 'trading', 'notes', 'apps', 'community', 'layouts', 'subscription', 'settings', 'information', 'legal-privacy', 'legal-terms', 'legal-safety'];
+const MAY_SCROLL = new Set(['settings', 'information', 'apps', 'legal-privacy', 'legal-terms', 'legal-safety']);   // owner: 'only settings and information' (+ the Apps list)
 const UA = 'Mozilla/5.0 (Linux; Android 16; SM-A155F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Mobile Safari/537.36';
 const fails = [];
 const fail = (rule, where, what) => { fails.push(`${rule} | ${where} | ${what}`); };
@@ -47,6 +47,9 @@ for (const [w, h] of SIZES) {
     // 'Focus should never be alone - should be called focus page' (4 Nov 2026)
     const lone = r.text.match(/.{0,20}\b(Focus|FOCUS)\b(?!\s*(page|PAGE)).{0,20}/);   // the page's name (the plain word 'focus' in a sentence is fine)
     if (lone) fail("'Focus' is always 'Focus page'", where, lone[0]);
+    // 'everything must be professional' (4 Nov 2026): no casual spelling anywhere a person can read
+    const casual = r.text.match(/.{0,20}\b(thes|dont|cant|wont|doesnt|isnt|im|ur|pls|plz|gonna|wanna|alot|Publics)\b.{0,20}/i);
+    if (casual) fail('professional wording', where, casual[0]);
     // the app must never break: no errors while opening a screen
     if (errs.length) fail('no errors', where, errs[0]);
   }

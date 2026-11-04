@@ -181,4 +181,5 @@ commits, pushed as a new update) - nothing else changes.
 | 173 | 2026-11-04 | Notes: Create page has no + on it | b11e2c2 |
 | 174 | 2026-11-04 | The owner's rules are checked automatically on every update (no scrolling, nothing cut, full screen, no 'Story', 'Focus page', no errors) - a broken rule stops the update before it reaches the phone | 9318d66 |
 | 175 | 2026-11-04 | Lockedintool security: no picture of your Dashboard before you unlock Lockedintool - that picture was the squashed bar after every unlock | e8b73bf |
-| 176 | 2026-11-04 | Lockedintool security: unlocking your phone straight into Lockedintool opens it at once - no second fingerprint (opening it any other time still asks) | (this) |
+| 176 | 2026-11-04 | Lockedintool security: unlocking your phone straight into Lockedintool opens it at once - no second fingerprint (opening it any other time still asks) | d751b1e |
+| 177 | 2026-11-04 | Professional wording: 'Public community', 'Always open on Your Community', the price note and the Only system note written properly; the Privacy Policy corrected to match the app (card details are kept locked on your phone; PayFast for South African plans); casual spelling now blocked by the automatic checks | (this) |
