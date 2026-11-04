@@ -1237,9 +1237,41 @@ export class Hub {
   //      name, and makes its own signed notification webhook (lsSetup). A plan lasts as long as Lemon Squeezy says
   //      (renews_at / ends_at): it renews every month by itself until cancelled from Lemon Squeezy's email / customer
   //      portal. ----
+  // The plans' prices (owner: Basic $5 / Premium $15). The rand price South Africans pay on PayFast is the dollar price
+  // CONVERTED at the day's rate (owner, 4 Nov 2026: 'a display that shows the price converted to the currency the person
+  // stays in'), rounded to whole rand - unless SUB_BASIC_ZAR / SUB_PREMIUM_ZAR fix it. SUB_BASIC_USD / SUB_PREMIUM_USD
+  // change the dollar prices (prices can go up or down - members are told: priceWatch).
+  planUsd() { return { basic: Number(this.env.SUB_BASIC_USD || 5), premium: Number(this.env.SUB_PREMIUM_USD || 15) }; }
+  zarRate() {
+    if (!this.fx) { try { this.fx = JSON.parse((this.one("SELECT v FROM meta WHERE k = 'fx_zar'") || {}).v || 'null'); } catch (e) {} }
+    return (this.fx && this.fx.rate) || 18.5;
+  }
+  // The day's dollar -> rand rate (open.er-api.com, at most once every 12 hours; the last one is kept if it can't be reached).
+  async fxRefresh() {
+    this.zarRate();
+    if (this.fx && Date.now() - this.fx.at < 12 * 3600000) return;
+    try {
+      const r = await fetch('https://open.er-api.com/v6/latest/USD', { cf: { cacheTtl: 3600 } });
+      const rate = Number(((await r.json()).rates || {}).ZAR);
+      if (rate > 5 && rate < 100) { this.fx = { rate, at: Date.now() }; this.sql.exec("INSERT OR REPLACE INTO meta (k, v) VALUES ('fx_zar', ?)", JSON.stringify(this.fx)); }
+    } catch (e) {}
+  }
   subPlans() {
-    const c = this.lsCache || {};
-    return { basic: { usd: c.basicUsd || 5, zar: Number(this.env.SUB_BASIC_ZAR || 95) }, premium: { usd: c.premiumUsd || 15, zar: Number(this.env.SUB_PREMIUM_ZAR || 285) } };
+    const u = this.planUsd(), rate = this.zarRate();
+    const zar = (k, usd) => Number(this.env['SUB_' + k + '_ZAR']) || Math.round(usd * rate);
+    return { basic: { usd: u.basic, zar: zar('BASIC', u.basic) }, premium: { usd: u.premium, zar: zar('PREMIUM', u.premium) } };
+  }
+  // Prices can change, up or down (owner, 4 Nov 2026): when a plan's dollar price changes, everyone with an active plan
+  // is told (Lockedintool's own chat + a notification). Their paid month never costs more - the new price is for new
+  // purchases and the next payment.
+  priceWatch() {
+    const u = this.planUsd(), now = JSON.stringify(u), was = (this.one("SELECT v FROM meta WHERE k = 'plan_prices'") || {}).v;
+    if (was === now) return;
+    this.sql.exec("INSERT OR REPLACE INTO meta (k, v) VALUES ('plan_prices', ?)", now);
+    if (!was) return;   // first time: nothing changed, just remembered
+    let old = {}; try { old = JSON.parse(was); } catch (e) {}
+    const txt = 'Lockedintool’s plan prices have changed: Basic $' + u.basic + ' a month' + (old.basic && old.basic !== u.basic ? ' (was $' + old.basic + ')' : '') + ', Premium $' + u.premium + ' a month' + (old.premium && old.premium !== u.premium ? ' (was $' + old.premium + ')' : '') + '. The month you already paid for stays at the price you paid - nothing extra is charged. The new prices apply to new purchases and your next payment.';
+    for (const r of this.sql.exec('SELECT uid FROM subs WHERE until > ?', Date.now()).toArray()) this.alert(r.uid, txt);
   }
   subReady() { return this.lsReady() || this.expressReady() || this.pfReady(); }
   // South African users (owner chose Stitch back for them): their account's Country (accounts from before Country count
@@ -1625,6 +1657,7 @@ export class Hub {
   }
   async sub(me, op, b, url) {
     const now = Date.now();
+    if (op === 'info' || op === 'buy') { await this.fxRefresh(); this.priceWatch(); }
     if (op === 'info') { await this.lsRefresh(me); await this.subPending(me); return json(this.subView(me)); }
     if (op === 'buy') {
       const plans = this.subPlans(), plan = String(b.plan || '');
