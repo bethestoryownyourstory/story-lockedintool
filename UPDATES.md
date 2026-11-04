@@ -179,4 +179,5 @@ commits, pushed as a new update) - nothing else changes.
 | 171 | 2026-11-04 | Apps: the Lockedintool app sits first in the LOCKEDINTOOL section, not mixed with the phone's apps | 25ba7a0 |
 | 172 | 2026-11-04 | Updates really install: the phone checks the downloaded file IS the new version (it could get the old build and install it again and again). Notes: '+' is now 'Create page' (with the + inside) and 'Create' is 'Create drawing', two wide buttons under the style preview. Pages that don't scroll no longer show the ⌄ hint | f6cca41 |
 | 173 | 2026-11-04 | Notes: Create page has no + on it | b11e2c2 |
-| 174 | 2026-11-04 | The owner's rules are checked automatically on every update (no scrolling, nothing cut, full screen, no 'Story', 'Focus page', no errors) - a broken rule stops the update before it reaches the phone | (this) |
+| 174 | 2026-11-04 | The owner's rules are checked automatically on every update (no scrolling, nothing cut, full screen, no 'Story', 'Focus page', no errors) - a broken rule stops the update before it reaches the phone | 9318d66 |
+| 175 | 2026-11-04 | Lockedintool security: no picture of your Dashboard before you unlock Lockedintool - that picture was the squashed bar after every unlock | (this) |

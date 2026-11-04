@@ -43,12 +43,18 @@ class LockedintoolHome : Activity() {
     }
     /** On screen (started, not stopped): the Pages may live inside this window. */
     @Volatile var visibleNow = false
-    override fun onStart() { super.onStart(); visibleNow = true; OverlayService.instance?.homeWake() }
+    override fun onStart() { super.onStart(); visibleNow = true; showShot(); OverlayService.instance?.homeWake() }
     override fun onStop() { visibleNow = false; OverlayService.instance?.homeStopped(this); super.onStop() }
     override fun onDestroy() { OverlayService.instance?.homeGone(this); if (current === this) current = null; super.onDestroy() }
     /** The latest picture of Lockedintool, placed exactly where the Pages were on screen. */
     fun showShot() { runOnUiThread { runCatching {
         val svc = OverlayService.instance
+        // Lockedintool security on and not unlocked yet: no picture of your Dashboard before you've unlocked Lockedintool
+        // (owner, 4 Nov 2026: the Dashboard's bar showed squashed for a moment after every unlock - it was this saved
+        // picture, shown until Lockedintool's own unlock finished). Plain black until the unlock; the live Dashboard follows.
+        val locked = Security.lit(this) && svc?.secIsOpen() != true
+        shot?.visibility = if (locked) android.view.View.INVISIBLE else android.view.View.VISIBLE
+        if (locked) return@runCatching
         // The latest picture, or the one kept on the phone (Lockedintool was just restarted).
         val b = svc?.homeShot ?: runCatching { android.graphics.BitmapFactory.decodeFile(java.io.File(filesDir, "home_shot.jpg").path) }.getOrNull() ?: return@runCatching
         val top = svc?.homeShot?.let { svc.homeShotTop } ?: getSharedPreferences("story", MODE_PRIVATE).getInt("home_shot_top", 0)
