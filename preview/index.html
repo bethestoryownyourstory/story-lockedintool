@@ -1490,6 +1490,7 @@
   .sub-opt-acts button{ width:56px; height:56px; border-radius:50%; border:1px solid #2a2a2a; background:#000000; color:#ffffff; font:inherit; font-size:20px; display:flex; align-items:center; justify-content:center; cursor:pointer; }
   .sub-opt-acts .sub-opt-ok{ background:#ffffff; color:#000000; border-color:#ffffff; }
   .sub-zar{ font-size:11px; color:var(--muted); text-align:center; margin-top:8px; }
+  .set2-one > .section-title{ display:none; }   /* a Settings option on its own screen: its name is already the title */
   .sub-pricechange{ font-size:10px; color:var(--muted); text-align:center; margin-top:6px; line-height:1.35; }
   /* 3D Circle's pages keep their own top (name + buttons); the back button and page dots stay out of a preview. */
   .preview-top .dash-back, .preview-top .page-dots{ visibility:hidden !important; }
@@ -10041,15 +10042,12 @@ function informationScreen(){
     </div>`;
 }
 function settingsHubScreen(){
-  // Settings (owner: "fix settings, they don't look nice"): one card per section, rows split by thin lines, the
-  // explanation under each name, choices as full-width even buttons (set2).
+  // Settings (owner, 4 Nov 2026: 'make settings be clean, don't matter if in the screen they will be short. But just show
+  // only the words of the options and you have to tap the word to see its options'): a plain list of names; tapping one
+  // opens just that option's choices on its own screen (‹ Settings goes back to the list). Subscriptions stay last.
   const white = window.storyTheme && window.storyTheme()==='white';
-  const st = state.accountStatus.status;
-  return `
-    <div class="page-shell set2">
-    ${topBar('Settings', false)}
-    <div class="section-title">DISPLAY</div>
-    <div class="set2-card">
+  const sections = [
+    ['theme', 'System theme', ()=>`<div class="set2-card">
       <div class="set2-row set2-stack">
         <div class="set2-text"><div class="set2-name">System theme</div></div>
         <div class="set2-seg">
@@ -10057,17 +10055,29 @@ function settingsHubScreen(){
           <button class="theme-opt${white ? ' on' : ''}" data-action="theme-white">White</button>
         </div>
       </div>
-    </div>
-    ${quickAccessSettingsHTML()}
-    ${widgetsOnlySettingsHTML()}
-    ${securitySettingsHTML()}
-    ${privacySettingsHTML()}
-    <div class="section-title">CATEGORIES</div>
+    </div>`],
+    ['quick', 'Quick access', quickAccessSettingsHTML],
+    ['widgets', 'Widgets', widgetsOnlySettingsHTML],
+    ['security', 'Security', securitySettingsHTML],
+    ['privacy', 'Privacy', privacySettingsHTML],
+  ].map(([k, name, f])=>[k, name, f()]).filter(x=>x[2]);
+  const open = sections.find(x=>x[0] === state.setSection);
+  if(open) return `
+    <div class="page-shell set2">
+    ${topBar(open[1], false, '', 'settings')}
+    <div class="set2-one">${open[2]}</div>
+    </div>`;
+  state.setSection = null;
+  const row = (attr, name)=>`<div class="set2-row set2-link" ${attr}><div class="set2-text"><div class="set2-name">${name}</div></div><span class="chev-right">›</span></div>`;
+  return `
+    <div class="page-shell set2">
+    ${topBar('Settings', false)}
     <div class="set2-card">
-      <div class="set2-row set2-link" data-nav="notif-settings"><div class="set2-text"><div class="set2-name">Notifications</div></div><span class="chev-right">›</span></div>
-      <div class="set2-row set2-link" data-nav="community-guidelines"><div class="set2-text"><div class="set2-name">Community Guidelines</div>${st !== 'active' ? `<div class="set2-sub" style="color:var(--red);">${st==='warned'?'Warning issued':'Account suspended'}</div>` : ''}</div><span class="chev-right">›</span></div>
+      ${sections.map(([k, name])=>row(`data-action="set-open" data-v="${k}"`, name)).join('')}
+      ${row('data-nav="notif-settings"', 'Notifications')}
+      ${row('data-nav="community-guidelines"', 'Community Guidelines')}
+      ${row('data-nav="subscription"', 'Subscriptions')}
     </div>
-    ${subSettingsHTML()}
     </div>
   `;
 }
@@ -16830,6 +16840,7 @@ function attachHandlers(){
       // Pressing Community (not coming back from one of its groups): the choose screen, or Your Community (owner).
       if(target === 'community' && state.current !== 'community-group' && state.current !== 'community') state.communityMode = cmStartMode();
       if(target === 'layouts-pagelayout') state.layoutRowEdit = null;   // Page layout opens on its list of rows
+      if(target === 'settings') state.setSection = null;   // Settings opens on its list of names (owner)
       if(target === 'layouts-color'){ state.colorScope = el.getAttribute('data-scope') || 'pages'; state.colorEditTarget = state.colorScope === 'dashboard' ? 'dashboard' : null; }   // Dashboard: one scope, open its editor straight away
       state.moneyTransferOpen = false;   // Money's Transfer Money pop-up (its Wallet Overview button) never stays open behind
       state.current = target;
@@ -18779,6 +18790,7 @@ function attachHandlers(){
         case 'pay-reopen': if(state.pay.waiting) payOpenBank(state.pay.waiting.url); break;
         case 'pay-done': state.pay.waiting = null; state.pay.parts = null; break;
         case 'paywith-close': state.pay.choose = null; break;
+        case 'set-open': state.setSection = el.getAttribute('data-v'); break;
         case 'paynotify-cancel': state.pay.notify = null; break;
         case 'paynotify-send': payNotifySend(); break;
         case 'paywith-more': state.pay.choose.more = !state.pay.choose.more; break;
