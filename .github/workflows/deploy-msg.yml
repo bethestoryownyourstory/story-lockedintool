@@ -143,7 +143,7 @@ jobs:
           KEY=$(echo "$R" | python3 -c 'import sys,json; d=json.load(sys.stdin); r=d.get("result") if isinstance(d.get("result"),dict) else d; print(r.get("key",""))' 2>/dev/null)
           if [ -z "$KID" ] || [ -z "$KEY" ]; then
             echo "Calls relay could not be set up: the Cloudflare API token needs the 'Calls' (Realtime): Edit permission." | tee -a "$GITHUB_STEP_SUMMARY"
-            echo "Cloudflare said: $(echo "$R" | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d.get("errors"), "fields:", sorted(d.keys()))' 2>/dev/null)"
+            echo "Cloudflare said: $(echo "$R" | python3 -c 'import sys,json; d=json.load(sys.stdin); r=d.get("result"); print(d.get("errors"), "success:", d.get("success"), "result type:", type(r).__name__, "result fields:", sorted(r.keys()) if isinstance(r,dict) else (sorted(r[0].keys()) if isinstance(r,list) and r else r))' 2>/dev/null)"
             exit 0
           fi
           echo "::add-mask::$KEY"
