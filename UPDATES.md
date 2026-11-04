@@ -143,3 +143,4 @@ commits, pushed as a new update) - nothing else changes.
 | 135 | 2026-11-04 | Subscription: the rand price is today's conversion of the dollar price, other countries see their own currency too; the price-change note shows under every plan and members are told when a price changes | (this) |
 | 136 | 2026-11-04 | Your phone (the official account) is Premium · Only system - always on, no payment | (this) |
 | 137 | 2026-11-04 | Only system really asks to make Lockedintool your Home app (the question never appeared before), and asks again until it is | (this) |
+| 138 | 2026-11-04 | Your account stays on Only system for good - it can't be switched to Second system | (this) |

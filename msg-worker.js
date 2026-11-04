@@ -162,12 +162,12 @@ export class Hub {
     this.sql.exec(`CREATE TABLE IF NOT EXISTS resets (token TEXT PRIMARY KEY, uid TEXT, exp INTEGER)`);
     this.sql.exec(`CREATE TABLE IF NOT EXISTS rlimit (k TEXT PRIMARY KEY, hour INTEGER, n INTEGER)`);
     for (const un of OFFICIAL_USERNAMES) this.sql.exec('UPDATE users SET official = 1 WHERE username = ?', un);
-    // The owner's own phone (owner, 4 Nov 2026: 'Set my phone to premium only system please'): the official account's plan
-    // is Premium under Only system - set once; the owner can still switch the option later (sub/mode).
-    if (!this.one("SELECT v FROM meta WHERE k = 'owner_premium_only'")) {
+    // The owner's own phone (owner, 4 Nov 2026: 'Set my phone to premium only system please'; 'I'm never switching to
+    // second system. I want to be on only system'): the official account's plan is Premium under Only system - always.
+    if ((this.one("SELECT v FROM meta WHERE k = 'owner_premium_only'") || {}).v !== '2') {
       for (const un of OFFICIAL_USERNAMES) { const u = this.one('SELECT id FROM users WHERE username = ?', un); if (!u) continue;
         this.sql.exec("INSERT INTO subs (uid, plan, until, updated, mode) VALUES (?, 'premium', 0, ?, 'only') ON CONFLICT(uid) DO UPDATE SET plan = 'premium', mode = 'only', updated = excluded.updated", u.id, Date.now()); }
-      this.sql.exec("INSERT OR REPLACE INTO meta (k, v) VALUES ('owner_premium_only', '1')");
+      this.sql.exec("INSERT OR REPLACE INTO meta (k, v) VALUES ('owner_premium_only', '2')");
     }
     this.sql.exec(`CREATE TABLE IF NOT EXISTS follows (uid TEXT, fid TEXT, at INTEGER, PRIMARY KEY (uid, fid))`);
     this.sql.exec(`CREATE INDEX IF NOT EXISTS follows_fid ON follows(fid)`);
@@ -1297,7 +1297,7 @@ export class Hub {
   subView(me) {
     const r = this.one('SELECT * FROM subs WHERE uid = ?', me.id), now = Date.now();
     // Lockedintool's official account always has everything: Premium, under the option it chose (no payment, never ends).
-    if (me.official) return { official: true, connected: !!this.subProvider(me), provider: this.subProvider(me), enforced: this.env.SUB_ENFORCE === '1', plan: 'premium', mode: (r && r.mode) || 'second', until: 0, active: true, officialPlan: true, plans: this.subPlans() };
+    if (me.official) return { official: true, connected: !!this.subProvider(me), provider: this.subProvider(me), enforced: this.env.SUB_ENFORCE === '1', plan: 'premium', mode: (r && r.mode) || 'only', until: 0, active: true, officialPlan: true, plans: this.subPlans() };
     const active = !!(r && r.until > now);
     const provider = this.subProvider(me);
     return { official: !!me.official, connected: !!provider, provider, enforced: this.env.SUB_ENFORCE === '1', plan: active ? r.plan : null, mode: active ? (r.mode || 'second') : null, until: r ? r.until : 0, active, plans: this.subPlans() };
@@ -1670,7 +1670,7 @@ export class Hub {
     // The official account switches its option (Second system / Only system) without paying.
     if (op === 'mode') {
       if (!me.official) return json({ error: 'official' }, 403);
-      const mode = b.mode === 'only' ? 'only' : 'second';
+      const mode = 'only';   // the owner's account stays on Only system (owner: 'I'm never switching to second system')
       this.sql.exec("INSERT INTO subs (uid, plan, until, updated, mode) VALUES (?, 'premium', 0, ?, ?) ON CONFLICT(uid) DO UPDATE SET mode = excluded.mode, updated = excluded.updated", me.id, Date.now(), mode);
       return json(this.subView(me));
     }
