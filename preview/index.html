@@ -10725,7 +10725,7 @@ function litRecentAttach(inp, key, run, anchor){
       // Second tap: the box becomes writable and this same tap puts you in it, with the keyboard.
       close(); inp.readOnly = false; litRecentWriting[key] = true;
       // Put you in the box once this tap is over (focusing during the tap itself gets undone by the tap).
-      setTimeout(()=>{ if(document.activeElement !== inp) inp.focus(); litKeyboard(true); }, 30);
+      requestAnimationFrame(()=>{ if(document.activeElement !== inp) inp.focus(); litKeyboard(true); });
       return;
     }
     litKeyboard(true);
@@ -11421,7 +11421,7 @@ function prRender(){
     '<input class="pf-pr-code" inputmode="numeric" maxlength="6" autocomplete="one-time-code"><button data-pf="pr-verify">Confirm</button><button class="pf-pr-alt" data-pf="pr-change">Use a different ' + (ph ? 'number' : 'email') + '</button><div class="pf-pr-msg"></div>';
   else box.innerHTML = note + (ph ? '<input class="pf-pr-in" type="tel" inputmode="tel" autocomplete="tel" placeholder="+27 82 123 4567" maxlength="20">' : '<input class="pf-pr-in" type="email" inputmode="email" autocomplete="email" autocapitalize="none" spellcheck="false" placeholder="you@example.com" maxlength="254">') +
     '<button data-pf="pr-send">Send code</button><div class="pf-pr-msg"></div>';
-  const inp = box.querySelector('input'); if(inp) setTimeout(()=>{ try{ inp.focus(); if(NATIVE && window.StoryNative.setTyping) window.StoryNative.setTyping(true); }catch(e){} }, 60);
+  const inp = box.querySelector('input'); if(inp) requestAnimationFrame(()=>{ try{ inp.focus(); if(NATIVE && window.StoryNative.setTyping) window.StoryNative.setTyping(true); }catch(e){} });
 }
 function prSay(t){ const m = document.querySelector('#story-profile .pf-pr-msg'); if(m) m.textContent = t; }
 function prBusy(on, label){ const b = document.querySelector('#story-profile .pf-pr-body button'); if(b){ b.disabled = on; if(label) b.textContent = label; } }
@@ -19114,7 +19114,7 @@ function attachHandlers(){
             .catch(()=>showToast('No connection to Lockedintool right now')).finally(()=>{ tm.busy = false; renderDevice(); });
           break;
         }
-        case 'team-add-open': (state.team || (state.team = {})).addOpen = true; setTimeout(()=>{ const q = document.querySelector('.team-add-q'); if(q) q.focus(); }, 50); break;
+        case 'team-add-open': (state.team || (state.team = {})).addOpen = true; requestAnimationFrame(()=>{ const q = document.querySelector('.team-add-q'); if(q) q.focus(); }); break;
         case 'team-add-close': Object.assign(state.team || (state.team = {}), { addOpen:false, q:'', found:null }); break;
         case 'team-rename': { const t = teamChat(); if(t && t.creator === (msgAccount() || {}).id) (state.team || (state.team = {})).renameOpen = true; break; }
         case 'team-rename-close': (state.team || (state.team = {})).renameOpen = false; break;
@@ -19970,7 +19970,7 @@ function litSheet(o){
   box.addEventListener('click', e=>e.stopPropagation()); bg.addEventListener('click', close);
   // Profile's window shows nothing outside #story-profile, so the sheet goes inside it there.
   bg.appendChild(box); (document.getElementById('story-profile') || document.body).appendChild(bg);
-  if(field) setTimeout(()=>{ try{ field.focus(); }catch(e){} }, 60);
+  if(field) requestAnimationFrame(()=>{ try{ field.focus(); }catch(e){} });
   return close;
 }
 const LIT_REASONS = [['spam', 'Spam'], ['scam', 'Scam or fraud'], ['abuse', 'Bullying or harassment'], ['hate', 'Hate speech'], ['violence', 'Violence or threats'], ['nudity', 'Nudity or sexual content'], ['other', 'Something else']];
@@ -21813,7 +21813,7 @@ function endSwipe(e){
     if(label) label.style.opacity = '0';
     const action = el.dataset.swipeAction;
     activeSwipe = null;
-    setTimeout(()=>{ runSwipeAction(action); }, 120);
+    runSwipeAction(action);   // at once (owner: 0.0 s on everything)
   } else {
     thumb.style.left = '3px';
     if(fill) fill.style.width = '0px';
@@ -22060,7 +22060,7 @@ function endRecentDrag(e){
       d.card.style.transition = 'transform 0.18s ease, opacity 0.18s ease';
       d.card.style.transform = 'translateY(-130%)';
       d.card.style.opacity = '0';
-      setTimeout(()=>{ state.recents = state.recents.filter(r=>r.key!==key); renderDevice(); }, 180);
+      state.recents = state.recents.filter(r=>r.key!==key); renderDevice();
     } else {
       d.card.style.transition = 'transform 0.18s ease, opacity 0.18s ease';
       d.card.style.transform = ''; d.card.style.opacity = '';
