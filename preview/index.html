@@ -7925,13 +7925,14 @@ function accountSwitcherTemplate(){
 }
 
 function chartFullscreenTemplate(){
-  const isLandscape = state.chartOrientation === 'landscape';
+  // Rotate view (sideways) is REMOVED (owner, 4 Nov 2026: 'I told you remove this feature') - the full-screen chart is
+  // always upright; the old landscape CSS stays unused.
+  const isLandscape = false;
   return `
     <div class="chart-fullscreen ${isLandscape?'landscape':''}">
       <div class="chart-fs-head">
         <span class="page-title" style="font-size:13px;">${escText(state.focusName || state.focusSymbol)} <span class="${state.focusQuote && state.focusQuote.change < 0 ? 'delta-down' : 'delta-up'}" style="font-size:12px;">${state.focusQuote ? fmtPrice(state.focusQuote.bid) + (state.focusQuote.change != null ? ' ' + (state.focusQuote.change >= 0 ? '+' : '') + state.focusQuote.change.toFixed(2) + '%' : '') : '—'}</span></span>
         <div style="display:flex;gap:6px;align-items:center;">
-          <button class="chart-orient-btn" data-action="chart-orientation-toggle" title="Rotate view">${isLandscape ? '⬍' : '⬌'}</button>
           <button class="modal-close" data-action="chart-fullscreen-close">×</button>
         </div>
       </div>
@@ -17846,7 +17847,7 @@ function attachHandlers(){
       else if(NOTE_UNDOABLE_ACTIONS.has(action)) pushNoteUndoSnapshot();
       switch(action){
         case 'chart-fullscreen': state.chartFullscreen = true; break;
-        case 'chart-orientation-toggle': state.chartOrientation = state.chartOrientation==='portrait' ? 'landscape' : 'portrait'; break;
+        case 'chart-orientation-toggle': state.chartOrientation = 'portrait'; break;   // Rotate view removed (owner)
         case 'chart-fullscreen-close': state.chartFullscreen = false; break;
         case 'home-picker-cancel': state.homePickerOpen = false; break;
         case 'recents-bg': state.recentsOpen = false; break;
