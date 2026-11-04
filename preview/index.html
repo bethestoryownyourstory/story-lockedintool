@@ -1386,6 +1386,20 @@
   #story-profile .cv-in .cv-btn{ width:68px; height:68px; }
   #story-profile .cv-decline{ background:#e5484d !important; border-color:#e5484d !important; color:#fff !important; }
   #story-profile .cv-accept{ background:#2ea44f; border-color:#2ea44f; color:#fff; }
+  /* End-of-call rating (owner): stars + an optional note, over the call screen once a call ends. */
+  #story-profile .pf-rateview{ position:absolute; inset:0; z-index:52; background:var(--pf-bg); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px; padding:32px 24px calc(32px + var(--pf-ime, 0px)); box-sizing:border-box; }
+  #story-profile .pf-rateview[hidden]{ display:none; }
+  #story-profile .rv-t{ font-size:22px; font-weight:800; text-align:center; }
+  #story-profile .rv-sub{ font-size:14px; color:var(--pf-muted); text-align:center; margin-top:-10px; }
+  #story-profile .rv-stars{ display:flex; gap:10px; }
+  #story-profile .rv-star{ width:46px; height:46px; border:none; background:none; padding:0; color:var(--pf-muted); cursor:pointer; display:flex; align-items:center; justify-content:center; }
+  #story-profile .rv-star.on{ color:#d4a017; }
+  #story-profile .rv-note{ width:100%; max-width:420px; min-height:84px; box-sizing:border-box; border:1px solid var(--pf-hair); border-radius:14px; background:var(--pf-bg); color:var(--pf-fg); font:inherit; font-size:15px; padding:12px 14px; resize:none; outline:none; }
+  #story-profile .rv-btns{ display:flex; gap:12px; width:100%; max-width:420px; }
+  #story-profile .rv-btns button{ flex:1; height:48px; border-radius:14px; font:inherit; font-size:15px; font-weight:700; cursor:pointer; }
+  #story-profile .rv-skip{ background:var(--pf-bg); color:var(--pf-fg); border:1px solid var(--pf-hair); }
+  #story-profile .rv-send{ background:var(--pf-fg); color:var(--pf-bg); border:1px solid var(--pf-fg); }
+  #story-profile .rv-send:disabled{ opacity:0.35; }
   /* Group calls: everyone in the call as tiles (video, or their picture), up to 8. */
   #story-profile .pf-gcallview{ justify-content:flex-start; gap:18px; padding-top:40px; }
   #story-profile .pf-gcallview .cv-top{ margin-top:6px; }
@@ -2541,6 +2555,9 @@
   #story-profile .pf-pv-opt.on .pf-pv-dot{ border-color:var(--pf-fg); background:radial-gradient(circle, var(--pf-fg) 0 4.5px, transparent 5px); }
   #story-profile .up-p-more{ margin-left:auto; flex:none; }
   #story-profile .pf-rep{ border-top:1px solid var(--pf-hair); padding:12px 2px; font-size:13px; }
+  #story-profile .pf-rate-sum:empty{ display:none; }
+  #story-profile .pf-rate-sum{ padding:4px 2px 14px; font-size:13px; }
+  #story-profile .pf-rate-stars{ color:#d4a017; letter-spacing:1px; }
   #story-profile .pf-rep-k{ font-weight:800; }
   #story-profile .pf-rep-m{ color:var(--pf-muted); font-size:12px; margin-top:2px; line-height:1.4; word-break:break-word; }
   #story-profile .pf-rep-look{ margin-top:6px; padding:8px 10px; border:1px solid var(--pf-hair); border-radius:10px; white-space:pre-wrap; word-break:break-word; }
@@ -8831,7 +8848,8 @@ function sendMoneyScreen(){
     <div class="note" style="margin-top:10px;">You approve every payment in your own bank. It goes straight from your account into theirs - Lockedintool never holds your money.</div>
     ${payHistoryHTML()}
     </div>
-    ${p.choose ? payWithTemplate() : ''}`;
+    ${p.choose ? payWithTemplate() : ''}
+    ${p.notify && !p.choose ? payNotifyTemplate() : ''}`;
 }
 function receiveMoneyScreen(){
   const p = state.pay, r = p.recv;
@@ -8905,6 +8923,32 @@ function netWorthSplit(amt){
   for(const a of l){ if(left <= 0) break; const take = Math.min(left, Math.floor(a.bal * 100)); if(take >= 100){ parts.push({ from:a.name, amount: take / 100, status:'todo' }); left -= take; } }
   return { parts, short: left > 0 ? left / 100 : 0, total: l.reduce((x, a)=>x + a.bal, 0) };
 }
+// Notify person (owner, 27 Oct 2026: 'a pop text will show up after send is tapped that says notify person. And it shows
+// an automatic text that you can send to that person ... Then you can click send text or cancel'): once a payment to a
+// Lockedintool profile has started, a pop-up offers a ready-made message to them; Send text puts it in your chat with
+// them (the normal end-to-end message - Profile's window sends it), Cancel sends nothing. The money goes to the bank
+// account on their profile (Receive) - Lockedintool can't pick one of their cards, so the text says account.
+function payNotifyText(n){ return 'Hi ' + (n.name || '@' + n.username) + ', I’m sending you ' + payMoney(n.amt) + ' through Lockedintool. It goes into the bank account on your Lockedintool profile.'; }
+function payNotifyTemplate(){
+  const n = state.pay.notify; if(!n) return '';
+  return `
+    <div class="modal-overlay" data-action="paynotify-cancel">
+      <div class="confirm-sheet" onclick="event.stopPropagation()">
+        <div class="confirm-title">Notify person</div>
+        <div class="confirm-sub" style="text-align:left;">This message goes to ${escText(n.name || '@' + n.username)} in Messages:</div>
+        <div class="row-card" style="margin:10px 0 0;text-align:left;"><div class="row"><div class="row-name" style="white-space:normal;line-height:1.4;font-weight:500;">${escText(payNotifyText(n))}</div></div></div>
+        <div class="confirm-btn-row" style="margin-top:12px;"><button class="btn-wide" style="margin-top:0;" data-action="paynotify-cancel">Cancel</button><button class="btn-wide btn-primary" style="margin-top:0;" data-action="paynotify-send">Send text</button></div>
+      </div>
+    </div>`;
+}
+function payNotifySend(){
+  const n = state.pay.notify; state.pay.notify = null; if(!n) return;
+  const text = payNotifyText(n), c = chatFor(n.id, { name:n.name, username:n.username });
+  const m = { id: 'm' + Date.now() + Math.random().toString(36).slice(2, 6), from:'me', text, at: Date.now(), status:'sending' };
+  (c.messages = c.messages || []).push(m); saveMsgChats();
+  msgOut({ type:'send', chatId: n.id, id: m.id, text });
+  showToast('Message sent');
+}
 function payWithTemplate(){
   const p = state.pay, c = p.choose; if(!c) return '';
   const cards = walletCards(), act = activeCard(), split = netWorthSplit(c.amt);
@@ -8935,6 +8979,7 @@ function payStartPart(i){
     p.busy = false; part.status = 'pending';
     sendOriginSet(r.id, p.origin || 'wallet');   // where it was sent from: only the Wallet's own sends show on Wallet (owner)
     p.waiting = { id:r.id, url:r.url, amount:part.amount, who:d.who, from:part.from, part:i, of:parts.length, status:'pending', started:Date.now() };
+    if(i === 0 && d.to) p.notify = { id:d.to.id, name:d.to.name || '', username:d.to.username || '', amt: parts.reduce((x, q)=>x + q.amount, 0) };
     payOpenBank(r.url); payShow(); payPollT = setTimeout(payPoll, 4000);
   }).catch(e=>{ p.busy = false; part.status = 'failed'; p.msg = PAY_ERRORS[e.code] || 'Couldn’t start the payment - try again.'; if(i > 0) p.msg += ' ' + payMoney(parts.slice(0, i).reduce((x, q)=>x + q.amount, 0)) + ' was already paid.'; p.parts = null; payShow(); });
 }
@@ -8950,7 +8995,7 @@ function payWithGo(kind, id){
   } else if(kind === 'card'){ const card = walletCards().find(x=>x.id === id); parts = [{ from: card ? cardLabel(card) : '', amount: amt, status:'todo' }]; }
   else parts = [{ from:'', amount: amt, status:'todo' }];
   const body = p.mode === 'story' ? { to:p.to.id, ref:p.ref } : { bank:{ name:p.name.trim(), bank:p.bank, acct:p.acct.replace(/\s+/g, '') }, ref:p.ref };
-  p.dest = { body, who: p.mode === 'story' ? (p.to.name || '@' + p.to.username) : p.name.trim() };
+  p.dest = { body, who: p.mode === 'story' ? (p.to.name || '@' + p.to.username) : p.name.trim(), to: p.mode === 'story' ? { id:p.to.id, name:p.to.name, username:p.to.username } : null };
   p.parts = parts; p.choose = null; p.amount = ''; p.ref = '';
   payStartPart(0);
 }
@@ -9631,7 +9676,17 @@ function repRender(list){
     '<div class="pf-rep-btns">' + (removable[r.kind] && !r.gone ? '<button data-pf="rep-act" data-a="remove" data-id="' + escText(r.id) + '">Remove it</button>' : '') +
     '<button class="danger" data-pf="rep-act" data-a="ban" data-id="' + escText(r.id) + '">Ban account</button><button data-pf="rep-act" data-a="dismiss" data-id="' + escText(r.id) + '">Dismiss</button></div></div>').join('');
 }
-async function repLoad(){ repRender(null); try{ repRender((await msgApi('/v1/reports')).reports || []); }catch(e){ const box = document.querySelector('#story-profile .pf-rep-list'); if(box) box.innerHTML = '<div class="pf-ed-note">' + (e.code === 'official' ? 'Only Lockedintool’s official profile sees reports.' : 'No connection right now') + '</div>'; } }
+// Call ratings (owner's end-of-call rating) for the official profile, above the reports: the average, how many, and the
+// newest notes - never who rated.
+async function rateSumLoad(){
+  const box = document.querySelector('#story-profile .pf-rate-sum'); if(!box) return;
+  box.innerHTML = '';
+  let r; try{ r = await msgApi('/v1/callrates'); }catch(e){ return; }
+  const st = n=>'<span class="pf-rate-stars">' + '★'.repeat(n) + '</span>';
+  box.innerHTML = '<div class="pf-rep-k">Call ratings</div><div class="pf-rep-m">' + (r.count ? r.avg + ' ★ average from ' + r.count + (r.count === 1 ? ' rating' : ' ratings') + ' · ' + [5, 4, 3, 2, 1].map(n=>n + '★ ' + (r.by[n] || 0)).join(' · ') : 'No calls rated yet') + '</div>' +
+    (r.recent || []).filter(x=>x.note).slice(0, 15).map(x=>'<div class="pf-rep"><div>' + st(x.stars) + ' · ' + escText((x.grp ? 'Group ' : '') + (x.video ? 'video call' : 'voice call')) + ' · ' + escText(callLen(x.secs)) + ' · ' + escText(msgTime(x.at)) + '</div><div class="pf-rep-m">' + escText(x.note) + '</div></div>').join('');
+}
+async function repLoad(){ rateSumLoad(); repRender(null); try{ repRender((await msgApi('/v1/reports')).reports || []); }catch(e){ const box = document.querySelector('#story-profile .pf-rep-list'); if(box) box.innerHTML = '<div class="pf-ed-note">' + (e.code === 'official' ? 'Only Lockedintool’s official profile sees reports.' : 'No connection right now') + '</div>'; } }
 async function repAct(id, a, sure){
   if(a === 'ban' && !sure){ litSheet({ title:'Ban this account?', text:'It is deleted with everything it posted. This can’t be undone.', items:[{ label:'Ban account', danger:true, fn: ()=>repAct(id, a, true) }] }); return; }
   try{ repRender((await msgApi('/v1/reports/act', { id, action:a })).reports || []); showToast(a === 'remove' ? 'Removed' : a === 'ban' ? 'Account banned' : 'Dismissed'); }
@@ -10491,6 +10546,7 @@ window.storyProfileOnly = function(){
     </div>
     <div class="pf-scroll pf-reports" hidden>
       <div class="pf-ed-head"><button class="pf-ed-back" data-pf="rep-back" aria-label="Back">‹</button><div class="pf-ed-title">Reports</div></div>
+      <div class="pf-rate-sum"></div>
       <div class="pf-rep-list"></div>
     </div>
     <div class="pf-scroll pf-field" hidden>
@@ -10843,6 +10899,9 @@ window.storyProfileOnly = function(){
     else if(k === 'call-accept') callAccept();
     else if(k === 'call-decline') callDecline();
     else if(k === 'call-end') callHangup();
+    else if(k === 'rate-star'){ callRateQ.stars = +b.getAttribute('data-n') || 0; callRateRender(); }
+    else if(k === 'rate-skip') callRateClose(false);
+    else if(k === 'rate-send') callRateClose(true);
     else if(k === 'call-mute') callToggle('mute');
     else if(k === 'call-speaker') callToggle('speaker');
     else if(k === 'call-cam') callToggle('cam');
@@ -12522,10 +12581,55 @@ function callView(){
   }
   return v;
 }
+// ---- End-of-call rating (owner, 23 Oct 2026: 'At the end of each call a pop up will show up, user rates the call and
+// can add something if they want'): after a call that really connected (5 s or more) - voice, video or group - the call
+// screen shows 'How was the call?' with 1-5 stars, an optional note, Skip and Send. Sent to Lockedintool's server
+// (/v1/callrate; the official profile sees the totals in Profile ⋮ > Reports - never who rated). A new call closes it. ----
+const callRateQ = { on:false, video:false, group:false, secs:0, stars:0 };
+const RV_STAR = '<svg viewBox="0 0 24 24" width="38" height="38" fill="currentColor"><path d="M12 2.5l2.9 6.2 6.6.7-5 4.5 1.4 6.6L12 17.2l-5.9 3.3 1.4-6.6-5-4.5 6.6-.7z"/></svg>';
+function callRateView(){
+  const el = document.getElementById('story-profile'); if(!el) return null;
+  let v = el.querySelector('.pf-rateview');
+  if(!v){
+    v = document.createElement('div'); v.className = 'pf-rateview'; v.hidden = true;
+    v.innerHTML = '<div class="rv-t">How was the call?</div><div class="rv-sub"></div><div class="rv-stars">' +
+      [1, 2, 3, 4, 5].map(n=>'<button class="rv-star" data-pf="rate-star" data-n="' + n + '" aria-label="' + n + ' star' + (n > 1 ? 's' : '') + '">' + RV_STAR + '</button>').join('') +
+      '</div><textarea class="rv-note" maxlength="300" placeholder="Add something (optional)"></textarea>' +
+      '<div class="rv-btns"><button class="rv-skip" data-pf="rate-skip">Skip</button><button class="rv-send" data-pf="rate-send" disabled>Send</button></div>';
+    const note = v.querySelector('.rv-note');
+    note.addEventListener('focus', ()=>{ if(typeof profileTypingOn === 'function') profileTypingOn(); });
+    note.addEventListener('blur', ()=>{ if(NATIVE && window.StoryNative.setTyping) try{ window.StoryNative.setTyping(false); }catch(err){} });
+    el.appendChild(v);
+  }
+  return v;
+}
+function callRateRender(){
+  const v = callRateView(); if(!v) return;
+  v.hidden = !callRateQ.on; if(!callRateQ.on) return;
+  v.querySelector('.rv-sub').textContent = (callRateQ.group ? 'Group ' + (callRateQ.video ? 'video call' : 'call') : callRateQ.video ? 'Video call' : 'Voice call') + ' · ' + callLen(callRateQ.secs);
+  v.querySelectorAll('.rv-star').forEach(b=>b.classList.toggle('on', +b.getAttribute('data-n') <= callRateQ.stars));
+  v.querySelector('.rv-send').disabled = !callRateQ.stars;
+}
+// true = the rating is showing (the call screen stays up until Skip / Send).
+function callRateOpen(o){
+  if(!(o.secs >= 5) || !litSignedIn()) return false;
+  Object.assign(callRateQ, { on:true, video:!!o.video, group:!!o.group, secs:Math.round(o.secs), stars:0 });
+  const v = callRateView(); if(v) v.querySelector('.rv-note').value = '';
+  callRateRender(); return true;
+}
+function callRateClose(send){
+  if(!callRateQ.on) return;
+  const v = callRateView(), note = v ? v.querySelector('.rv-note').value : '';
+  if(send && callRateQ.stars){ msgApi('/v1/callrate', { stars:callRateQ.stars, note, video:callRateQ.video, group:callRateQ.group, secs:callRateQ.secs }).catch(()=>{}); showToast('Thanks for rating the call'); }
+  callRateQ.on = false; callRateRender();
+  if(v){ const n = v.querySelector('.rv-note'); if(document.activeElement === n) n.blur(); }
+  if(call.state === 'idle' && gcall.state === 'idle') callNative('callUi', false);
+}
 function callRender(){
   secCoverSync();   // Lockedintool security: a call always shows over the lock
   const v = callView(); if(!v) return;
   const on = call.state !== 'idle';
+  if(on && callRateQ.on){ callRateQ.on = false; callRateRender(); }
   v.hidden = !on; if(!on) return;
   const c = msgChats().find(x=>x.id === call.peer) || {};
   v.querySelector('.cv-pic').innerHTML = c.photo ? '<img alt="" src="' + escText(c.photo) + '">' : PF_PHOTO_PLACEHOLDER;
@@ -12679,7 +12783,8 @@ function callEnd(text, save){
   try{ call.local && call.local.getTracks().forEach(t=>t.stop()); }catch(e){}
   call.pc = null; call.local = null; call.remote = null;
   call.state = 'ended'; call.endText = text || 'Call ended'; callRender();
-  setTimeout(()=>{ if(call.state === 'ended'){ call.state = 'idle'; callRender(); callNative('callUi', false); } }, 1600);
+  const rate = { video:call.video, secs: answered ? (Date.now() - call.answeredAt) / 1000 : 0 };
+  setTimeout(()=>{ if(call.state === 'ended'){ call.state = 'idle'; callRender(); if(gcall.state !== 'idle' || !callRateOpen(rate)) { if(gcall.state === 'idle') callNative('callUi', false); } } }, 1600);
 }
 function callToggle(k){
   if(k === 'mute'){ call.muted = !call.muted; call.local && call.local.getAudioTracks().forEach(t=>t.enabled = !call.muted); }
@@ -12737,6 +12842,7 @@ function gcallRender(){
   secCoverSync();   // Lockedintool security: a call always shows over the lock
   const v = gcallView(); if(!v) return;
   const on = gcall.state !== 'idle';
+  if(on && callRateQ.on){ callRateQ.on = false; callRateRender(); }
   v.hidden = !on; if(!on){ v.querySelector('.gc-grid').innerHTML = ''; return; }
   v.querySelector('.cv-name').textContent = gcall.name || 'Group call';
   const secs = gcall.joinedAt ? Math.floor((Date.now() - gcall.joinedAt) / 1000) : 0;
@@ -12884,7 +12990,8 @@ function gcallEnd(text, dir, nosave){
   try{ gcall.local && gcall.local.getTracks().forEach(t=>t.stop()); }catch(e){}
   gcall.parts = {}; gcall.local = null;
   gcall.state = 'ended'; gcall.endText = text || 'You left the call'; gcallRender();
-  setTimeout(()=>{ if(gcall.state === 'ended'){ gcall.state = 'idle'; gcallRender(); if(call.state === 'idle') callNative('callUi', false); } }, 1600);
+  const rate = { video:gcall.video, group:true, secs: answered ? (Date.now() - gcall.joinedAt) / 1000 : 0 };
+  setTimeout(()=>{ if(gcall.state === 'ended'){ gcall.state = 'idle'; gcallRender(); if(call.state === 'idle' && !callRateOpen(rate)) callNative('callUi', false); } }, 1600);
 }
 function gcallToggle(k){
   if(k === 'mute') gcall.muted = !gcall.muted;
@@ -18630,6 +18737,8 @@ function attachHandlers(){
         case 'pay-reopen': if(state.pay.waiting) payOpenBank(state.pay.waiting.url); break;
         case 'pay-done': state.pay.waiting = null; state.pay.parts = null; break;
         case 'paywith-close': state.pay.choose = null; break;
+        case 'paynotify-cancel': state.pay.notify = null; break;
+        case 'paynotify-send': payNotifySend(); break;
         case 'paywith-more': state.pay.choose.more = !state.pay.choose.more; break;
         case 'paywith-card': payWithGo('card', el.getAttribute('data-id')); break;
         case 'paywith-nw': payWithGo('nw'); break;
