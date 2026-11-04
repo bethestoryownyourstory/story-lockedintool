@@ -4347,6 +4347,7 @@ function litColorsSave(o){ try{ localStorage.setItem('story-color-systems', JSON
 // Which system applies to a screen ('dashboard' or a page key): a page falls back page -> its row -> all pages.
 function litColorSystemFor(screen){
   const o = litColors();
+  if(screen === '__pages-all') return o.all || null;
   if(screen === 'dashboard' || !litIsPage(screen)) return o.dash || null;
   const pg = (o.pages || {})[screen]; if(pg) return pg;
   const r = rowOfPage(screen), row = r ? (o.rows || {})[String(r)] : null; if(row) return row;
@@ -4500,7 +4501,25 @@ function litApplyColors(){
   const area = document.getElementById('content-area');
   if(!area) return;
   if(document.querySelector('.lit-auth') || (state.pageStyleOn && state.pageStyleViewOpen) || state.rowsViewOpen){ litRecolorArea(area, null); return; }
+  // Layouts > Pages > Color customization: the screen shows the PAGES' colours ('all pages'), each row / page its own.
+  if(area.querySelector('[data-litc-pages]')){
+    litRecolorArea(area, '__pages-all');
+    area.querySelectorAll('[data-litc]').forEach(el=>{ const v = litScopeGet(el.getAttribute('data-litc')); if(v && v.bg && v.text) litSetVars(el, v); });
+    return;
+  }
   litRecolorArea(area, state.current || 'dashboard');
+}
+// Puts one colour system on an element (its own colours and everything inside it).
+function litSetVars(el, sys){
+  try{ litCssBuild(); }catch(e){}
+  const bg = litHexRgb(sys.bg), text = litHexRgb(sys.text);
+  el.style.setProperty('--litc-bg-rgb', `${bg.r}, ${bg.g}, ${bg.b}`);
+  el.style.setProperty('--litc-text-rgb', `${text.r}, ${text.g}, ${text.b}`);
+  for(const k of Object.keys(LITC_ROOTVARS)){
+    const rv = LITC_ROOTVARS[k], col = rv.role === 'bg' ? bg : text;
+    el.style.setProperty(k, rv.c.a == null ? `rgb(${col.r}, ${col.g}, ${col.b})` : `rgba(${col.r}, ${col.g}, ${col.b}, ${rv.c.a})`);
+  }
+  el.style.setProperty('background-color', sys.bg, 'important');
 }
 function syncAppPages(){
   const rows = rowsList();
@@ -9583,8 +9602,12 @@ function layoutsColorScreen(){
   if(state.colorEditTarget) return colorEditorHTML(state.colorEditTarget);
   // Pages: the list of scopes (all pages, each row, each page in the row).
   const rows = rowsList(), ids = rowIds();
+  // The list shows the colours you have (owner, 4 Nov 2026: 'when you apply colors to all pages the background of this
+  // settings and the texts change to those colors ... if its only one page then that option only will get colored ... if
+  // its a row then that row will get colored ... like a display of what colors you have'): the screen wears 'all pages',
+  // each row's card its row's, each page's line its page's (litApplyColors -> data-litc).
   return `
-    <div class="page-shell layouts-shell">
+    <div class="page-shell layouts-shell" data-litc-pages>
     ${topBar('Color customization', false, '', 'layouts', '', false, true)}
     <div class="note">Make anything black your own background colour and anything white your own text colour - just the background and the texts, like the System theme.</div>
     <div class="row-card" style="cursor:pointer;" data-action="color-edit" data-t="all">
@@ -9592,9 +9615,9 @@ function layoutsColorScreen(){
     </div>
     ${rows.map((items, i)=>`
       <div class="section-title">ROW ${i + 1}</div>
-      <div class="row-card">
+      <div class="row-card" data-litc="row:${ids[i]}">
         <div class="row" style="cursor:pointer;" data-action="color-edit" data-t="row:${ids[i]}"><div class="row-left"><div class="row-name">Whole row</div><div class="row-sub">${litScopeLabel('row:' + ids[i])}</div></div><span class="chev-right">›</span></div>
-        ${items.map(it=>`<div class="row" style="cursor:pointer;" data-action="color-edit" data-t="page:${escText(it.key)}"><div class="row-left"><div class="row-name">${it.label}</div><div class="row-sub">${litScopeLabel('page:' + it.key)}</div></div><span class="chev-right">›</span></div>`).join('')}
+        ${items.map(it=>`<div class="row" style="cursor:pointer;" data-litc="page:${escText(it.key)}" data-action="color-edit" data-t="page:${escText(it.key)}"><div class="row-left"><div class="row-name">${it.label}</div><div class="row-sub">${litScopeLabel('page:' + it.key)}</div></div><span class="chev-right">›</span></div>`).join('')}
       </div>
     `).join('')}
     </div>
