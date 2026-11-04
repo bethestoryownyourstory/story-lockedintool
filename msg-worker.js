@@ -189,6 +189,7 @@ export class Hub {
     this.sql.exec(`CREATE TABLE IF NOT EXISTS tombs (tok TEXT PRIMARY KEY, at INTEGER)`);
     try { this.sql.exec(`ALTER TABLE tombs ADD COLUMN why TEXT`); } catch (e) {}   // 'deleted' (by its owner) | 'banned'
     this.sql.exec(`CREATE TABLE IF NOT EXISTS delreasons (reason TEXT, note TEXT, at INTEGER)`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS callrates (uid TEXT, stars INTEGER, note TEXT, video INTEGER, grp INTEGER, secs INTEGER, at INTEGER)`);   // the end-of-call rating (owner) - no names shown
     this.sql.exec(`CREATE TABLE IF NOT EXISTS reports (id TEXT PRIMARY KEY, uid TEXT, kind TEXT, target TEXT, owner TEXT, reason TEXT, text TEXT, at INTEGER, status TEXT)`);
     this.sql.exec(`CREATE TABLE IF NOT EXISTS ucomments (id TEXT PRIMARY KEY, pid TEXT, uid TEXT, text TEXT, at INTEGER)`);
     this.sql.exec(`CREATE INDEX IF NOT EXISTS ucomments_pid ON ucomments(pid, at)`);
@@ -279,6 +280,8 @@ export class Hub {
       if (path === '/v1/blocks') return this.blocksOf(me);
       if (path === '/v1/report') return this.report(me, body);
       if (path === '/v1/reports') return this.reportsList(me);
+      if (path === '/v1/callrate') return this.callRate(me, body);
+      if (path === '/v1/callrates') return this.callRates(me);
       if (path === '/v1/reports/act') return this.reportAct(me, body);
       if (path === '/v1/auth/set') return this.authSet(me, body);
       if (path === '/v1/auth/mk') return this.authMk(me, body);
@@ -921,6 +924,25 @@ export class Hub {
     if (kind === 'group') { const g = this.one("SELECT * FROM groups WHERE id = ? AND type = 'public'", id); return g ? { owner: g.creator, look: g.name + (g.about ? ' - ' + g.about : '') } : null; }
     return null;
   }
+  // The rating a person gives when a call ends (owner: 'at the end of each call a pop up will show up, user rates the call
+  // and can add something if they want'). 1-5 stars + an optional note; at most 40 a day per account.
+  callRate(me, b) {
+    const stars = Math.round(+b.stars || 0);
+    if (stars < 1 || stars > 5) return json({ error: 'stars' }, 400);
+    const day = Date.now() - 86400000;
+    if (this.one('SELECT COUNT(*) AS n FROM callrates WHERE uid = ? AND at > ?', me.id, day).n >= 40) return json({ ok: true });
+    this.sql.exec('INSERT INTO callrates (uid, stars, note, video, grp, secs, at) VALUES (?, ?, ?, ?, ?, ?, ?)', me.id, stars,
+      String(b.note || '').replace(/\s+/g, ' ').trim().slice(0, 300), b.video ? 1 : 0, b.group ? 1 : 0, Math.max(0, Math.min(86400, Math.round(+b.secs || 0))), Date.now());
+    return json({ ok: true });
+  }
+  // Only Lockedintool's official profile sees them (Profile ⋮ > Reports) - totals + the newest, never who rated.
+  callRates(me) {
+    if (!me.official) return json({ error: 'official' }, 403);
+    const all = this.sql.exec('SELECT stars, COUNT(*) AS n FROM callrates GROUP BY stars').toArray(), by = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    let count = 0, sum = 0; for (const r of all) { by[r.stars] = r.n; count += r.n; sum += r.stars * r.n; }
+    const recent = this.sql.exec('SELECT stars, note, video, grp, secs, at FROM callrates ORDER BY at DESC LIMIT 30').toArray();
+    return json({ count, avg: count ? Math.round(sum / count * 10) / 10 : 0, by, recent });
+  }
   report(me, b) {
     const kind = String(b.kind || ''), id = String(b.id || '').slice(0, 60);
     const t = this.reportTarget(kind, id);
@@ -1002,6 +1024,7 @@ export class Hub {
     for (const l of this.sql.exec('SELECT * FROM lives WHERE uid = ? AND ended IS NULL', uid).toArray()) this.liveEnd(l);
     this.sql.exec('DELETE FROM livewatch WHERE uid = ?', uid); this.sql.exec('DELETE FROM livecmt WHERE uid = ?', uid);
     this.sql.exec('DELETE FROM rcodes WHERE uid = ?', uid); this.sql.exec('DELETE FROM resets WHERE uid = ?', uid);
+    this.sql.exec("UPDATE callrates SET uid = '' WHERE uid = ?", uid);   // ratings stay, with no account attached
     for (const m of this.sql.exec('SELECT gid FROM gmembers WHERE uid = ?', uid).toArray()) {
       this.sql.exec('DELETE FROM gmembers WHERE gid = ? AND uid = ?', m.gid, uid);
       const left = this.memberIds(m.gid);
