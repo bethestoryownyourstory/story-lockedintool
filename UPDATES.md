@@ -148,7 +148,7 @@ commits, pushed as a new update) - nothing else changes.
 | 140 | 2026-11-04 | Subscriptions moved to the bottom of Settings (out of the Dashboard menu); your Subscription page shows exactly what a customer sees | a7d015b |
 | 141 | 2026-11-04 | Settings is clean: only the names of the options - tap one to see its choices | 55c182c |
 | 142 | 2026-11-04 | Only system: behind a pop-up / floating app window you see Lockedintool, not black - tap it to get the live Dashboard back | 6dd4fbd |
-| 143 | 2026-11-04 | Only system: opening Lockedintool always lands on the Dashboard - no black screen that needed a swipe up (the phone's Recents app flashing during Home no longer makes the Dashboard step aside for good) | (this) |
+| 143 | 2026-11-04 | Only system: opening Lockedintool always lands on the Dashboard - no black screen that needed a swipe up (the phone's Recents app flashing during Home no longer makes the Dashboard step aside for good) | 363f156 |
 | 144 | 2026-11-04 | Only system: the Dashboard lives inside Lockedintool's own Home screen, so Samsung pop-up windows and their floating bubbles stay on top of it (Lockedintool in the back) | (this) |
 | 145 | 2026-11-04 | Apps: the Lockedintool app is listed with your phone's apps (opens its setup screen) | (this) |
 | 146 | 2026-11-04 | Updates install with the screen on too; if the phone wants a tap, Android's own Install screen comes up - no update notification | (this) |
@@ -162,3 +162,4 @@ commits, pushed as a new update) - nothing else changes.
 | 154 | 2026-11-04 | Dial pad's Search contact opens the phone's own Contacts search - type a name, tap the contact to call or anything else | (this) |
 | 155 | 2026-11-04 | Only system: your phone's wallpaper no longer shows for a moment when going back to the Dashboard - Lockedintool's Home is solid | (this) |
 | 156 | 2026-11-04 | Layouts: Background picture - any picture from your phone behind the Dashboard, and behind all pages / a row / one page | (this) |
+| 157 | 2026-11-04 | Dial pad's Search contact opens your Contacts straight on its search box; the Dashboard's bottom bar no longer shows over other apps | (this) |

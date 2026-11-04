@@ -230,6 +230,36 @@ class StoryAccessibilityService : AccessibilityService() {
             }
             h.postDelayed(step, 250)
         }
+        /** Dial pad > Search contact (owner, 4 Nov 2026: 'search contacts is not working - it's just the same thing as view
+         *  all contacts, it doesn't go to the search option'): the phone's Contacts app opens, and its own Search is tapped
+         *  once so you can type the name straight away. Only in that app, only its Search, once. */
+        fun tapContactsSearch(pkg: String) {
+            if (instance == null || pkg.isEmpty()) return
+            val h = android.os.Handler(android.os.Looper.getMainLooper())
+            var tries = 0
+            val step = object : Runnable {
+                override fun run() {
+                    val s = instance ?: return
+                    if (++tries > 25) return
+                    val ws = runCatching { s.windows }.getOrNull()
+                    if (ws != null) for (w in ws) {
+                        val r = runCatching { w.root }.getOrNull() ?: continue
+                        if (r.packageName?.toString() != pkg) continue
+                        var hit: android.view.accessibility.AccessibilityNodeInfo? = null
+                        find(r, 0, intArrayOf(0)) { n ->
+                            val id = n.viewIdResourceName?.lowercase().orEmpty()
+                            if (said(n) == "search" || said(n).startsWith("search contacts") || id.endsWith("/search") || id.contains("search_button") || id.contains("menu_search")) { hit = n; true } else false
+                        }
+                        var c = hit ?: continue
+                        var up = 0
+                        while (!c.isClickable && up < 5) { c = c.parent ?: break; up++ }
+                        if (c.isClickable && c.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK)) return
+                    }
+                    h.postDelayed(this, 150)
+                }
+            }
+            h.postDelayed(step, 300)
+        }
         private fun said(n: android.view.accessibility.AccessibilityNodeInfo) = (n.text ?: n.contentDescription ?: "").toString().trim().lowercase()
         /** Taps the first visible node in the phone's output switcher / panel that matches (or the row holding it). */
         private fun clickIn(match: (android.view.accessibility.AccessibilityNodeInfo) -> Boolean): Boolean {

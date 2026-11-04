@@ -1219,7 +1219,13 @@ class OverlayService : Service(), StoryBridge.Host {
     /** The app on screen changed (accessibility): leaving the app page's app takes the strip away. */
     fun foregroundChanged(pkg: String) { widgetLiveEvent(pkg != homePkg()); ui.post {
         openingPkg?.let { w -> if (w.isNotEmpty() && pkg == w) { ui.removeCallbacks(openingHide); openingHide.run() } }   // the app just opened is in front
-        if (appPagePkg != null && pkg != appPagePkg && pkg != packageName) { appPagePkg = null; removeAppEdge() }; systemEnforce(pkg) } }
+        if (appPagePkg != null && pkg != appPagePkg && pkg != packageName) { appPagePkg = null; removeAppEdge() }; systemEnforce(pkg)
+        // Only system: another app came to the front while the Pages live in Lockedintool's Home - they close (kept drawn
+        // there), so the Dashboard's Station 3 bar never stays up over that app (owner, 4 Nov 2026: the Messages / Profile
+        // bar showed over the Claude app - 'What's happening?').
+        if (SystemMode.on(this) && pagesInHome() && pagesPane?.shown == true && pkg != packageName && pkg != "com.android.systemui" && pkg != homePkg()
+            && LockedintoolHome.current?.focused != true && pickerHid.isEmpty() && !createActive && !callActive) pagesPane?.let { hideOne(it) }
+    } }
 
     // ---- Lockedintool as your system (SystemMode.kt): the DASHBOARD is your home screen, so the phone's own bare home
     //      screen sends you back to the Dashboard. Your apps all still work (owner, 28 Oct 2026: 'apps on dashboard for
@@ -1761,6 +1767,9 @@ class OverlayService : Service(), StoryBridge.Host {
      *  opened over the Home (owner: Lockedintool stays in the back) is never covered. */
     fun homeFocused() { ui.post {
         if (!SystemMode.on(this) || pagesPane?.shown == true || keyguardLocked() || WidgetMode.on(this)) return@post
+        // Only while Lockedintool's Home really is what you see (an app opening over it must not bring the Dashboard back).
+        val h = LockedintoolHome.current
+        if (h == null || !h.visibleNow || !h.focused) return@post
         if (pickerHid.isNotEmpty() || openingPkg != null || createActive || callActive) return@post
         if (StoryAccessibilityService.recentsInFront()) return@post
         // Every time Lockedintool's Home is what you see, the Dashboard is on it - never a black Home you have to tap
