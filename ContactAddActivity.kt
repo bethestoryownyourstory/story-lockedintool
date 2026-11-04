@@ -32,6 +32,16 @@ class ContactAddActivity : Activity() {
             runCatching { startActivityForResult(Intent(Intent.ACTION_PICK, ContactsContract.CommonDataKinds.Phone.CONTENT_URI), 8) }.onFailure { done(false) }
             return
         }
+        if (mode == "search") {
+            // The phone's own Contacts search (owner, 4 Nov 2026: 'you can type the name and it shows and can tap it and
+            // do what you want to do or call') - the Contacts app opened on its search; tap a contact to call / message...
+            val pkg = runCatching { Intent(Intent.ACTION_VIEW, ContactsContract.Contacts.CONTENT_URI).resolveActivity(packageManager)?.packageName }.getOrNull()
+            val search = Intent(Intent.ACTION_SEARCH).putExtra(android.app.SearchManager.QUERY, "").also { if (pkg != null) it.setPackage(pkg) }
+            val ok = pkg != null && runCatching { search.resolveActivity(packageManager) }.getOrNull() != null &&
+                runCatching { startActivityForResult(search, 9) }.isSuccess
+            if (!ok) runCatching { startActivityForResult(Intent(Intent.ACTION_PICK, ContactsContract.CommonDataKinds.Phone.CONTENT_URI), 8) }.onFailure { done(false) }
+            return
+        }
         if (mode == "all") {    // the phone's Contacts list
             runCatching { startActivityForResult(Intent(Intent.ACTION_VIEW, ContactsContract.Contacts.CONTENT_URI), 9) }.onFailure { done(false) }
             return

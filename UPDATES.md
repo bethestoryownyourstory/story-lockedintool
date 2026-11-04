@@ -145,7 +145,7 @@ commits, pushed as a new update) - nothing else changes.
 | 137 | 2026-11-04 | Only system really asks to make Lockedintool your Home app (the question never appeared before), and asks again until it is | f0287b6 |
 | 138 | 2026-11-04 | Your account stays on Only system for good - it can't be switched to Second system | 697ca34 |
 | 139 | 2026-11-04 | Only system: no Apps | Lockedintool switch any more, and never a frozen old home screen behind Lockedintool | baf2ae0 |
-| 140 | 2026-11-04 | Subscriptions moved to the bottom of Settings (out of the Dashboard menu); your Subscription page shows exactly what a customer sees | (this) |
+| 140 | 2026-11-04 | Subscriptions moved to the bottom of Settings (out of the Dashboard menu); your Subscription page shows exactly what a customer sees | a7d015b |
 | 141 | 2026-11-04 | Settings is clean: only the names of the options - tap one to see its choices | (this) |
 | 142 | 2026-11-04 | Only system: behind a pop-up / floating app window you see Lockedintool, not black - tap it to get the live Dashboard back | (this) |
 | 143 | 2026-11-04 | Only system: opening Lockedintool always lands on the Dashboard - no black screen that needed a swipe up (the phone's Recents app flashing during Home no longer makes the Dashboard step aside for good) | (this) |
@@ -159,3 +159,4 @@ commits, pushed as a new update) - nothing else changes.
 | 151 | 2026-11-04 | Layouts > Pages > Color customization shows your colours: the screen in the all-pages colours, each row and page in its own | (this) |
 | 152 | 2026-11-04 | Pages colour screen: its background takes your colours only when every page uses the same ones; otherwise only the options are coloured | (this) |
 | 153 | 2026-11-04 | Dial pad: Search contact (left) and View all contacts (right) - the phone's own contacts; a picked contact's number goes into the dial pad | (this) |
+| 154 | 2026-11-04 | Dial pad's Search contact opens the phone's own Contacts search - type a name, tap the contact to call or anything else | (this) |
