@@ -115,8 +115,22 @@ object Updater {
             offered = latest; offeredAt = System.currentTimeMillis()
             // Already downloaded this version (e.g. it was waiting for the screen to go off): don't fetch it again.
             val prefs = ctx.getSharedPreferences("story", Context.MODE_PRIVATE)
-            val apk = if (apkFile(ctx).exists() && prefs.getLong("upd_apk_ver", 0) == latest) apkFile(ctx)
-                else download(base, ctx, latest).also { prefs.edit().putLong("upd_apk_ver", latest).apply() }
+            // The file must really BE that version (owner, 4 Nov 2026: 'I pressed install, installed it, nothing is happening' -
+            // the phone stayed on 1.332): a download made while GitHub was still swapping the files could be the OLD build
+            // under the new number, and it was then installed again and again. Checked by reading the file's own version.
+            var apk = apkFile(ctx)
+            if (!(apk.exists() && prefs.getLong("upd_apk_ver", 0) == latest && apkVersion(ctx, apk) == latest)) {
+                prefs.edit().remove("upd_apk_ver").apply()
+                apk = download(base, ctx, latest)
+                val got = apkVersion(ctx, apk)
+                if (got != latest) {
+                    runCatching { apk.delete() }; doneProgress(ctx)
+                    setStatus(ctx, "Build $latest isn't ready to download yet - trying again in a moment")
+                    offered = 0
+                    return
+                }
+                prefs.edit().putLong("upd_apk_ver", latest).apply()
+            }
             doneProgress(ctx)
             // Installs straight away, screen on or off (owner, 4 Nov 2026: 'why don't I get the updates even when my screen is
             // on / Why does it have to be off'). Only a call waits (installing restarts Lockedintool for a moment) - the
@@ -172,6 +186,10 @@ object Updater {
     }
 
     private fun apkFile(ctx: Context) = File(ctx.cacheDir, "story-update.apk")
+    /** The version written inside a downloaded APK (0 = not a readable APK). */
+    fun apkVersion(ctx: Context, apk: File): Long = runCatching {
+        ctx.packageManager.getPackageArchiveInfo(apk.path, 0)?.longVersionCode ?: 0L
+    }.getOrDefault(0L)
 
     /** Downloads the update, showing a loading bar (notification + setup screen) as it goes. */
     private fun download(base: String, ctx: Context, version: Long): File {
@@ -229,6 +247,9 @@ object Updater {
     fun installWithSystemInstaller(ctx: Context): Boolean = runCatching {
         val apk = apkFile(ctx)
         if (!apk.exists()) return false
+        // Never offer a file that isn't newer than what's installed (it would 'install' and change nothing).
+        val mine = ctx.packageManager.getPackageInfo(ctx.packageName, 0).longVersionCode
+        if (apkVersion(ctx, apk) <= mine) { runCatching { apk.delete() }; ctx.getSharedPreferences("story", Context.MODE_PRIVATE).edit().remove("upd_apk_ver").apply(); return false }
         val uri = FileProvider.getUriForFile(ctx, ctx.packageName + ".files", apk)
         markGoHome(ctx, true)
         OverlayService.instance?.pauseForInstall()
