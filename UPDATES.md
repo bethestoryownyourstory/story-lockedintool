@@ -139,3 +139,4 @@ commits, pushed as a new update) - nothing else changes.
 | 131 | 2026-11-04 | "Focus" is never alone - it says "Focus page" everywhere (the page, Rows, Page Styles, Layouts, Add to Focus page, plan texts, the home screen widget) | (this) |
 | 132 | 2026-11-04 | From the day-one check: rate a call when it ends (stars + an optional note; the official profile sees the ratings in Reports), and the Notify person pop-up after sending money to a Lockedintool profile | (this) |
 | 133 | 2026-11-04 | Trading page names put right: the small label "FOCUS PAGE" sits on top of the big "Trading" title (sizes as before) | (this) |
+| 134 | 2026-11-04 | Servers renamed to Lockedintool's own names (lockedintool-msg / -trade / -release) - accounts and chats moved with them; the app (1.307) can now hand everything over to Lockedintool's own Android ID | 51acc43, c15e127, 6e229a3 |
