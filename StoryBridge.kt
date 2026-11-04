@@ -124,6 +124,33 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         if (p.isNotEmpty()) launchApp(p) else host.showToast("Pick your music player in Layouts > Dashboard > Music player")   // no player known yet: say so
     }
 
+    /** Can this phone open apps in a pop-up (floating) window? Samsung's pop-up view, or Android's own freeform windows. */
+    @JavascriptInterface
+    fun popupSupported(): Boolean = runCatching {
+        ctx.packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_FREEFORM_WINDOW_MANAGEMENT) ||
+            android.os.Build.MANUFACTURER.equals("samsung", true) ||
+            android.provider.Settings.Global.getInt(ctx.contentResolver, "enable_freeform_support", 0) == 1
+    }.getOrDefault(false)
+
+    /** Apps > hold an app > Open in pop-up view (owner, 4 Nov 2026: 'when I hold an app to make it into a pop up even tho
+     *  I haven't opened it I can't'): the phone's OWN pop-up window - the app is started in a floating window (Android's
+     *  launch bounds + freeform mode), exactly like the phone's launcher does it. Lockedintool stays behind it. */
+    @JavascriptInterface
+    fun launchAppPopup(pkg: String) {
+        val i = ctx.packageManager.getLaunchIntentForPackage(pkg) ?: return
+        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
+        val dm = ctx.resources.displayMetrics
+        val w = (dm.widthPixels * 0.82f).toInt(); val h = (dm.heightPixels * 0.5f).toInt()
+        val l = (dm.widthPixels - w) / 2; val t = (dm.heightPixels - h) / 3
+        val opts = android.app.ActivityOptions.makeBasic().setLaunchBounds(android.graphics.Rect(l, t, l + w, t + h))
+        runCatching { android.app.ActivityOptions::class.java.getMethod("setLaunchWindowingMode", Int::class.javaPrimitiveType).invoke(opts, 5) }   // 5 = freeform (pop-up)
+        val ok = runCatching { ctx.startActivity(i, opts.toBundle()) }.isSuccess
+        if (!ok) { launchApp(pkg); return }
+        // Second system: the Pages float over every app, so they step aside for the pop-up (in Only system they're the Home
+        // screen behind it already).
+        if (!SystemMode.on(ctx)) host.hidePanelFor(pkg, "an app")
+    }
+
     /** Opens the real app exactly as the phone's own launcher would, and gets STORY out of the way. */
     @JavascriptInterface
     fun launchApp(pkg: String) {

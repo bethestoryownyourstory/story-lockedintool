@@ -855,7 +855,10 @@ class OverlayService : Service(), StoryBridge.Host {
         if (p === pagesPane && shown && appEdge != null) { appPagePkg = null; removeAppEdge() }
         if (p === pagesPane && !shown) ui.postDelayed({ PageWidgets.refreshPlaced(this) }, 1500)  // home screen widgets show what you just saw
         if (shown && (p === pagesPane || p === profilePane)) hideLiveWidgets() else if (!shown && (p === pagesPane || p === profilePane)) widgetLiveEvent(false)
-        if (p === pagesPane) { quietApps(shown); updateBarLine(); if (!shown && pagesTyping) pagesBackToTop(); updateBubble()
+        // Inside Lockedintool's Home (Only system) the Pages are your home screen, and a home screen never pauses what's
+        // playing - a pop-up window's video / music keeps going (owner, 4 Nov 2026: 'when I have a pop up on and I'm on
+        // apps from the dashboard the sound pauses').
+        if (p === pagesPane) { quietApps(shown && !pagesInHome()); updateBarLine(); if (!shown && pagesTyping) pagesBackToTop(); updateBubble()
             if (!shown) tvView?.place(org.json.JSONObject().put("show", false)) }
         // Only system: Pages that step aside while they live inside Lockedintool's Home stay DRAWN there (not touchable,
         // not focusable - Home's own tap brings them back), so coming back to the Dashboard is instant and Lockedintool's
@@ -1814,7 +1817,7 @@ class OverlayService : Service(), StoryBridge.Host {
         val prevWm = p.wm; val prevType = p.lp.type
         runCatching { prevWm.removeView(p.frame) }
         p.lp.type = WindowManager.LayoutParams.TYPE_APPLICATION_PANEL; p.lp.token = null
-        if (runCatching { hw.addView(p.frame, p.lp) }.isSuccess) { p.wm = hw; homeHostWm = hw; homePrevWm = prevWm; homePrevType = prevType }
+        if (runCatching { hw.addView(p.frame, p.lp) }.isSuccess) { p.wm = hw; homeHostWm = hw; homePrevWm = prevWm; homePrevType = prevType; quietApps(false) }
         else { p.lp.type = prevType; p.lp.token = null; runCatching { prevWm.addView(p.frame, p.lp) }; restackOver(prevWm) }
     }
     /** The Home went out of sight (an app, the phone's Recents): Pages that were showing inside it close, like they always

@@ -13836,6 +13836,7 @@ function appMenuTemplate(){
       <div class="confirm-sheet" onclick="event.stopPropagation()">
         <div class="confirm-title app-menu-title"><span class="app-menu-icon">${appIconHTML(a)}</span>${escText(a.name)}</div>
         <div class="confirm-btn-row">
+          ${a.pkg && NATIVE && window.StoryNative.popupSupported && window.StoryNative.popupSupported() ? `<button class="btn-wide" style="margin-top:0;" data-action="app-popup">Open in pop-up view</button>` : ''}
           ${a.section !== 'STORY' && !wgOn() ? `<button class="btn-wide" style="margin-top:0;" data-action="app-turn-into-page">${a.pkg && appPagesStored().some(x=>x.pkg === a.pkg) ? 'Remove page' : 'Create into a page'}</button>` : ''}
           <button class="btn-wide" style="margin-top:0;color:var(--red);" data-action="app-delete">Delete App</button>
         </div>
@@ -18327,6 +18328,12 @@ function attachHandlers(){
         case 'app-page-open': {
           const pkg = el.getAttribute('data-pkg');
           if(NATIVE && window.StoryNative.appPageOpen) window.StoryNative.appPageOpen(pkg); else showToast('Opens the app on your phone');
+          break;
+        }
+        case 'app-popup': {   // the phone's own pop-up window for this app (owner)
+          const a = state.installedApps.find(x=>x.id===state.appMenuId);
+          state.appMenuId = null;
+          if(a && a.pkg && window.StoryNative.launchAppPopup) window.StoryNative.launchAppPopup(a.pkg);
           break;
         }
         case 'app-delete': {
