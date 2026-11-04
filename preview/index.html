@@ -9103,7 +9103,8 @@ function subscriptionScreen(){
   // other plans show. It comes back when it runs out.
   if(w && w.status === 'pending' && !state.sub.polling){ state.sub.polling = true; subPollT = setTimeout(subPoll, 400); }   // checked while this page shows
   const soon = !plansOnSale();   // FREE-ONLY launch (owner): Basic & Premium show "Coming soon", not for sale yet
-  const status = active ? 'Your plan: ' + (s.plan === 'premium' ? 'Premium' : 'Basic') + ' · ' + subOptName(s.mode) + ' · paid until ' + until
+  const status = s.officialPlan ? 'Your plan: Premium · ' + subOptName(s.mode) + ' · official account'
+    : active ? 'Your plan: ' + (s.plan === 'premium' ? 'Premium' : 'Basic') + ' · ' + subOptName(s.mode) + ' · paid until ' + until
     : !s.connected ? 'Subscriptions open once LOCKED IN TOOL’s payments are set up.'
     : soon ? 'Free: the Dashboard is yours. Basic & Premium are coming soon.'
     : locked ? 'Free: the Dashboard. Choose a plan for the Pages.' : 'Choose a plan to use LOCKED IN TOOL.';
@@ -9115,7 +9116,7 @@ function subscriptionScreen(){
     <div class="sub-head">LOCKED IN TOOL</div>
     <div class="sub-opts">${SUB_OPTIONS.map(o=>`<button class="sub-opt${mode === o.key ? ' on' : ''}" data-action="sub-opt" data-v="${o.key}"><span class="sub-opt-mark">${mode === o.key ? '✓' : ''}</span>${o.name}${o.note ? `<span class="sub-opt-note">${o.note}</span>` : ''}<span class="sub-opt-tip"><b>${o.name}</b>${o.short}</span></button>`).join('')}</div>
     <div class="sub-status">${escText(status)}</div>
-    ${active ? `<button class="sub-end-btn" data-action="sub-endask">Cancel plan</button>` : ''}
+    ${active && !s.officialPlan ? `<button class="sub-end-btn" data-action="sub-endask">Cancel plan</button>` : ''}
     ${w ? `<div class="row-card pay-wait">
       <div class="pay-wait-amt">${escText(w.name)}</div>
       <div class="pay-wait-who">${subOptName(w.mode)} · $${w.usd}/month${(w.provider === 'stitch' || w.provider === 'payfast') && w.zar ? ' · R' + Number(w.zar).toFixed(2) : ''}</div>
@@ -9229,6 +9230,8 @@ function subOptConfirm(){
   const k = state.sub.optView; state.sub.optView = null;
   if(k === 'second' && sysModeState().on){ showToast('Lockedintool is your only system - log out or delete your account to change it'); renderDevice(); return; }
   state.sub.mode = k; renderDevice();
+  // The official account's option is kept on the server (no payment) - Premium under the option it chose.
+  if((subState() || {}).officialPlan) msgApi('/v1/sub/mode', { mode:k }).then(r=>{ subSave(r); renderDevice(); }).catch(()=>{});
   if(k !== 'only') return;
   // Owner (full access) or a plan you already have: it can go on now. Otherwise it goes on with the plan you pay.
   const s = subState() || {};
