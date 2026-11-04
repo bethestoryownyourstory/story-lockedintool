@@ -1072,7 +1072,7 @@
   .acct-title-caret{ font-size:10px; opacity:0.7; }
   .acct-title:active{ opacity:0.6; }
   /* Owner: no timeframe row of our own (TradingView has its timeframes) - the chart takes its space (190 + 34). */
-  .tv-card{ height:224px; padding:0; position:relative; overflow:hidden; }
+  .tv-card{ height:255px; padding:0; position:relative; overflow:hidden; }
   .tv-slot{ position:absolute; inset:0; }
   .tv-host{ width:100%; height:100%; touch-action:none; }
   .tv-widget{ position:absolute; inset:0; width:100%; height:100%; border:0; display:block; background:#000000; }
@@ -7721,10 +7721,9 @@ function tradingPageScreen(){
   state.positions = positions;
   return `
     <div class="page-shell">
-    ${topBar('Trading', true)}
+    ${topBar('Focus page', true)}
     ${pageArrows()}
-    <div class="eyebrow">FOCUS</div>
-    <div class="big-num trade-symbol" style="font-size:24px;" data-action="symbol-picker-open">${escText(state.focusName || state.focusSymbol)} <span class="${chg != null && chg < 0 ? 'delta-down' : 'delta-up'}" style="font-size:15px;">${q ? fmtPrice(q.bid) : '—'}${chg != null ? ' ' + (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%' : ''}</span></div>
+    <div class="eyebrow">TRADING</div>
     <div class="chart-wrap" id="trading-chart">
       <div class="row-card tv-card">
         <div class="tv-slot"></div>
