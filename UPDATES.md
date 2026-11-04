@@ -169,4 +169,5 @@ commits, pushed as a new update) - nothing else changes.
 | 161 | 2026-11-04 | Only system: swiping up from an app back to Lockedintool - the Dashboard is already there, live in the same frame (no redraw, no wait) | dc1251d |
 | 162 | 2026-11-04 | Only system: no black when swiping back from an app - the Dashboard no longer rests behind the app, and Lockedintool's Home shows the Dashboard's picture until the live one is drawn | f622380 |
 | 163 | 2026-11-04 | 0.0 s everywhere: the last small waits are gone - the keyboard comes up at once, swipe-to-confirm acts the moment you let go, a swiped-away recent goes at once, the unlock asks at once | (this) |
-| 164 | 2026-11-04 | Dial pad: Search contact and View all contacts are joined to the dial pad as one piece, each with its own outline | (this) |
+| 164 | 2026-11-04 | Dial pad: Search contact and View all contacts are joined to the dial pad as one piece, each with its own outline | 40a29ca |
+| 165 | 2026-11-04 | Dashboard: the bottom bar no longer shows squashed for a moment after unlocking (Lockedintool's backup bar no longer opens while the Dashboard reloads) | (this) |

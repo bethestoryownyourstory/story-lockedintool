@@ -670,7 +670,9 @@ class OverlayService : Service(), StoryBridge.Host {
             override fun onPageStarted(v: WebView, url: String, favicon: android.graphics.Bitmap?) {
                 if (small) paneRef?.let { it.loading = true; it.frame.alpha = 0f; syncBarBg() }
                 if (!small && !dial && !profile) tvView?.place(org.json.JSONObject().put("show", false))  // the page tells it again once loaded
-                if (!small && !dial && !profile && dashBandInPage) { dashBandInPage = false; updateBubble() }   // the new page says again whether it draws the Dashboard's bar
+                // The Dashboard's bar stays the page's own while the Pages reload (owner's video, 4 Nov 2026: after unlocking,
+                // the bar showed squashed for half a second - our backup Station 3 window opened during the reload and was
+                // resized on screen). Every screens version draws it itself now (the built-in copy too), so it isn't reset.
                 // The Pages loading inside Lockedintool's Home stay see-through until drawn, so the Home's picture of them
                 // shows instead of a black screen (owner's video, 4 Nov 2026: black for seconds after 'Close all').
                 if (!small && !dial && !profile) paneRef?.let { pp -> pp.loading = true; if (pp === pagesPane && pagesInHome()) pp.frame.alpha = 0f
