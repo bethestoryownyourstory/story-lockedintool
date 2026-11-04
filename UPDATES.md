@@ -165,4 +165,5 @@ commits, pushed as a new update) - nothing else changes.
 | 157 | 2026-11-04 | Dial pad's Search contact opens your Contacts straight on its search box; the Dashboard's bottom bar no longer shows over other apps | (this) |
 | 158 | 2026-11-04 | Apps: hold an app -> Open in pop-up view (the phone's own floating window). A pop-up's sound no longer pauses while you use Lockedintool | (this) |
 | 159 | 2026-11-04 | Information: The future of Lockedintool - PCs, laptops, TVs, Lockedintool's own devices, kit and USB / SD backups | (this) |
-| 160 | 2026-11-04 | Apps: the hold menu has an × to close it | (this) |
+| 160 | 2026-11-04 | Apps: the hold menu has an × to close it | e111d71 |
+| 161 | 2026-11-04 | Only system: swiping up from an app back to Lockedintool - the Dashboard is already there, live in the same frame (no redraw, no wait) | (this) |

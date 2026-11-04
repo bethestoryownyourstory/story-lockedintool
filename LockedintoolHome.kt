@@ -57,11 +57,16 @@ class LockedintoolHome : Activity() {
         (v.layoutParams as? android.widget.FrameLayout.LayoutParams)?.let { it.topMargin = (top - loc[1]).coerceAtLeast(0); v.layoutParams = it }
         v.setImageBitmap(b)
     } } }
-    override fun onNewIntent(intent: Intent?) { super.onNewIntent(intent); setIntent(intent); showHome() }
+    override fun onNewIntent(intent: Intent?) { super.onNewIntent(intent); setIntent(intent)
+        if (OverlayService.instance?.homeShowFast(this) == true) { OverlayService.instance?.phoneScreenShown(); return }
+        showHome() }
     // The Pages go INSIDE this window first (so the phone's floating windows and bubbles sit above the Dashboard - owner,
     // 4 Nov 2026: 'Lockedintool is supposed to be in the back'), once it is really on screen; then the Dashboard. Coming
     // back with the Pages still up (a fingerprint prompt, a picker...) keeps you where you were.
-    override fun onResume() { super.onResume(); window.decorView.post {
+    override fun onResume() { super.onResume()
+        // Back from an app: the Dashboard is already drawn here - it goes live at once (owner: no delay, no lag).
+        if (OverlayService.instance?.homeShowFast(this) == true) { OverlayService.instance?.phoneScreenShown(); return }
+        window.decorView.post {
         if (isFinishing || isDestroyed) return@post
         val svc = OverlayService.instance
         svc?.homeAttach(this)

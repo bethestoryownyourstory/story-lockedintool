@@ -323,6 +323,7 @@ class OverlayService : Service(), StoryBridge.Host {
 
     /** Fresh copy of the screens, skipping the website's cache. */
     private fun reload(p: Pane) {
+        if (p === pagesPane) parkedDash = false
         p.stale = false; p.loadedAt = System.currentTimeMillis(); p.ver = screensSeen
         p.web.loadUrl(remoteBase() + "?" + (if (p.lock) "s3=1&dial=1&lock=1&" else if (p.gap) "s3=1&profile=1&gap=1&" else if (p.profile) "s3=1&profile=1&" else if (p.dial) "s3=1&dial=1&" else if (p.small) "s3=1&" else "") + "v=" + System.currentTimeMillis())
     }
@@ -820,6 +821,7 @@ class OverlayService : Service(), StoryBridge.Host {
     }
 
     private fun setShown(p: Pane, shown: Boolean) {
+        if (p === pagesPane && shown) parkedDash = false
         if (shown && p === pagesPane && pagesInHome() && LockedintoolHome.current?.visibleNow != true) homeDetach()
         p.shown = shown
         if (p === pagesPane) { if (shown) SystemMode.reset() else if (SystemMode.on(this)) { ui.removeCallbacks(systemCheckRun); ui.postDelayed(systemCheckRun, 700) } }
@@ -1827,9 +1829,39 @@ class OverlayService : Service(), StoryBridge.Host {
         if (homeHostWm !== act.windowManager || !pagesInHome()) return
         if (pickerHid.isNotEmpty() || createActive) return
         val p = pagesPane ?: return
+        val loaded = p.loadedAt
         if (p.shown) hideOne(p)
         // Out of sight: what's kept drawn in the Home is the Dashboard, ready for when you come back.
-        p.web.evaluateJavascript("window.storyShow&&window.storyShow('dashboard',false)", null)
+        // It's drawn once awake (a resting page may not draw), then rests again - so the frame waiting in the Home really
+        // is the Dashboard, never the screen you left from.
+        val fresh = p.loadedAt == loaded
+        if (fresh) runCatching { p.web.onResume() }
+        p.web.evaluateJavascript("window.storyShow&&window.storyShow('dashboard',false)") {
+            if (!fresh) return@evaluateJavascript
+            var rested = false
+            val rest = Runnable { if (!rested) { rested = true; if (!p.shown) runCatching { p.web.onPause() } } }
+            runCatching { p.web.postVisualStateCallback(2L, object : WebView.VisualStateCallback() { override fun onComplete(requestId: Long) { ui.post(rest) } }) }.onFailure { ui.post(rest) }
+            ui.postDelayed(rest, 600)
+        }
+        parkedDash = fresh   // not when it's reloading (new screens) - then the normal way
+    }
+    /** The Dashboard is already drawn inside the Home (parked by homeStopped). */
+    private var parkedDash = false
+    /** Swipe up / Home from an app back to Lockedintool (owner, 4 Nov 2026: 'when I swipe up to close the app I'm on to
+     *  lockedintool ... there is a separation, a slight delay and lag'): the Dashboard is ALREADY drawn inside the Home,
+     *  so it just becomes live in the same frame the Home shows - no redraw of the page, no waiting for a new frame, no
+     *  hop through the message queue. Called on the main thread by LockedintoolHome.onResume / onNewIntent; false = the
+     *  normal way (showHome) is needed. */
+    fun homeShowFast(act: android.app.Activity): Boolean {
+        val p = pagesPane ?: return false
+        if (!parkedDash || p.shown || !pagesInHome() || homeHostWm !== act.windowManager) return false
+        if (!SystemMode.on(this) || keyguardLocked() || WidgetMode.on(this) || Security.lit(this)) return false
+        if (p.lp.alpha <= 0f || p.frame.alpha <= 0f || (p.loading && p.web.progress < 100)) return false
+        if (pickerHid.isNotEmpty() || openingPkg != null || createActive) return false
+        parkedDash = false
+        setInLit(true); hideLiveWidgets()
+        setShown(p, true); updateBubble(); addBar()
+        return true
     }
     /** The Home is going away: the Pages go back to their own overlay window. */
     fun homeGone(act: android.app.Activity) { if (homeHostWm === act.windowManager) homeDetach() }
