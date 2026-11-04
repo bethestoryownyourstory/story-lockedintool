@@ -4347,12 +4347,17 @@ function litColorsSave(o){ try{ localStorage.setItem('story-color-systems', JSON
 // Which system applies to a screen ('dashboard' or a page key): a page falls back page -> its row -> all pages.
 function litColorSystemFor(screen){
   const o = litColors();
-  if(screen === 'dashboard') return o.dash || null;
+  if(screen === 'dashboard' || !litIsPage(screen)) return o.dash || null;
   const pg = (o.pages || {})[screen]; if(pg) return pg;
   const r = rowOfPage(screen), row = r ? (o.rows || {})[String(r)] : null; if(row) return row;
   return o.all || null;
 }
 // Read / write one scope's assignment. target: 'dashboard' | 'all' | 'row:<id>' | 'page:<key>'. val = {bg,text,name} or null.
+// The Pages (Money, Wallet, Focus page, app pages - any row) have their own colours; EVERY other screen is reached from
+// the Dashboard and wears the Dashboard's colours (owner, 4 Nov 2026: 'colors not applying to the full dashboard
+// experience - like the settings, basically everything that you can access by using the dashboard, like the dashboard
+// menu and layouts settings').
+function litIsPage(key){ return !!key && (PAGES.includes(key) || key.indexOf('app:') === 0 || !!rowOfPage(key)); }
 function litScopeGet(target){
   const o = litColors();
   if(target === 'dashboard') return o.dash || null;
@@ -4377,7 +4382,7 @@ function litPageName(key){ const it = PAGE_SWITCH_ITEMS.find(x=>x.key === key) |
 // --- the recolour pass: run once at the end of renderDevice ---
 // The music card recolours like the other Dashboard cards (owner: its colour 'didn't change') - black card -> bg colour,
 // white text / play button / visualizer bars -> text colour, same as the System theme swaps them.
-const LIT_C_KEEP = '[data-keep-color], .note-card, .note-content-wrap, .canvas-page-wrap, .notes-swatch, .canvas-swatch, .notes-preview-page, .realcard, .realcard-chase, .realcard-amex, .lit-block, .colorpicker-sheet, .notes-popover-overlay, .modal-overlay, .lit-sheet, .cr-shutter';
+const LIT_C_KEEP = '[data-keep-color], .note-card, .note-content-wrap, .canvas-page-wrap, .notes-swatch, .canvas-swatch, .notes-preview-page, .realcard, .realcard-chase, .realcard-amex, .lit-block, .colorpicker-sheet, .cr-shutter';
 const LIT_C_PROPS = ['color', 'background-color', 'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color', 'outline-color', 'fill', 'stroke', 'caret-color'];
 function litHexRgb(h){ h = String(h || ''); if(h[0] === '#') h = h.slice(1); if(h.length === 3) h = h.split('').map(c=>c + c).join(''); if(h.length < 6) return { r:0, g:0, b:0 }; return { r:parseInt(h.slice(0,2),16), g:parseInt(h.slice(2,4),16), b:parseInt(h.slice(4,6),16) }; }
 function litParseRGB(v){ const m = String(v).match(/^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)\s*(?:[,/]\s*([\d.]+%?))?\s*\)$/i); return m ? { r:+m[1], g:+m[2], b:+m[3], a:m[4] == null ? null : m[4] } : null; }
@@ -4391,25 +4396,101 @@ function litMapToken(c, bg, text, white){
   const col = role === 'bg' ? bg : text;
   return c.a == null ? `rgb(${col.r}, ${col.g}, ${col.b})` : `rgba(${col.r}, ${col.g}, ${col.b}, ${c.a})`;
 }
-// Recolour one rendered screen container ('area') for a given screen key. Reused for the live #content-area and for
-// the hidden neighbour pages built for a swipe, so a swipe into a coloured page never flashes its plain look first.
+// Colours apply INSTANTLY and to everything (owner, 4 Nov 2026: 'colour's not applying instantly'): instead of walking
+// the page after each draw (parts that redraw by themselves - payments, music, prices - came back black for a moment),
+// the colours live in the STYLESHEET. litCssBuild copies every colour rule once (same order, so nothing else changes) with
+// its near-black / near-white replaced by rgba(var(--litc-bg-rgb | --litc-text-rgb, <original>), alpha), and the page's
+// own colour variables (--card...) are overridden on the screen. A screen with a colour system just carries the two
+// variables; without them everything falls back to the original colour. Rebuilt when the System theme changes.
+let LITC_BUILT = null, LITC_ROOTVARS = {};
+function litParseColor(v){
+  v = String(v || '').trim().toLowerCase();
+  if(v === 'white') return { r:255, g:255, b:255, a:null }; if(v === 'black') return { r:0, g:0, b:0, a:null };
+  if(/^#[0-9a-f]{3,8}$/.test(v)){ let h = v.slice(1); if(h.length <= 4) h = h.split('').map(c=>c + c).join('');
+    return { r:parseInt(h.slice(0,2),16), g:parseInt(h.slice(2,4),16), b:parseInt(h.slice(4,6),16), a: h.length === 8 ? String(+(parseInt(h.slice(6,8),16) / 255).toFixed(3)) : null }; }
+  return litParseRGB(v);
+}
+function litRole(c, white){ if(!litNeutralC(c.r, c.g, c.b)) return null; const avg = (c.r + c.g + c.b) / 3; return avg <= 56 ? (white ? 'text' : 'bg') : (white ? 'bg' : 'text'); }
+function litCssBuild(){
+  const white = !!(window.storyTheme && window.storyTheme() === 'white');
+  if(LITC_BUILT === white) return;
+  LITC_BUILT = white; LITC_ROOTVARS = {};
+  const out = [];
+  const conv = (v, pri)=>{
+    const c = litParseColor(v); if(!c) return null;
+    const role = litRole(c, white);
+    const val = !role ? v : `rgba(var(--litc-${role}-rgb, ${c.r}, ${c.g}, ${c.b}), ${c.a == null ? 1 : c.a})`;
+    return val + (pri ? ' !important' : '');
+  };
+  const walk = (rules, sink)=>{
+    for(const r of rules){
+      if(r.media && r.cssRules){ const inner = []; walk(r.cssRules, inner); if(inner.length) sink.push('@media ' + r.media.mediaText + '{' + inner.join('') + '}'); continue; }
+      if(r.conditionText && r.cssRules){ const inner = []; walk(r.cssRules, inner); if(inner.length) sink.push('@supports ' + r.conditionText + '{' + inner.join('') + '}'); continue; }
+      if(!r.style || !r.selectorText) continue;
+      const decl = [];
+      for(let i = 0; i < r.style.length; i++){
+        const p = r.style[i]; const v = r.style.getPropertyValue(p).trim(); const pri = r.style.getPropertyPriority(p);
+        if(p.indexOf('--') === 0){
+          if(/^(:root|html)$/.test(r.selectorText.trim())){ const c = litParseColor(v); if(c && litRole(c, white)) LITC_ROOTVARS[p] = { v, c, role: litRole(c, white) }; }
+          continue;
+        }
+        if(v.indexOf('var(') >= 0) continue;
+        if(p === 'background-image'){   // gradients (e.g. Layouts' black fade): each black / white stop is recoloured
+          const nv = v.replace(/rgba?\([^)]*\)|#[0-9a-fA-F]{3,8}\b/g, m=>{ const c = litParseColor(m); const role = c && litRole(c, white);
+            return role ? `rgba(var(--litc-${role}-rgb, ${c.r}, ${c.g}, ${c.b}), ${c.a == null ? 1 : c.a})` : m; });
+          decl.push(p + ':' + nv + (pri ? ' !important' : '')); continue;
+        }
+        if(!LIT_C_PROPS.includes(p)) continue;
+        const nv = conv(v, pri); if(nv == null) continue;
+        decl.push(p + ':' + nv);
+      }
+      if(decl.length) sink.push(r.selectorText + '{' + decl.join(';') + '}');
+    }
+  };
+  for(const sh of Array.from(document.styleSheets)){
+    if(sh.ownerNode && sh.ownerNode.id === 'litc-css') continue;
+    let rules; try{ rules = sh.cssRules; }catch(e){ continue; }
+    if(rules) walk(rules, out);
+  }
+  // What keeps its own look (notes, real cards, the colour wheel...) gets the original variables back.
+  const restore = Object.keys(LITC_ROOTVARS).map(k=>k + ':' + LITC_ROOTVARS[k].v).join(';');
+  out.push(LIT_C_KEEP + '{--litc-bg-rgb:initial;--litc-text-rgb:initial;' + restore + '}');
+  let el = document.getElementById('litc-css');
+  if(!el){ el = document.createElement('style'); el.id = 'litc-css'; document.head.appendChild(el); }
+  el.textContent = out.join('\n');
+}
+// Recolour one rendered screen container ('area') for a given screen key - the live #content-area, and the hidden
+// neighbour pages built for a swipe (so a swipe into a coloured page never flashes its plain look first).
 function litRecolorArea(area, screen){
   if(!area) return;
-  area.style.removeProperty('background-color');   // inline overrides inside the area vanish on each re-render
   const sys = screen ? litColorSystemFor(screen) : null;
-  if(!sys || !sys.bg || !sys.text) return;
-  const bg = litHexRgb(sys.bg), text = litHexRgb(sys.text), white = !!(window.storyTheme && window.storyTheme() === 'white');
+  const props = ['--litc-bg-rgb', '--litc-text-rgb'].concat(Object.keys(LITC_ROOTVARS));
+  if(!sys || !sys.bg || !sys.text){
+    if(area.__litc){ props.forEach(k=>area.style.removeProperty(k)); area.style.removeProperty('background-color'); area.__litc = null; }
+    return;
+  }
+  try{ litCssBuild(); }catch(e){}
+  const bg = litHexRgb(sys.bg), text = litHexRgb(sys.text);
+  area.__litc = sys.bg + sys.text;
+  area.style.setProperty('--litc-bg-rgb', `${bg.r}, ${bg.g}, ${bg.b}`);
+  area.style.setProperty('--litc-text-rgb', `${text.r}, ${text.g}, ${text.b}`);
+  for(const k of Object.keys(LITC_ROOTVARS)){
+    const rv = LITC_ROOTVARS[k], col = rv.role === 'bg' ? bg : text;
+    area.style.setProperty(k, rv.c.a == null ? `rgb(${col.r}, ${col.g}, ${col.b})` : `rgba(${col.r}, ${col.g}, ${col.b}, ${rv.c.a})`);
+  }
   area.style.setProperty('background-color', sys.bg, 'important');
-  const els = area.querySelectorAll('*');
+  // Colours written straight on an element (not in the stylesheet) and SVG fill / stroke: these few are mapped here.
+  const white = !!(window.storyTheme && window.storyTheme() === 'white');
+  const els = area.querySelectorAll('[style], svg [fill], svg [stroke], svg[fill], svg[stroke]');
   for(let i = 0; i < els.length; i++){
     const el = els[i];
     if(el.closest(LIT_C_KEEP)) continue;
-    const cs = getComputedStyle(el);
     for(const p of LIT_C_PROPS){
       if((p === 'fill' || p === 'stroke') && !(el instanceof SVGElement)) continue;
-      const c = litParseRGB(cs.getPropertyValue(p));
-      if(!c || c.a === '0' || c.a === 0) continue;         // none / fully transparent stays as it is
-      if(!litNeutralC(c.r, c.g, c.b)) continue;            // real colours untouched
+      const own = el.style.getPropertyValue(p) || ((p === 'fill' || p === 'stroke') ? el.getAttribute(p) : '');
+      if(!own || own.indexOf('var(') >= 0) continue;
+      const c = litParseColor(own);
+      if(!c || c.a === '0' || c.a === 0) continue;
       const mapped = litMapToken(c, bg, text, white);
       if(mapped) el.style.setProperty(p, mapped, 'important');
     }
@@ -4418,9 +4499,8 @@ function litRecolorArea(area, screen){
 function litApplyColors(){
   const area = document.getElementById('content-area');
   if(!area) return;
-  if(document.querySelector('.lit-auth') || (state.pageStyleOn && state.pageStyleViewOpen) || state.rowsViewOpen){ area.style.removeProperty('background-color'); return; }
-  const screen = state.current === 'dashboard' ? 'dashboard' : (PAGES.includes(state.current) ? state.current : null);
-  litRecolorArea(area, screen);
+  if(document.querySelector('.lit-auth') || (state.pageStyleOn && state.pageStyleViewOpen) || state.rowsViewOpen){ litRecolorArea(area, null); return; }
+  litRecolorArea(area, state.current || 'dashboard');
 }
 function syncAppPages(){
   const rows = rowsList();
