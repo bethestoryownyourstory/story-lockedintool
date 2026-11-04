@@ -4502,9 +4502,22 @@ function litApplyColors(){
   if(!area) return;
   if(document.querySelector('.lit-auth') || (state.pageStyleOn && state.pageStyleViewOpen) || state.rowsViewOpen){ litRecolorArea(area, null); return; }
   // Layouts > Pages > Color customization: the screen shows the PAGES' colours ('all pages'), each row / page its own.
+  // The background takes 'all pages' only when EVERY page uses the same colours; if a row or a page has its own, the
+  // background stays your System theme's and only the options are coloured (owner, 4 Nov 2026: 'if you apply to all
+  // pages but thes a page ... or row that has different color then the background ... will stay black or white (your
+  // system theme) - then only the options will get colored. If you have one text color and one background color
+  // everything under pages the same then the background will be that color too'). Each option shows what it really
+  // looks like: a row = its own or all pages', a page = its own, its row's or all pages'.
   if(area.querySelector('[data-litc-pages]')){
-    litRecolorArea(area, '__pages-all');
-    area.querySelectorAll('[data-litc]').forEach(el=>{ const v = litScopeGet(el.getAttribute('data-litc')); if(v && v.bg && v.text) litSetVars(el, v); });
+    const o = litColors(), all = o.all;
+    const same = v=>!v || (all && v.bg === all.bg && v.text === all.text);
+    const uniform = !!(all && all.bg && all.text) && Object.values(o.rows || {}).every(same) && Object.values(o.pages || {}).every(same);
+    litRecolorArea(area, uniform ? '__pages-all' : null);
+    area.querySelectorAll('[data-litc]').forEach(el=>{
+      const t = el.getAttribute('data-litc');
+      const v = t === 'all' ? all : t.indexOf('row:') === 0 ? ((o.rows || {})[t.slice(4)] || all) : litColorSystemFor(t.slice(5));
+      if(v && v.bg && v.text) litSetVars(el, v);
+    });
     return;
   }
   litRecolorArea(area, state.current || 'dashboard');
@@ -9610,7 +9623,7 @@ function layoutsColorScreen(){
     <div class="page-shell layouts-shell" data-litc-pages>
     ${topBar('Color customization', false, '', 'layouts', '', false, true)}
     <div class="note">Make anything black your own background colour and anything white your own text colour - just the background and the texts, like the System theme.</div>
-    <div class="row-card" style="cursor:pointer;" data-action="color-edit" data-t="all">
+    <div class="row-card" style="cursor:pointer;" data-litc="all" data-action="color-edit" data-t="all">
       <div class="row"><div class="row-left"><div class="row-name">Apply colours to all pages</div><div class="row-sub">${litScopeLabel('all')}</div></div><span class="chev-right">›</span></div>
     </div>
     ${rows.map((items, i)=>`
