@@ -48,11 +48,13 @@ class LockedintoolHome : Activity() {
     override fun onDestroy() { OverlayService.instance?.homeGone(this); if (current === this) current = null; super.onDestroy() }
     /** The latest picture of Lockedintool, placed exactly where the Pages were on screen. */
     fun showShot() { runOnUiThread { runCatching {
-        val svc = OverlayService.instance ?: return@runCatching
-        val b = svc.homeShot ?: return@runCatching
+        val svc = OverlayService.instance
+        // The latest picture, or the one kept on the phone (Lockedintool was just restarted).
+        val b = svc?.homeShot ?: runCatching { android.graphics.BitmapFactory.decodeFile(java.io.File(filesDir, "home_shot.jpg").path) }.getOrNull() ?: return@runCatching
+        val top = svc?.homeShot?.let { svc.homeShotTop } ?: getSharedPreferences("story", MODE_PRIVATE).getInt("home_shot_top", 0)
         val v = shot ?: return@runCatching
         val loc = IntArray(2); window.decorView.getLocationOnScreen(loc)
-        (v.layoutParams as? android.widget.FrameLayout.LayoutParams)?.let { it.topMargin = (svc.homeShotTop - loc[1]).coerceAtLeast(0); v.layoutParams = it }
+        (v.layoutParams as? android.widget.FrameLayout.LayoutParams)?.let { it.topMargin = (top - loc[1]).coerceAtLeast(0); v.layoutParams = it }
         v.setImageBitmap(b)
     } } }
     override fun onNewIntent(intent: Intent?) { super.onNewIntent(intent); setIntent(intent); showHome() }

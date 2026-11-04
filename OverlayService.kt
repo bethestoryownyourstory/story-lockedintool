@@ -670,6 +670,10 @@ class OverlayService : Service(), StoryBridge.Host {
                 if (small) paneRef?.let { it.loading = true; it.frame.alpha = 0f; syncBarBg() }
                 if (!small && !dial && !profile) tvView?.place(org.json.JSONObject().put("show", false))  // the page tells it again once loaded
                 if (!small && !dial && !profile && dashBandInPage) { dashBandInPage = false; updateBubble() }   // the new page says again whether it draws the Dashboard's bar
+                // The Pages loading inside Lockedintool's Home stay see-through until drawn, so the Home's picture of them
+                // shows instead of a black screen (owner's video, 4 Nov 2026: black for seconds after 'Close all').
+                if (!small && !dial && !profile) paneRef?.let { pp -> pp.loading = true; if (pp === pagesPane && pagesInHome()) pp.frame.alpha = 0f
+                    ui.postDelayed({ if (pp.loading) pagesDrawn(pp) }, 8000) }
             }
             // Android sometimes shuts the page down to free memory, which leaves a blank white window:
             // build STORY's windows again instead (and don't let it take the app down).
@@ -712,6 +716,8 @@ class OverlayService : Service(), StoryBridge.Host {
                 } else {
                     // The Pages: the room the Dashboard keeps at its bottom for Station 3 (and the bottom line under it).
                     v.evaluateJavascript(dashPadJs(), null)
+                    paneRef?.let { pp -> runCatching { v.postVisualStateCallback(2L, object : WebView.VisualStateCallback() { override fun onComplete(requestId: Long) { ui.post { pagesDrawn(pp) } } }) }
+                        .onFailure { pagesDrawn(pp) }; ui.postDelayed({ pagesDrawn(pp) }, 1500) }
                 }
             }
         }
@@ -831,7 +837,7 @@ class OverlayService : Service(), StoryBridge.Host {
         // even an untouchable one. A hidden pane is fully see-through, so apps underneath get every touch.
         p.lp.alpha = if (shown) 1f else 0f
         if (p.small && shown) { p.lp.width = p.openW; p.lp.height = p.openH }
-        p.frame.alpha = if (shown && !(p.small && p.loading)) 1f else 0f
+        p.frame.alpha = if (shown && !((p.small || (p === pagesPane && pagesInHome())) && p.loading)) 1f else 0f
         // The Pages' own brightness (the slider's "system" mode) only while they're up - never over other apps.
         if (p === pagesPane) p.lp.screenBrightness = if (shown && pagesBright >= 0f) pagesBright else WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
         runCatching { p.wm.updateViewLayout(p.frame, p.lp) }
@@ -855,7 +861,7 @@ class OverlayService : Service(), StoryBridge.Host {
         // goes to the dashboard'); behind a floating window you see the real Lockedintool. Not with Lockedintool security
         // on (then it only shows after unlocking).
         if (p === pagesPane && !shown && pagesInHome() && !Security.lit(this)) {
-            p.lp.alpha = 1f; p.frame.alpha = 1f
+            p.lp.alpha = 1f; p.frame.alpha = if (p.loading) 0f else 1f
             runCatching { p.wm.updateViewLayout(p.frame, p.lp) }
         }
     }
@@ -1505,6 +1511,12 @@ class OverlayService : Service(), StoryBridge.Host {
         val loc = IntArray(2); v.getLocationOnScreen(loc); homeShotTop = loc[1]
         homeShot = b
         LockedintoolHome.current?.showShot()
+        // Kept on the phone too, so Lockedintool's Home has a picture even right after Android restarted Lockedintool.
+        val top = homeShotTop; val copy = b.copy(b.config ?: android.graphics.Bitmap.Config.RGB_565, false)
+        Thread { runCatching {
+            java.io.File(filesDir, "home_shot.jpg").outputStream().use { copy.compress(android.graphics.Bitmap.CompressFormat.JPEG, 80, it) }
+            getSharedPreferences("story", MODE_PRIVATE).edit().putInt("home_shot_top", top).apply()
+        }; copy.recycle() }.start()
     } }
     private fun hideOne(p: Pane) {
         if (p === pagesPane && p.shown && SystemMode.on(this)) snapHome(p)
@@ -1736,6 +1748,12 @@ class OverlayService : Service(), StoryBridge.Host {
      *  swipe the bottom button up to see the dashboard'). If Lockedintool's Home is what really ends up in front, the
      *  Dashboard comes straight back (homeFocused / the checks below). */
     @Volatile private var navAsideAt = 0L
+    /** The Pages have drawn their page: inside Lockedintool's Home they become visible (shown, or kept drawn behind). */
+    private fun pagesDrawn(p: Pane) {
+        if (!p.loading || p !== pagesPane) return
+        p.loading = false
+        if (pagesInHome() && (p.shown || (!Security.lit(this) && p.lp.alpha > 0f))) p.frame.alpha = 1f
+    }
     /** Lockedintool's Home (Only system) got the screen's focus: if the Pages are away and nothing else is up, the Dashboard
      *  shows. Only right after a Home / Recents step aside, or when the Home has no picture to show - so a floating window
      *  opened over the Home (owner: Lockedintool stays in the back) is never covered. */
