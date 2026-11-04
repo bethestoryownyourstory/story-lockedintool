@@ -136,3 +136,4 @@ commits, pushed as a new update) - nothing else changes.
 | 128 | 2026-11-04 | Trading full-screen: the chart stays live above the New Order sheet (it used to go black). Rotate view (the ⬌ button) removed - the full-screen chart is always upright | 13e6e64 + this |
 | 129 | 2026-11-04 | Dashboard quote: you can delete the name - the "— Unknown" line (dash included) goes away instead of coming back | (this) |
 | 130 | 2026-11-04 | Trading page: title is now "Focus page" with "TRADING" under it; Lockedintool's pair name line removed - the TradingView chart is taller by that space | (this) |
+| 131 | 2026-11-04 | "Focus" is never alone - it says "Focus page" everywhere (the page, Rows, Page Styles, Layouts, Add to Focus page, plan texts, the home screen widget) | (this) |

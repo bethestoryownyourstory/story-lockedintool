@@ -4228,7 +4228,7 @@ const PAGES = ['money','wallet','trading'];
 const PAGE_SWITCH_ITEMS = [
   {key:'money', label:'Money'},
   {key:'wallet', label:'Home / Wallet'},
-  {key:'trading', label:'Focus'},
+  {key:'trading', label:'Focus page'},
 ];
 // App pages (owner): hold an app in Apps > Create into a page -> it joins the row after Focus (kept in
 // localStorage `story-app-pages` = [{pkg, name}]). Landing on one shows the app's card (owner: it never opens by itself);
@@ -4951,7 +4951,7 @@ function seededMonthAmounts(dateStr){
   const r2 = Math.abs(Math.sin(seed*1.7));
   return { inAmt: Math.round(3000 + r1*9000), outAmt: Math.round(1500 + r2*6000) };
 }
-const PAGE_LABEL = { wallet:'Wallet', money:'Money', trading:'Trading' };
+const PAGE_LABEL = { wallet:'Wallet', money:'Money', trading:'Focus page' };
 // Rows was removed from this list -- it isn't a page-fast-access style (Story is planning
 // a separate explanation/role for it), so the standalone "Rows" quick-access button
 // (data-action="page-quick-rows", its own state.rowsViewOpen flag) is untouched by
@@ -7655,15 +7655,15 @@ function focusEmptyScreen(){
   const st = state.focusAdd || null;
   return `
     <div class="page-shell focus-empty">
-    ${topBar('Focus', true)}
-    <div class="focus-empty-body"><button class="focus-plus" data-action="focus-add" aria-label="Add to Focus">+</button></div>
+    ${topBar('Focus page', true)}
+    <div class="focus-empty-body"><button class="focus-plus" data-action="focus-add" aria-label="Add to Focus page">+</button></div>
     </div>
     ${st ? focusAddSheetHTML(st) : ''}`;
 }
 function focusAddSheetHTML(st){
   if(st.step === 'choose') return `
     <div class="modal-overlay" data-action="focus-cancel"><div class="confirm-sheet" onclick="event.stopPropagation()">
-      <div class="confirm-title">Add to Focus</div>
+      <div class="confirm-title">Add to Focus page</div>
       <div class="confirm-btn-row focus-opts" style="margin-top:10px;"><button class="btn-wide" style="margin-top:0;" data-action="focus-builtin">Built-in add-ons</button><button class="btn-wide" style="margin-top:0;" data-action="focus-custom">Custom</button></div>
       <button class="btn-wide" data-action="focus-cancel">Cancel</button>
     </div></div>`;
@@ -9010,7 +9010,7 @@ function subRefresh(force){
 setTimeout(()=>{ subWaitLoad(); subRefresh(!!state.sub.waiting); }, 4000);   // a plan payment you started: the server checks it now
 const SUB_PLANS = [
   { key:'basic', name:'Basic', tag:'Your essentials. Stay locked in.', badge:'',
-    text:'Get the core LOCKED IN TOOL experience with your three essential pages: Money, Home/Wallet, and Focus. Keep your finances, wallet, and goals in one place, with the freedom to build your daily routine around what matters most.',
+    text:'Get the core LOCKED IN TOOL experience with your three essential pages: Money, Home/Wallet, and Focus page. Keep your finances, wallet, and goals in one place, with the freedom to build your daily routine around what matters most.',
     list:['Money page', 'Home/Wallet page', 'Customizable Focus page', 'Three-page layout', 'Essential focus tools'] },
   { key:'premium', name:'Premium', tag:'Your goals. Your setup. Your rules.', badge:'Full access',
     text:'Unlock the full LOCKED IN TOOL experience. Expand beyond the three essential pages, customize your workspace, and build a setup that fits your goals, whether you’re focused on trading, business, e-commerce, studying, or personal growth.',
@@ -9332,7 +9332,7 @@ function layoutsPageLayoutScreen(){
         const fc = it.key === 'trading' ? focusAddon() : '';
         const fcLabel = fc === 'trading' ? 'Trading Page' : fc.indexOf('app:') === 0 ? 'an app' : '';
         return `<div class="row"><div class="row-left"><div class="row-name">${i + 1}. ${it.label}</div><div class="row-sub">${posSub}${fcLabel ? ' · has ' + fcLabel : ''}</div></div>
-        <span style="display:flex;gap:6px;">${fcLabel ? `<button class="edit-remove" data-action="focus-clear" title="Take the add-on / app off Focus - the Focus page stays (empty)">Clear</button>` : ''}<button class="edit-remove" data-action="row-remove" data-k="${escText(it.key)}">Remove</button><button class="order-corner-btn" data-action="row-move" data-k="${escText(it.key)}" data-by="-1" title="Move left"${i === 0 ? ' disabled style="opacity:0.3;"' : ''}>‹</button><button class="order-corner-btn" data-action="row-move" data-k="${escText(it.key)}" data-by="1" title="Move right"${i === items.length - 1 ? ' disabled style="opacity:0.3;"' : ''}>›</button></span></div>`;
+        <span style="display:flex;gap:6px;">${fcLabel ? `<button class="edit-remove" data-action="focus-clear" title="Take the add-on / app off the Focus page - the Focus page stays (empty)">Clear</button>` : ''}<button class="edit-remove" data-action="row-remove" data-k="${escText(it.key)}">Remove</button><button class="order-corner-btn" data-action="row-move" data-k="${escText(it.key)}" data-by="-1" title="Move left"${i === 0 ? ' disabled style="opacity:0.3;"' : ''}>‹</button><button class="order-corner-btn" data-action="row-move" data-k="${escText(it.key)}" data-by="1" title="Move right"${i === items.length - 1 ? ' disabled style="opacity:0.3;"' : ''}>›</button></span></div>`;
       }).join('')}
     </div>
     </div>`;
@@ -9866,7 +9866,7 @@ const LEGAL = {
     ['Automatic updates', [
       'Using Lockedintool means agreeing that it keeps itself up to date: new versions install automatically.' ]],
     ['Subscription', [
-      'Without a plan you can use the Dashboard for free. Basic adds the Money, Wallet and Focus pages and Lockedintool calls (voice, video and group calls); Premium adds everything else (more pages and rows). Calls aren’t part of the free plan - phone calls from the dial pad are your phone’s own and always work.',
+      'Without a plan you can use the Dashboard for free. Basic adds the Money, Wallet and Focus page and Lockedintool calls (voice, video and group calls); Premium adds everything else (more pages and rows). Calls aren’t part of the free plan - phone calls from the dial pad are your phone’s own and always work.',
       'Basic is $5 a month and Premium $15 a month. Changes to prices will be announced before they apply.',
       'In South Africa plans are charged in rand (shown before you pay - currently R95 and R285) through Stitch and approved by you on your own bank’s or card’s page. One payment gives 30 days of your plan; paying the same plan again adds 30 days. These plans don’t renew by themselves - you pay each month.',
       'Outside South Africa plans are charged in US dollars (your bank may show it in your own currency) and sold through Lemon Squeezy (lemonsqueezy.com), which takes the payment on its own page - card, PayPal, Apple Pay or Google Pay - and handles your country’s sales tax. A plan renews by itself every month until you cancel; cancel any time with the link in Lemon Squeezy’s email, and your plan runs to the end of the month already paid.',
@@ -9927,7 +9927,7 @@ function informationScreen(){
       ['Everything in one place', 'Your money, your cards, your trading, your notes and your people - without switching between apps.'],
     ])}
     ${block('HOW IT WORKS', [
-      ['Pages', 'Money, Wallet and Focus sit side by side in a row. Swipe between them; Rows and Page Styles show them in different ways.'],
+      ['Pages', 'Money, Wallet and Focus page sit side by side in a row. Swipe between them; Rows and Page Styles show them in different ways.'],
       ['Station 3', 'The button in the corner. Open it for Messages, Profile, Create, Call history and the dial pad - from anywhere.'],
       ['Community', 'Public groups anyone can join, and your own community.'],
       ['Notes', 'Notes and drawings, kept on your phone.'],
@@ -17867,7 +17867,7 @@ function attachHandlers(){
         case 'focus-cancel': state.focusAdd = null; break;
         case 'focus-add-go': {
           const v = el.getAttribute('data-v'); focusSet(v); state.focusAdd = null;
-          showToast(v === 'trading' ? 'Trading Page added to Focus' : 'Added to Focus');
+          showToast(v === 'trading' ? 'Trading Page added to Focus page' : 'Added to Focus page');
           break; }
         case 'app-row-pick': { const p = state.appRowPick; state.appRowPick = null; if(p){ const v = el.getAttribute('data-v'); toggleAppPage(p, v === 'new' ? 'new' : +v); } break; }
         case 'app-row-close': state.appRowPick = null; break;

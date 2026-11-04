@@ -213,7 +213,7 @@
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_wallet" />
         </receiver>
-        <receiver android:name=".FocusWidget" android:exported="true" android:label="Focus">
+        <receiver android:name=".FocusWidget" android:exported="true" android:label="Focus page">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_focus" />
         </receiver>

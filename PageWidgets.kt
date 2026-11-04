@@ -42,7 +42,7 @@ class CommunityWidget : PageWidget("community")
 object PageWidgets {
     const val ACTION_OPEN_PAGE = "com.story.launcher.OPEN_PAGE"
     private val providers = mapOf("dashboard" to DashboardWidget::class.java, "money" to MoneyWidget::class.java, "wallet" to WalletWidget::class.java, "trading" to FocusWidget::class.java, "notes" to NotesWidget::class.java, "community" to CommunityWidget::class.java)
-    private val names = mapOf("dashboard" to "Dashboard", "money" to "Money", "wallet" to "Home / Wallet", "trading" to "Focus", "notes" to "Notes", "community" to "Community")
+    private val names = mapOf("dashboard" to "Dashboard", "money" to "Money", "wallet" to "Home / Wallet", "trading" to "Focus page", "notes" to "Notes", "community" to "Community")
     private val lastSnap = HashMap<String, Long>()
 
     fun file(c: Context, page: String) = File(File(c.filesDir, "widgets").apply { mkdirs() }, "$page.png")
