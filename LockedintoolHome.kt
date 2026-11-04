@@ -43,7 +43,7 @@ class LockedintoolHome : Activity() {
     }
     /** On screen (started, not stopped): the Pages may live inside this window. */
     @Volatile var visibleNow = false
-    override fun onStart() { super.onStart(); visibleNow = true }
+    override fun onStart() { super.onStart(); visibleNow = true; OverlayService.instance?.homeWake() }
     override fun onStop() { visibleNow = false; OverlayService.instance?.homeStopped(this); super.onStop() }
     override fun onDestroy() { OverlayService.instance?.homeGone(this); if (current === this) current = null; super.onDestroy() }
     /** The latest picture of Lockedintool, placed exactly where the Pages were on screen. */

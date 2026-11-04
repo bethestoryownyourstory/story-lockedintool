@@ -830,7 +830,10 @@ class OverlayService : Service(), StoryBridge.Host {
         // Station 3 / the dial pads are left exactly as they are.
         if (p === pagesPane || p === profilePane || p === profileGapPane) {
             if (shown) runCatching { p.web.onResume() }
-            else if (!(p !== pagesPane && callActive)) runCatching { p.web.onPause() }
+            // Parked inside Lockedintool's Home they don't rest: a resting page needs ~0.5 s to draw again, which showed
+            // as black when you swiped back from an app (owner, 4 Nov 2026). Behind an app the Home is out of sight, so
+            // the page counts as hidden anyway (no drawing, timers slowed).
+            else if (!(p !== pagesPane && callActive) && !(p === pagesPane && pagesInHome() && !Security.lit(this))) runCatching { p.web.onPause() }
         }
         // Profile's main window takes the keyboard like the Pages do (so typing a name / username / bio just works).
         p.lp.flags = if (p.gap) flagsFor(true, false) else if (p.profile) flagsFor(false, shown) else flagsFor(p.small, shown)
@@ -841,7 +844,7 @@ class OverlayService : Service(), StoryBridge.Host {
         // even an untouchable one. A hidden pane is fully see-through, so apps underneath get every touch.
         p.lp.alpha = if (shown) 1f else 0f
         if (p.small && shown) { p.lp.width = p.openW; p.lp.height = p.openH }
-        p.frame.alpha = if (shown && !((p.small && p.loading) || (p === pagesPane && pagesInHome() && p.loading && p.web.progress < 100))) 1f else 0f
+        p.frame.alpha = if (shown && !((p.small && p.loading) || (p === pagesPane && pagesInHome() && ((p.loading && p.web.progress < 100) || homeWaking)))) 1f else 0f
         // The Pages' own brightness (the slider's "system" mode) only while they're up - never over other apps.
         if (p === pagesPane) p.lp.screenBrightness = if (shown && pagesBright >= 0f) pagesBright else WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
         runCatching { p.wm.updateViewLayout(p.frame, p.lp) }
@@ -868,7 +871,7 @@ class OverlayService : Service(), StoryBridge.Host {
         // goes to the dashboard'); behind a floating window you see the real Lockedintool. Not with Lockedintool security
         // on (then it only shows after unlocking).
         if (p === pagesPane && !shown && pagesInHome() && !Security.lit(this)) {
-            p.lp.alpha = 1f; p.frame.alpha = if (p.loading && p.web.progress < 100) 0f else 1f
+            p.lp.alpha = 1f; p.frame.alpha = if ((p.loading && p.web.progress < 100) || homeWaking) 0f else 1f
             runCatching { p.wm.updateViewLayout(p.frame, p.lp) }
         }
     }
@@ -1532,7 +1535,8 @@ class OverlayService : Service(), StoryBridge.Host {
         }; copy.recycle() }.start()
     } }
     private fun hideOne(p: Pane) {
-        if (p === pagesPane && p.shown && SystemMode.on(this)) snapHome(p)
+        // The Home's picture is always the Dashboard (what you come back to), taken whenever the Pages leave it.
+        if (p === pagesPane && p.shown && SystemMode.on(this) && dashUp) snapHome(p)
         // Station 3 and the dial pad keep their page exactly as it is while hidden, so showing them
         // again changes nothing on screen (no re-layout, no resize, no jump).
         if (!p.small) p.web.evaluateJavascript("window.storyReset&&window.storyReset()", null)
@@ -1765,7 +1769,7 @@ class OverlayService : Service(), StoryBridge.Host {
     private fun pagesDrawn(p: Pane) {
         if (!p.loading || p !== pagesPane) return
         p.loading = false
-        if (pagesInHome() && (p.shown || (!Security.lit(this) && p.lp.alpha > 0f))) p.frame.alpha = 1f
+        if (pagesInHome() && !homeWaking && (p.shown || (!Security.lit(this) && p.lp.alpha > 0f))) p.frame.alpha = 1f
     }
     /** Lockedintool's Home (Only system) got the screen's focus: if the Pages are away and nothing else is up, the Dashboard
      *  shows. Only right after a Home / Recents step aside, or when the Home has no picture to show - so a floating window
@@ -1832,21 +1836,29 @@ class OverlayService : Service(), StoryBridge.Host {
         val loaded = p.loadedAt
         if (p.shown) hideOne(p)
         // Out of sight: what's kept drawn in the Home is the Dashboard, ready for when you come back.
-        // It's drawn once awake (a resting page may not draw), then rests again - so the frame waiting in the Home really
-        // is the Dashboard, never the screen you left from.
         val fresh = p.loadedAt == loaded
-        if (fresh) runCatching { p.web.onResume() }
-        p.web.evaluateJavascript("window.storyShow&&window.storyShow('dashboard',false)") {
-            if (!fresh) return@evaluateJavascript
-            var rested = false
-            val rest = Runnable { if (!rested) { rested = true; if (!p.shown) runCatching { p.web.onPause() } } }
-            runCatching { p.web.postVisualStateCallback(2L, object : WebView.VisualStateCallback() { override fun onComplete(requestId: Long) { ui.post(rest) } }) }.onFailure { ui.post(rest) }
-            ui.postDelayed(rest, 600)
-        }
+        runCatching { p.web.onResume() }
+        p.web.evaluateJavascript("window.storyShow&&window.storyShow('dashboard',false)", null)
+        // Until it has drawn again on your return, the page stays see-through and the Home shows its picture of the
+        // Dashboard (homeShot) - never black (owner, 4 Nov 2026: 'a separation, a slight delay').
+        homeWaking = true; p.frame.alpha = 0f
         parkedDash = fresh   // not when it's reloading (new screens) - then the normal way
     }
     /** The Dashboard is already drawn inside the Home (parked by homeStopped). */
     private var parkedDash = false
+    /** The parked page is see-through until it has drawn again after the Home came back (the Dashboard's picture shows). */
+    private var homeWaking = false
+    /** Lockedintool's Home is on screen again (onStart): the parked page draws its next frame, then shows over the picture. */
+    fun homeWake() {
+        if (!homeWaking) return
+        val p = pagesPane ?: run { homeWaking = false; return }
+        var done = false
+        val go = Runnable { if (!done) { done = true; homeWaking = false
+            if (pagesInHome() && !(p.loading && p.web.progress < 100) && (p.shown || (!Security.lit(this) && p.lp.alpha > 0f))) p.frame.alpha = 1f } }
+        runCatching { p.web.postVisualStateCallback(3L, object : WebView.VisualStateCallback() { override fun onComplete(requestId: Long) { p.frame.postOnAnimation(go) } }) }
+            .onFailure { ui.post(go) }
+        ui.postDelayed(go, 350)
+    }
     /** Swipe up / Home from an app back to Lockedintool (owner, 4 Nov 2026: 'when I swipe up to close the app I'm on to
      *  lockedintool ... there is a separation, a slight delay and lag'): the Dashboard is ALREADY drawn inside the Home,
      *  so it just becomes live in the same frame the Home shows - no redraw of the page, no waiting for a new frame, no
@@ -1856,7 +1868,7 @@ class OverlayService : Service(), StoryBridge.Host {
         val p = pagesPane ?: return false
         if (!parkedDash || p.shown || !pagesInHome() || homeHostWm !== act.windowManager) return false
         if (!SystemMode.on(this) || keyguardLocked() || WidgetMode.on(this) || Security.lit(this)) return false
-        if (p.lp.alpha <= 0f || p.frame.alpha <= 0f || (p.loading && p.web.progress < 100)) return false
+        if (p.lp.alpha <= 0f || (p.loading && p.web.progress < 100)) return false
         if (pickerHid.isNotEmpty() || openingPkg != null || createActive) return false
         parkedDash = false
         setInLit(true); hideLiveWidgets()
@@ -1867,7 +1879,7 @@ class OverlayService : Service(), StoryBridge.Host {
     fun homeGone(act: android.app.Activity) { if (homeHostWm === act.windowManager) homeDetach() }
     private fun homeDetach() {
         val hw = homeHostWm ?: return
-        homeHostWm = null
+        homeHostWm = null; homeWaking = false
         val p = pagesPane ?: return
         if (p.wm !== hw) return
         val to = homePrevWm ?: wm
