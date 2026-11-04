@@ -226,10 +226,15 @@ class OverlayService : Service(), StoryBridge.Host {
 
     private fun startAsForeground() {
         val nm = getSystemService(NotificationManager::class.java)
-        nm.createNotificationChannel(NotificationChannel("story", "Lockedintool", NotificationManager.IMPORTANCE_MIN))
+        // No 'Lockedintool is on' notification (owner, 4 Nov 2026, a screenshot of it in the panel: 'I don't want these
+        // notifications'): Android needs one for a service that keeps running, but its channel is made SILENT AND HIDDEN
+        // (importance none) - on Android 13+ the service runs on and nothing shows in the panel or the status bar. The old
+        // channel goes (an app can't lower a channel it already made to 'none').
+        runCatching { nm.deleteNotificationChannel("story") }
+        nm.createNotificationChannel(NotificationChannel("story_on", "Lockedintool is on", NotificationManager.IMPORTANCE_NONE).apply { setShowBadge(false) })
         // Tapping the notification opens STORY; it never switches STORY off (only "Stop Lockedintool" does).
         val openApp = android.app.PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), android.app.PendingIntent.FLAG_IMMUTABLE)
-        val n = Notification.Builder(this, "story").setContentTitle("Lockedintool is on").setContentText("Stays on until you tap Stop Lockedintool")
+        val n = Notification.Builder(this, "story_on").setContentTitle("Lockedintool is on").setContentText("Stays on until you tap Stop Lockedintool")
             .setSmallIcon(android.R.drawable.ic_menu_view).setContentIntent(openApp).setOngoing(true).build()
         fgNote = n
         if (Build.VERSION.SDK_INT >= 34) startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE) else startForeground(1, n)

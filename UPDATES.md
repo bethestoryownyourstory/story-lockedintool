@@ -137,7 +137,7 @@ commits, pushed as a new update) - nothing else changes.
 | 129 | 2026-11-04 | Dashboard quote: you can delete the name - the "— Unknown" line (dash included) goes away instead of coming back | fb317e9 |
 | 130 | 2026-11-04 | Trading page: title is now "Focus page" with "TRADING" under it; Lockedintool's pair name line removed - the TradingView chart is taller by that space | e2e7b82 |
 | 131 | 2026-11-04 | "Focus" is never alone - it says "Focus page" everywhere (the page, Rows, Page Styles, Layouts, Add to Focus page, plan texts, the home screen widget) | 78e4298 |
-| 132 | 2026-11-04 | From the day-one check: rate a call when it ends (stars + an optional note; the official profile sees the ratings in Reports), and the Notify person pop-up after sending money to a Lockedintool profile | (this) |
+| 132 | 2026-11-04 | From the day-one check: rate a call when it ends (stars + an optional note; the official profile sees the ratings in Reports), and the Notify person pop-up after sending money to a Lockedintool profile | 283552f |
 | 133 | 2026-11-04 | Trading page names put right: the small label "FOCUS PAGE" sits on top of the big "Trading" title (sizes as before) | (this) |
 | 134 | 2026-11-04 | Servers renamed to Lockedintool's own names (lockedintool-msg / -trade / -release) - accounts and chats moved with them; the app (1.307) can now hand everything over to Lockedintool's own Android ID | 51acc43, c15e127, 6e229a3 |
 | 135 | 2026-11-04 | Subscription: the rand price is today's conversion of the dollar price, other countries see their own currency too; the price-change note shows under every plan and members are told when a price changes | (this) |
@@ -152,3 +152,4 @@ commits, pushed as a new update) - nothing else changes.
 | 144 | 2026-11-04 | Only system: the Dashboard lives inside Lockedintool's own Home screen, so Samsung pop-up windows and their floating bubbles stay on top of it (Lockedintool in the back) | (this) |
 | 145 | 2026-11-04 | Apps: the Lockedintool app is listed with your phone's apps (opens its setup screen) | (this) |
 | 146 | 2026-11-04 | Updates install with the screen on too; if the phone wants a tap, Android's own Install screen comes up - no update notification | (this) |
+| 147 | 2026-11-04 | No more 'Lockedintool is on' notification in the panel | (this) |
