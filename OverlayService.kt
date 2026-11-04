@@ -160,6 +160,8 @@ class OverlayService : Service(), StoryBridge.Host {
         // Using STORY means agreeing to automatic updates (everyone, owner included). Not agreed yet:
         // show the agreement and stay off; agreeing starts STORY.
         if (!Release.agreedAuto(this)) { gated = true; running = false; UpdateActivity.ask(this, force = true); stopSelf(); return }
+        // Only the owner's phones until launch, and never a modified copy (Access.kt): nothing starts at all.
+        if (!Access.allowed(this)) { gated = true; running = false; Access.refresh(this); stopSelf(); return }
         instance = this
         getSharedPreferences("story", MODE_PRIVATE).edit().putBoolean("enabled", true).apply()
         quietApps(false)  // never leave the phone muted (e.g. STORY was restarted while the Pages were open)

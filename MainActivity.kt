@@ -34,6 +34,17 @@ class MainActivity : Activity() {
         fun title(t: String, size: Float = 22f) = TextView(this).apply { text = t; setTextColor(StoryTheme.swap(this@MainActivity, Color.WHITE)); textSize = size; setPadding(0, 0, 0, pad / 2) }
         fun btn(t: String, f: () -> Unit) = Button(this).apply { text = t; isAllCaps = false; setOnClickListener { f() } }
         col.addView(title("Lockedintool", 32f))
+        // Not allowed to use Lockedintool (Access.kt): ONLY the owner's notice - nothing else works or shows. The build line
+        // stays tappable so the owner can unlock a new phone of their own with the PIN.
+        if (!Access.allowed(this)) {
+            col.addView(title(if (!Genuine.ok(this)) "This copy of Lockedintool was modified and can’t be used." else "This copy of Lockedintool can’t be used.", 18f))
+            col.addView(title("Lockedintool is only available from its official website, lockedintool.com, or the Google Play Store.", 15f))
+            col.addView(title("Using this app, or any modification made from it, without Lockedintool’s permission is breaking the law, and action will be taken.", 15f))
+            addBuildLine(col, pad)
+            setContentView(ScrollView(this).apply { setBackgroundColor(StoryTheme.swap(this@MainActivity, Color.BLACK)); addView(col) })
+            Access.refresh(this) { ok -> if (ok) runOnUiThread { recreate() } }   // launched since: open as normal
+            return
+        }
         // Only use widgets (owner): opening the app shows ONLY the widgets button - Turn off. Turning it off brings
         // the whole system straight back (the Pages open on the Dashboard).
         if (WidgetMode.on(this)) {
@@ -101,9 +112,15 @@ class MainActivity : Activity() {
             col.addView(btn("Undo last update") { askPin("Undo last update", "Everyone goes back to the screens from before the last update.") { pin -> publish(pin, "undo") } })
             col.addView(btn("Leave owner mode") { Release.setOwner(this, false); channelChanged() })
         }
+        addBuildLine(col, pad)
+        setContentView(ScrollView(this).apply { setBackgroundColor(StoryTheme.swap(this@MainActivity, Color.BLACK)); addView(col) })
+    }
+
+    private fun addBuildLine(col: LinearLayout, pad: Int) {
         val info = packageManager.getPackageInfo(packageName, 0)
-        col.addView(title("Build ${info.versionName} (code ${info.longVersionCode}) - built for Android API ${applicationInfo.targetSdkVersion} - this phone runs API ${Build.VERSION.SDK_INT}", 12f).apply {
-            setTextColor(0xFF888888.toInt()); setPadding(0, pad, 0, 0)
+        col.addView(TextView(this).apply {
+            text = "Build ${info.versionName} (code ${info.longVersionCode}) - built for Android API ${applicationInfo.targetSdkVersion} - this phone runs API ${Build.VERSION.SDK_INT}"
+            textSize = 12f; setTextColor(0xFF888888.toInt()); setPadding(0, pad, 0, 0)
             // Hidden owner unlock: tap this line 7 times. Users never see a PIN or the Publish button.
             var taps = 0; var firstTap = 0L
             setOnClickListener {
@@ -112,7 +129,6 @@ class MainActivity : Activity() {
                 if (++taps >= 7 && !Release.isOwner(this@MainActivity)) { taps = 0; askPin("Owner", "Enter your PIN.") { pin -> unlockOwner(pin) } }
             }
         })
-        setContentView(ScrollView(this).apply { setBackgroundColor(StoryTheme.swap(this@MainActivity, Color.BLACK)); addView(col) })
     }
 
     private fun showUpdateStatus() {
