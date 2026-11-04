@@ -2972,6 +2972,11 @@
   html.dial-wide body.s3-only .station3-dialpad-float .station3-dial-side-l{ border-radius:20px 0 0 20px; }
   html.dial-wide body.s3-only .station3-dialpad-float .station3-dial-side-r{ border-radius:0 20px 20px 0; }
   html.dial-wide body.s3-only .station3-dialpad-float .station3-dial-side:active{ background:#e9e9e9; }
+  /* Attached to Station 3 (owner, 4 Nov 2026: 'attach the dial pad with station 3 so it's not separated'): it sits right
+     on Station 3's bar, so its bottom edge is straight. (The lock screen's dial pad keeps its own look.) */
+  html.dial-wide body.s3-only.s3-dial:not(.s3-lock) .station3-dialpad-float{ border-radius:20px 20px 0 0 !important; }
+  html.dial-wide body.s3-only.s3-dial:not(.s3-lock) .station3-dialpad-float .station3-dial-side-l{ border-radius:20px 0 0 0; }
+  html.dial-wide body.s3-only.s3-dial:not(.s3-lock) .station3-dialpad-float .station3-dial-side-r{ border-radius:0 20px 0 0; }
   .station3-dial-side-in{ display:flex; align-items:center; gap:8px; writing-mode:vertical-rl; transform:rotate(180deg); font-size:12px; font-weight:700; letter-spacing:.3px; white-space:nowrap; }
   .station3-dial-side-in svg{ transform:rotate(90deg); flex-shrink:0; }
   .station3-newcontact-btn{
