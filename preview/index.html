@@ -9053,7 +9053,7 @@ function subRefresh(force){
   if(!force && s && Date.now() - (s.checked || 0) < 3 * 3600000) return;
   msgApi('/v1/sub/info').then(i=>{ const was = subLocked(); subSave(i); subApplyMode(); syncAppPages(); if(was !== subLocked() || state.current === 'subscription') renderDevice(); }).catch(()=>{});
 }
-setTimeout(()=>{ subWaitLoad(); subRefresh(!!state.sub.waiting); }, 4000);   // a plan payment you started: the server checks it now
+setTimeout(()=>{ subWaitLoad(); const c = subState() || {}; subRefresh(!!state.sub.waiting || (c.official && !c.officialPlan)); }, 4000);   // ... and the official account picks up its Premium · Only system straight away (#136)   // a plan payment you started: the server checks it now
 // Prices can change (owner, 4 Nov 2026: 'the words where I said prices might change - those are permanent and should
 // always be showing underneath each plan'; 'the prices of the plans can increase and can also decrease'; members are
 // notified, never charged extra for a month already paid, and the changed price is for new customers). Shown under
