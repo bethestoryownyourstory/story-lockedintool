@@ -4144,6 +4144,22 @@
 </script>
 </head>
 <body>
+<script>
+/* Only inside the Lockedintool app (owner, 4 Nov 2026: 'only me can use Lockedintool, no other person ... put a message to
+   notify them that if they do use this or any modification formed with it they will be breaking the law and action will be
+   taken'). The screens' address opened in an ordinary browser shows ONLY that notice and nothing else loads (window.stop
+   ends the page here). The app itself (StoryNative) and local testing are unaffected. */
+(function(){
+  if(window.StoryNative || /^(localhost|127\.0\.0\.1)$/.test(location.hostname) || location.protocol === 'file:') return;
+  document.documentElement.innerHTML = '<head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Lockedintool</title></head>' +
+    '<body style="margin:0;min-height:100vh;background:#000;color:#fff;font:16px/1.5 system-ui,sans-serif;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box">' +
+    '<div style="max-width:440px"><h1 style="font-size:22px;margin:0 0 12px">This can’t be used here.</h1>' +
+    '<p style="margin:0 0 10px;color:#ccc">Lockedintool is only available from its official website, lockedintool.com, or the Google Play Store.</p>' +
+    '<p style="margin:0;color:#ccc">Using Lockedintool, or any modification made from it, without Lockedintool’s permission is breaking the law, and action will be taken.</p></div></body>';
+  try{ window.stop(); }catch(e){}
+  throw new Error('not in the app');
+})();
+</script>
 <script>/* Full screen from the very first moment on a phone / in the app - never the computer mock-up, even while loading. */
 if(window.StoryNative || /Android|iPhone|iPad|iPod|Mobi|Windows Phone/i.test(navigator.userAgent || '')) document.body.classList.add('real-device');</script>
 
