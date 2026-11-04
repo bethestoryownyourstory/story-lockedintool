@@ -51,7 +51,7 @@ const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
 const money = (cur, n) => cur + (Number.isInteger(+n) ? String(+n) : Number(n).toFixed(2));
 const YEAR = new Date().getFullYear();
 const MAIL = 'lockedintool@gmail.com';
-const GET = 'https://bethestoryownyourstory.github.io/story-lockedintool/get/';
+const GET = 'https://lockedintool.github.io/story-lockedintool/get/';
 
 const CSS = `
 :root{--bg:#000;--line:#262626;--text:#fff;--dim:#9a9a9a;--btn:#fff;--btn-text:#000;--green:#30d158}
@@ -202,7 +202,7 @@ ${info}
 <script>
   // Owner: 'Lockedintool is not yet available for the public' - the site says so, and 'Download for Android' only shows
   // once the owner has launched it (gh-pages launched.txt, made by the launch); then the line goes away by itself.
-  fetch('https://bethestoryownyourstory.github.io/story-lockedintool/launched.txt', { cache: 'no-store' })
+  fetch('https://lockedintool.github.io/story-lockedintool/launched.txt', { cache: 'no-store' })
     .then(function (r) { if (r.ok) { document.getElementById('get').hidden = false; document.getElementById('soon').hidden = true; } }).catch(function () {});
 </script>`);
 

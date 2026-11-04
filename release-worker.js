@@ -8,7 +8,7 @@
 // Settings (Cloudflare -> this Worker -> Settings -> Variables and Secrets):
 //   PIN           (secret) the owner PIN. Change it there any time - no app update needed.
 //   GITHUB_TOKEN  (secret) fine-grained GitHub token: this repo only, "Actions: Read and write".
-const REPO = 'bethestoryownyourstory/story-lockedintool';
+const REPO = 'lockedintool/story-lockedintool';
 const WORKFLOW = 'screens.yml';
 
 const json = (body, status = 200) =>

@@ -11,9 +11,9 @@ const SERVER = 'https://story-msg.percyjuniormaseko0.workers.dev';
 const HOSTS = { api: SERVER, trade: 'https://story-trade.percyjuniormaseko0.workers.dev', release: 'https://story-release.percyjuniormaseko0.workers.dev' };
 // Where the app's screens and builds are kept today. Only these lines change when that home moves (Lockedintool's own
 // GitHub account) - every phone keeps using lockedintool.com/app/ and lockedintool.com/releases/.
-const SCREENS = 'https://bethestoryownyourstory.github.io/story-lockedintool/';
-const BUILDS = 'https://github.com/bethestoryownyourstory/story-lockedintool/releases/download/';
-const CONFIG = 'https://raw.githubusercontent.com/bethestoryownyourstory/story-lockedintool/main/release.json';
+const SCREENS = 'https://lockedintool.github.io/story-lockedintool/';
+const BUILDS = 'https://github.com/lockedintool/story-lockedintool/releases/download/';
+const CONFIG = 'https://raw.githubusercontent.com/lockedintool/story-lockedintool/main/release.json';
 const DOWNLOAD_RELEASE = 'latest';
 // Private until launch (owner's PAUSE rule): the download answers only at /download/<this code>; on launch day set it
 // to '' so the plain lockedintool.com/download works for everyone (and DOWNLOAD_RELEASE to 'live').

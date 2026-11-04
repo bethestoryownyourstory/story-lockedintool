@@ -1180,7 +1180,7 @@ export class Hub {
     if (now - last < 4000) return json({ ok: true, wait: true });
     this.sql.exec("INSERT OR REPLACE INTO meta (k, v) VALUES ('ping_at', ?)", String(now));
     const get = async u => { try { const r = await fetch(u + '?t=' + now, { cf: { cacheTtl: 0 } }); return r.ok ? (await r.text()).trim().slice(0, 200) : ''; } catch (e) { return ''; } };
-    const [screens, app] = await Promise.all([get('https://bethestoryownyourstory.github.io/story-lockedintool/live-source.txt'), get('https://github.com/bethestoryownyourstory/story-lockedintool/releases/download/live/version.json')]);
+    const [screens, app] = await Promise.all([get('https://lockedintool.github.io/story-lockedintool/live-source.txt'), get('https://github.com/lockedintool/story-lockedintool/releases/download/live/version.json')]);
     const v = screens + '|' + app, before = (this.one("SELECT v FROM meta WHERE k = 'release'") || {}).v || '';
     if (!screens && !app) return json({ ok: false });
     if (v === before) return json({ ok: true, changed: false });
