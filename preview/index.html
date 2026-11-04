@@ -2957,16 +2957,20 @@
   .station3-dialpad-bottom-row{ display:flex; align-items:center; justify-content:space-between; width:100%; }
   .station3-newcontact{ display:flex; flex-direction:column; align-items:center; gap:3px; background:none; border:none; }
   /* Search contact / View all contacts beside the dial pad (owner) - only in the app's own dial pad windows. The dial pad
-     itself keeps its exact size and place; the two buttons sit in the room on each side, as tall as the dial pad, in the
-     dial pad's own colours (they follow the theme with it), the words sideways like 'Show all cards'. */
+     itself keeps its exact size and place; the two buttons sit on each side, as tall as the dial pad, in the dial pad's
+     own colours (they follow the theme with it), the words sideways like 'Show all cards'. ONE piece with the dial pad
+     (owner, 4 Nov 2026: 'combine the dial pad with the two buttons on the side - I don't like it when they separate. And
+     they can have their outline'): no gaps, one rounded shape and one shadow; each button keeps its own outline. */
   .station3-dial-side{ display:none; }
-  html.dial-wide body.s3-only .station3-dialpad-float{ display:flex !important; align-items:stretch; gap:8px; width:auto !important; max-width:none !important;
-    padding:0 !important; background:transparent !important; box-shadow:none !important; border-radius:0 !important; }
+  html.dial-wide body.s3-only .station3-dialpad-float{ display:flex !important; align-items:stretch; gap:0; width:auto !important; max-width:none !important;
+    padding:0 !important; background:transparent !important; box-shadow:0 14px 34px rgba(0,0,0,0.45) !important; border-radius:20px !important; overflow:hidden; }
   html.dial-wide body.s3-only .station3-dialpad-float .station3-dialpad{ width:280px; box-sizing:border-box; flex-shrink:0;
-    padding:14px 14px 12px; border-radius:20px; background:#ffffff; box-shadow:0 14px 34px rgba(0,0,0,0.45); }
+    padding:14px 14px 12px; border-radius:0; background:#ffffff; box-shadow:none; }
   html.dial-wide body.s3-only .station3-dialpad-float .station3-dial-side{ display:flex; align-items:center; justify-content:center;
-    width:clamp(30px, calc((100vw - 280px) / 2 - 16px), 54px); flex-shrink:0; padding:0; border-radius:20px;
-    background:#ffffff; color:#000; border:1px solid rgba(0,0,0,0.08); box-shadow:0 14px 34px rgba(0,0,0,0.45); font-family:var(--font-body); }
+    width:clamp(30px, calc((100vw - 280px) / 2 - 8px), 54px); flex-shrink:0; padding:0; box-sizing:border-box;
+    background:#ffffff; color:#000; border:1px solid rgba(0,0,0,0.22); box-shadow:none; font-family:var(--font-body); }
+  html.dial-wide body.s3-only .station3-dialpad-float .station3-dial-side-l{ border-radius:20px 0 0 20px; }
+  html.dial-wide body.s3-only .station3-dialpad-float .station3-dial-side-r{ border-radius:0 20px 20px 0; }
   html.dial-wide body.s3-only .station3-dialpad-float .station3-dial-side:active{ background:#e9e9e9; }
   .station3-dial-side-in{ display:flex; align-items:center; gap:8px; writing-mode:vertical-rl; transform:rotate(180deg); font-size:12px; font-weight:700; letter-spacing:.3px; white-space:nowrap; }
   .station3-dial-side-in svg{ transform:rotate(90deg); flex-shrink:0; }
