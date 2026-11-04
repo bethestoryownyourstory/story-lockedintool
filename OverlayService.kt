@@ -508,7 +508,11 @@ class OverlayService : Service(), StoryBridge.Host {
                 MotionEvent.ACTION_DOWN -> { downX = e.rawX; downY = e.rawY; downT = SystemClock.uptimeMillis(); moved = false }
                 MotionEvent.ACTION_MOVE -> if (Math.hypot((e.rawX - downX).toDouble(), (e.rawY - downY).toDouble()) > touch) moved = true
                 MotionEvent.ACTION_UP -> if (!moved && Math.hypot((e.rawX - downX).toDouble(), (e.rawY - downY).toDouble()) <= touch &&
-                    SystemClock.uptimeMillis() - downT < 400) showPicker()   // tap = Apps | Lockedintool switch
+                    SystemClock.uptimeMillis() - downT < 400 && !SystemMode.on(this)) showPicker()   // tap = Apps | Lockedintool switch
+                // ...but NOT in Only system (owner, 27 Oct 2026: 'when lockedintool is set to be the only system the feature to
+                // be able to switch with the bottom button will not be available'; 4 Nov 2026: 'Thes still the option to switch
+                // to apps. But I cant swipe to anywhere') - the Dashboard is your home there; apps open from its Apps button
+                // and the phone's Recents. The phone's own gestures on the bar are untouched.
                 MotionEvent.ACTION_CANCEL -> phoneSwipe("cancel")         // the phone took the swipe (its Home / Recents)
             }
             true

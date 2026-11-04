@@ -144,3 +144,4 @@ commits, pushed as a new update) - nothing else changes.
 | 136 | 2026-11-04 | Your phone (the official account) is Premium · Only system - always on, no payment | (this) |
 | 137 | 2026-11-04 | Only system really asks to make Lockedintool your Home app (the question never appeared before), and asks again until it is | (this) |
 | 138 | 2026-11-04 | Your account stays on Only system for good - it can't be switched to Second system | (this) |
+| 139 | 2026-11-04 | Only system: no Apps | Lockedintool switch any more, and never a frozen old home screen behind Lockedintool | (this) |

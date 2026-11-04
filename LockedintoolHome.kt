@@ -17,7 +17,13 @@ import android.os.Bundle
  * own prompt); they switch their normal launcher back there any time, so it is never a trap.
  */
 class LockedintoolHome : Activity() {
-    override fun onCreate(savedInstanceState: Bundle?) { super.onCreate(savedInstanceState); showHome() }
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        // Black, never see-through (owner, 4 Nov 2026: a frozen picture of the old home screen showed behind it and nothing
+        // could be swiped) - the Dashboard is drawn over it the moment it shows.
+        window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.BLACK))
+        showHome()
+    }
     override fun onNewIntent(intent: Intent?) { super.onNewIntent(intent); setIntent(intent); showHome() }
     override fun onResume() { super.onResume(); showHome() }
 
