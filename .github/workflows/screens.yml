@@ -47,6 +47,16 @@ jobs:
             git archive origin/main index.html manifest.json icon-192.png icon-512.png | tar -x -C site
             echo "main $(git rev-parse --short origin/main)" > site/live-source.txt
           fi
+      # The owner's rules are checked BEFORE anything reaches a phone (owner, 4 Nov 2026: 'the app is supposed to keep on
+      # checking that these mistakes don't ever happen again'). A broken rule stops the update here.
+      - name: Check the owner's rules
+        if: github.event_name == 'push'
+        run: |
+          npm i --no-save --silent playwright@1.48.2
+          npx playwright install --with-deps chromium >/dev/null
+          python3 -m http.server 8800 >/dev/null 2>&1 &
+          sleep 2
+          node owner-checks.mjs http://localhost:8800/index.html
       - name: New upload -> Test channel
         if: github.event_name == 'push'
         run: |
