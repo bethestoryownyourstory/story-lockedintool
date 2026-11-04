@@ -8949,15 +8949,22 @@ const SUB_KEY = 'story-sub';
 const STORY_OWNER = /\/preview\//.test(location.pathname);
 function subState(){ try{ return JSON.parse(localStorage.getItem(SUB_KEY) || 'null'); }catch(e){ return null; } }
 function subSave(v){ try{ localStorage.setItem(SUB_KEY, JSON.stringify(Object.assign({}, v, { checked:Date.now() }))); }catch(e){} }
-function subActive(){ const s = subState(); return !!(s && s.plan && s.until > Date.now()); }
+// The real Lockedintool only (Genuine.kt): a modified copy gets no paid parts (owner, 4 Nov 2026: 'No one must have
+// Lockedintool for free except for the free version ... mods of the free / paid plans - nope').
+function appGenuine(){ try{ return !(NATIVE && window.StoryNative.appGenuine) || !!window.StoryNative.appGenuine(); }catch(e){ return true; } }
+// Full access belongs ONLY to Lockedintool's official account (the server says so - users.official), on the real app -
+// never to a phone because of which screens it loaded (a reviewer copy sent to Stitch ran the owner's screens and so had
+// everything free).
+function fullAccess(){ const s = subState(); return !!(s && s.official) && appGenuine(); }
+function subActive(){ const s = subState(); return !!(s && s.plan && s.until > Date.now()) && appGenuine(); }
 // The paywall only shows once the owner switches it on (server secret SUB_ENFORCE=1, with the live payment keys - owner).
-function subLocked(){ const s = subState(); return !!(s && s.connected && s.enforced) && !subActive() && !STORY_OWNER; }
-function subPremium(){ const s = subState(); return STORY_OWNER || !(s && s.connected) || (subActive() && s.plan === 'premium'); }
+function subLocked(){ const s = subState(); return !!(s && s.connected && s.enforced) && !subActive() && !fullAccess(); }
+function subPremium(){ const s = subState(); return fullAccess() || !(s && s.connected) || (subActive() && s.plan === 'premium'); }
 // FREE-ONLY LAUNCH (owner, 28 Oct 2026: 'only the free' - launch the Free tier; Basic & Premium show "Coming soon",
 // not for sale yet). Flip PLANS_ON_SALE to true the day the owner says to start selling the plans. The owner's own
-// phone (STORY_OWNER) can still open the buy flow so they can keep testing payments.
+// account (fullAccess - the official account) can still open the buy flow so they can keep testing payments.
 const PLANS_ON_SALE = false;
-function plansOnSale(){ return PLANS_ON_SALE || STORY_OWNER; }
+function plansOnSale(){ return PLANS_ON_SALE || fullAccess(); }
 // Plans (owner's 'Full layout of Lockedintool'): FREE (no plan) = the Dashboard only - the Pages are hidden; BASIC =
 // the Dashboard + Money, Wallet and Focus only (Focus can be Trading Page or one app) - no app pages, no rows;
 // PREMIUM = everything. Only once subscriptions are really on (enforced), never on the owner's phone.
@@ -8968,7 +8975,7 @@ function planGateRows(a){
   if(a === 'page-quick-rows' && planBasicOnly()){ showToast('Rows come with Premium'); state.current = 'subscription'; return true; }
   return false;
 }
-function planBasicOnly(){ const s = subState(); if(!(s && s.connected && s.enforced && subActive() && s.plan !== 'premium')) return false; try{ return !STORY_OWNER; }catch(e){ return true; } }   // (rows are worked out before STORY_OWNER exists)
+function planBasicOnly(){ const s = subState(); if(!(s && s.connected && s.enforced && subActive() && s.plan !== 'premium')) return false; return !fullAccess(); }   // (rows are worked out before STORY_OWNER exists)
 function isPagesScreen(k){ return PAGES.includes(k) || ['money', 'wallet', 'trading', 'money-summary', 'wallet-overview', 'tx-history', 'send-money', 'receive-money', 'layouts-pagelayout'].includes(k) || isAppPage(k); }
 function subRefresh(force){
   if(!msgAccount() || IN_STATION3_WINDOW) return;
@@ -9140,7 +9147,7 @@ function subOptConfirm(){
   if(k !== 'only') return;
   // Owner (full access) or a plan you already have: it can go on now. Otherwise it goes on with the plan you pay.
   const s = subState() || {};
-  if(STORY_OWNER || s.active) sysModeAsk();
+  if(fullAccess() || s.active) sysModeAsk();
   else showToast('Only system - now choose your plan');
 }
 // A plan paid under "Only system" turns it on (here, and whenever Lockedintool sees that plan).

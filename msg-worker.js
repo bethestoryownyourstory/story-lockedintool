@@ -1236,7 +1236,7 @@ export class Hub {
     const r = this.one('SELECT * FROM subs WHERE uid = ?', me.id), now = Date.now();
     const active = !!(r && r.until > now);
     const provider = this.subProvider(me);
-    return { connected: !!provider, provider, enforced: this.env.SUB_ENFORCE === '1', plan: active ? r.plan : null, mode: active ? (r.mode || 'second') : null, until: r ? r.until : 0, active, plans: this.subPlans() };
+    return { official: !!me.official, connected: !!provider, provider, enforced: this.env.SUB_ENFORCE === '1', plan: active ? r.plan : null, mode: active ? (r.mode || 'second') : null, until: r ? r.until : 0, active, plans: this.subPlans() };
   }
   // Stitch Express REST API (express.stitch.money/api/v1, its own OpenAPI spec): a 15-minute token from clientId +
   // clientSecret, then payment links. Amounts are in cents.

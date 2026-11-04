@@ -37,8 +37,10 @@ object Release {
         if (has) p.edit().putBoolean("review", true).apply()
         return has
     }
-    /** Test channel (newest screens + builds): the owner's phone and reviewer phones. */
-    fun testChannel(ctx: Context) = isOwner(ctx) || isReview(ctx)
+    /** Test channel (newest screens + builds): ONLY the owner's phone (owner, 4 Nov 2026: 'I sent an apk to stitch ...
+     *  No one must have Lockedintool for free, except for the free version'). A reviewer copy (app-review.apk, sent to
+     *  Stitch) now runs the public version like everyone else, under the normal plan rules. */
+    fun testChannel(ctx: Context) = isOwner(ctx)
     fun base(ctx: Context) = if (testChannel(ctx)) TEST_BASE else LIVE_BASE
 
     /** The user signed "Automatic updates - I agree" once: updates install by themselves, never asked again. */

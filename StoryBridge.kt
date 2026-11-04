@@ -487,6 +487,12 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         val name = if (pkg.isEmpty()) "" else runCatching { ctx.packageManager.getApplicationLabel(ctx.packageManager.getApplicationInfo(pkg, 0)).toString() }.getOrDefault("")
         return "on|$pkg|$name"
     }
+    /** Is this the real Lockedintool, signed with Lockedintool's own key? A modified ('modded') copy has to be signed
+     *  again with someone else's key, so it fails this - and then gets no paid parts (owner, 4 Nov 2026: 'No one must
+     *  have Lockedintool for free ... mods of the free / paid plans - nope'). */
+    @JavascriptInterface
+    fun appGenuine(): Boolean = Genuine.ok(ctx)
+
     /** Settings > SECURITY > Extra protection (owner: 'a second layer ... not removing the phone's protection'; never
      *  worded as 'unhackable'): what on this phone makes it easier to break into. Lockedintool only LOOKS - it never
      *  changes any of it. {lock, adb, dev, root, nfc}. */
