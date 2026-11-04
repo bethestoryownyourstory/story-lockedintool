@@ -4144,6 +4144,22 @@
 </script>
 </head>
 <body>
+<script>
+/* Only inside the Lockedintool app (owner, 4 Nov 2026: 'only me can use Lockedintool, no other person ... put a message to
+   notify them that if they do use this or any modification formed with it they will be breaking the law and action will be
+   taken'). The screens' address opened in an ordinary browser shows ONLY that notice and nothing else loads (window.stop
+   ends the page here). The app itself (StoryNative) and local testing are unaffected. */
+(function(){
+  if(window.StoryNative || /^(localhost|127\.0\.0\.1)$/.test(location.hostname) || location.protocol === 'file:') return;
+  document.documentElement.innerHTML = '<head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Lockedintool</title></head>' +
+    '<body style="margin:0;min-height:100vh;background:#000;color:#fff;font:16px/1.5 system-ui,sans-serif;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box">' +
+    '<div style="max-width:440px"><h1 style="font-size:22px;margin:0 0 12px">This can’t be used here.</h1>' +
+    '<p style="margin:0 0 10px;color:#ccc">Lockedintool is only available from its official website, lockedintool.com, or the Google Play Store.</p>' +
+    '<p style="margin:0;color:#ccc">Using Lockedintool, or any modification made from it, without Lockedintool’s permission is breaking the law, and action will be taken.</p></div></body>';
+  try{ window.stop(); }catch(e){}
+  throw new Error('not in the app');
+})();
+</script>
 <script>/* Full screen from the very first moment on a phone / in the app - never the computer mock-up, even while loading. */
 if(window.StoryNative || /Android|iPhone|iPad|iPod|Mobi|Windows Phone/i.test(navigator.userAgent || '')) document.body.classList.add('real-device');</script>
 
@@ -7466,7 +7482,11 @@ function tvPlace(){
   if(r.width < 20 || r.height < 20) return hide();
   // Only the part of the box that's inside the page's visible area (scrolled half out of view = the half that shows).
   const ca = slot.closest('#content-area'); const cr = ca ? ca.getBoundingClientRect() : { left:0, top:0, right:innerWidth, bottom:innerHeight };
-  const top = Math.max(r.top, cr.top), bottom = Math.min(r.bottom, cr.bottom);
+  // The New Order sheet (full screen) covers only the bottom: the chart stays live and usable ABOVE it (owner's screenshot,
+  // 4 Nov 2026: the chart went black the moment the sheet opened) - it's cut off at the sheet's top edge, not hidden.
+  const osheet = document.querySelector('.order-sheet-overlay .order-sheet');
+  const sheetTop = osheet ? osheet.getBoundingClientRect().top : Infinity;
+  const top = Math.max(r.top, cr.top), bottom = Math.min(r.bottom, cr.bottom, sheetTop - 1);
   if(bottom - top < 20) return hide();
   // Anything covering the box (a sheet, a pop-up, the order panel...) - the chart steps aside until it's gone.
   L.style.pointerEvents = 'none';
@@ -7476,6 +7496,7 @@ function tvPlace(){
     const x = r.left + r.width * fx, y = r.top + r.height * fy;
     if(y < top || y > bottom) continue;
     const el = document.elementFromPoint(x, y);
+    if(osheet && el && el.closest && el.closest('.order-sheet-overlay') && !el.closest('.order-sheet')) continue;   // the sheet's see-through backdrop isn't a cover
     if(el && el !== L && !L.contains(el) && !own.contains(el) && !(el.closest && el.closest('#trading-chart, .chart-fs-body'))){ covered = true; break; }
   }
   L.style.pointerEvents = '';
@@ -7487,6 +7508,9 @@ function tvPlace(){
     const holesN = [...(own.parentElement || own).querySelectorAll('.tv-sltp-btn:not(.tv-sltp-fs), .chart-fs-btn')]
       .map(b=>b.getBoundingClientRect()).filter(b=>b.width && b.height).map(b=>[b.left - lx - 3, b.top - r.top - 3, b.width + 6, b.height + 6]);
     const dimN = document.querySelector('#device-wrap #system-dimmer');
+    // With the New Order sheet up the whole chart fits in the space above it (its axes stay visible), not just its top part.
+    if(osheet) return tvSend({ show:true, x:lx, y:top, w:lw, h:bottom - top, ct:0, cb:bottom - top, holes:holesN.map(h=>[h[0], h[1] - (top - r.top), h[2], h[3]]),
+      r:0, dim: 0, dpr: window.devicePixelRatio || 1 });
     return tvSend({ show:true, x:lx, y:r.top, w:lw, h:r.height, ct:top - r.top, cb:bottom - r.top, holes:holesN,
       r: wide ? 0 : parseFloat(getComputedStyle(own.closest('.tv-card') || own).borderTopLeftRadius) || 0,
       dim: dimN ? parseFloat(getComputedStyle(dimN).opacity) || 0 : 0, dpr: window.devicePixelRatio || 1 });
@@ -8949,15 +8973,22 @@ const SUB_KEY = 'story-sub';
 const STORY_OWNER = /\/preview\//.test(location.pathname);
 function subState(){ try{ return JSON.parse(localStorage.getItem(SUB_KEY) || 'null'); }catch(e){ return null; } }
 function subSave(v){ try{ localStorage.setItem(SUB_KEY, JSON.stringify(Object.assign({}, v, { checked:Date.now() }))); }catch(e){} }
-function subActive(){ const s = subState(); return !!(s && s.plan && s.until > Date.now()); }
+// The real Lockedintool only (Genuine.kt): a modified copy gets no paid parts (owner, 4 Nov 2026: 'No one must have
+// Lockedintool for free except for the free version ... mods of the free / paid plans - nope').
+function appGenuine(){ try{ return !(NATIVE && window.StoryNative.appGenuine) || !!window.StoryNative.appGenuine(); }catch(e){ return true; } }
+// Full access belongs ONLY to Lockedintool's official account (the server says so - users.official), on the real app -
+// never to a phone because of which screens it loaded (a reviewer copy sent to Stitch ran the owner's screens and so had
+// everything free).
+function fullAccess(){ const s = subState(); return !!(s && s.official) && appGenuine(); }
+function subActive(){ const s = subState(); return !!(s && s.plan && s.until > Date.now()) && appGenuine(); }
 // The paywall only shows once the owner switches it on (server secret SUB_ENFORCE=1, with the live payment keys - owner).
-function subLocked(){ const s = subState(); return !!(s && s.connected && s.enforced) && !subActive() && !STORY_OWNER; }
-function subPremium(){ const s = subState(); return STORY_OWNER || !(s && s.connected) || (subActive() && s.plan === 'premium'); }
+function subLocked(){ const s = subState(); return !!(s && s.connected && s.enforced) && !subActive() && !fullAccess(); }
+function subPremium(){ const s = subState(); return fullAccess() || !(s && s.connected) || (subActive() && s.plan === 'premium'); }
 // FREE-ONLY LAUNCH (owner, 28 Oct 2026: 'only the free' - launch the Free tier; Basic & Premium show "Coming soon",
 // not for sale yet). Flip PLANS_ON_SALE to true the day the owner says to start selling the plans. The owner's own
-// phone (STORY_OWNER) can still open the buy flow so they can keep testing payments.
+// account (fullAccess - the official account) can still open the buy flow so they can keep testing payments.
 const PLANS_ON_SALE = false;
-function plansOnSale(){ return PLANS_ON_SALE || STORY_OWNER; }
+function plansOnSale(){ return PLANS_ON_SALE || fullAccess(); }
 // Plans (owner's 'Full layout of Lockedintool'): FREE (no plan) = the Dashboard only - the Pages are hidden; BASIC =
 // the Dashboard + Money, Wallet and Focus only (Focus can be Trading Page or one app) - no app pages, no rows;
 // PREMIUM = everything. Only once subscriptions are really on (enforced), never on the owner's phone.
@@ -8968,7 +8999,7 @@ function planGateRows(a){
   if(a === 'page-quick-rows' && planBasicOnly()){ showToast('Rows come with Premium'); state.current = 'subscription'; return true; }
   return false;
 }
-function planBasicOnly(){ const s = subState(); if(!(s && s.connected && s.enforced && subActive() && s.plan !== 'premium')) return false; try{ return !STORY_OWNER; }catch(e){ return true; } }   // (rows are worked out before STORY_OWNER exists)
+function planBasicOnly(){ const s = subState(); if(!(s && s.connected && s.enforced && subActive() && s.plan !== 'premium')) return false; return !fullAccess(); }   // (rows are worked out before STORY_OWNER exists)
 function isPagesScreen(k){ return PAGES.includes(k) || ['money', 'wallet', 'trading', 'money-summary', 'wallet-overview', 'tx-history', 'send-money', 'receive-money', 'layouts-pagelayout'].includes(k) || isAppPage(k); }
 function subRefresh(force){
   if(!msgAccount() || IN_STATION3_WINDOW) return;
@@ -9140,7 +9171,7 @@ function subOptConfirm(){
   if(k !== 'only') return;
   // Owner (full access) or a plan you already have: it can go on now. Otherwise it goes on with the plan you pay.
   const s = subState() || {};
-  if(STORY_OWNER || s.active) sysModeAsk();
+  if(fullAccess() || s.active) sysModeAsk();
   else showToast('Only system - now choose your plan');
 }
 // A plan paid under "Only system" turns it on (here, and whenever Lockedintool sees that plan).
@@ -20631,7 +20662,9 @@ function fitPageToScreen(area, el, pageKey){
   FIT_CACHE[key] = { zoom, limit, bottom:m.bottom, unsure, seen: !unsure };
   // A page squeezed far smaller than normal on a real phone tells Lockedintool's problem report what it measured,
   // so a page that doesn't fill the screen can be fixed for every phone (owner: pages always full screen).
-  if(NATIVE && window.litProblem && !(window.__fitSent || (window.__fitSent = {}))[page + (unsure ? 'u' : '')] && (window.__fitSent[page + (unsure ? 'u' : '')] = 1)) try{
+  // Only when it really doesn't fill: runs off the bottom, or leaves >10% empty while it could still grow.
+  const misfit = m.bottom > limit + 2 || (limit - m.bottom > limit * 0.1 && zoom < FIT_MAX_SCALE - 0.01);
+  if(NATIVE && misfit && window.litProblem && !(window.__fitSent || (window.__fitSent = {}))[page + (unsure ? 'u' : '')] && (window.__fitSent[page + (unsure ? 'u' : '')] = 1)) try{
     const kids = Array.from(el.children).map(c=>({ c:(c.className || c.tagName).toString().split(' ')[0].slice(0, 24), b:Math.round(c.getBoundingClientRect().bottom), p:getComputedStyle(c).position[0] })).sort((x, y)=>y.b - x.b).slice(0, 3);
     litProblem('fit', page + (unsure ? ' U' : '') + ' z' + zoom.toFixed(2) + ' a' + area.clientWidth + 'x' + area.clientHeight + ' w' + innerWidth + 'x' + innerHeight + ' lim' + Math.round(limit) + ' top' + Math.round(m.top) + ' bot' + Math.round(m.bottom) + ' vis' + document.visibilityState[0] + ' ' + kids.map(k=>k.c + ':' + k.b + k.p).join(' '), 'fit');
   }catch(e){}
