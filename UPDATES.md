@@ -146,3 +146,4 @@ commits, pushed as a new update) - nothing else changes.
 | 138 | 2026-11-04 | Your account stays on Only system for good - it can't be switched to Second system | (this) |
 | 139 | 2026-11-04 | Only system: no Apps | Lockedintool switch any more, and never a frozen old home screen behind Lockedintool | (this) |
 | 140 | 2026-11-04 | Subscriptions moved to the bottom of Settings (out of the Dashboard menu); your Subscription page shows exactly what a customer sees | (this) |
+| 141 | 2026-11-04 | Settings is clean: only the names of the options - tap one to see its choices | (this) |
