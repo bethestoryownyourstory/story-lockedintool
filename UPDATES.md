@@ -134,7 +134,7 @@ commits, pushed as a new update) - nothing else changes.
 | 126 | 2026-11-04 | Calls relay on (calls connect on mobile data). No one gets Lockedintool free: full access only for the official account (checked by the server); reviewer copies (Stitch) run the public version with normal plan rules; modified copies get no paid parts | 1f9d521, 71c2d8a |
 | 127 | 2026-11-04 | Only the owner can use Lockedintool until launch - other phones and modified copies start nothing and see only the legal notice (the browser too). The page-size report only fires when a page really doesn't fill the screen; the 43 old reports (calls busy, sizing, slow opens from older versions) marked fixed | 7c25030 |
 | 128 | 2026-11-04 | Trading full-screen: the chart stays live above the New Order sheet (it used to go black). Rotate view (the ⬌ button) removed - the full-screen chart is always upright | 13e6e64 + this |
-| 129 | 2026-11-04 | Dashboard quote: you can delete the name - the "— Unknown" line (dash included) goes away instead of coming back | (this) |
+| 129 | 2026-11-04 | Dashboard quote: you can delete the name - the "— Unknown" line (dash included) goes away instead of coming back | fb317e9 |
 | 130 | 2026-11-04 | Trading page: title is now "Focus page" with "TRADING" under it; Lockedintool's pair name line removed - the TradingView chart is taller by that space | (this) |
 | 131 | 2026-11-04 | "Focus" is never alone - it says "Focus page" everywhere (the page, Rows, Page Styles, Layouts, Add to Focus page, plan texts, the home screen widget) | (this) |
 | 132 | 2026-11-04 | From the day-one check: rate a call when it ends (stars + an optional note; the official profile sees the ratings in Reports), and the Notify person pop-up after sending money to a Lockedintool profile | (this) |
@@ -149,3 +149,4 @@ commits, pushed as a new update) - nothing else changes.
 | 141 | 2026-11-04 | Settings is clean: only the names of the options - tap one to see its choices | (this) |
 | 142 | 2026-11-04 | Only system: behind a pop-up / floating app window you see Lockedintool, not black - tap it to get the live Dashboard back | (this) |
 | 143 | 2026-11-04 | Only system: opening Lockedintool always lands on the Dashboard - no black screen that needed a swipe up (the phone's Recents app flashing during Home no longer makes the Dashboard step aside for good) | (this) |
+| 144 | 2026-11-04 | Only system: the Dashboard lives inside Lockedintool's own Home screen, so Samsung pop-up windows and their floating bubbles stay on top of it (Lockedintool in the back) | (this) |

@@ -24,6 +24,9 @@ class LockedintoolHome : Activity() {
         // Black, never see-through (owner, 4 Nov 2026: a frozen picture of the old home screen showed behind it and nothing
         // could be swiped) - the Dashboard is drawn over it the moment it shows.
         window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.BLACK))
+        // The whole screen, edge to edge: the Pages live inside this window in Only system (OverlayService.homeAttach).
+        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or android.view.WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN)
+        if (android.os.Build.VERSION.SDK_INT >= 30) window.setDecorFitsSystemWindows(false)
         // Behind the phone's floating windows (Samsung pop-up view...) Lockedintool stays in the back (owner, 4 Nov 2026:
         // 'Lockedintool is supposed to be in the back'): the picture of what Lockedintool showed as it stepped aside; a tap
         // on it (anywhere outside the floating window) brings the live Dashboard back.
@@ -37,9 +40,12 @@ class LockedintoolHome : Activity() {
         setContentView(root)
         current = this
         showShot()
-        showHome()
     }
-    override fun onDestroy() { if (current === this) current = null; super.onDestroy() }
+    /** On screen (started, not stopped): the Pages may live inside this window. */
+    @Volatile var visibleNow = false
+    override fun onStart() { super.onStart(); visibleNow = true }
+    override fun onStop() { visibleNow = false; OverlayService.instance?.homeStopped(this); super.onStop() }
+    override fun onDestroy() { OverlayService.instance?.homeGone(this); if (current === this) current = null; super.onDestroy() }
     /** The latest picture of Lockedintool, placed exactly where the Pages were on screen. */
     fun showShot() { runOnUiThread { runCatching {
         val svc = OverlayService.instance ?: return@runCatching
@@ -50,7 +56,15 @@ class LockedintoolHome : Activity() {
         v.setImageBitmap(b)
     } } }
     override fun onNewIntent(intent: Intent?) { super.onNewIntent(intent); setIntent(intent); showHome() }
-    override fun onResume() { super.onResume(); showHome() }
+    // The Pages go INSIDE this window first (so the phone's floating windows and bubbles sit above the Dashboard - owner,
+    // 4 Nov 2026: 'Lockedintool is supposed to be in the back'), once it is really on screen; then the Dashboard. Coming
+    // back with the Pages still up (a fingerprint prompt, a picker...) keeps you where you were.
+    override fun onResume() { super.onResume(); window.decorView.post {
+        if (isFinishing || isDestroyed) return@post
+        val svc = OverlayService.instance
+        svc?.homeAttach(this)
+        if (svc == null || !svc.pagesShownNow()) showHome()
+    } }
     /** Has the screen's focus (nothing of the phone's - Recents, a floating window - is over it). */
     @Volatile var focused = false
     override fun onWindowFocusChanged(hasFocus: Boolean) {

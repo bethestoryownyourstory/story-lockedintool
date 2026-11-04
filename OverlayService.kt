@@ -802,9 +802,12 @@ class OverlayService : Service(), StoryBridge.Host {
         if (dialPane == null) dialPane = buildPane(true, dial = true)
         if (fresh) raiseBubble()  // done while Station 3 is still hidden, so nothing visibly changes later
         addBar()
+        // A Pages window built while Lockedintool's Home is on screen goes inside it (Only system).
+        LockedintoolHome.current?.let { h -> if (h.visibleNow && !pagesInHome()) ui.post { if (LockedintoolHome.current === h && h.visibleNow) homeAttach(h) } }
     }
 
     private fun setShown(p: Pane, shown: Boolean) {
+        if (shown && p === pagesPane && pagesInHome() && LockedintoolHome.current?.visibleNow != true) homeDetach()
         p.shown = shown
         if (p === pagesPane) { if (shown) SystemMode.reset() else if (SystemMode.on(this)) { ui.removeCallbacks(systemCheckRun); ui.postDelayed(systemCheckRun, 700) } }
         // Cooling (owner): a hidden Pages / Profile window rests (its page counts as hidden: no drawing, no animation
@@ -1230,7 +1233,7 @@ class OverlayService : Service(), StoryBridge.Host {
         }
         addBar(); updateBubble(); syncLockDial()
     } }
-    fun systemModeChanged() { ui.post { if (SystemMode.on(this)) { SystemMode.reset(); addBar(); systemShowPages() } else addBar() } }
+    fun systemModeChanged() { ui.post { if (SystemMode.on(this)) { SystemMode.reset(); addBar(); systemShowPages() } else { homeDetach(); addBar() } } }
     // Every launch Lockedintool makes is one of its own features: the app it opens is let through (SystemMode.grant).
     override fun startActivity(intent: Intent?) { SystemMode.grant(); super.startActivity(intent) }
     override fun startActivity(intent: Intent?, options: android.os.Bundle?) { SystemMode.grant(); super.startActivity(intent, options) }
@@ -1736,8 +1739,66 @@ class OverlayService : Service(), StoryBridge.Host {
         }
         dialPane?.takeIf { it.shown }?.let { hideOne(it) }
         profilePane?.takeIf { it.shown && !callActive }?.let { hideOne(it) }   // never during a call
-        pagesPane?.takeIf { it.shown }?.let { hideOne(it) }
+        if (!pagesInHome()) pagesPane?.takeIf { it.shown }?.let { hideOne(it) }   // inside Home the phone's own screen just covers them
         updateBubble()
+    }
+
+    // ---- Only system: the Pages live INSIDE Lockedintool's Home (owner, 4 Nov 2026, Samsung's floating pop-up bubble
+    //      disappearing on the Dashboard: 'Lockedintool is supposed to be in the back'). An overlay window is drawn over
+    //      every app window, floating pop-ups and their bubbles included, so while Lockedintool's Home is on screen the
+    //      Pages' window is attached to the Home's own window (a panel of it): the phone's floating windows, bubbles and
+    //      gestures then sit above the Dashboard exactly as they do over any home screen. Shown while the Home is out of
+    //      sight (Station 3's Rows over an app, a widget...) they go back to the overlay first. ----
+    private var homeHostWm: WindowManager? = null
+    private var homePrevWm: WindowManager? = null
+    private var homePrevType = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+    private fun pagesInHome(): Boolean { val h = homeHostWm ?: return false; return pagesPane?.wm === h }
+    fun pagesShownNow() = pagesPane?.shown == true
+    /** Called on the main thread by LockedintoolHome once its window is up. */
+    fun homeAttach(act: android.app.Activity) {
+        if (!SystemMode.on(this) || keyguardLocked() || WidgetMode.on(this)) return
+        val p = pagesPane ?: return
+        val hw = act.windowManager
+        if (p.wm === hw) return
+        if (pagesInHome()) homeDetach()
+        if (pagesTyping) pagesTyping = false
+        val prevWm = p.wm; val prevType = p.lp.type
+        runCatching { prevWm.removeView(p.frame) }
+        p.lp.type = WindowManager.LayoutParams.TYPE_APPLICATION_PANEL; p.lp.token = null
+        if (runCatching { hw.addView(p.frame, p.lp) }.isSuccess) { p.wm = hw; homeHostWm = hw; homePrevWm = prevWm; homePrevType = prevType }
+        else { p.lp.type = prevType; p.lp.token = null; runCatching { prevWm.addView(p.frame, p.lp) }; restackOver(prevWm) }
+    }
+    /** The Home went out of sight (an app, the phone's Recents): Pages that were showing inside it close, like they always
+     *  stepped aside for those - never left 'open' behind an app (they'd quiet its sound and keep Station 3 in Dashboard
+     *  mode). Coming back lands on the Dashboard. Lockedintool's own pickers / camera keep their own step-aside. */
+    fun homeStopped(act: android.app.Activity) {
+        if (homeHostWm !== act.windowManager || !pagesInHome()) return
+        if (pickerHid.isNotEmpty() || createActive) return
+        pagesPane?.takeIf { it.shown }?.let { hideOne(it) }
+    }
+    /** The Home is going away: the Pages go back to their own overlay window. */
+    fun homeGone(act: android.app.Activity) { if (homeHostWm === act.windowManager) homeDetach() }
+    private fun homeDetach() {
+        val hw = homeHostWm ?: return
+        homeHostWm = null
+        val p = pagesPane ?: return
+        if (p.wm !== hw) return
+        val to = homePrevWm ?: wm
+        runCatching { hw.removeView(p.frame) }
+        p.lp.type = homePrevType; p.lp.token = null; p.wm = to
+        runCatching { to.addView(p.frame, p.lp) }
+        restackOver(to)
+    }
+    /** Everything that sits above the Pages in that window layer goes back on top of them, in its usual order. */
+    private fun restackOver(to: WindowManager) {
+        if (!callActive) {
+            for (q in listOfNotNull(profilePane, profileGapPane)) if (q.wm === to) runCatching { q.wm.removeView(q.frame); q.wm.addView(q.frame, q.lp) }
+            profileStrip?.let { v -> profileStripLp?.let { lp -> val sw = profileStripWm ?: layerWm; if (sw === to) runCatching { sw.removeView(v); sw.addView(v, lp) } } }
+        }
+        lockDialPane?.let { q -> if (q.wm === to) runCatching { q.wm.removeView(q.frame); q.wm.addView(q.frame, q.lp) } }
+        barBg?.let { v -> barBgLp?.let { lp -> val bw = barBgWm ?: wm; if (bw === to) runCatching { bw.removeView(v); bw.addView(v, lp) } } }
+        for (q in listOfNotNull(s3Pane, dialPane)) if (q.wm === to) runCatching { q.wm.removeView(q.frame); q.wm.addView(q.frame, q.lp) }
+        raiseBubble(); addBar()
     }
 
     /** One of the phone's apps was opened from the Pages (an app, ALARM, CAMERA, GALLERY): it opens UNDER the Pages, and
@@ -2685,6 +2746,7 @@ class OverlayService : Service(), StoryBridge.Host {
     /** The Pages (showing) drop to the normal overlay layer, below the keyboard and the notification panel. */
     private fun lowerPages(): Boolean {
         val p = pagesPane ?: return false
+        if (pagesInHome()) return false
         if (pagesTyping || !p.shown || p.wm === wm) return false
         runCatching { p.wm.removeView(p.frame) }
         p.lp.type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY; p.wm = wm
