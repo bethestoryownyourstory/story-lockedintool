@@ -7482,7 +7482,11 @@ function tvPlace(){
   if(r.width < 20 || r.height < 20) return hide();
   // Only the part of the box that's inside the page's visible area (scrolled half out of view = the half that shows).
   const ca = slot.closest('#content-area'); const cr = ca ? ca.getBoundingClientRect() : { left:0, top:0, right:innerWidth, bottom:innerHeight };
-  const top = Math.max(r.top, cr.top), bottom = Math.min(r.bottom, cr.bottom);
+  // The New Order sheet (full screen) covers only the bottom: the chart stays live and usable ABOVE it (owner's screenshot,
+  // 4 Nov 2026: the chart went black the moment the sheet opened) - it's cut off at the sheet's top edge, not hidden.
+  const osheet = document.querySelector('.order-sheet-overlay .order-sheet');
+  const sheetTop = osheet ? osheet.getBoundingClientRect().top : Infinity;
+  const top = Math.max(r.top, cr.top), bottom = Math.min(r.bottom, cr.bottom, sheetTop - 1);
   if(bottom - top < 20) return hide();
   // Anything covering the box (a sheet, a pop-up, the order panel...) - the chart steps aside until it's gone.
   L.style.pointerEvents = 'none';
@@ -7492,6 +7496,7 @@ function tvPlace(){
     const x = r.left + r.width * fx, y = r.top + r.height * fy;
     if(y < top || y > bottom) continue;
     const el = document.elementFromPoint(x, y);
+    if(osheet && el && el.closest && el.closest('.order-sheet-overlay') && !el.closest('.order-sheet')) continue;   // the sheet's see-through backdrop isn't a cover
     if(el && el !== L && !L.contains(el) && !own.contains(el) && !(el.closest && el.closest('#trading-chart, .chart-fs-body'))){ covered = true; break; }
   }
   L.style.pointerEvents = '';
@@ -7503,6 +7508,9 @@ function tvPlace(){
     const holesN = [...(own.parentElement || own).querySelectorAll('.tv-sltp-btn:not(.tv-sltp-fs), .chart-fs-btn')]
       .map(b=>b.getBoundingClientRect()).filter(b=>b.width && b.height).map(b=>[b.left - lx - 3, b.top - r.top - 3, b.width + 6, b.height + 6]);
     const dimN = document.querySelector('#device-wrap #system-dimmer');
+    // With the New Order sheet up the whole chart fits in the space above it (its axes stay visible), not just its top part.
+    if(osheet) return tvSend({ show:true, x:lx, y:top, w:lw, h:bottom - top, ct:0, cb:bottom - top, holes:holesN.map(h=>[h[0], h[1] - (top - r.top), h[2], h[3]]),
+      r:0, dim: 0, dpr: window.devicePixelRatio || 1 });
     return tvSend({ show:true, x:lx, y:r.top, w:lw, h:r.height, ct:top - r.top, cb:bottom - r.top, holes:holesN,
       r: wide ? 0 : parseFloat(getComputedStyle(own.closest('.tv-card') || own).borderTopLeftRadius) || 0,
       dim: dimN ? parseFloat(getComputedStyle(dimN).opacity) || 0 : 0, dpr: window.devicePixelRatio || 1 });
