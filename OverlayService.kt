@@ -1474,7 +1474,23 @@ class OverlayService : Service(), StoryBridge.Host {
         syncLockDial()
     }
 
+    // Only system: what Lockedintool showed the moment it stepped aside, drawn by the Home screen behind the phone's
+    // floating windows (owner, 4 Nov 2026, a Samsung pop-up window over plain black: 'Lockedintool is supposed to be in the
+    // back'). Lockedintool's Pages float over every app, so a floating window can only sit in FRONT of the Home screen -
+    // LockedintoolHome shows this picture there, and a tap on it brings the live Dashboard back.
+    @Volatile var homeShot: android.graphics.Bitmap? = null
+    @Volatile var homeShotTop = 0
+    private fun snapHome(p: Pane) { runCatching {
+        val v = p.web; if (v.width <= 0 || v.height <= 0) return
+        val b = homeShot?.takeIf { !it.isRecycled && it.width == v.width && it.height == v.height }
+            ?: android.graphics.Bitmap.createBitmap(v.width, v.height, android.graphics.Bitmap.Config.RGB_565)
+        v.draw(android.graphics.Canvas(b))
+        val loc = IntArray(2); v.getLocationOnScreen(loc); homeShotTop = loc[1]
+        homeShot = b
+        LockedintoolHome.current?.showShot()
+    } }
     private fun hideOne(p: Pane) {
+        if (p === pagesPane && p.shown && SystemMode.on(this)) snapHome(p)
         // Station 3 and the dial pad keep their page exactly as it is while hidden, so showing them
         // again changes nothing on screen (no re-layout, no resize, no jump).
         if (!p.small) p.web.evaluateJavascript("window.storyReset&&window.storyReset()", null)

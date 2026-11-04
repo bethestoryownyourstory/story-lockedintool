@@ -17,13 +17,38 @@ import android.os.Bundle
  * own prompt); they switch their normal launcher back there any time, so it is never a trap.
  */
 class LockedintoolHome : Activity() {
+    companion object { @Volatile var current: LockedintoolHome? = null }
+    private var shot: android.widget.ImageView? = null
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Black, never see-through (owner, 4 Nov 2026: a frozen picture of the old home screen showed behind it and nothing
         // could be swiped) - the Dashboard is drawn over it the moment it shows.
         window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.BLACK))
+        // Behind the phone's floating windows (Samsung pop-up view...) Lockedintool stays in the back (owner, 4 Nov 2026:
+        // 'Lockedintool is supposed to be in the back'): the picture of what Lockedintool showed as it stepped aside; a tap
+        // on it (anywhere outside the floating window) brings the live Dashboard back.
+        val root = android.widget.FrameLayout(this).apply { setBackgroundColor(android.graphics.Color.BLACK) }
+        shot = android.widget.ImageView(this).apply {
+            scaleType = android.widget.ImageView.ScaleType.FIT_START; adjustViewBounds = true
+            setOnClickListener { OverlayService.instance?.openPages("dashboard") }
+        }
+        root.addView(shot, android.widget.FrameLayout.LayoutParams(android.widget.FrameLayout.LayoutParams.MATCH_PARENT, android.widget.FrameLayout.LayoutParams.WRAP_CONTENT))
+        root.setOnClickListener { OverlayService.instance?.openPages("dashboard") }
+        setContentView(root)
+        current = this
+        showShot()
         showHome()
     }
+    override fun onDestroy() { if (current === this) current = null; super.onDestroy() }
+    /** The latest picture of Lockedintool, placed exactly where the Pages were on screen. */
+    fun showShot() { runOnUiThread { runCatching {
+        val svc = OverlayService.instance ?: return@runCatching
+        val b = svc.homeShot ?: return@runCatching
+        val v = shot ?: return@runCatching
+        val loc = IntArray(2); window.decorView.getLocationOnScreen(loc)
+        (v.layoutParams as? android.widget.FrameLayout.LayoutParams)?.let { it.topMargin = (svc.homeShotTop - loc[1]).coerceAtLeast(0); v.layoutParams = it }
+        v.setImageBitmap(b)
+    } } }
     override fun onNewIntent(intent: Intent?) { super.onNewIntent(intent); setIntent(intent); showHome() }
     override fun onResume() { super.onResume(); showHome() }
 
