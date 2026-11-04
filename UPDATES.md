@@ -172,4 +172,5 @@ commits, pushed as a new update) - nothing else changes.
 | 164 | 2026-11-04 | Dial pad: Search contact and View all contacts are joined to the dial pad as one piece, each with its own outline | 40a29ca |
 | 165 | 2026-11-04 | Dashboard: the bottom bar no longer shows squashed for a moment after unlocking (Lockedintool's backup bar no longer opens while the Dashboard reloads) | 0e4d7c0 |
 | 166 | 2026-11-04 | Dial pad: attached to Station 3 - it sits right on Station 3's bar, no gap, straight bottom edge (over apps, the Pages and the Dashboard) | a739218 |
-| 167 | 2026-11-04 | Dial pad: a black piece fills the space under its left part, beside Station 3's bar, so the dial pad and Station 3 are one piece | (this) |
+| 167 | 2026-11-04 | Dial pad: a black piece fills the space under its left part, beside Station 3's bar, so the dial pad and Station 3 are one piece | d263650 |
+| 168 | 2026-11-04 | Only system: the keyboard comes up when you type on the Dashboard / Pages (editing the quote, search...) | (this) |

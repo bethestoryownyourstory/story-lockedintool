@@ -2864,7 +2864,11 @@ class OverlayService : Service(), StoryBridge.Host {
     private var pagesTyping = false
     override fun setTyping(on: Boolean) { ui.post {
         val p = pagesPane ?: return@post
-        if (!on || !lowerPages()) return@post
+        if (!on) return@post
+        // Inside Lockedintool's Home (Only system) the Pages are part of the Home's own window, and the keyboard already
+        // shows above it - so just ask for it (owner, 4 Nov 2026: editing the Dashboard's quote brought no keyboard -
+        // lowerPages refuses there, and this used to stop right here).
+        if (!(pagesInHome() && p.shown) && !lowerPages()) return@post
         p.web.requestFocus()
         val imm = getSystemService(android.view.inputmethod.InputMethodManager::class.java)
         ui.post { runCatching { imm.showSoftInput(p.web, 0) } }; ui.postDelayed({ runCatching { imm.showSoftInput(p.web, 0) } }, 120)
