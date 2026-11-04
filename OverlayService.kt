@@ -758,9 +758,10 @@ class OverlayService : Service(), StoryBridge.Host {
             }
         else if (dial)
             WindowManager.LayoutParams(dialW, dialH, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, flagsFor(true, false), PixelFormat.TRANSLUCENT).apply {
-                // Middle of the screen, just above Station 3's 40dp bar (which sits on the bottom edge).
+                // Middle of the screen, sitting right ON Station 3's 40dp bar - attached, no gap (owner, 4 Nov 2026:
+                // 'attach the dial pad with station 3 so that when I'm on it it's not like separated').
                 gravity = Gravity.BOTTOM or Gravity.START
-                x = (resources.displayMetrics.widthPixels - (280 * dp).toInt()) / 2; y = (52 * dp).toInt()
+                x = (resources.displayMetrics.widthPixels - (280 * dp).toInt()) / 2; y = (40 * dp).toInt()
             }
         else if (small)
             WindowManager.LayoutParams(s3W, s3H, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, flagsFor(true, false), PixelFormat.TRANSLUCENT).apply {
@@ -1395,7 +1396,7 @@ class OverlayService : Service(), StoryBridge.Host {
             (v.background as? GradientDrawable)?.setColor(barBgColor())
             runCatching { (barBgWm ?: wm).updateViewLayout(v, lp) }
         } }
-        dialPane?.let { p -> p.lp.y = y + (52 * dp).toInt(); runCatching { p.wm.updateViewLayout(p.frame, p.lp) } }
+        dialPane?.let { p -> p.lp.y = y + (40 * dp).toInt(); runCatching { p.wm.updateViewLayout(p.frame, p.lp) } }   // attached to the bar (owner)
         fitProfileGap()
         syncBarTouch()
         updateBarLine()
