@@ -1310,7 +1310,10 @@ class OverlayService : Service(), StoryBridge.Host {
     /** The Pages stepped aside for a moment for Lockedintool's own screens (Create's camera, a system picker): the
      *  Dashboard's Station 3 stays where it is. Not for the phone's own switch screens opened from the Dashboard's
      *  Controls / Media output (sysFromPages) - held there, Station 3 covered their bottom buttons (Wi-Fi panel's Done...). */
-    private fun pagesAside() = pagesHiddenForCreate || (pickerHid.any { it === pagesPane } && !sysFromPages)
+    // Not for Lockedintool security's unlock prompt: the Dashboard's bar is put away while the phone's prompt is up (owner's
+    // video, 4 Nov 2026: the bar showed squashed until the unlock finished - our backup bar opened over the prompt).
+    private fun pagesAside() = pagesHiddenForCreate || (pickerHid.any { it === pagesPane } && !sysFromPages && !secPrompting)
+    private var secPrompting = false
     private var sysFromPages = false
     /** The phone's own navigation area at the bottom (gesture line / buttons), in px. */
     private fun navInsetPx(): Int = if (Build.VERSION.SDK_INT >= 30)
@@ -2335,7 +2338,8 @@ class OverlayService : Service(), StoryBridge.Host {
     }
     private fun secPrompt(then: (() -> Unit)?) {
         if (secIsOpen()) { then?.invoke(); return }
-        if (!stepAsideForSystem()) { then?.invoke(); return }   // another of the phone's screens is up: just show it locked
+        secPrompting = true
+        if (!stepAsideForSystem()) { secPrompting = false; then?.invoke(); return }   // another of the phone's screens is up: just show it locked
         secThen = then
         hideLiveWidgets()
         // The phone's own prompt / PIN page shows: Station 3's bar is put away meanwhile (never over its buttons) and comes back after.
@@ -2345,8 +2349,10 @@ class OverlayService : Service(), StoryBridge.Host {
         runCatching { startActivity(Intent(this, IdentityActivity::class.java).putExtra(IdentityActivity.EXTRA_TITLE, "Unlock Lockedintool")
             .putExtra(IdentityActivity.EXTRA_FOR, "security").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)) }
             .onFailure { secDone("fail") }
+        updateBubble()
     }
     fun secDone(result: String) { ui.post {
+        secPrompting = false
         if (result == "ok" || result == "nolock") { secOpen = true; secTell() }
         comeBackFromSystem()
         val t = secThen; secThen = null

@@ -174,3 +174,4 @@ commits, pushed as a new update) - nothing else changes.
 | 166 | 2026-11-04 | Dial pad: attached to Station 3 - it sits right on Station 3's bar, no gap, straight bottom edge (over apps, the Pages and the Dashboard) | a739218 |
 | 167 | 2026-11-04 | Dial pad: a black piece fills the space under its left part, beside Station 3's bar, so the dial pad and Station 3 are one piece | d263650 |
 | 168 | 2026-11-04 | Only system: the keyboard comes up when you type on the Dashboard / Pages (editing the quote, search...) | (this) |
+| 169 | 2026-11-04 | Lockedintool security: the Dashboard's bar no longer shows squashed while the unlock prompt is up | (this) |
