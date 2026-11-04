@@ -20654,7 +20654,9 @@ function fitPageToScreen(area, el, pageKey){
   FIT_CACHE[key] = { zoom, limit, bottom:m.bottom, unsure, seen: !unsure };
   // A page squeezed far smaller than normal on a real phone tells Lockedintool's problem report what it measured,
   // so a page that doesn't fill the screen can be fixed for every phone (owner: pages always full screen).
-  if(NATIVE && window.litProblem && !(window.__fitSent || (window.__fitSent = {}))[page + (unsure ? 'u' : '')] && (window.__fitSent[page + (unsure ? 'u' : '')] = 1)) try{
+  // Only when it really doesn't fill: runs off the bottom, or leaves >10% empty while it could still grow.
+  const misfit = m.bottom > limit + 2 || (limit - m.bottom > limit * 0.1 && zoom < FIT_MAX_SCALE - 0.01);
+  if(NATIVE && misfit && window.litProblem && !(window.__fitSent || (window.__fitSent = {}))[page + (unsure ? 'u' : '')] && (window.__fitSent[page + (unsure ? 'u' : '')] = 1)) try{
     const kids = Array.from(el.children).map(c=>({ c:(c.className || c.tagName).toString().split(' ')[0].slice(0, 24), b:Math.round(c.getBoundingClientRect().bottom), p:getComputedStyle(c).position[0] })).sort((x, y)=>y.b - x.b).slice(0, 3);
     litProblem('fit', page + (unsure ? ' U' : '') + ' z' + zoom.toFixed(2) + ' a' + area.clientWidth + 'x' + area.clientHeight + ' w' + innerWidth + 'x' + innerHeight + ' lim' + Math.round(limit) + ' top' + Math.round(m.top) + ' bot' + Math.round(m.bottom) + ' vis' + document.visibilityState[0] + ' ' + kids.map(k=>k.c + ':' + k.b + k.p).join(' '), 'fit');
   }catch(e){}
