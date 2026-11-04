@@ -151,7 +151,7 @@ commits, pushed as a new update) - nothing else changes.
 | 143 | 2026-11-04 | Only system: opening Lockedintool always lands on the Dashboard - no black screen that needed a swipe up (the phone's Recents app flashing during Home no longer makes the Dashboard step aside for good) | 363f156 |
 | 144 | 2026-11-04 | Only system: the Dashboard lives inside Lockedintool's own Home screen, so Samsung pop-up windows and their floating bubbles stay on top of it (Lockedintool in the back) | 5b717f8 |
 | 145 | 2026-11-04 | Apps: the Lockedintool app is listed with your phone's apps (opens its setup screen) | 9949163 |
-| 146 | 2026-11-04 | Updates install with the screen on too; if the phone wants a tap, Android's own Install screen comes up - no update notification | (this) |
+| 146 | 2026-11-04 | Updates install with the screen on too; if the phone wants a tap, Android's own Install screen comes up - no update notification | 458ec16 |
 | 147 | 2026-11-04 | No more 'Lockedintool is on' notification in the panel | (this) |
 | 148 | 2026-11-04 | Only system: no black screen on the way to the Dashboard (it stays drawn in Lockedintool's Home); after an update you're put back on Lockedintool, not the phone's old home screen | (this) |
 | 149 | 2026-11-04 | Only system: no black screen while Lockedintool reloads after Close all - you see Lockedintool's last picture until the Dashboard is ready | (this) |
@@ -165,3 +165,4 @@ commits, pushed as a new update) - nothing else changes.
 | 157 | 2026-11-04 | Dial pad's Search contact opens your Contacts straight on its search box; the Dashboard's bottom bar no longer shows over other apps | (this) |
 | 158 | 2026-11-04 | Apps: hold an app -> Open in pop-up view (the phone's own floating window). A pop-up's sound no longer pauses while you use Lockedintool | (this) |
 | 159 | 2026-11-04 | Information: The future of Lockedintool - PCs, laptops, TVs, Lockedintool's own devices, kit and USB / SD backups | (this) |
+| 160 | 2026-11-04 | Apps: the hold menu has an × to close it | (this) |

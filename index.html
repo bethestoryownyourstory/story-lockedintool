@@ -1966,6 +1966,10 @@
   }
   .confirm-title{ font-size:14px; font-weight:700; margin-bottom:6px; }
   /* Hold an app: its real icon at icon size beside its name (owner) - never stretched into a big picture. */
+  /* The app's hold menu closes with its own × at the top right (owner, 4 Nov 2026: 'Put a x to close this with instead of
+     having to tap the screen to close it'); tapping outside still works too. */
+  .app-menu-sheet{ position:relative; }
+  .app-menu-x{ position:absolute; top:10px; right:12px; }
   .app-menu-title{ display:flex; align-items:center; justify-content:center; gap:10px; margin-bottom:14px; }
   .app-menu-icon{ width:36px; height:36px; flex:0 0 36px; display:flex; align-items:center; justify-content:center; font-size:26px; line-height:1; }
   .app-menu-icon img{ border-radius:9px !important; }
@@ -13842,7 +13846,8 @@ function appMenuTemplate(){
   if(!a) return '';
   return `
     <div class="modal-overlay" data-action="app-menu-close">
-      <div class="confirm-sheet" onclick="event.stopPropagation()">
+      <div class="confirm-sheet app-menu-sheet" onclick="event.stopPropagation()">
+        <button class="modal-close app-menu-x" data-action="app-menu-close" aria-label="Close">×</button>
         <div class="confirm-title app-menu-title"><span class="app-menu-icon">${appIconHTML(a)}</span>${escText(a.name)}</div>
         <div class="confirm-btn-row">
           ${a.pkg && NATIVE && window.StoryNative.popupSupported && window.StoryNative.popupSupported() ? `<button class="btn-wide" style="margin-top:0;" data-action="app-popup">Open in pop-up view</button>` : ''}
