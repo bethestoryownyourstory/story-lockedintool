@@ -193,7 +193,16 @@ object Updater {
         return apk
     }
 
+    /** Installing replaces Lockedintool for a moment, so Android shows the phone's old home screen meanwhile (owner, 4 Nov
+     *  2026: 'the lockedintool app close and I was on my phones original apps'). When Lockedintool's Home was what you were
+     *  on (Only system), or you're installing it yourself, Lockedintool's Home comes straight back after (BootReceiver). */
+    fun markGoHome(ctx: Context, yourself: Boolean) {
+        val home = SystemMode.on(ctx) && (yourself || LockedintoolHome.current?.visibleNow == true)
+        ctx.getSharedPreferences("story", Context.MODE_PRIVATE).edit().putBoolean("upd_go_home", home).apply()
+    }
+
     private fun install(ctx: Context, apk: File) {
+        markGoHome(ctx, false)
         val installer = ctx.packageManager.packageInstaller
         val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
         if (Build.VERSION.SDK_INT >= 31) params.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
@@ -221,6 +230,7 @@ object Updater {
         val apk = apkFile(ctx)
         if (!apk.exists()) return false
         val uri = FileProvider.getUriForFile(ctx, ctx.packageName + ".files", apk)
+        markGoHome(ctx, true)
         OverlayService.instance?.pauseForInstall()
         ctx.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/vnd.android.package-archive")
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -348,6 +358,15 @@ class BootReceiver : BroadcastReceiver() {
             c.getSharedPreferences("story", Context.MODE_PRIVATE).edit().remove("upd_progress").apply()
             val v = runCatching { c.packageManager.getPackageInfo(c.packageName, 0).longVersionCode }.getOrDefault(0)
             Updater.setStatus(c, "Updated to build $v")
+            // Only system: back on Lockedintool's Home, never left on the phone's old home screen after an update.
+            val p = c.getSharedPreferences("story", Context.MODE_PRIVATE)
+            if (p.getBoolean("upd_go_home", false)) {
+                p.edit().remove("upd_go_home").apply()
+                val pm = c.getSystemService(android.os.PowerManager::class.java)
+                if (SystemMode.on(c) && pm.isInteractive) runCatching {
+                    c.startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).setPackage(c.packageName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                }
+            }
         }
         Updater.schedule(c)
         KeepAlive.ensureRunning(c)

@@ -849,6 +849,15 @@ class OverlayService : Service(), StoryBridge.Host {
         if (shown && (p === pagesPane || p === profilePane)) hideLiveWidgets() else if (!shown && (p === pagesPane || p === profilePane)) widgetLiveEvent(false)
         if (p === pagesPane) { quietApps(shown); updateBarLine(); if (!shown && pagesTyping) pagesBackToTop(); updateBubble()
             if (!shown) tvView?.place(org.json.JSONObject().put("show", false)) }
+        // Only system: Pages that step aside while they live inside Lockedintool's Home stay DRAWN there (not touchable,
+        // not focusable - Home's own tap brings them back), so coming back to the Dashboard is instant and Lockedintool's
+        // black Home never shows on its own (owner, 4 Nov 2026: 'everytime this black screen shows up everytime my phone
+        // goes to the dashboard'); behind a floating window you see the real Lockedintool. Not with Lockedintool security
+        // on (then it only shows after unlocking).
+        if (p === pagesPane && !shown && pagesInHome() && !Security.lit(this)) {
+            p.lp.alpha = 1f; p.frame.alpha = 1f
+            runCatching { p.wm.updateViewLayout(p.frame, p.lp) }
+        }
     }
 
     // While Pages is open, STORY silences the app underneath itself (a TikTok video, YouTube...), like the
@@ -1506,7 +1515,9 @@ class OverlayService : Service(), StoryBridge.Host {
         if (p === profilePane) { p.web.evaluateJavascript("window.storyProfileReset&&window.storyProfileReset()", null); profileGapPane?.takeIf { it.stale }?.let { reload(it) } }
         // New screens were published: pick them up in the background. Station 3 / the dial pad only reload
         // then (never on a timer), so tapping them open is always instant.
-        if ((p.stale || (!p.small && System.currentTimeMillis() - p.loadedAt > 5 * 60_000)) && !(p === profilePane && callActive)) reload(p)
+        // (The Pages kept inside Lockedintool's Home only reload for new screens - a reload there would show the black Home.)
+        val aged = !p.small && System.currentTimeMillis() - p.loadedAt > 5 * 60_000 && !(p === pagesPane && pagesInHome())
+        if ((p.stale || aged) && !(p === profilePane && callActive)) reload(p)
         // Lockedintool security: you left Lockedintool (the Pages and Station 3's window both closed) - it locks.
         if ((p === pagesPane || p === profilePane) && pagesPane?.shown != true && profilePane?.shown != true && pickerHid.isEmpty()) secLock()
     }
@@ -1779,7 +1790,10 @@ class OverlayService : Service(), StoryBridge.Host {
     fun homeStopped(act: android.app.Activity) {
         if (homeHostWm !== act.windowManager || !pagesInHome()) return
         if (pickerHid.isNotEmpty() || createActive) return
-        pagesPane?.takeIf { it.shown }?.let { hideOne(it) }
+        val p = pagesPane ?: return
+        if (p.shown) hideOne(p)
+        // Out of sight: what's kept drawn in the Home is the Dashboard, ready for when you come back.
+        p.web.evaluateJavascript("window.storyShow&&window.storyShow('dashboard',false)", null)
     }
     /** The Home is going away: the Pages go back to their own overlay window. */
     fun homeGone(act: android.app.Activity) { if (homeHostWm === act.windowManager) homeDetach() }
@@ -1791,6 +1805,7 @@ class OverlayService : Service(), StoryBridge.Host {
         val to = homePrevWm ?: wm
         runCatching { hw.removeView(p.frame) }
         p.lp.type = homePrevType; p.lp.token = null; p.wm = to
+        if (!p.shown) { p.lp.alpha = 0f; p.frame.alpha = 0f }   // kept drawn only inside the Home - never over other apps
         runCatching { to.addView(p.frame, p.lp) }
         restackOver(to)
     }
