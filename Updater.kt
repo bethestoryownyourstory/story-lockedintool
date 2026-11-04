@@ -118,13 +118,13 @@ object Updater {
             val apk = if (apkFile(ctx).exists() && prefs.getLong("upd_apk_ver", 0) == latest) apkFile(ctx)
                 else download(base, ctx, latest).also { prefs.edit().putLong("upd_apk_ver", latest).apply() }
             doneProgress(ctx)
-            // Seamless (owner): installing restarts Lockedintool for a moment, so it waits for the screen to go off
-            // (nobody using the phone, no call) - OverlayService's screen-off calls installWaiting.
-            val pm = ctx.getSystemService(android.os.PowerManager::class.java)
+            // Installs straight away, screen on or off (owner, 4 Nov 2026: 'why don't I get the updates even when my screen is
+            // on / Why does it have to be off'). Only a call waits (installing restarts Lockedintool for a moment) - the
+            // screen going off or the next check installs it after.
             if (now) ctx.getSharedPreferences("story", Context.MODE_PRIVATE).edit().putBoolean("session_confirm_tried", false).apply()
-            if (!now && (pm.isInteractive || OverlayService.instance?.inCall() == true)) {
+            if (!now && callOn(ctx)) {
                 ctx.getSharedPreferences("story", Context.MODE_PRIVATE).edit().putLong("upd_waiting", latest).apply()
-                setStatus(ctx, "Build $latest is ready - it installs by itself when the screen is off")
+                setStatus(ctx, "Build $latest is ready - it installs once the call ends")
                 return
             }
             setStatus(ctx, "Installing build $latest…")
@@ -136,6 +136,13 @@ object Updater {
             busy = false
             if (nowWanted && !now) { nowWanted = false; Thread { checkNow(ctx, force = true, now = true) }.start() }
         }
+    }
+
+    /** A Lockedintool call or a phone call is on: an update never restarts Lockedintool in the middle of it. */
+    fun callOn(ctx: Context): Boolean {
+        if (OverlayService.instance?.inCall() == true) return true
+        val am = ctx.getSystemService(android.media.AudioManager::class.java) ?: return false
+        return am.mode == android.media.AudioManager.MODE_IN_CALL || am.mode == android.media.AudioManager.MODE_IN_COMMUNICATION || am.mode == android.media.AudioManager.MODE_RINGTONE
     }
 
     /** The screen just went off: a downloaded update that was waiting installs now, out of sight. */
@@ -292,12 +299,21 @@ class InstallResultReceiver : BroadcastReceiver() {
     /** The quiet install was refused (on the owner's Samsung: INSTALL_FAILED_VERIFICATION_FAILURE, every time, so the
      *  phone stayed on an old version). If you asked for it yourself, Android's own installer opens now - one tap; if it
      *  was automatic, a 'Lockedintool update ready - Tap to install' notification waits (never a screen popping up). */
+    // No notification (owner, 4 Nov 2026: no Lockedintool notification showed in the panel - 'And I dont want them'): when
+    // the phone refuses the quiet install, Android's OWN install screen comes up instead (one tap, Install) - while the
+    // phone is unlocked and no call is on, at most once every 30 minutes for the same build (Cancel = asked again later).
     private fun fallback(c: Context): Boolean {
-        if (Updater.userAsked(c)) {
-            c.getSharedPreferences("story", Context.MODE_PRIVATE).edit().remove("upd_now_at").apply()
+        val p = c.getSharedPreferences("story", Context.MODE_PRIVATE)
+        val asked = Updater.userAsked(c)
+        if (asked) p.edit().remove("upd_now_at").apply()
+        val pm = c.getSystemService(android.os.PowerManager::class.java)
+        val km = c.getSystemService(android.app.KeyguardManager::class.java)
+        val ver = p.getLong("upd_apk_ver", 0)
+        val recent = p.getLong("upd_prompt_ver", 0) == ver && System.currentTimeMillis() - p.getLong("upd_prompt_at", 0) < 30 * 60_000
+        if (asked || (pm.isInteractive && km?.isKeyguardLocked != true && !Updater.callOn(c) && !recent)) {
+            p.edit().putLong("upd_prompt_ver", ver).putLong("upd_prompt_at", System.currentTimeMillis()).apply()
             if (Updater.installWithSystemInstaller(c)) { Updater.setStatus(c, "Tap Install on Android's screen to update"); return true }
         }
-        showUpdateNotification(c)
         return false
     }
 
