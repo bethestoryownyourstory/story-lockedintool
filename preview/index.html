@@ -1490,6 +1490,7 @@
   .sub-opt-acts button{ width:56px; height:56px; border-radius:50%; border:1px solid #2a2a2a; background:#000000; color:#ffffff; font:inherit; font-size:20px; display:flex; align-items:center; justify-content:center; cursor:pointer; }
   .sub-opt-acts .sub-opt-ok{ background:#ffffff; color:#000000; border-color:#ffffff; }
   .sub-zar{ font-size:11px; color:var(--muted); text-align:center; margin-top:8px; }
+  .sub-pricechange{ font-size:10px; color:var(--muted); text-align:center; margin-top:6px; line-height:1.35; }
   /* 3D Circle's pages keep their own top (name + buttons); the back button and page dots stay out of a preview. */
   .preview-top .dash-back, .preview-top .page-dots{ visibility:hidden !important; }
   /* Home screen widget pictures: the page only - no veils, bubbles or Station 3 pieces over it. */
@@ -9053,6 +9054,20 @@ function subRefresh(force){
   msgApi('/v1/sub/info').then(i=>{ const was = subLocked(); subSave(i); subApplyMode(); syncAppPages(); if(was !== subLocked() || state.current === 'subscription') renderDevice(); }).catch(()=>{});
 }
 setTimeout(()=>{ subWaitLoad(); subRefresh(!!state.sub.waiting); }, 4000);   // a plan payment you started: the server checks it now
+// Prices can change (owner, 4 Nov 2026: 'the words where I said prices might change - those are permanent and should
+// always be showing underneath each plan'; 'the prices of the plans can increase and can also decrease'; members are
+// notified, never charged extra for a month already paid, and the changed price is for new customers). Shown under
+// every plan until the owner says the prices stay the same forever. The server tells members when a price changes
+// (msg-worker priceWatch).
+const SUB_PRICE_NOTE = 'Changes of current prices will be announced if made. Prices can go up or down - a month you already paid never costs more; new prices are for new purchases.';
+// The plan's dollar price in the currency of your country (owner: 'shows the price converted to the currency the person
+// stays in') - the day's rate, '' until it's known or when you're in a dollar country.
+function subLocalPrice(usd){
+  const cur = COUNTRY_CURRENCY[accountCountry()] || '';
+  if(!cur || cur === 'USD' || !usd) return '';
+  fxEnsure(); const v = fxConvert(Number(usd), 'USD', cur);
+  return v == null ? '' : ' (about ' + fmtCur(v, cur) + ' today)';
+}
 const SUB_PLANS = [
   { key:'basic', name:'Basic', tag:'Your essentials. Stay locked in.', badge:'',
     text:'Get the core LOCKED IN TOOL experience with your three essential pages: Money, Home/Wallet, and Focus page. Keep your finances, wallet, and goals in one place, with the freedom to build your daily routine around what matters most.',
@@ -9119,7 +9134,8 @@ function subscriptionScreen(){
           ? `<button class="btn-wide" disabled style="opacity:0.7;">Coming soon</button>
         <div class="sub-zar">Basic and Premium are coming soon. The Free version — your Dashboard — is ready now.</div>`
           : `<button class="btn-wide btn-primary" data-action="sub-buy" data-plan="${p.key}"${state.sub.busy || (w && w.status === 'pending' && w.plan === p.key) ? ' disabled' : ''}>${w && w.status === 'pending' && w.plan === p.key ? (w.provider === 'stitch' ? 'Waiting for your bank' : 'Waiting for your payment') : w && w.status === 'pending' ? 'Switch to ' + p.name : 'Choose ' + p.name}</button>
-        <div class="sub-zar">${viaRand ? `Paid in rand: R${Number(pr.zar || 0).toFixed(2)} a month${viaPayfast ? ' — card or instant EFT on PayFast’s secure page' : ', approved in your own bank'}` : `$${pr.usd || p.usd || ''} a month on Lemon Squeezy’s secure page - card, PayPal, Apple Pay or Google Pay. Renews every month.`}</div>`}
+        <div class="sub-zar">${viaRand ? `Paid in rand: R${Number(pr.zar || 0).toFixed(2)} a month (today’s rate for $${pr.usd})${viaPayfast ? ' — card or instant EFT on PayFast’s secure page' : ', approved in your own bank'}` : `$${pr.usd || p.usd || ''} a month${subLocalPrice(pr.usd || p.usd)} on Lemon Squeezy’s secure page - card, PayPal, Apple Pay or Google Pay. Renews every month.`}</div>`}
+        <div class="sub-pricechange">${SUB_PRICE_NOTE}</div>
       </div>`; }).join('')}
     ${state.sub.msg ? `<div class="note pay-msg">${escText(state.sub.msg)}</div>` : ''}
     <div class="note" style="margin:12px 0 4px;">Both plans are designed to help you stay organized, focused, and consistent.</div>
@@ -9922,8 +9938,8 @@ const LEGAL = {
       'Using Lockedintool means agreeing that it keeps itself up to date: new versions install automatically.' ]],
     ['Subscription', [
       'Without a plan you can use the Dashboard for free. Basic adds the Money, Wallet and Focus page and Lockedintool calls (voice, video and group calls); Premium adds everything else (more pages and rows). Calls aren’t part of the free plan - phone calls from the dial pad are your phone’s own and always work.',
-      'Basic is $5 a month and Premium $15 a month. Changes to prices will be announced before they apply.',
-      'In South Africa plans are charged in rand (shown before you pay - currently R95 and R285) through Stitch and approved by you on your own bank’s or card’s page. One payment gives 30 days of your plan; paying the same plan again adds 30 days. These plans don’t renew by themselves - you pay each month.',
+      'Basic is $5 a month and Premium $15 a month. Prices can change - they can go up or go down. Changes of current prices will be announced if made: everyone with a plan is told, a month you already paid for never costs more and nothing extra is charged for it, and the new price applies to new purchases and your next payment. A price can also come back down before your next payment.',
+      'In South Africa plans are charged in rand - the dollar price converted at the day’s rate, shown before you pay - through PayFast, on its own secure page (card or instant EFT). One payment gives 30 days of your plan; paying the same plan again adds 30 days. These plans don’t renew by themselves - you pay each month.',
       'Outside South Africa plans are charged in US dollars (your bank may show it in your own currency) and sold through Lemon Squeezy (lemonsqueezy.com), which takes the payment on its own page - card, PayPal, Apple Pay or Google Pay - and handles your country’s sales tax. A plan renews by itself every month until you cancel; cancel any time with the link in Lemon Squeezy’s email, and your plan runs to the end of the month already paid.',
       'Before you pay you can cancel or switch plans at any time. Once a payment is made it is not refundable, except where the law requires a refund.',
       'We may change prices or what a plan includes; you will be told in the app before it affects you.' ]],
