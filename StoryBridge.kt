@@ -839,7 +839,8 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
             val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
             val out = JSONArray()
             pm.queryIntentActivities(intent, 0)
-                .filter { it.activityInfo.packageName != ctx.packageName }
+                // Lockedintool itself is listed too, like any app (owner, 4 Nov 2026: 'where's the lockedintool app? ... in apps
+                // as the app. Where apps are') - in Only system it's the way back to the Lockedintool app (its setup screen).
                 .map { it to it.loadLabel(pm).toString() }
                 .sortedBy { it.second.lowercase() }
                 .distinctBy { it.first.activityInfo.packageName }
