@@ -73,7 +73,7 @@ class OverlayService : Service(), StoryBridge.Host {
             AodActivity.instance?.finish()  // unlocked (e.g. fingerprint) while the Always On Display was up
             ui.post { syncLockDial(); profileLayer(false)   // unlocked: Station 3's window back where the keyboard works
                 // Lockedintool security: something of Lockedintool's is already on screen (the Dashboard as your home...) - unlock it.
-                if (!secIsOpen() && !callActive && pickerHid.isEmpty() && (pagesPane?.shown == true || profilePane?.shown == true)) ui.postDelayed({ if (!secIsOpen() && !walletOpening && pickerHid.isEmpty()) secPrompt(null) }, 350) }
+                if (!secIsOpen() && !callActive && pickerHid.isEmpty() && (pagesPane?.shown == true || profilePane?.shown == true)) ui.post { if (!secIsOpen() && !walletOpening && pickerHid.isEmpty()) secPrompt(null) } }
             for (d in longArrayOf(300, 1000, 2500)) ui.postDelayed({ syncLockDial(); updateBubble() }, d)
             Updater.check(this@OverlayService); checkScreens()
         }
@@ -1073,7 +1073,7 @@ class OverlayService : Service(), StoryBridge.Host {
             w.lp.flags = w.lp.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
             runCatching { wm.updateViewLayout(w.holder, w.lp) }
             w.web.requestFocus()
-            ui.postDelayed({ runCatching { imm.showSoftInput(w.web, 0) } }, 120)
+            runCatching { imm.showSoftInput(w.web, 0) }; ui.postDelayed({ runCatching { imm.showSoftInput(w.web, 0) } }, 120)   // at once; again if the window wasn't ready
         } else if (liveTyping === w) {
             liveTyping = null
             runCatching { imm.hideSoftInputFromWindow(w.web.windowToken, 0) }
@@ -2800,7 +2800,7 @@ class OverlayService : Service(), StoryBridge.Host {
         val imm = getSystemService(android.view.inputmethod.InputMethodManager::class.java)
         if (on) {
             p.web.requestFocus()
-            ui.postDelayed({ runCatching { imm.showSoftInput(p.web, 0) } }, 60)
+            runCatching { imm.showSoftInput(p.web, 0) }; ui.postDelayed({ runCatching { imm.showSoftInput(p.web, 0) } }, 60)
         } else runCatching { imm.hideSoftInputFromWindow(p.web.windowToken, 0) }
     } }
     override fun closeProfile() { ui.post { profilePane?.takeIf { it.shown }?.let { hideOne(it) } } }
@@ -2820,7 +2820,8 @@ class OverlayService : Service(), StoryBridge.Host {
         val p = pagesPane ?: return@post
         if (!on || !lowerPages()) return@post
         p.web.requestFocus()
-        ui.postDelayed({ runCatching { getSystemService(android.view.inputmethod.InputMethodManager::class.java).showSoftInput(p.web, 0) } }, 120)
+        val imm = getSystemService(android.view.inputmethod.InputMethodManager::class.java)
+        ui.post { runCatching { imm.showSoftInput(p.web, 0) } }; ui.postDelayed({ runCatching { imm.showSoftInput(p.web, 0) } }, 120)
     } }
 
     /** Station 3's window (Messages, Profile, Create, Call history) works the same on the lock screen (owner): while
