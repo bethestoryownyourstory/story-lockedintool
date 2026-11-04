@@ -705,7 +705,7 @@ class OverlayService : Service(), StoryBridge.Host {
                     v.evaluateJavascript("window.storyProfileOnly&&window.storyProfileOnly()", null)
                     ui.postDelayed({ paneRef?.let { it.loading = false; if (it.shown) it.frame.alpha = 1f } }, 200)
                 } else if (dial) {
-                    v.evaluateJavascript("window.storyDialOnly&&window.storyDialOnly()", null); v.evaluateJavascript(DIAL_JS, null)
+                    v.evaluateJavascript("document.documentElement.classList.add('dial-wide');window.storyDialOnly&&window.storyDialOnly()", null); v.evaluateJavascript(DIAL_JS, null)
                     ui.postDelayed({ paneRef?.let { it.loading = false; if (it.shown) it.frame.alpha = 1f }; syncBarBg() }, 200)
                 } else if (small) {
                     v.evaluateJavascript(exactGeometryJs(), null)
@@ -730,7 +730,9 @@ class OverlayService : Service(), StoryBridge.Host {
         // Station 3's page always lays out at full size, pinned to the corner; its window may be
         // smaller (see setStation3Size) and simply cuts off the empty part, so nothing reflows.
         // The dial pad page also lays out at a fixed size (pinned bottom-left); its window just cuts it to the dial pad.
-        val dialW = ((280 + 70) * dp).toInt(); val dialH = minOf((560 * dp).toInt(), realHeightPx())
+        // As wide as the screen: room for the dial pad's Search contact / View all contacts buttons on both sides
+        // (owner, 4 Nov 2026); the window itself is cut to what shows (setDialSize), the dial pad never moves.
+        val dialW = maxOf(((280 + 70) * dp).toInt(), resources.displayMetrics.widthPixels); val dialH = minOf((560 * dp).toInt(), realHeightPx())
         frame.addView(wv, when {
             profile -> FrameLayout.LayoutParams(-1, -1)
             dial -> FrameLayout.LayoutParams(dialW, dialH, Gravity.BOTTOM or Gravity.START)
@@ -2819,7 +2821,23 @@ class OverlayService : Service(), StoryBridge.Host {
     // ---- Dial pad > New contact: the phone's own new-contact screen (number filled in). The dial pad and the Pages
     //      step aside while it's up; STORY comes back when you save or go back. ----
     private var contactDialWasOpen = false
+    // ---- Dial pad > Search contact / View all contacts (owner, 4 Nov 2026: 'on the dial pad on the left side I want search
+    //      contact, on the right view all your contacts' - chose the phone's own Contacts): the phone's contact picker
+    //      (with its own search) puts the number you pick into the dial pad; View all contacts opens the phone's Contacts
+    //      list. Lockedintool steps aside and comes straight back, like New contact. ----
+    private var contactFromLock = false
+    @Volatile private var contactPickedNumber = ""
+    override fun contacts(mode: String, fromLock: Boolean) { ui.post {
+        contactFromLock = fromLock; contactPickedNumber = ""
+        contactDialWasOpen = dialPane?.shown == true
+        dialPane?.takeIf { it.shown }?.let { hideOne(it) }
+        if (!stepAsideForSystem()) return@post
+        runCatching { startActivity(Intent(this, ContactAddActivity::class.java).putExtra(ContactAddActivity.EXTRA_MODE, mode).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)) }
+            .onFailure { contactDone(false) }
+    } }
+    fun contactPicked(number: String) { contactPickedNumber = number }
     override fun newContact(number: String) { ui.post {
+        contactFromLock = false; contactPickedNumber = ""
         contactDialWasOpen = dialPane?.shown == true
         dialPane?.takeIf { it.shown }?.let { hideOne(it) }
         if (!stepAsideForSystem()) return@post
@@ -2874,8 +2892,10 @@ class OverlayService : Service(), StoryBridge.Host {
     fun systemScreenDone() { ui.post { comeBackFromSystem(); controlsChanged(); ui.postDelayed({ controlsChanged() }, 1000) } }
     fun contactDone(saved: Boolean) { ui.post {
         comeBackFromSystem()
-        if (contactDialWasOpen) { contactDialWasOpen = false; dialPane?.takeIf { !it.shown && s3Pane?.shown == true }?.let { setShown(it, true) } }
-        if (saved) showToast("Contact saved")
+        if (contactDialWasOpen) { contactDialWasOpen = false; dialPane?.takeIf { !it.shown && (s3Pane?.shown == true || (s3Held && dashGeom)) }?.let { setShown(it, true) } }
+        val num = contactPickedNumber; contactPickedNumber = ""
+        if (num.isNotEmpty()) (if (contactFromLock) lockDialPane else dialPane)?.web?.evaluateJavascript("window.storyDialSet&&window.storyDialSet(" + org.json.JSONObject.quote(num) + ")", null)
+        if (saved && num.isEmpty()) showToast("Contact saved")
     } }
 
     override fun showToast(msg: String) { ui.post {

@@ -2952,6 +2952,20 @@
   .station3-dialpad-key span.sub{ font-size:7px; letter-spacing:1px; opacity:.55; margin-top:1px; }
   .station3-dialpad-bottom-row{ display:flex; align-items:center; justify-content:space-between; width:100%; }
   .station3-newcontact{ display:flex; flex-direction:column; align-items:center; gap:3px; background:none; border:none; }
+  /* Search contact / View all contacts beside the dial pad (owner) - only in the app's own dial pad windows. The dial pad
+     itself keeps its exact size and place; the two buttons sit in the room on each side, as tall as the dial pad, in the
+     dial pad's own colours (they follow the theme with it), the words sideways like 'Show all cards'. */
+  .station3-dial-side{ display:none; }
+  html.dial-wide body.s3-only .station3-dialpad-float{ display:flex !important; align-items:stretch; gap:8px; width:auto !important; max-width:none !important;
+    padding:0 !important; background:transparent !important; box-shadow:none !important; border-radius:0 !important; }
+  html.dial-wide body.s3-only .station3-dialpad-float .station3-dialpad{ width:280px; box-sizing:border-box; flex-shrink:0;
+    padding:14px 14px 12px; border-radius:20px; background:#ffffff; box-shadow:0 14px 34px rgba(0,0,0,0.45); }
+  html.dial-wide body.s3-only .station3-dialpad-float .station3-dial-side{ display:flex; align-items:center; justify-content:center;
+    width:clamp(30px, calc((100vw - 280px) / 2 - 16px), 54px); flex-shrink:0; padding:0; border-radius:20px;
+    background:#ffffff; color:#000; border:1px solid rgba(0,0,0,0.08); box-shadow:0 14px 34px rgba(0,0,0,0.45); font-family:var(--font-body); }
+  html.dial-wide body.s3-only .station3-dialpad-float .station3-dial-side:active{ background:#e9e9e9; }
+  .station3-dial-side-in{ display:flex; align-items:center; gap:8px; writing-mode:vertical-rl; transform:rotate(180deg); font-size:12px; font-weight:700; letter-spacing:.3px; white-space:nowrap; }
+  .station3-dial-side-in svg{ transform:rotate(90deg); flex-shrink:0; }
   .station3-newcontact-btn{
     width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center;
     background:rgba(0,0,0,0.06); border:1px solid rgba(0,0,0,0.12); color:#000; flex-shrink:0;
@@ -13656,6 +13670,8 @@ document.addEventListener('click', (e)=>{
   if(el.hasAttribute('data-app-id')) pushRecentApp(which);
   storyOpenPhone(which);
 }, true);
+// A contact picked with the dial pad's Search contact: its number goes into the dial pad (OverlayService.contactDone).
+window.storyDialSet = function(n){ state.station3DialInput = String(n || '').replace(/[^0-9+*#]/g, '').slice(0, 24); renderDevice(); };
 window.storyGoHome = function(){ state.recentsOpen=false; state.homePickerOpen=false; state.appMenuId=null; state.current = state.homeScreen || 'wallet'; renderDevice(); };
 document.addEventListener('click', (e)=>{
   const el = e.target.closest && e.target.closest('[data-native-pkg]');
@@ -15520,7 +15536,13 @@ function station3DialpadHTML(){
     ['7','PQRS'],['8','TUV'],['9','WXYZ'],
     ['*',''],['0','+'],['#',''],
   ];
+  // Beside the dial pad (owner, 4 Nov 2026): Search contact on the left, View all contacts on the right - the phone's own
+  // contact picker / Contacts list. Only in the app's own dial pad windows (html.dial-wide), which leave room for them.
+  const side = (cls, act, label, icon)=>`<button class="station3-dial-side ${cls}" data-action="${act}" title="${label}"><span class="station3-dial-side-in">${icon}<span>${label}</span></span></button>`;
+  const ICON_SEARCH = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>';
+  const ICON_PEOPLE = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="4"/><path d="M2 21c0-4 3-6 7-6s7 2 7 6"/><path d="M16 4a4 4 0 0 1 0 8"/><path d="M22 21c0-3-1.5-5-4-5.6"/></svg>';
   return `
+    ${side('station3-dial-side-l', 'station3-contacts-search', 'Search contact', ICON_SEARCH)}
     <div class="station3-dialpad">
       <button class="station3-dialpad-close" data-action="station3-dialpad-close" title="Close">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M18 15l-6-6-6 6"/></svg>
@@ -15546,6 +15568,7 @@ function station3DialpadHTML(){
         </button>
       </div>
     </div>
+    ${side('station3-dial-side-r', 'station3-contacts-all', 'View all contacts', ICON_PEOPLE)}
   `;
 }
 // Three independent fixed-position pieces now, not a stacked column: Rows + Page Styles
@@ -18338,6 +18361,11 @@ function attachHandlers(){
           }
           break;
         }
+        case 'station3-contacts-search':
+        case 'station3-contacts-all':
+          if(NATIVE && window.StoryNative.contacts) window.StoryNative.contacts(action === 'station3-contacts-search' ? 'pick' : 'all');
+          else showToast('Contacts work in the Lockedintool app');
+          break;
         case 'station3-new-contact':
           // The phone's own new-contact screen with the number you typed (STORY comes straight back after).
           if(NATIVE && window.StoryNative.newContact){ window.StoryNative.newContact(state.station3DialInput.trim()); }

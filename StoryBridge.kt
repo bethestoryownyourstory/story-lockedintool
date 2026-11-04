@@ -43,6 +43,7 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         fun appPageOpen(pkg: String)
         fun openPages(page: String)
         fun newContact(number: String)
+        fun contacts(mode: String, fromLock: Boolean)
         fun setQuickAccess(json: String)
         fun toggleCreate()
         fun toggleCalls()
@@ -822,6 +823,9 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
     fun callNumberVideo(number: String) { if (station3) { host.callNumberVideo(number); if (!lock) host.closeStation3() } }
     /** Dial pad > New contact (with the number you typed). */
     @JavascriptInterface fun newContact(number: String) { if (station3) host.newContact(number) }
+    /** Dial pad > Search contact ('pick': the phone's contact picker, its number comes into the dial pad) / View all
+     *  contacts ('all': the phone's Contacts list). */
+    @JavascriptInterface fun contacts(mode: String) { if (station3) host.contacts(mode, lock) }
 
     /** Settings > QUICK ACCESS (JSON: mode, where, s3Aod, lockDial, dialAod). */
     @JavascriptInterface

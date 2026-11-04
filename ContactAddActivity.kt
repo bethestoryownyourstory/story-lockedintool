@@ -27,6 +27,15 @@ class ContactAddActivity : Activity() {
     }
 
     private fun open() {
+        val mode = intent.getStringExtra(EXTRA_MODE).orEmpty()
+        if (mode == "pick") {   // the phone's contact picker, with its own search; the number comes back to the dial pad
+            runCatching { startActivityForResult(Intent(Intent.ACTION_PICK, ContactsContract.CommonDataKinds.Phone.CONTENT_URI), 8) }.onFailure { done(false) }
+            return
+        }
+        if (mode == "all") {    // the phone's Contacts list
+            runCatching { startActivityForResult(Intent(Intent.ACTION_VIEW, ContactsContract.Contacts.CONTENT_URI), 9) }.onFailure { done(false) }
+            return
+        }
         val i = Intent(Intent.ACTION_INSERT, ContactsContract.Contacts.CONTENT_URI)
             .putExtra(ContactsContract.Intents.Insert.PHONE, intent.getStringExtra(EXTRA_NUMBER).orEmpty())
             .putExtra("finishActivityOnSaveCompleted", true)
@@ -36,7 +45,14 @@ class ContactAddActivity : Activity() {
     @Deprecated("Activity result")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        done(resultCode == RESULT_OK)
+        if (requestCode == 8) {
+            val num = if (resultCode == RESULT_OK) data?.data?.let { uri -> runCatching {
+                contentResolver.query(uri, arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER), null, null, null)?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
+            }.getOrNull() } else null
+            if (!num.isNullOrBlank()) OverlayService.instance?.contactPicked(num.filter { it.isDigit() || it == '+' || it == '*' || it == '#' })
+            done(false); return
+        }
+        done(resultCode == RESULT_OK && requestCode == 7)
     }
 
     private var reported = false
@@ -50,5 +66,5 @@ class ContactAddActivity : Activity() {
         super.onDestroy()
     }
 
-    companion object { const val EXTRA_NUMBER = "number" }
+    companion object { const val EXTRA_NUMBER = "number"; const val EXTRA_MODE = "mode" }
 }
