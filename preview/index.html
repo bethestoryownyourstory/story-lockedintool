@@ -5541,7 +5541,6 @@ function dashboardScreen(){
           <div class="sidebar-item" data-nav="notes">NOTES</div>
           ${dashCommunityOn() ? '<div class="sidebar-item" data-nav="community">COMMUNITY</div>' : ''}
           <div class="sidebar-item" data-nav="settings">SETTINGS</div>
-          <div class="sidebar-item" data-nav="subscription">SUBSCRIPTIONS</div>
           <div class="sidebar-item" data-nav="information">INFORMATION</div>
           <div class="sidebar-item" data-dash="camera">CAMERA</div>
           <div class="sidebar-item" data-dash="gallery">GALLERY</div>
@@ -9026,7 +9025,7 @@ function appGenuine(){ try{ return !(NATIVE && window.StoryNative.appGenuine) ||
 // never to a phone because of which screens it loaded (a reviewer copy sent to Stitch ran the owner's screens and so had
 // everything free).
 function fullAccess(){ const s = subState(); return !!(s && s.official) && appGenuine(); }
-function subActive(){ const s = subState(); return !!(s && s.plan && s.until > Date.now()) && appGenuine(); }
+function subActive(){ const s = subState(); return !!(s && s.plan && (s.until > Date.now() || (s.officialPlan && s.official))) && appGenuine(); }   // the official account's plan never ends (until 0)
 // The paywall only shows once the owner switches it on (server secret SUB_ENFORCE=1, with the live payment keys - owner).
 function subLocked(){ const s = subState(); return !!(s && s.connected && s.enforced) && !subActive() && !fullAccess(); }
 function subPremium(){ const s = subState(); return fullAccess() || !(s && s.connected) || (subActive() && s.plan === 'premium'); }
@@ -9102,8 +9101,10 @@ function subscriptionScreen(){
   // Owner: a plan you've paid for isn't listed any more - you have it (the line above the plans says so); only the
   // other plans show. It comes back when it runs out.
   if(w && w.status === 'pending' && !state.sub.polling){ state.sub.polling = true; subPollT = setTimeout(subPoll, 400); }   // checked while this page shows
-  const soon = !plansOnSale();   // FREE-ONLY launch (owner): Basic & Premium show "Coming soon", not for sale yet
-  const status = s.officialPlan ? 'Your plan: Premium · ' + subOptName(s.mode) + ' · official account'
+  // The page looks EXACTLY as a customer sees it (owner, 4 Nov 2026: 'make my subscription page be clean, show exactly
+  // how it will show to a customer') - the official account gets no extra buttons or words here.
+  const soon = !PLANS_ON_SALE;   // FREE-ONLY launch (owner): Basic & Premium show "Coming soon", not for sale yet
+  const status = s.officialPlan ? 'Your plan: Premium · ' + subOptName(s.mode)
     : active ? 'Your plan: ' + (s.plan === 'premium' ? 'Premium' : 'Basic') + ' · ' + subOptName(s.mode) + ' · paid until ' + until
     : !s.connected ? 'Subscriptions open once LOCKED IN TOOL’s payments are set up.'
     : soon ? 'Free: the Dashboard is yours. Basic & Premium are coming soon.'
@@ -9112,7 +9113,7 @@ function subscriptionScreen(){
   const mode = subMode();
   return `
     <div class="page-shell sub-page">
-    ${topBar('Subscription', false, '', 'dashboard', '', false)}
+    ${topBar('Subscription', false, '', 'settings', '', false)}
     <div class="sub-head">LOCKED IN TOOL</div>
     <div class="sub-opts">${SUB_OPTIONS.map(o=>`<button class="sub-opt${mode === o.key ? ' on' : ''}" data-action="sub-opt" data-v="${o.key}"><span class="sub-opt-mark">${mode === o.key ? '✓' : ''}</span>${o.name}${o.note ? `<span class="sub-opt-note">${o.note}</span>` : ''}<span class="sub-opt-tip"><b>${o.name}</b>${o.short}</span></button>`).join('')}</div>
     <div class="sub-status">${escText(status)}</div>
@@ -10066,8 +10067,20 @@ function settingsHubScreen(){
       <div class="set2-row set2-link" data-nav="notif-settings"><div class="set2-text"><div class="set2-name">Notifications</div></div><span class="chev-right">›</span></div>
       <div class="set2-row set2-link" data-nav="community-guidelines"><div class="set2-text"><div class="set2-name">Community Guidelines</div>${st !== 'active' ? `<div class="set2-sub" style="color:var(--red);">${st==='warned'?'Warning issued':'Account suspended'}</div>` : ''}</div><span class="chev-right">›</span></div>
     </div>
+    ${subSettingsHTML()}
     </div>
   `;
+}
+// Subscriptions live at the very bottom of Settings (owner, 4 Nov 2026: 'put the subscriptions options that on the
+// dashboard under settings at the very bottom. That's where its going to be now. I don't want it in the dashboard menu
+// anymore').
+function subSettingsHTML(){
+  const s = subState() || {};
+  const now = s.active ? (s.plan === 'premium' ? 'Premium' : 'Basic') + ' · ' + subOptName(s.mode) : 'Free';
+  return `<div class="section-title">SUBSCRIPTIONS</div>
+    <div class="set2-card">
+      <div class="set2-row set2-link" data-nav="subscription"><div class="set2-text"><div class="set2-name">LOCKED IN TOOL plans</div><div class="set2-sub">Your plan: ${escText(now)}</div></div><span class="chev-right">›</span></div>
+    </div>`;
 }
 
 // ===== NATIVE BRIDGE -- only active inside the STORY Android launcher app =====
