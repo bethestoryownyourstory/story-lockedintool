@@ -18363,7 +18363,7 @@ function attachHandlers(){
         }
         case 'station3-contacts-search':
         case 'station3-contacts-all':
-          if(NATIVE && window.StoryNative.contacts) window.StoryNative.contacts(action === 'station3-contacts-search' ? 'pick' : 'all');
+          if(NATIVE && window.StoryNative.contacts) window.StoryNative.contacts(action === 'station3-contacts-search' ? 'search' : 'all');
           else showToast('Contacts work in the Lockedintool app');
           break;
         case 'station3-new-contact':
