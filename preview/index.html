@@ -3956,6 +3956,7 @@
   .create-group-sheet::-webkit-scrollbar{ display:none; }
   .group-photo-grid{ display:grid; grid-template-columns:repeat(3, 1fr); gap:4px; margin-top:6px; }
   /* Background picture (Layouts): the screen's own black backgrounds turn see-through so the picture shows behind the cards. */
+  #content-area.lit-noscroll{ overflow-y:hidden !important; overscroll-behavior:none; }
   #content-area.lit-has-bg > *, .lit-has-bg .page-shell, .lit-has-bg .story-screen, .lit-has-bg .layouts-shell{ background-color:transparent !important; background-image:none !important; }
   .litbg-preview{ height:190px; border-radius:16px; border:1px solid var(--line); background:#000 center/cover no-repeat; display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:12px; margin:10px 0 4px; }
   .litbg-grid{ display:grid; grid-template-columns:repeat(3, 1fr); gap:4px; margin-top:8px; }
@@ -16735,6 +16736,13 @@ function renderDevice(){
   positionStation3();
   dashTellNative();
   litApplyColors();   // owner: Layouts colour customization - recolour this screen if it (or its row / all pages) has a colour system
+  // NO SCROLLING except Settings and Information (owner, 4 Nov 2026: 'I told you only settings and information must have
+  // scrolling - everything being visible in one full screen, no scrolling, not even a tiny bit'). Every other screen is
+  // fitted to the screen, but it still moved by ~2px when touched; now the screen itself simply can't scroll. Left
+  // scrollable: Settings / Information / its legal pages, the Apps list (all your phone's apps) and an open note's pages.
+  if(fsLive){ const cur = state.current;
+    const may = SCROLL_PAGES.has(cur) || cur === 'apps' || NO_FIT_SCREENS.has(cur) || !!fsLive.querySelector('#notes-editor-shell');
+    fsLive.classList.toggle('lit-noscroll', !may); if(!may && fsLive.scrollTop) fsLive.scrollTop = 0; }
   placeAllCardsBtn();
   saveSettings();
   walletBtnTell();
