@@ -10397,7 +10397,7 @@ function loadNativeApps(){
   if(!NATIVE) return;
   try{
     const list = JSON.parse(window.StoryNative.getApps());
-    const storyApps = state.installedApps.filter(a=>a.section==='STORY');
+    const storyApps = state.installedApps.filter(a=>a.section==='STORY' && !a.pkg);   // Lockedintool's own screens (its app comes back with the phone's list)
     // Each icon is turned into a small image once and reused, so the Apps area draws instantly every time.
     const prev = {};
     state.installedApps.forEach(a=>{ if(a.pkg && a.iconUrl) prev[a.pkg] = a; });
@@ -10412,7 +10412,10 @@ function loadNativeApps(){
           iconUrl = URL.createObjectURL(new Blob([bytes], { type:'image/png' }));
         }catch(e){}
       }
-      return { id:'pkg:'+a.pkg, pkg:a.pkg, name:a.label, icon:'📱', iconUrl, iconSrc:a.icon, section:'PHONE APPS' };
+      // The Lockedintool app itself sits in Lockedintool's own space, first - never mixed with the phone's apps (owner,
+      // 4 Nov 2026: 'move lockedintool app to be always on the lockedintool own space ... so that it's not mixed with the apps').
+      const own = a.pkg === 'com.story.launcher' || a.pkg === 'com.lockedintool.app';
+      return { id:'pkg:'+a.pkg, pkg:a.pkg, name:a.label, icon:'📱', iconUrl, iconSrc:a.icon, section: own ? 'STORY' : 'PHONE APPS', own };
     }));
     Object.values(prev).forEach(a=>{ try{ URL.revokeObjectURL(a.iconUrl); }catch(e){} });
     // An app that's gone from the phone stops being a page.
@@ -13815,7 +13818,7 @@ function appsScreen(){
     <div class="page-shell">
     ${topBar('Apps', false)}
     ${sections.map(sec=>{
-      const items = state.installedApps.filter(a=>a.section===sec);
+      const items = state.installedApps.filter(a=>a.section===sec).sort((x, y)=>(y.own ? 1 : 0) - (x.own ? 1 : 0));
       if(!items.length) return '';
       return `
         <div class="section-title">${sec === 'STORY' ? 'LOCKEDINTOOL' : sec}</div>
