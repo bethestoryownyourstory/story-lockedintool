@@ -2338,6 +2338,14 @@ class OverlayService : Service(), StoryBridge.Host {
     }
     private fun secPrompt(then: (() -> Unit)?) {
         if (secIsOpen()) { then?.invoke(); return }
+        // The phone was JUST unlocked with its own fingerprint / face / PIN (Lockedintool security uses that same lock):
+        // unlocking straight into Lockedintool counts as Lockedintool's unlock - no second prompt, instant (owner, 4 Nov
+        // 2026: 'that security option takes time to show up ... everything should be instant' -> chose 'Count phone
+        // unlock'). Only within 4 s of the phone's unlock; opening Lockedintool any other time still asks.
+        if (userPresentAt > 0 && System.currentTimeMillis() - userPresentAt < 4000 && !keyguardLocked() &&
+            runCatching { getSystemService(android.app.KeyguardManager::class.java).isDeviceSecure }.getOrDefault(false)) {
+            secOpen = true; secTell(); LockedintoolHome.current?.showShot(); then?.invoke(); return
+        }
         secPrompting = true
         if (!stepAsideForSystem()) { secPrompting = false; then?.invoke(); return }   // another of the phone's screens is up: just show it locked
         secThen = then
