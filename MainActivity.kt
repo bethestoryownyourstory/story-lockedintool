@@ -34,6 +34,32 @@ class MainActivity : Activity() {
         fun title(t: String, size: Float = 22f) = TextView(this).apply { text = t; setTextColor(StoryTheme.swap(this@MainActivity, Color.WHITE)); textSize = size; setPadding(0, 0, 0, pad / 2) }
         fun btn(t: String, f: () -> Unit) = Button(this).apply { text = t; isAllCaps = false; setOnClickListener { f() } }
         col.addView(title("Lockedintool", 32f))
+        // The move to Lockedintool's own Android ID (AppMove.kt). The NEW app's first start copies everything from the
+        // old one before anything else (owner mode included, so this comes before the Access check).
+        if (AppMove.needed(this)) {
+            val msg = title("Moving your Lockedintool to its new app… keep this screen open.", 18f)
+            col.addView(msg)
+            col.addView(title("Your settings, notes, drawings, money history, cards, trading accounts and files are copied from the old Lockedintool. The old one keeps everything until you remove it.", 15f))
+            setContentView(ScrollView(this).apply { setBackgroundColor(StoryTheme.swap(this@MainActivity, Color.BLACK)); addView(col) })
+            AppMove.run(this) { r ->
+                if (r == "ok") recreate()
+                else {
+                    msg.text = if (r == "old") "The old Lockedintool needs its latest update first: open it, tap Check for updates now, then open this one again."
+                        else "Couldn’t finish copying - nothing was lost. Open this again to try once more."
+                    col.addView(btn("Try again") { recreate() })
+                }
+            }
+            return
+        }
+        // The OLD app once the new Lockedintool is on the phone: it only points there.
+        if (AppMove.handedOver(this)) {
+            col.addView(title("Lockedintool has moved to its new app.", 18f))
+            col.addView(title("Open the new Lockedintool - it copies everything from this one. Then this old one can be removed.", 15f))
+            col.addView(btn("Open the new Lockedintool") { packageManager.getLaunchIntentForPackage(AppMove.NEW_PKG)?.let { startActivity(it) } })
+            col.addView(btn("Remove this old Lockedintool") { startActivity(Intent(Intent.ACTION_DELETE, android.net.Uri.parse("package:$packageName"))) })
+            setContentView(ScrollView(this).apply { setBackgroundColor(StoryTheme.swap(this@MainActivity, Color.BLACK)); addView(col) })
+            return
+        }
         // Not allowed to use Lockedintool (Access.kt): ONLY the owner's notice - nothing else works or shows. The build line
         // stays tappable so the owner can unlock a new phone of their own with the PIN.
         if (!Access.allowed(this)) {
@@ -55,6 +81,13 @@ class MainActivity : Activity() {
             })
             setContentView(ScrollView(this).apply { setBackgroundColor(StoryTheme.swap(this@MainActivity, Color.BLACK)); addView(col) })
             return
+        }
+        // Everything was copied from the old Lockedintool: remove it (asked once by itself, the button stays until it's gone).
+        if (AppMove.removeOld(this)) {
+            col.addView(title("Everything was copied from the old Lockedintool. Remove the old one so only this one runs. Log in once to bring your chats back.", 15f))
+            col.addView(btn("Remove the old Lockedintool") { AppMove.askRemoveOld(this) })
+            val p = getSharedPreferences("story", MODE_PRIVATE)
+            if (!p.getBoolean("old_remove_asked", false)) { p.edit().putBoolean("old_remove_asked", true).apply(); AppMove.askRemoveOld(this) }
         }
         col.addView(title("Floats over your phone. Your home screen, lock screen and apps stay exactly as they are.", 15f))
         col.addView(btn("1. Allow display over other apps") {

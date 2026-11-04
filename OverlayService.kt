@@ -162,6 +162,10 @@ class OverlayService : Service(), StoryBridge.Host {
         if (!Release.agreedAuto(this)) { gated = true; running = false; UpdateActivity.ask(this, force = true); stopSelf(); return }
         // Only the owner's phones until launch, and never a modified copy (Access.kt): nothing starts at all.
         if (!Access.allowed(this)) { gated = true; running = false; Access.refresh(this); stopSelf(); return }
+        // The move to Lockedintool's own Android ID (AppMove): the old app steps down once it handed over; the new app
+        // waits for the setup screen to copy everything from the old one first.
+        if (AppMove.handedOver(this) && getSharedPreferences("story", MODE_PRIVATE).getBoolean("moved_out", false)) { gated = true; running = false; stopSelf(); return }
+        if (AppMove.needed(this)) { gated = true; running = false; stopSelf(); return }
         instance = this
         getSharedPreferences("story", MODE_PRIVATE).edit().putBoolean("enabled", true).apply()
         quietApps(false)  // never leave the phone muted (e.g. STORY was restarted while the Pages were open)

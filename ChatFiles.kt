@@ -59,7 +59,7 @@ object ChatFiles {
         outDir(c).listFiles()?.forEach { if (System.currentTimeMillis() - it.lastModified() > 86400000L) it.delete() }
         val safe = name.replace(Regex("[^A-Za-z0-9 _.()-]"), "_").take(80).ifBlank { "file" }
         val f = File(outDir(c), safe).apply { writeBytes(bytes) }
-        val u = androidx.core.content.FileProvider.getUriForFile(c, "com.story.launcher.files", f)
+        val u = androidx.core.content.FileProvider.getUriForFile(c, c.packageName + ".files", f)
         val view = Intent(Intent.ACTION_VIEW).setDataAndType(u, mime.ifBlank { "application/octet-stream" })
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
         c.startActivity(Intent.createChooser(view, null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION))

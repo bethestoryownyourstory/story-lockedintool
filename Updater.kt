@@ -96,6 +96,8 @@ object Updater {
         busy = true; lastCheck = System.currentTimeMillis()
         if (now) nowWanted = false
         try {
+            // The old app (com.story.launcher) once the new Lockedintool is installed: it only hands over now (AppMove).
+            if (AppMove.handedOver(ctx)) { setStatus(ctx, "Lockedintool has moved to its new app - open the new Lockedintool"); return }
             val base = Release.base(ctx)
             val latest = JSONObject(open(base + "version.json").inputStream.bufferedReader().use { it.readText() }).getLong("versionCode")
             val mine = ctx.packageManager.getPackageInfo(ctx.packageName, 0).longVersionCode

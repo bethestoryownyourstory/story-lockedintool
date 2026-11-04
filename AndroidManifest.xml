@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Lockedintool's own Android ID move (AppMove.kt): only apps signed with Lockedintool's key may use the hand-over door. -->
+    <permission android:name="com.lockedintool.permission.MOVE" android:protectionLevel="signature" />
+    <uses-permission android:name="com.lockedintool.permission.MOVE" />
     <!-- The Dashboard's real Controls: Wi-Fi's state (and switching it on Android 9 and older), Do Not Disturb. -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
@@ -218,10 +221,17 @@
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_focus" />
         </receiver>
 
+        <!-- The hand-over door for the move to Lockedintool's own Android ID (AppMove.kt) - signature-locked. -->
+        <provider
+            android:name=".MoveProvider"
+            android:authorities="${applicationId}.move"
+            android:exported="true"
+            android:permission="com.lockedintool.permission.MOVE" />
+
         <!-- Lets Android's own installer open a downloaded update (plan B when the quiet install fails). -->
         <provider
             android:name="androidx.core.content.FileProvider"
-            android:authorities="com.story.launcher.files"
+            android:authorities="${applicationId}.files"
             android:exported="false"
             android:grantUriPermissions="true">
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />

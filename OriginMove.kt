@@ -75,7 +75,7 @@ object OriginMove {
     }
 
     // Everything the windows keep: every saved setting / chat / page (localStorage) and the notes + drawings (IndexedDB).
-    private const val EXPORT = """(async()=>{
+    const val EXPORT = """(async()=>{
       const ls = {}; for(let i = 0; i < localStorage.length; i++){ const k = localStorage.key(i); ls[k] = localStorage.getItem(k); }
       const notes = await new Promise(res=>{ try{ const r = indexedDB.open('story-notes', 1);
         r.onupgradeneeded = ()=>r.result.createObjectStore('kv');
