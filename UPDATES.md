@@ -141,7 +141,7 @@ commits, pushed as a new update) - nothing else changes.
 | 133 | 2026-11-04 | Trading page names put right: the small label "FOCUS PAGE" sits on top of the big "Trading" title (sizes as before) | c29769d |
 | 134 | 2026-11-04 | Servers renamed to Lockedintool's own names (lockedintool-msg / -trade / -release) - accounts and chats moved with them; the app (1.307) can now hand everything over to Lockedintool's own Android ID | 51acc43, c15e127, 6e229a3 |
 | 135 | 2026-11-04 | Subscription: the rand price is today's conversion of the dollar price, other countries see their own currency too; the price-change note shows under every plan and members are told when a price changes | 234fa93 |
-| 136 | 2026-11-04 | Your phone (the official account) is Premium · Only system - always on, no payment | (this) |
+| 136 | 2026-11-04 | Your phone (the official account) is Premium · Only system - always on, no payment | b38fec9 |
 | 137 | 2026-11-04 | Only system really asks to make Lockedintool your Home app (the question never appeared before), and asks again until it is | (this) |
 | 138 | 2026-11-04 | Your account stays on Only system for good - it can't be switched to Second system | (this) |
 | 139 | 2026-11-04 | Only system: no Apps | Lockedintool switch any more, and never a frozen old home screen behind Lockedintool | (this) |
@@ -155,3 +155,4 @@ commits, pushed as a new update) - nothing else changes.
 | 147 | 2026-11-04 | No more 'Lockedintool is on' notification in the panel | (this) |
 | 148 | 2026-11-04 | Only system: no black screen on the way to the Dashboard (it stays drawn in Lockedintool's Home); after an update you're put back on Lockedintool, not the phone's old home screen | (this) |
 | 149 | 2026-11-04 | Only system: no black screen while Lockedintool reloads after Close all - you see Lockedintool's last picture until the Dashboard is ready | (this) |
+| 150 | 2026-11-04 | Only system: the Dashboard comes back by itself after closing an app (no black screen to tap). Colour systems apply instantly and to every screen reached from the Dashboard (Settings, Layouts, Notes, Information...) | (this) |

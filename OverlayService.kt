@@ -837,7 +837,7 @@ class OverlayService : Service(), StoryBridge.Host {
         // even an untouchable one. A hidden pane is fully see-through, so apps underneath get every touch.
         p.lp.alpha = if (shown) 1f else 0f
         if (p.small && shown) { p.lp.width = p.openW; p.lp.height = p.openH }
-        p.frame.alpha = if (shown && !((p.small || (p === pagesPane && pagesInHome())) && p.loading)) 1f else 0f
+        p.frame.alpha = if (shown && !((p.small && p.loading) || (p === pagesPane && pagesInHome() && p.loading && p.web.progress < 100))) 1f else 0f
         // The Pages' own brightness (the slider's "system" mode) only while they're up - never over other apps.
         if (p === pagesPane) p.lp.screenBrightness = if (shown && pagesBright >= 0f) pagesBright else WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
         runCatching { p.wm.updateViewLayout(p.frame, p.lp) }
@@ -861,7 +861,7 @@ class OverlayService : Service(), StoryBridge.Host {
         // goes to the dashboard'); behind a floating window you see the real Lockedintool. Not with Lockedintool security
         // on (then it only shows after unlocking).
         if (p === pagesPane && !shown && pagesInHome() && !Security.lit(this)) {
-            p.lp.alpha = 1f; p.frame.alpha = if (p.loading) 0f else 1f
+            p.lp.alpha = 1f; p.frame.alpha = if (p.loading && p.web.progress < 100) 0f else 1f
             runCatching { p.wm.updateViewLayout(p.frame, p.lp) }
         }
     }
@@ -1761,7 +1761,11 @@ class OverlayService : Service(), StoryBridge.Host {
         if (!SystemMode.on(this) || pagesPane?.shown == true || keyguardLocked() || WidgetMode.on(this)) return@post
         if (pickerHid.isNotEmpty() || openingPkg != null || createActive || callActive) return@post
         if (StoryAccessibilityService.recentsInFront()) return@post
-        if (SystemClock.uptimeMillis() - navAsideAt > 3000 && homeShot != null) return@post
+        // Every time Lockedintool's Home is what you see, the Dashboard is on it - never a black Home you have to tap
+        // (owner, 4 Nov 2026: 'everytime i close an app ... all I see is a black screen then I have to tap the screen to
+        // see the dashboard'). The phone's floating windows sit above the Home now, so there's nothing to wait for.
+        // (Lockedintool security: its own unlock asks first, so it isn't asked again and again here.)
+        if (Security.lit(this)) return@post
         systemShowPages()
     } }
     private fun stepAsideForPhoneNav() {
