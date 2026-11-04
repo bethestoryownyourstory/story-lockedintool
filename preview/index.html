@@ -3942,6 +3942,10 @@
   .create-group-sheet{ scrollbar-width:none; }
   .create-group-sheet::-webkit-scrollbar{ display:none; }
   .group-photo-grid{ display:grid; grid-template-columns:repeat(3, 1fr); gap:4px; margin-top:6px; }
+  /* Background picture (Layouts): the screen's own black backgrounds turn see-through so the picture shows behind the cards. */
+  #content-area.lit-has-bg > *, .lit-has-bg .page-shell, .lit-has-bg .story-screen, .lit-has-bg .layouts-shell{ background-color:transparent !important; background-image:none !important; }
+  .litbg-preview{ height:190px; border-radius:16px; border:1px solid var(--line); background:#000 center/cover no-repeat; display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:12px; margin:10px 0 4px; }
+  .litbg-grid{ display:grid; grid-template-columns:repeat(3, 1fr); gap:4px; margin-top:8px; }
   .group-photo{ aspect-ratio:1; padding:0; border:none; border-radius:8px; overflow:hidden; background:var(--card-2); }
   .group-photo img{ width:100%; height:100%; object-fit:cover; display:block; }
   .group-photo-more{ display:flex; flex-direction:column; align-items:center; justify-content:center; color:var(--text); font-size:22px; font-weight:700; border:1px dashed var(--line); }
@@ -4511,10 +4515,60 @@ function litRecolorArea(area, screen){
     }
   }
 }
+// ===== BACKGROUND PICTURE (Layouts > Dashboard / Pages) - owner, 4 Nov 2026: 'where the option to put any picture as my
+// background? ... that should be under layouts' -> 'Dashboard + Pages, each its own'. Same scopes as Color customization:
+// 'dashboard' (the Dashboard and every screen reached from it), 'all' pages, 'row:<id>', 'page:<key>' (a page falls back
+// page -> its row -> all pages). The picture is the phone's own photo (upright, 1440px - story-photo/media/<id>), kept
+// on the phone in IndexedDB 'story-bg' (never uploaded); which scopes have one is in localStorage 'story-bg-set' so it's
+// known at once, and the pictures are loaded into memory at start (LIT_BG), so a screen shows its picture instantly.
+const LIT_BG = {};
+function litBgSet(){ try{ return JSON.parse(localStorage.getItem('story-bg-set') || '{}') || {}; }catch(e){ return {}; } }
+function litBgDb(){ return new Promise((res, rej)=>{ const r = indexedDB.open('story-bg', 1); r.onupgradeneeded = ()=>r.result.createObjectStore('pics'); r.onsuccess = ()=>res(r.result); r.onerror = ()=>rej(r.error); }); }
+async function litBgLoadAll(){
+  const set = litBgSet(); const keys = Object.keys(set); if(!keys.length) return;
+  try{
+    const db = await litBgDb();
+    await Promise.all(keys.map(k=>new Promise(res=>{ const q = db.transaction('pics').objectStore('pics').get(k);
+      q.onsuccess = ()=>{ if(q.result){ if(LIT_BG[k]) URL.revokeObjectURL(LIT_BG[k]); LIT_BG[k] = URL.createObjectURL(q.result); } res(); }; q.onerror = ()=>res(); })));
+    litApplyColors();
+  }catch(e){}
+}
+if(!/[?&]s3=/.test(location.search)) setTimeout(()=>{ try{ litBgLoadAll(); }catch(e){} }, 0);   // the pictures in memory at start
+async function litBgPut(target, blob){
+  const db = await litBgDb();
+  await new Promise((res, rej)=>{ const t = db.transaction('pics', 'readwrite'); if(blob) t.objectStore('pics').put(blob, target); else t.objectStore('pics').delete(target); t.oncomplete = res; t.onerror = ()=>rej(t.error); });
+  const set = litBgSet(); if(blob) set[target] = Date.now(); else delete set[target];
+  try{ localStorage.setItem('story-bg-set', JSON.stringify(set)); }catch(e){}
+  if(LIT_BG[target]){ URL.revokeObjectURL(LIT_BG[target]); delete LIT_BG[target]; }
+  if(blob) LIT_BG[target] = URL.createObjectURL(blob);
+}
+function litBgFor(screen){
+  if(!screen) return null;
+  if(screen === '__pages-all') return LIT_BG.all || null;
+  if(screen === 'dashboard' || !litIsPage(screen)) return LIT_BG.dashboard || null;
+  if(LIT_BG['page:' + screen]) return LIT_BG['page:' + screen];
+  const r = rowOfPage(screen), id = r ? rowIds()[r - 1] : null;
+  if(id != null && LIT_BG['row:' + id]) return LIT_BG['row:' + id];
+  return LIT_BG.all || null;
+}
+function litBgLabel(target){ return litBgSet()[target] ? 'Picture' : 'None'; }
+// The picture behind one screen (#content-area, or a swipe neighbour): the screen's own backgrounds turn see-through so it
+// shows; the cards keep theirs (readable), with a light shade over the picture.
+function litBgArea(area, screen){
+  if(!area) return;
+  const url = litBgFor(screen);
+  if(!url){ if(area.__litbg){ area.classList.remove('lit-has-bg'); area.style.removeProperty('background-image'); area.style.removeProperty('background-size'); area.style.removeProperty('background-position'); area.__litbg = null; } return; }
+  if(area.__litbg === url) return;
+  area.__litbg = url;
+  area.classList.add('lit-has-bg');
+  area.style.setProperty('background-image', `linear-gradient(rgba(0,0,0,0.28), rgba(0,0,0,0.28)), url("${url}")`, 'important');
+  area.style.setProperty('background-size', 'cover', 'important');
+  area.style.setProperty('background-position', 'center', 'important');
+}
 function litApplyColors(){
   const area = document.getElementById('content-area');
   if(!area) return;
-  if(document.querySelector('.lit-auth') || (state.pageStyleOn && state.pageStyleViewOpen) || state.rowsViewOpen){ litRecolorArea(area, null); return; }
+  if(document.querySelector('.lit-auth') || (state.pageStyleOn && state.pageStyleViewOpen) || state.rowsViewOpen){ litRecolorArea(area, null); litBgArea(area, null); return; }
   // Layouts > Pages > Color customization: the screen shows the PAGES' colours ('all pages'), each row / page its own.
   // The background takes 'all pages' only when EVERY page uses the same colours; if a row or a page has its own, the
   // background stays your System theme's and only the options are coloured (owner, 4 Nov 2026: 'if you apply to all
@@ -4523,6 +4577,7 @@ function litApplyColors(){
   // everything under pages the same then the background will be that color too'). Each option shows what it really
   // looks like: a row = its own or all pages', a page = its own, its row's or all pages'.
   if(area.querySelector('[data-litc-pages]')){
+    litBgArea(area, null);
     const o = litColors(), all = o.all;
     const same = v=>!v || (all && v.bg === all.bg && v.text === all.text);
     const uniform = !!(all && all.bg && all.text) && Object.values(o.rows || {}).every(same) && Object.values(o.pages || {}).every(same);
@@ -4535,6 +4590,7 @@ function litApplyColors(){
     return;
   }
   litRecolorArea(area, state.current || 'dashboard');
+  litBgArea(area, (document.querySelector('.lit-auth') || (state.pageStyleOn && state.pageStyleViewOpen) || state.rowsViewOpen || state.current === 'layouts-bg') ? null : (state.current || 'dashboard'));
 }
 // Puts one colour system on an element (its own colours and everything inside it).
 function litSetVars(el, sys){
@@ -5384,6 +5440,7 @@ let state = {
   colorPickerVal:100,
   colorPickerHex:'#ffffff',
   colorScope:null,        // Layouts colour customization: 'dashboard' | 'pages' (which Layouts tab opened it)
+  bgScope:null, bgEditTarget:null, bgPicking:false, bgShown:90,   // Layouts > Background picture
   colorEditTarget:null,   // which scope is being edited: 'dashboard' | 'all' | 'row:<id>' | 'page:<key>'
   highlighterSize:2,
   plusMenuOpen:false,
@@ -9497,6 +9554,9 @@ function layoutsScreen(){
       <div class="row-card" style="cursor:pointer;" data-nav="layouts-color" data-scope="dashboard">
         <div class="row"><div class="row-left"><div class="row-name">Color customization</div><div class="row-sub">${litScopeLabel('dashboard') === 'Default' ? 'Pick your own background and text colours' : litScopeLabel('dashboard')}</div></div><span class="chev-right">›</span></div>
       </div>
+      <div class="row-card" style="cursor:pointer;" data-nav="layouts-bg" data-scope="dashboard">
+        <div class="row"><div class="row-left"><div class="row-name">Background picture</div><div class="row-sub">${litBgSet().dashboard ? 'Your picture' : 'Any picture from your phone'}</div></div><span class="chev-right">›</span></div>
+      </div>
     ` : `
       <div class="section-title">PAGES</div>
       <div class="row-card" style="cursor:pointer;" data-nav="layouts-homescreen">
@@ -9504,6 +9564,9 @@ function layoutsScreen(){
       </div>
       <div class="row-card" style="cursor:pointer;" data-nav="layouts-color" data-scope="pages">
         <div class="row"><div class="row-left"><div class="row-name">Color customization</div><div class="row-sub">Your own colours - a whole row, one page, or all pages</div></div><span class="chev-right">›</span></div>
+      </div>
+      <div class="row-card" style="cursor:pointer;" data-nav="layouts-bg" data-scope="pages">
+        <div class="row"><div class="row-left"><div class="row-name">Background picture</div><div class="row-sub">Any picture - a whole row, one page, or all pages</div></div><span class="chev-right">›</span></div>
       </div>
       <div class="row-card" style="cursor:pointer;" data-nav="layouts-pagelayout">
         <div class="row"><div class="row-left"><div class="row-name">Page layout</div><div class="row-sub">The order of the pages in each row</div></div><span class="chev-right">›</span></div>
@@ -9649,6 +9712,49 @@ function layoutsColorScreen(){
     `).join('')}
     </div>
   `;
+}
+// Layouts > Background picture: the Dashboard has one; the Pages have all pages / each row / each page (like colours).
+function layoutsBgScreen(){
+  if(state.bgEditTarget) return bgEditorHTML(state.bgEditTarget);
+  const rows = rowsList(), ids = rowIds();
+  return `
+    <div class="page-shell layouts-shell">
+    ${topBar('Background picture', false, '', 'layouts', '', false, true)}
+    <div class="note">Any picture from your phone behind your pages - all of them, a whole row, or one page.</div>
+    <div class="row-card" style="cursor:pointer;" data-action="bg-edit" data-t="all">
+      <div class="row"><div class="row-left"><div class="row-name">All pages</div><div class="row-sub">${litBgLabel('all')}</div></div><span class="chev-right">›</span></div>
+    </div>
+    ${rows.map((items, i)=>`
+      <div class="section-title">ROW ${i + 1}</div>
+      <div class="row-card">
+        <div class="row" style="cursor:pointer;" data-action="bg-edit" data-t="row:${ids[i]}"><div class="row-left"><div class="row-name">Whole row</div><div class="row-sub">${litBgLabel('row:' + ids[i])}</div></div><span class="chev-right">›</span></div>
+        ${items.map(it=>`<div class="row" style="cursor:pointer;" data-action="bg-edit" data-t="page:${escText(it.key)}"><div class="row-left"><div class="row-name">${it.label}</div><div class="row-sub">${litBgLabel('page:' + it.key)}</div></div><span class="chev-right">›</span></div>`).join('')}
+      </div>
+    `).join('')}
+    </div>`;
+}
+function bgEditorHTML(target){
+  const title = target === 'dashboard' ? 'Dashboard picture' : target === 'all' ? 'All pages'
+    : target.indexOf('row:') === 0 ? 'Row ' + (rowIds().indexOf(+target.slice(4)) + 1) : litPageName(target.slice(5));
+  const url = LIT_BG[target];
+  let grid = '';
+  if(state.bgPicking){
+    const access = NATIVE && window.StoryNative.photoAccess ? window.StoryNative.photoAccess() : 'none';
+    let ids = []; if(access !== 'none') try{ ids = JSON.parse(window.StoryNative.listPhotos() || '[]'); }catch(e){}
+    grid = access === 'none'
+      ? `<div class="note">Let Lockedintool show your pictures here.</div><button class="notes-create-btn" style="width:100%;margin-top:8px;" data-action="bg-allow">Allow</button>`
+      : `<div class="litbg-grid">${access === 'partial' ? `<button class="group-photo group-photo-more" data-action="bg-allow">+<span>More pictures</span></button>` : ''}${ids.slice(0, state.bgShown || 90).map(id=>`<button class="group-photo" data-action="bg-pick" data-photo="${escText(String(id))}"><img loading="lazy" alt="" src="${ProfileThumbBase}thumb/${escText(String(id))}"></button>`).join('')}</div>${ids.length ? '' : '<div class="note">No pictures on this phone yet.</div>'}${ids.length > (state.bgShown || 90) ? `<button class="notes-create-btn" style="width:100%;margin-top:8px;" data-action="bg-more">More</button>` : ''}`;
+  }
+  return `
+    <div class="page-shell layouts-shell">
+    <div class="topbar"><button class="dash-back" data-action="bg-editback">‹</button><div class="topbar-title">${escText(title)}</div><span style="width:30px;"></span></div>
+    <div class="litbg-preview" data-keep-color style="${url ? `background-image:url('${url}');` : ''}">${url ? '' : 'No picture'}</div>
+    <div class="row-card">
+      <div class="row" style="cursor:pointer;" data-action="bg-choose"><div class="row-left"><div class="row-name">${url ? 'Change picture' : 'Choose a picture'}</div></div><span class="chev-right">›</span></div>
+      ${url ? `<div class="row" style="cursor:pointer;" data-action="bg-remove"><div class="row-left"><div class="row-name" style="color:#ff453a;">Remove picture</div></div></div>` : ''}
+    </div>
+    ${grid}
+    </div>`;
 }
 function colorEditorHTML(target){
   const v = litScopeGet(target) || { bg:'#000000', text:'#f3f2ee', name:'' };
@@ -14398,7 +14504,7 @@ let noteAccessWaiting = null;
 window.storyNoteAccessDone = function(kind){
   const w = noteAccessWaiting; noteAccessWaiting = null;
   if(w && w.kind === kind && document.getElementById('note-panel')) w.then();
-  else if(state.groupDraftPicking && kind === 'photos') renderDevice();   // Create Group's picture grid
+  else if((state.groupDraftPicking || state.bgPicking) && kind === 'photos') renderDevice();   // Create Group's / Background picture's grid
   if(cardAccessWaiting && kind === 'camera'){ cardAccessWaiting = false; const w = document.getElementById('card-cam'); if(w) openCardCamera(w.dataset.side); }
 };
 // Picture: the phone's real pictures in STORY's own grid (thumbnails straight from the phone); tap one -> in the note.
@@ -15411,6 +15517,7 @@ function renderScreenContent(){
     case 'layouts-pagelayout': return layoutsPageLayoutScreen();
     case 'layouts-music': return layoutsMusicScreen();
     case 'layouts-color': return layoutsColorScreen();
+    case 'layouts-bg': return layoutsBgScreen();
     case 'layouts-arrangement': return layoutsArrangementScreen();
     case 'settings': return settingsHubScreen();
     case 'notes': return notesScreen();
@@ -16980,6 +17087,7 @@ function attachHandlers(){
       if(target === 'community' && state.current !== 'community-group' && state.current !== 'community') state.communityMode = cmStartMode();
       if(target === 'layouts-pagelayout') state.layoutRowEdit = null;   // Page layout opens on its list of rows
       if(target === 'settings') state.setSection = null;   // Settings opens on its list of names (owner)
+      if(target === 'layouts-bg'){ state.bgScope = el.getAttribute('data-scope') || 'pages'; state.bgEditTarget = state.bgScope === 'dashboard' ? 'dashboard' : null; state.bgPicking = false; }
       if(target === 'layouts-color'){ state.colorScope = el.getAttribute('data-scope') || 'pages'; state.colorEditTarget = state.colorScope === 'dashboard' ? 'dashboard' : null; }   // Dashboard: one scope, open its editor straight away
       state.moneyTransferOpen = false;   // Money's Transfer Money pop-up (its Wallet Overview button) never stays open behind
       state.current = target;
@@ -18171,6 +18279,25 @@ function attachHandlers(){
         case 'app-row-pick': { const p = state.appRowPick; state.appRowPick = null; if(p){ const v = el.getAttribute('data-v'); toggleAppPage(p, v === 'new' ? 'new' : +v); } break; }
         case 'app-row-close': state.appRowPick = null; break;
         case 'row-edit': state.layoutRowEdit = +el.getAttribute('data-v'); break;
+        // Layouts > Background picture
+        case 'bg-edit': state.bgEditTarget = el.getAttribute('data-t'); state.bgPicking = false; break;
+        case 'bg-editback':
+          if(state.bgPicking){ state.bgPicking = false; break; }
+          if(state.bgScope === 'dashboard'){ state.current = 'layouts'; state.layoutsTab = 'dashboard'; state.bgEditTarget = null; }
+          else state.bgEditTarget = null;
+          break;
+        case 'bg-choose': if(!NATIVE){ showToast('Pictures work in the Lockedintool app'); break; } state.bgPicking = true; state.bgShown = 90; break;
+        case 'bg-more': state.bgShown = (state.bgShown || 90) + 90; break;
+        case 'bg-allow': noteAccessWaiting = { kind:'photos', then: ()=>renderDevice() }; window.StoryNative.noteAsk('photos'); return;
+        case 'bg-pick': {
+          const id = el.getAttribute('data-photo'), target = state.bgEditTarget;
+          state.bgPicking = false;
+          fetch(ProfileThumbBase + 'media/' + encodeURIComponent(id)).then(r=>{ if(!r.ok) throw 0; return r.blob(); })
+            .then(b=>litBgPut(target, b)).then(()=>{ showToast('Picture set'); renderDevice(); })
+            .catch(()=>showToast('Couldn\u2019t use that picture'));
+          break;
+        }
+        case 'bg-remove': litBgPut(state.bgEditTarget, null).then(()=>{ showToast('Picture removed'); renderDevice(); }); break;
         // Layouts > Color customization
         case 'color-edit': state.colorEditTarget = el.getAttribute('data-t'); break;
         case 'color-editback':
@@ -21039,7 +21166,7 @@ function buildNeighbor(pg){
   host.innerHTML = frameHTML;
   document.body.appendChild(host);
   const area = host.querySelector('#content-area');
-  if(area){ area.innerHTML = contentHTML; try{ fitPageToScreen(area, null, pg); }catch(e){} try{ litRecolorArea(area, pg); }catch(e){} }   // recolour the neighbour so a swipe never flashes its plain look
+  if(area){ area.innerHTML = contentHTML; try{ fitPageToScreen(area, null, pg); }catch(e){} try{ litRecolorArea(area, pg); litBgArea(area, pg); }catch(e){} }   // recolour the neighbour so a swipe never flashes its plain look
   NEIGHBORS[pg] = { host, w:r.width, h:r.height };
   return NEIGHBORS[pg];
 }
