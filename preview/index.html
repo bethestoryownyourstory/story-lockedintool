@@ -4250,7 +4250,7 @@ const LOCK_CLOSED_SVG = '<svg width="15" height="15" viewBox="0 0 24 24" fill="n
 const LOCK_OPEN_SVG = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 10.5V7a4 4 0 0 1 7.6-1.7"/></svg>';
 function quoteGet(){ try{ const q = JSON.parse(localStorage.getItem('story-quote') || 'null'); if(q && typeof q === 'object') return { text: q.text || '', author: (q.author != null ? q.author : 'Unknown'), locked: q.locked !== false }; }catch(e){} return { text:'', author:'Unknown', locked:true }; }
 function quoteSet(patch){ const q = Object.assign(quoteGet(), patch); try{ localStorage.setItem('story-quote', JSON.stringify(q)); }catch(e){} return q; }
-function quoteSaveFromInputs(){ const t = document.getElementById('quote-edit'), a = document.getElementById('quote-author-edit'); if(!t) return; const text = (t.innerText || t.textContent || '').replace(/ /g, ' ').trim(); const author = (a ? (a.innerText || a.textContent || '') : '').replace(/ /g, ' ').trim(); quoteSet({ text:text, author: author || 'Unknown' }); }
+function quoteSaveFromInputs(){ const t = document.getElementById('quote-edit'), a = document.getElementById('quote-author-edit'); if(!t) return; const text = (t.innerText || t.textContent || '').replace(/ /g, ' ').trim(); const author = (a ? (a.innerText || a.textContent || '') : '').replace(/ /g, ' ').trim(); quoteSet({ text:text, author: author }); }   // an emptied name stays empty (owner: 'I can't even delete the -')
 function quotesCardHTML(){
   const q = quoteGet();
   const lockBtn = `<button class="quote-lock" data-action="quote-lock" aria-label="${q.locked ? 'Unlock quote' : 'Lock quote'}">${q.locked ? LOCK_CLOSED_SVG : LOCK_OPEN_SVG}</button>`;
@@ -4259,10 +4259,10 @@ function quotesCardHTML(){
     // itself is editable, no boxes - it looks exactly like the quote, you just type on it.
     return `<div class="quotes-card" id="quotes-card"><div class="quotes-head"><div class="quotes-title">QUOTES</div><div class="quotes-head-right"><button class="quote-save" data-action="quote-save">Save</button>${lockBtn}</div></div>`
       + `<p class="quote-text quote-ed" id="quote-edit" contenteditable="true" data-ph="Your quote…">${escText(q.text || QUOTE_DEFAULT)}</p>`
-      + `<div class="quote-author quote-author-edit"><span class="quote-author-tag">Who said it</span><span class="quote-ed quote-author-ed" id="quote-author-edit" contenteditable="true" data-ph="Add a name">${escText(q.author || 'Unknown')}</span></div></div>`;
+      + `<div class="quote-author quote-author-edit"><span class="quote-author-tag">Who said it</span><span class="quote-ed quote-author-ed" id="quote-author-edit" contenteditable="true" data-ph="Add a name">${escText(q.author || '')}</span></div></div>`;
   }
   return `<div class="quotes-card" id="quotes-card"><div class="quotes-head"><div class="quotes-title">QUOTES</div>${lockBtn}</div>`
-    + `<p class="quote-text">${escText(q.text || QUOTE_DEFAULT)}</p><span class="quote-author">— ${escText(q.author || 'Unknown')}</span></div>`;
+    + `<p class="quote-text">${escText(q.text || QUOTE_DEFAULT)}</p>${q.author ? `<span class="quote-author">— ${escText(q.author)}</span>` : ''}</div>`;
 }
 let curRow = 1;   // the row the Pages show (1 = Row 1)
 // Rows (owner): Row 1 = Money, Home / Wallet, Focus + the apps added to Row 1; Row 2, 3... = the apps added there
