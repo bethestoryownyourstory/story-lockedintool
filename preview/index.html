@@ -638,6 +638,14 @@
   }
   .notes-fab-col{ display:flex; flex-direction:column; align-items:center; gap:12px; }
   .notes-fab-col .notes-create-wrap{ margin:0; }
+  /* Create page / Create drawing (owner, 4 Nov 2026, drawn under the style preview: 'make the create page button say
+     create page and the create button be create drawing ... the shape like how I drew ... the plus can still be there
+     inside the create page button, just as a design'): two wide pills, as wide as the style preview, one above the other. */
+  .notes-fab-stack:has(.notes-wide-btn){ align-items:stretch; margin-right:0; margin-bottom:0; padding-bottom:46px; align-self:flex-end; width:calc((100% - 10px) / 2); box-sizing:border-box; }
+  .notes-fab-col:has(.notes-wide-btn){ align-items:stretch; gap:10px; }
+  .notes-fab-col .notes-create-wrap:has(.notes-wide-btn){ display:flex; }
+  .notes-wide-btn{ width:100%; display:flex; align-items:center; justify-content:center; gap:10px; padding:11px 14px; font-size:13px; white-space:nowrap; }
+  .notes-wide-btn .notes-fab{ width:24px; height:24px; font-size:15px; flex-shrink:0; box-shadow:none; }
   .notes-create-btn{
     background:#000; color:#e8e6e1; border:1px solid var(--line); border-radius:22px;
     padding:11px 24px; font-size:12px; font-weight:700; cursor:pointer; font-family:var(--font-body);
@@ -14838,9 +14846,9 @@ function notesScreen(){
     </div>
     <div class="notes-fab-stack">
       <div class="notes-fab-col">
-        <button class="notes-fab" data-action="notes-new" title="New note">+</button>
+        <button class="notes-create-btn notes-wide-btn" data-action="notes-new" title="New note"><span class="notes-fab">+</span><span>Create page</span></button>
         <div class="notes-create-wrap">
-          <button class="notes-create-btn" data-action="scratch-new" title="Open the drawing space">Create</button>
+          <button class="notes-create-btn notes-wide-btn" data-action="scratch-new" title="Open the drawing space">Create drawing</button>
         </div>
       </div>
     </div>
@@ -16744,7 +16752,7 @@ function renderDevice(){
   // fitted to the screen, but it still moved by ~2px when touched; now the screen itself simply can't scroll. Left
   // scrollable: Settings / Information / its legal pages, the Apps list (all your phone's apps) and an open note's pages.
   if(fsLive){ const cur = state.current;
-    const may = SCROLL_PAGES.has(cur) || cur === 'apps' || NO_FIT_SCREENS.has(cur) || !!fsLive.querySelector('#notes-editor-shell');
+    const may = litMayScroll(fsLive);
     fsLive.classList.toggle('lit-noscroll', !may); if(!may && fsLive.scrollTop) fsLive.scrollTop = 0; }
   placeAllCardsBtn();
   saveSettings();
@@ -16767,7 +16775,7 @@ function updateScrollHint(){
   const hint = document.getElementById('scroll-hint');
   if(!el || !hint) return;
   // (Not in a note / drawing: the page fills the screen and its own tools sit there.)
-  const hasMore = state.current !== 'notes-canvas' && state.current !== 'scratch-draw' && el.scrollHeight - el.scrollTop - el.clientHeight > 6;
+  const hasMore = state.current !== 'notes-canvas' && state.current !== 'scratch-draw' && litMayScroll(el) && el.scrollHeight - el.scrollTop - el.clientHeight > 6;
   hint.classList.toggle('visible', hasMore);
 }
 
@@ -17006,6 +17014,9 @@ function applyBrightness(){
   if(systemDimmer) systemDimmer.style.opacity = state.brightnessMode==='system' ? dim : 0;
 }
 
+// Only Settings, Information (+ its legal pages), the Apps list, drawing and an open note scroll (owner) - see renderDevice.
+function litMayScroll(area){ const cur = state.current;
+  return SCROLL_PAGES.has(cur) || cur === 'apps' || NO_FIT_SCREENS.has(cur) || !!(area && area.querySelector('#notes-editor-shell')); }
 function attachHandlers(){
   // #content-area is torn down and rebuilt on every render, so the scroll-hint listener has
   // to be reattached to the fresh node each time (updateScrollHint() itself also runs once
