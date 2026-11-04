@@ -173,5 +173,6 @@ commits, pushed as a new update) - nothing else changes.
 | 165 | 2026-11-04 | Dashboard: the bottom bar no longer shows squashed for a moment after unlocking (Lockedintool's backup bar no longer opens while the Dashboard reloads) | 0e4d7c0 |
 | 166 | 2026-11-04 | Dial pad: attached to Station 3 - it sits right on Station 3's bar, no gap, straight bottom edge (over apps, the Pages and the Dashboard) | a739218 |
 | 167 | 2026-11-04 | Dial pad: a black piece fills the space under its left part, beside Station 3's bar, so the dial pad and Station 3 are one piece | d263650 |
-| 168 | 2026-11-04 | Only system: the keyboard comes up when you type on the Dashboard / Pages (editing the quote, search...) | (this) |
-| 169 | 2026-11-04 | Lockedintool security: the Dashboard's bar no longer shows squashed while the unlock prompt is up | (this) |
+| 168 | 2026-11-04 | Only system: the keyboard comes up when you type on the Dashboard / Pages (editing the quote, search...) | 5be9297 |
+| 169 | 2026-11-04 | Lockedintool security: the Dashboard's bar no longer shows squashed while the unlock prompt is up | 428cfee |
+| 170 | 2026-11-04 | No scrolling anywhere except Settings and Information (and the Apps list / an open note): every other screen is locked to one full screen - it used to move a tiny bit | (this) |
