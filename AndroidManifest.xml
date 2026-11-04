@@ -77,7 +77,7 @@
             android:launchMode="singleTask"
             android:stateNotNeeded="true"
             android:taskAffinity=""
-            android:theme="@style/Theme.Story.Clear">
+            android:theme="@style/Theme.Story.Home">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.HOME" />
