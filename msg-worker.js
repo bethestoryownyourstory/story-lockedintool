@@ -1,4 +1,4 @@
-// STORY's message + call server (Cloudflare Worker "story-msg", deploy-msg.yml, settings in msg-wrangler.toml).
+// Lockedintool's message + call server (Cloudflare Worker "lockedintool-msg", deploy-msg.yml, settings in msg-wrangler.toml).
 // What it does - and what it never does:
 //  - Your STORY account is made by the phone itself (owner: no phone number in Messages): the phone sends only its
 //    PUBLIC key and gets back its id + a sign-in key. People find each other by @username only.
@@ -238,7 +238,7 @@ export class Hub {
         let stitch = this.expressReady() ? 'keys' : 'no-keys';
         let stitchHook = this.expressReady() ? 'keys' : 'no-keys';
         if (url.searchParams.get('pay') === '1' && this.expressReady()) { try { await this.expressToken(); stitch = 'ok'; stitchHook = await this.expressHook(); } catch (e) { stitch = String(e.message || e).slice(0, 160); } }
-        return json({ ok: true, stitch, stitchHook, payfast: this.pfReady() ? (this.pfSandbox() ? 'sandbox' : 'live') : 'off', sms: !!(this.env.TWILIO_VERIFY_SID || this.env.TWILIO_FROM), mail: this.mailReady(), resetSms: this.smsLinkReady(), plans: this.subPlans(), pay, subs: this.subReady(), transfers: this.payReady(), live: this.liveReady(), turn: this.turnReady() });
+        return json({ ok: true, data: !!this.one('SELECT id FROM users LIMIT 1'), stitch, stitchHook, payfast: this.pfReady() ? (this.pfSandbox() ? 'sandbox' : 'live') : 'off', sms: !!(this.env.TWILIO_VERIFY_SID || this.env.TWILIO_FROM), mail: this.mailReady(), resetSms: this.smsLinkReady(), plans: this.subPlans(), pay, subs: this.subReady(), transfers: this.payReady(), live: this.liveReady(), turn: this.turnReady() });
       }
       if (path === '/v1/try-pay') return this.tryPay();
       if (path === '/v1/try-pay/start') return this.tryPayStart(req, url);
@@ -1400,7 +1400,7 @@ export class Hub {
     const fields = {
       merchant_id: this.pfId(), merchant_key: this.pfKey(),
       return_url: this.pub(url) + '/v1/pay/return', cancel_url: this.pub(url) + '/v1/pay/return?pf=cancel',
-      notify_url: (this.origin || url.origin) + '/v1/payfast/notify',
+      notify_url: this.pub(url) + '/v1/payfast/notify',
       m_payment_id: p.id, amount: (p.cents / 100).toFixed(2),
       item_name: 'Lockedintool ' + (plan === 'premium' ? 'Premium' : 'Basic'),
       custom_str1: p.uid, custom_str2: plan, custom_str3: p.mode || 'second' };
@@ -1521,13 +1521,18 @@ export class Hub {
       }
     }
     let hook = get('hook');
-    if (!hook && this.origin) {   // the webhook Lemon Squeezy signs (its secret only lives here)
-      const secret = rand(24), url = this.origin + '/v1/lemonsqueezy/hook';
+    // The webhook Lemon Squeezy signs (its secret only lives here), on Lockedintool's own public address so renaming the
+    // server never breaks it; one made for an older address is replaced (and the old one removed) once.
+    const hookUrl = this.pub() + '/v1/lemonsqueezy/hook';
+    if (hook && get('hookurl') !== hookUrl && this.pub()) { hook = ''; }
+    if (!hook && this.pub()) {
+      const secret = rand(24), url = hookUrl;
       const events = ['subscription_created', 'subscription_updated', 'subscription_cancelled', 'subscription_resumed', 'subscription_expired', 'subscription_paused', 'subscription_unpaused', 'subscription_payment_success', 'subscription_payment_recovered'];
       const old = ((await this.ls('GET', '/webhooks?filter[store_id]=' + encodeURIComponent(store))).data || []).find(w => (w.attributes || {}).url === url);
       if (old) await this.ls('PATCH', '/webhooks/' + old.id, { data: { type: 'webhooks', id: String(old.id), attributes: { secret, events } } });
       else await this.ls('POST', '/webhooks', { data: { type: 'webhooks', attributes: { url, events, secret }, relationships: { store: { data: { type: 'stores', id: String(store) } } } } });
-      hook = secret; put('hook', hook);
+      hook = secret; put('hook', hook); put('hookurl', url);
+      for (const w of ((await this.ls('GET', '/webhooks?filter[store_id]=' + encodeURIComponent(store))).data || [])) { const u = (w.attributes || {}).url || ''; if (u !== url && /\/v1\/lemonsqueezy\/hook$/.test(u)) await this.ls('DELETE', '/webhooks/' + w.id).catch(() => {}); }
     }
     this.lsCache = { store, basic, premium, hook, basicUsd: +get('basicUsd') || 0, premiumUsd: +get('premiumUsd') || 0 };
     return this.lsCache;

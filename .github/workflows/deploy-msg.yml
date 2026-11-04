@@ -1,5 +1,5 @@
-name: Deploy STORY message server
-# Puts msg-worker.js on Cloudflare as the "story-msg" Worker (STORY's messages + calls: accounts made by the phone,
+name: Deploy Lockedintool message server
+# Puts msg-worker.js on Cloudflare as the "lockedintool-msg" Worker (STORY's messages + calls: accounts made by the phone,
 # locked messages, call set-up; phone verification by text code) - settings in msg-wrangler.toml. Runs when the server changes, or Actions -> Run workflow.
 # Needs repo secrets (Settings -> Secrets and variables -> Actions):
 #   CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID - the same ones the release server uses
@@ -103,7 +103,7 @@ jobs:
           # with the same name is removed first, since its secret can't be read back) and its keys go to the server.
           sleep 4
           SUB=$(curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/subdomain | python3 -c 'import sys,json; print(json.load(sys.stdin)["result"]["subdomain"])')
-          LIVE=$(curl -s https://story-msg.$SUB.workers.dev/v1/health | python3 -c 'import sys,json; print(json.load(sys.stdin).get("live"))' || echo False)
+          LIVE=$(curl -s https://lockedintool-msg.$SUB.workers.dev/v1/health | python3 -c 'import sys,json; print(json.load(sys.stdin).get("live"))' || echo False)
           if [ "$LIVE" = "True" ]; then echo "Live video: already set up"; exit 0; fi
           API=https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/calls/apps
           for id in $(curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" $API | python3 -c 'import sys,json; d=json.load(sys.stdin); print(" ".join(a["uid"] for a in (d.get("result") or []) if a.get("name")=="lockedintool-live"))'); do
@@ -131,7 +131,7 @@ jobs:
           # removed first, since its secret can't be read back) and its id + secret go to the server. Never fails the deploy.
           set +e
           SUB=$(curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/subdomain | python3 -c 'import sys,json; print(json.load(sys.stdin)["result"]["subdomain"])' 2>/dev/null)
-          TURN=$(curl -s https://story-msg.$SUB.workers.dev/v1/health | python3 -c 'import sys,json; print(json.load(sys.stdin).get("turn"))' 2>/dev/null)
+          TURN=$(curl -s https://lockedintool-msg.$SUB.workers.dev/v1/health | python3 -c 'import sys,json; print(json.load(sys.stdin).get("turn"))' 2>/dev/null)
           if [ "$TURN" = "True" ]; then echo "Calls relay: already set up"; exit 0; fi
           if [ -z "$TURN" ]; then echo "Calls relay: the server didn't answer - it is set up on the next deploy" | tee -a "$GITHUB_STEP_SUMMARY"; exit 0; fi
           API=https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/calls/turn_keys

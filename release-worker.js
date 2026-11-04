@@ -1,7 +1,7 @@
-// STORY release server - a Cloudflare Worker.
+// Lockedintool release server - a Cloudflare Worker ("lockedintool-release").
 // The app sends the PIN here; it is checked HERE, never inside the app.
 //   POST /verify  {"pin": "..."} -> {"ok": true} when the PIN is right (unlocks owner mode)
-//   POST /publish {"pin": "...", "action": "publish" | "undo"} -> runs "STORY screens - Test, then Approve" on GitHub:
+//   POST /publish {"pin": "...", "action": "publish" | "undo"} -> runs "Lockedintool screens - Test, then Approve" on GitHub:
 //        publish = the owner's "Publish live update": the Test screens + Test app build go to everyone
 //        undo    = the owner's "Undo last update": the screens from before the last publish come back
 //        (no action = undo, for owner phones still on the older app)
@@ -10,6 +10,10 @@
 //   GITHUB_TOKEN  (secret) fine-grained GitHub token: this repo only, "Actions: Read and write".
 const REPO = 'lockedintool/story-lockedintool';
 const WORKFLOW = 'screens.yml';
+// The server's old name (plan B step 3, owner 4 Nov 2026). Its PIN / GITHUB_TOKEN secrets can't be read back, so until
+// the owner adds them here (Cloudflare -> lockedintool-release -> Settings -> Variables and Secrets) every request is
+// passed on to the old server - Publish and the owner PIN keep working the whole time. Remove once both are set here.
+const OLD = 'https://story-release.percyjuniormaseko0.workers.dev';
 
 const json = (body, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -27,6 +31,7 @@ async function samePin(a, b) {
 export default {
   async fetch(request, env) {
     const path = new URL(request.url).pathname;
+    if (!env.PIN || !env.GITHUB_TOKEN) return fetch(new Request(OLD + path, request));
     if (request.method !== 'POST') return json({ ok: false, error: 'Lockedintool release server' }, 405);
     if (!env.PIN) return json({ ok: false, error: 'PIN is not set on the server.' }, 500);
     let body = {};
@@ -45,7 +50,7 @@ export default {
           Authorization: `Bearer ${env.GITHUB_TOKEN}`,
           Accept: 'application/vnd.github+json',
           'X-GitHub-Api-Version': '2022-11-28',
-          'User-Agent': 'story-release-server',
+          'User-Agent': 'lockedintool-release-server',
         },
         body: JSON.stringify({ ref: 'main', inputs: { action } }),
       });

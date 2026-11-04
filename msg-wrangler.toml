@@ -1,5 +1,5 @@
-# STORY's message + call server (msg-worker.js), deployed by deploy-msg.yml.
-name = "story-msg"
+# Lockedintool's message + call server (msg-worker.js), deployed by deploy-msg.yml.
+name = "lockedintool-msg"
 main = "msg-worker.js"
 compatibility_date = "2025-01-01"
 
@@ -16,11 +16,9 @@ class_name = "Hub"
 name = "STORE"
 class_name = "Store"
 
-# SQLite-backed Durable Object (works on Cloudflare's free plan).
+# SQLite-backed Durable Objects (work on Cloudflare's free plan). They were made in the server's old name ("story-msg",
+# migrations v1 = Hub, v2 = Store); renaming the server (owner, 4 Nov 2026: plan B step 3 - nothing named Story) MOVES
+# them, data and all, into this one - Cloudflare's own transfer, nothing is copied by hand. Never remove this migration.
 [[migrations]]
 tag = "v1"
-new_sqlite_classes = ["Hub"]
-
-[[migrations]]
-tag = "v2"
-new_sqlite_classes = ["Store"]
+transferred_classes = [ { from = "Hub", from_script = "story-msg", to = "Hub" }, { from = "Store", from_script = "story-msg", to = "Store" } ]

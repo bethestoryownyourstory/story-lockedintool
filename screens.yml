@@ -1,4 +1,4 @@
-name: STORY screens - Test, then Approve
+name: Lockedintool screens - Test, then Approve
 # Nothing reaches users until the owner says yes (owner's rule):
 #   push            -> the Test channel only (gh-pages /preview/ = the owner's phone).
 #   Run workflow    -> action:
@@ -99,7 +99,7 @@ jobs:
             if curl -sf "https://lockedintool.github.io/story-lockedintool/live-source.txt?t=$(date +%s%N)" | grep -q "$SRC"; then break; fi
             sleep 3
           done
-          curl -s -X POST https://story-msg.percyjuniormaseko0.workers.dev/v1/release-ping || true
+          curl -s -X POST https://api.lockedintool.com/v1/release-ping || true
       - name: Undo last update -> the screens from before go back for everyone (owner)
         if: github.event_name == 'workflow_dispatch' && inputs.action == 'undo'
         run: |

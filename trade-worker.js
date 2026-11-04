@@ -1,4 +1,4 @@
-// STORY trade server (Cloudflare Worker "story-trade"): connects MT4 / MT5 accounts through MetaApi - the only way an app
+// Lockedintool trade server (Cloudflare Worker "lockedintool-trade"): connects MT4 / MT5 accounts through MetaApi - the only way an app
 // can reach MT5. STORY's MetaApi key (secret METAAPI_TOKEN) stays here, never in the app. Each MT5 account added in
 // STORY gets its own access key (an HMAC of the account id) that only the phone that added it holds, so a phone can
 // only ever see and trade its own accounts.
@@ -39,7 +39,7 @@ export default {
     if (req.method === 'OPTIONS') return new Response(null, { headers: CORS });
     const url = new URL(req.url);
     const parts = url.pathname.split('/').filter(Boolean);   // ['mt5', id|'connect', action]
-    if (parts[0] !== 'mt5') return json({ ok: true, service: 'story-trade' });
+    if (parts[0] !== 'mt5') return json({ ok: true, service: 'lockedintool-trade' });
     if (!env.METAAPI_TOKEN) return json({ error: 'MT5 connects once Lockedintool’s MetaApi key is added' }, 503);
     try {
       if (parts[1] === 'connect' && req.method === 'POST') {

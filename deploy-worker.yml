@@ -1,5 +1,5 @@
-name: Deploy STORY release server
-# Puts release-worker.js on Cloudflare as the "story-release" Worker - no code editor needed.
+name: Deploy Lockedintool release server
+# Puts release-worker.js on Cloudflare as the "lockedintool-release" Worker - no code editor needed.
 # Runs when release-worker.js changes, or Actions -> this workflow -> Run workflow.
 # Needs two repo secrets (Settings -> Secrets and variables -> Actions):
 #   CLOUDFLARE_API_TOKEN  - Cloudflare API token from the "Edit Cloudflare Workers" template
@@ -29,4 +29,4 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deploy release-worker.js --name story-release --compatibility-date 2025-01-01
+          command: deploy release-worker.js --name lockedintool-release --compatibility-date 2025-01-01

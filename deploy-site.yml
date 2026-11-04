@@ -40,7 +40,7 @@ jobs:
         run: |
           SUB=$(curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/subdomain | python3 -c 'import sys,json; print(json.load(sys.stdin)["result"]["subdomain"])' || true)
           echo "SUB=$SUB" >> "$GITHUB_ENV"
-          PLANS_JSON=$(curl -s "https://story-msg.$SUB.workers.dev/v1/health" | python3 -c 'import sys,json; print(json.dumps(json.load(sys.stdin).get("plans")))' || echo null)
+          PLANS_JSON=$(curl -s "https://lockedintool-msg.$SUB.workers.dev/v1/health" | python3 -c 'import sys,json; print(json.dumps(json.load(sys.stdin).get("plans")))' || echo null)
           PLANS_JSON="$PLANS_JSON" node site-build.mjs _site
       - name: Put it on Cloudflare
         if: steps.ready.outputs.ok == 'true'

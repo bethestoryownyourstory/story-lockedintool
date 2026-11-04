@@ -6,9 +6,9 @@
 //  - api.lockedintool.com - Lockedintool's message server (password reset, delete account and payment pages, ...):
 //    every request is passed straight on to the server (WebSockets too) and the answer comes back unchanged.
 //  - everything else - the website itself (site-build.mjs).
-const SERVER = 'https://story-msg.percyjuniormaseko0.workers.dev';
+const SERVER = 'https://lockedintool-msg.percyjuniormaseko0.workers.dev';
 // Lockedintool's other servers, each on its own Lockedintool address (the names behind them are never seen).
-const HOSTS = { api: SERVER, trade: 'https://story-trade.percyjuniormaseko0.workers.dev', release: 'https://story-release.percyjuniormaseko0.workers.dev' };
+const HOSTS = { api: SERVER, trade: 'https://lockedintool-trade.percyjuniormaseko0.workers.dev', release: 'https://lockedintool-release.percyjuniormaseko0.workers.dev' };
 // Where the app's screens and builds are kept today. Only these lines change when that home moves (Lockedintool's own
 // GitHub account) - every phone keeps using lockedintool.com/app/ and lockedintool.com/releases/.
 const SCREENS = 'https://lockedintool.github.io/story-lockedintool/';

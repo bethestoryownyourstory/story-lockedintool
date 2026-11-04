@@ -55,7 +55,7 @@ jobs:
         run: |
           if [ -z "$T" ]; then echo "No CLOUDFLARE_API_TOKEN secret"; exit 1; fi
           KEY=$(printf 'lit-problems:%s' "$T" | sha256sum | cut -c1-48)
-          U=https://story-msg.percyjuniormaseko0.workers.dev
+          U=https://api.lockedintool.com
           mark() {  # $1 = JSON array of sigs, $2 = app version, $3 = note
             jq -n --arg key "$KEY" --argjson sigs "$1" --arg app "$2" --arg note "$3" '{key:$key,sigs:$sigs,app:$app,note:$note}' \
               | curl -sS -X POST -H 'content-type: application/json' --data @- "$U/v1/problems/fixed"; echo
