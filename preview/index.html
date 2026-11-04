@@ -1108,6 +1108,7 @@
   .symbol-list{ max-height:320px; overflow-y:auto; margin-top:10px; scrollbar-width:none; }
   .symbol-list::-webkit-scrollbar{ display:none; }
   .trade-symbol{ cursor:pointer; }
+  .trade-eyebrow{ display:block; margin:2px 0 0; }   /* owner: 'FOCUS PAGE' in the small label size, on top of the Trading title */
   .note-img{ display:block; max-width:100%; height:auto; border-radius:8px; margin:6px 0; }
   .note-audio{ display:flex; flex-direction:column; gap:4px; margin:6px 0; padding:8px 10px; border-radius:10px; background:rgba(0,0,0,0.06); max-width:100%; }
   .note-audio-name{ font-size:12px; font-weight:700; color:#000; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -7738,9 +7739,8 @@ function tradingPageScreen(){
   state.positions = positions;
   return `
     <div class="page-shell">
-    ${topBar('Focus page', true)}
+    ${topBar('<span class="eyebrow trade-eyebrow">FOCUS PAGE</span>Trading', true)}
     ${pageArrows()}
-    <div class="eyebrow">TRADING</div>
     <div class="chart-wrap" id="trading-chart">
       <div class="row-card tv-card">
         <div class="tv-slot"></div>
