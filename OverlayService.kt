@@ -120,8 +120,10 @@ class OverlayService : Service(), StoryBridge.Host {
             return
         }
         if (!AodActivity.enabled(this)) return
-        // Wake the screen right now, in parallel with the black screen starting (not after it).
-        wakeForAod()
+        // The Always On Display turns the screen back on ITSELF the moment it's ready (turnScreenOn), so the screen comes
+        // back already showing it - waking the screen first showed black / the phone's own lock screen in between (owner,
+        // 5 Nov 2026: 'it should feel like your phone never turns off ... I shouldn't see any black'). The wake below is
+        // only the backup, a moment later, if it hasn't come on by then.
         val i = Intent(this, AodActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
         // Opened straight away the way Android explicitly allows from the background - the plain start was quietly
         // blocked on some phones, leaving a black screen for a second until the retry below (owner, 5 Nov 2026: 'there's
@@ -131,8 +133,10 @@ class OverlayService : Service(), StoryBridge.Host {
                 .send(android.app.ActivityOptions.makeBasic().setPendingIntentBackgroundActivityStartMode(android.app.ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED).toBundle())
             else startActivity(i)
         }.onFailure { runCatching { startActivity(i) } }
-        // Some phones quietly block opening it from the background: ask again the way Android allows explicitly.
         val startedAt = aodStartedAt
+        ui.postDelayed({ if (aodStartedAt == startedAt && userPresentAt < startedAt && AodActivity.enabled(this) &&
+            !getSystemService(android.os.PowerManager::class.java).isInteractive) wakeForAod() }, 150)
+        // Some phones quietly block opening it from the background: ask again the way Android allows explicitly.
         ui.postDelayed({
             if (AodActivity.instance == null && AodActivity.enabled(this) && aodStartedAt == startedAt && userPresentAt < startedAt) runCatching {
                 wakeForAod()
@@ -146,7 +150,7 @@ class OverlayService : Service(), StoryBridge.Host {
         runCatching {
             @Suppress("DEPRECATION")
             getSystemService(android.os.PowerManager::class.java).newWakeLock(
-                android.os.PowerManager.SCREEN_DIM_WAKE_LOCK or android.os.PowerManager.ACQUIRE_CAUSES_WAKEUP or android.os.PowerManager.ON_AFTER_RELEASE,
+                android.os.PowerManager.SCREEN_BRIGHT_WAKE_LOCK or android.os.PowerManager.ACQUIRE_CAUSES_WAKEUP or android.os.PowerManager.ON_AFTER_RELEASE,
                 "story:aod").acquire(1_500)
         }
     }
@@ -156,7 +160,9 @@ class OverlayService : Service(), StoryBridge.Host {
         override fun onDisplayChanged(id: Int) {
             if (id != android.view.Display.DEFAULT_DISPLAY) return
             val d = getSystemService(android.hardware.display.DisplayManager::class.java).getDisplay(id) ?: return
-            if (d.state == android.view.Display.STATE_OFF && !getSystemService(android.os.PowerManager::class.java).isInteractive) onScreenOff()
+            // The earliest sign the screen is going off (off or dozing), not only fully off.
+            if (d.state != android.view.Display.STATE_ON && d.state != android.view.Display.STATE_UNKNOWN &&
+                !getSystemService(android.os.PowerManager::class.java).isInteractive) onScreenOff()
         }
     }
     // An app was installed or removed: rebuild the Apps list and tell the Pages, so it's right next time.
