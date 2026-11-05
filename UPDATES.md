@@ -185,5 +185,5 @@ commits, pushed as a new update) - nothing else changes.
 | 177 | 2026-11-04 | Professional wording: 'Public community', 'Always open on Your Community', the price note and the Only system note written properly; the Privacy Policy corrected to match the app (card details are kept locked on your phone; PayFast for South African plans); casual spelling now blocked by the automatic checks | 2c6cee4 |
 | 178 | 2026-11-05 | Deactivate account (Settings > Privacy, above Delete account): take a break - nothing deleted, nobody can find or call you, messages wait for you, your plan is paused; logging in activates it again | 0f7cee9 |
 | 179 | 2026-11-05 | Lockedintool security: the Dashboard shows behind the unlock prompt again - never a black screen first | 2a0382a |
-| 180 | 2026-11-05 | Lockedintool security: unlocking your phone opens Lockedintool with no second prompt, and the squashed Dashboard bar after unlocking is fixed at its cause (the prompt was being asked for twice) | (this) |
-| 181 | 2026-11-05 | No squashed Dashboard bar when Lockedintool restarts (an update installing): the backup bar no longer opens while the Dashboard loads | (this) |
+| 180 | 2026-11-05 | Lockedintool security: unlocking your phone opens Lockedintool with no second prompt, and the squashed Dashboard bar after unlocking is fixed at its cause (the prompt was being asked for twice) | ed2c64b |
+| 181 | 2026-11-05 | No squashed Dashboard bar when Lockedintool restarts (an update installing): the backup bar no longer opens while the Dashboard loads | bd08176 |
