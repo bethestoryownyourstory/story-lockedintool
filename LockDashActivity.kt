@@ -130,8 +130,7 @@ class LockDashActivity : Activity() {
                 // for me to go to an app I was using I need to swipe up'). Your apps stay in the phone's Recents.
                 override fun onDismissSucceeded() { asking = false
                     OverlayService.instance?.lockDashUnlocked()   // your phone's unlock counts for Lockedintool too - no second prompt
-                    runCatching { startActivity(android.content.Intent(this@LockDashActivity, LockedintoolHome::class.java)
-                        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_NO_ANIMATION)) }
+                    OverlayService.instance?.lockDashOpenHome(this@LockDashActivity)
                     finish(); overridePendingTransition(0, 0) }
                 override fun onDismissCancelled() { asking = false }   // stays; a tap asks again
                 override fun onDismissError() { asking = false; OverlayService.instance?.lockDashLeft(); finish() }   // never stuck: the phone's own lock screen

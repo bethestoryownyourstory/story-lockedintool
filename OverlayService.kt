@@ -1565,12 +1565,12 @@ class OverlayService : Service(), StoryBridge.Host {
      *  exactly what you saw. One copy each time the Dashboard shows, never on a loop. */
     private val homeShotRun = Runnable { homeShotCopy() }
     private fun homeShotSoon() {
-        if (Build.VERSION.SDK_INT < 34 || !SystemMode.on(this)) return
+        if (Build.VERSION.SDK_INT < 34 || !lockScreenOurs()) return
         ui.removeCallbacks(homeShotRun); ui.postDelayed(homeShotRun, 700)
     }
     private fun homeShotCopy() { if (Build.VERSION.SDK_INT >= 34) runCatching {
         val p = pagesPane ?: return
-        if (!p.shown || !homeUp || !SystemMode.on(this) || keyguardLocked() || p.frame.alpha < 1f || p.loading) return
+        if (!p.shown || !homeUp || !lockScreenOurs() || keyguardLocked() || p.frame.alpha < 1f || p.loading) return
         val v = p.web; if (v.width <= 0 || v.height <= 0 || !v.isAttachedToWindow) return
         val loc = IntArray(2); p.frame.getLocationOnScreen(loc)
         val req = android.view.PixelCopy.Request.Builder.ofWindow(p.frame).build()
@@ -1608,7 +1608,7 @@ class OverlayService : Service(), StoryBridge.Host {
     } }
     private fun hideOne(p: Pane) {
         // The Home's picture is always the Dashboard (what you come back to), taken whenever the Pages leave it.
-        if (p === pagesPane && p.shown && SystemMode.on(this) && homeUp) snapHome(p)
+        if (p === pagesPane && p.shown && lockScreenOurs() && homeUp) snapHome(p)
         // Station 3 and the dial pad keep their page exactly as it is while hidden, so showing them
         // again changes nothing on screen (no re-layout, no resize, no jump).
         if (!p.small) p.web.evaluateJavascript("window.storyReset&&window.storyReset()", null)
@@ -2450,6 +2450,18 @@ class OverlayService : Service(), StoryBridge.Host {
     @Volatile private var screenOnAt = 0L
     @Volatile private var lockDashLeftAt = 0L
     fun lockDashLeft() { lockDashLeftAt = System.currentTimeMillis() }
+    /** Lockedintool is your lock screen (owner, 5 Nov 2026): on Only system it's your whole phone - home screen, lock
+     *  screen, everything; on Second system only when Lockedintool security is your security ('even if you're on second
+     *  system ... and you set Lockedintool security, Lockedintool would be now your lock screen'). Phone's security on
+     *  Second system = the phone's own lock screen. */
+    fun lockScreenOurs() = SystemMode.on(this) || Security.lit(this)
+    /** Unlocked on Lockedintool's lock screen: you land on your Home Screen - Lockedintool's Home on Only system, the
+     *  Pages on your Home Screen on Second system (the app you were in stays in Recents). */
+    fun lockDashOpenHome(act: android.app.Activity) {
+        if (SystemMode.on(this)) { runCatching { act.startActivity(Intent(act, LockedintoolHome::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)) }; return }
+        val p = pagesPane ?: return
+        ui.post { hideLiveWidgets(); warmUp(); showPagesOn(p, "window.storyShow&&window.storyShow(null,false)") { updateBubble(); addBar() } }
+    }
     /** The phone was just unlocked on Lockedintool's lock screen: that IS Lockedintool's unlock too - straight away, never a
      *  second prompt (owner, 5 Nov 2026: 'I unlock my phone, then when it's unlocked I need to unlock it again' - the
      *  phone's own 'unlocked' report came after Lockedintool had already asked). */
@@ -2462,7 +2474,7 @@ class OverlayService : Service(), StoryBridge.Host {
      *  a glimpse of the phone's own lock screen first (owner, 5 Nov 2026: 'I can still see my lockscreen still'). With
      *  the Always On Display on, it sits ready underneath it. */
     private fun lockDashPrepare() { runCatching {
-        if (!SystemMode.on(this) || WidgetMode.on(this) || callActive || createActive || LockDashActivity.instance != null) return
+        if (!lockScreenOurs() || WidgetMode.on(this) || callActive || createActive || LockDashActivity.instance != null) return
         if (getSystemService(android.app.KeyguardManager::class.java)?.isDeviceSecure != true) return
         val mode = getSystemService(android.media.AudioManager::class.java)?.mode ?: android.media.AudioManager.MODE_NORMAL
         if (mode != android.media.AudioManager.MODE_NORMAL) return
@@ -2474,7 +2486,7 @@ class OverlayService : Service(), StoryBridge.Host {
         }.onFailure { runCatching { startActivity(i) } }
     } }
     private fun lockDashCheck() { runCatching {
-        if (!SystemMode.on(this) || WidgetMode.on(this) || callActive || createActive) return
+        if (!lockScreenOurs() || WidgetMode.on(this) || callActive || createActive) return
         if (LockDashActivity.instance != null || lockDashLeftAt > screenOffAt) return
         if (getSystemService(android.app.KeyguardManager::class.java)?.isKeyguardLocked != true || userPresentAt > screenOffAt) return
         if (!getSystemService(android.os.PowerManager::class.java).isInteractive || aodShowing()) return
