@@ -4546,14 +4546,22 @@ function litRecolorArea(area, screen){
 const LIT_BG = {};
 function litBgSet(){ try{ return JSON.parse(localStorage.getItem('story-bg-set') || '{}') || {}; }catch(e){ return {}; } }
 function litBgDb(){ return new Promise((res, rej)=>{ const r = indexedDB.open('story-bg', 1); r.onupgradeneeded = ()=>r.result.createObjectStore('pics'); r.onsuccess = ()=>res(r.result); r.onerror = ()=>rej(r.error); }); }
+// The app shows the Pages only once the picture is ready (owner, 5 Nov 2026: 'After unlocking lockedintool my background
+// like reloads ... you can see it moving') - the page tells it 'still loading' at once and 'ready' once every picture is
+// decoded and on the screen, so the picture is there from the first frame, never popping in after.
+function litBgTell(ready){ try{ if(typeof StoryNative !== 'undefined' && StoryNative.bgState) StoryNative.bgState(!!ready); }catch(e){} }
 async function litBgLoadAll(){
   const set = litBgSet(); const keys = Object.keys(set); if(!keys.length) return;
+  litBgTell(false);
   try{
     const db = await litBgDb();
     await Promise.all(keys.map(k=>new Promise(res=>{ const q = db.transaction('pics').objectStore('pics').get(k);
       q.onsuccess = ()=>{ if(q.result){ if(LIT_BG[k]) URL.revokeObjectURL(LIT_BG[k]); LIT_BG[k] = URL.createObjectURL(q.result); } res(); }; q.onerror = ()=>res(); })));
+    // Decoded before it's used, so it paints in the very first frame.
+    await Promise.all(Object.values(LIT_BG).map(u=>{ try{ const im = new Image(); im.src = u; return im.decode().catch(()=>{}); }catch(e){ return null; } }));
     litApplyColors();
   }catch(e){}
+  litBgTell(true);
 }
 if(!/[?&]s3=/.test(location.search)) setTimeout(()=>{ try{ litBgLoadAll(); }catch(e){} }, 0);   // the pictures in memory at start
 async function litBgPut(target, blob){
