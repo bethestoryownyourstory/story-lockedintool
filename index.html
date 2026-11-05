@@ -1241,6 +1241,12 @@
      (taller, larger label, a logo stacked under the text) and, as the only button, flex:1
      makes it fill the whole row. */
   .btn-row-action{ display:inline-flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; padding:12px 0 10px; font-size:15px; }
+  /* Tap to Pay's Net worth switch, in the button's bottom-right corner (owner's circle) - the Wallet Net worth icon, filled when on. */
+  .btn-row-action{ position:relative; }
+  .ttp-nw{ position:absolute; right:8px; bottom:8px; width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; border:1px solid currentColor; opacity:0.75; }
+  .ttp-nw svg{ width:14px; height:14px; }
+  .ttp-nw.on{ opacity:1; background:currentColor; }
+  .ttp-nw.on svg{ color:#e8e6e1; }
   .btn-row-action .row-action-ico{ width:46px; height:30px; overflow:visible; flex-shrink:0; }
   /* The contactless terminal's signal arcs ripple outward on their own loop (a live "ready to
      receive" idle animation -- scale as well as opacity, like a real ripple rather than three
@@ -8684,6 +8690,12 @@ function walletPayments(){
   return taps.concat(sends).sort((x, y)=>y.ts - x.ts);
 }
 const walletActivityList = ()=>walletPayments().slice(0, 5);
+// Tap to Pay's Net worth switch (owner, 5 Nov 2026, circling the Tap to Pay button's bottom-right corner: Net worth lets
+// a Tap to Pay payment come from two or more of your accounts together - 'yeah you can add it'). A card reader charges ONE
+// card per tap, so splitting a tap needs Lockedintool's own card (a licensed card-issuing partner, with the company); the
+// switch keeps your choice and says so honestly until then - Tap to Pay pays with the card showing in Wallet meanwhile.
+const TAP_NW_KEY = 'story-tap-nw';
+function tapNwOn(){ try{ return localStorage.getItem(TAP_NW_KEY) === '1'; }catch(e){ return false; } }
 const NW_ICON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg>';
 const NW_PENCIL = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>';
 function walletActivityColor(amt, ts){
@@ -8780,7 +8792,7 @@ function walletScreen(){
                   <path class="ttp-check" d="M41.5 23.5l3 3 6.5-7.5" stroke-width="2.4" stroke-linejoin="round"></path>
                 </g>
               </g>
-            </svg></button></div>
+            </svg><span class="ttp-nw${tapNwOn() ? ' on' : ''}" data-action="tap-nw" title="Net worth">${NW_ICON}</span></button></div>
     ${pageSecOn('wallet', 'activity') ? `${walletSecTitle('WALLET ACTIVITY', 'activity')}
     <div class="row-card wallet-activity-card">
       ${walletActivityRowsHTML()}
@@ -18388,8 +18400,9 @@ function attachHandlers(){
   // --- generic action dispatcher for all the new buttons/toggles ---
   document.querySelectorAll('[data-action]').forEach(el=>{
     if(el.getAttribute('data-action') === 'note-undo' || el.getAttribute('data-action') === 'note-redo') return;
-    el.addEventListener('click', ()=>{
+    el.addEventListener('click', ev=>{
       const action = el.getAttribute('data-action');
+      if(action === 'tap-nw' && ev) ev.stopPropagation();   // the switch sits inside the Tap to Pay button: only the switch acts
       if(NOTE_PAGE_SWITCH_ACTIONS.has(action)) resetNoteUndoStack();
       else if(NOTE_UNDOABLE_ACTIONS.has(action)) pushNoteUndoSnapshot();
       switch(action){
@@ -19264,6 +19277,8 @@ function attachHandlers(){
         case 'bank-unlink': { if(state.bankUnlinkAsk && Date.now() - state.bankUnlinkAsk < 4000){ state.bankUnlinkAsk = 0; bankUnlink(); } else { state.bankUnlinkAsk = Date.now(); showToast('Tap again to disconnect your bank'); } break; }
         case 'money-all': { const v = moneyAll(); v.on = !v.on; moneyAllSave(v); showToast(v.on ? 'Net worth' : 'Showing your card'); break; }
         case 'money-all-edit': state.moneyAllEdit = MONEY_ALL_KEY; break;
+        case 'tap-nw': { const on = !tapNwOn(); try{ localStorage.setItem(TAP_NW_KEY, on ? '1' : '0'); }catch(e){}
+          showToast(on ? 'Net worth on for Tap to Pay - it pays from your combined accounts once Lockedintool’s own card is ready. Until then it pays with the card in Wallet.' : 'Tap to Pay pays with the card in Wallet'); break; }
         case 'wallet-nw': { const v = nwGet(WALLET_NW_KEY); v.on = !v.on; nwSave(WALLET_NW_KEY, v); showToast(v.on ? 'Net worth' : 'Showing your card'); break; }
         case 'wallet-nw-edit': state.moneyAllEdit = WALLET_NW_KEY; break;
         case 'money-all-close': state.moneyAllEdit = false; break;
