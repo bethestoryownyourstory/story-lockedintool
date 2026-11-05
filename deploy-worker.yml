@@ -31,7 +31,10 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          names=$(npx -y wrangler@3 secret list --name lockedintool-release 2>/dev/null | grep -o '"name": *"[^"]*"' | sed 's/.*"\([^"]*\)"$/\1/' | tr '\n' ' ')
+          out=$(npx -y wrangler@3 secret list --name lockedintool-release 2>&1 || true)
+          # Only names come back (wrangler never shows a secret's value); printed so a problem is visible.
+          echo "$out" | grep -v -i 'token\|key' | tail -n 20
+          names=$(echo "$out" | grep -o '"name": *"[^"]*"' | sed 's/.*"\([^"]*\)"$/\1/' | tr '\n' ' ')
           echo "Secrets on lockedintool-release: $names"
           for n in PIN GITHUB_TOKEN; do
             echo " $names " | grep -q " $n " || { echo "### Not deployed: $n is missing on lockedintool-release (Cloudflare -> Workers & Pages -> lockedintool-release -> Settings -> Variables and Secrets)." >> "$GITHUB_STEP_SUMMARY"; exit 1; }
