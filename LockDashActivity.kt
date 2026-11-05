@@ -69,9 +69,43 @@ class LockDashActivity : Activity() {
         // tape across the whole screen ('the tape not that thick, just long ... transparent a lil more, look beautiful')
         // and DEVICE LOCKED in the logo's glitch style ('only the tape and the words device locked ... no colour'). No
         // padlock ('remove the lock and that's it'), no other words. (Was: a 'Locked / Tap to unlock' card, then the logo.)
-        root.setOnTouchListener { _, e -> if (e.action == MotionEvent.ACTION_UP) ask(); true }
+        // Unlock options (owner, 5 Nov 2026, with a picture: 'Can Lockedintool have unlock options? Because my phone does
+        // this thing that just unlocks my phone - this is annoying'; 'So you only get unlock options when you tap the
+        // screen when it's locked'; 'don't make the unlock options background transparent, make it the same as that
+        // picture'): nothing asks by itself any more. A tap on the locked screen shows Fingerprint / Face Unlock / Enter
+        // PIN - solid dark rounded rows, icon | name | arrow - and each opens the phone's OWN unlock (Android lets no app
+        // choose the method: the phone's unlock screen takes whichever you use).
+        val opts = unlockOptions()
+        opts.visibility = android.view.View.GONE
+        val dp = resources.displayMetrics.density
+        root.addView(opts, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM).apply {
+            val side = (resources.displayMetrics.widthPixels * 0.065f).toInt(); leftMargin = side; rightMargin = side; bottomMargin = (64 * dp).toInt() })
+        root.setOnTouchListener { _, e -> if (e.action == MotionEvent.ACTION_UP) opts.visibility = android.view.View.VISIBLE; true }
         setContentView(root)
         instance = this
+    }
+    private fun unlockOptions(): android.view.View {
+        val dp = resources.displayMetrics.density
+        val col = android.widget.LinearLayout(this).apply { orientation = android.widget.LinearLayout.VERTICAL }
+        for ((i, name) in listOf("Fingerprint", "Face Unlock", "Enter PIN").withIndex()) {
+            val row = android.widget.LinearLayout(this).apply {
+                orientation = android.widget.LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+                background = android.graphics.drawable.GradientDrawable(android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
+                    intArrayOf(Color.rgb(22, 22, 22), Color.rgb(10, 10, 10))).apply { cornerRadius = 24 * dp; setStroke((1 * dp).toInt(), Color.rgb(48, 48, 48)) }
+                isClickable = true; contentDescription = name
+                setOnClickListener { ask() }
+            }
+            row.addView(UnlockIcon(this, i), android.widget.LinearLayout.LayoutParams((76 * dp).toInt(), (68 * dp).toInt()))
+            row.addView(android.view.View(this).apply { setBackgroundColor(Color.rgb(44, 44, 44)) },
+                android.widget.LinearLayout.LayoutParams((1 * dp).toInt(), (40 * dp).toInt()))
+            row.addView(android.widget.TextView(this).apply { text = name; setTextColor(Color.WHITE); textSize = 19f
+                typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL); setPadding((20 * dp).toInt(), 0, 0, 0) },
+                android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            row.addView(UnlockIcon(this, 3), android.widget.LinearLayout.LayoutParams((52 * dp).toInt(), (68 * dp).toInt()))
+            col.addView(row, android.widget.LinearLayout.LayoutParams(android.widget.LinearLayout.LayoutParams.MATCH_PARENT, (68 * dp).toInt()).apply {
+                if (i > 0) topMargin = (12 * dp).toInt() })
+        }
+        return col
     }
     private fun lockSign(): android.view.View {
         val dp = resources.displayMetrics.density
@@ -115,14 +149,22 @@ class LockDashActivity : Activity() {
             gravity = Gravity.CENTER; setPadding(0, (4 * dp).toInt(), 0, 0); maxLines = 1 }, wrap())
         return box
     }
-    override fun onResume() { super.onResume(); overridePendingTransition(0, 0); window.decorView.post { ask() } }
+    override fun onResume() { super.onResume(); overridePendingTransition(0, 0); window.decorView.post { stillLocked() } }
     override fun onPause() { super.onPause(); overridePendingTransition(0, 0) }
     override fun onDestroy() { if (instance === this) instance = null; super.onDestroy() }
     @Deprecated("Back closes it: the phone's own lock screen is underneath")
     override fun onBackPressed() { OverlayService.instance?.lockDashLeft(); finish() }
 
     /** The screen came on: ask for the unlock now (the screen was off when this came up). */
-    fun screenOnNow() { if (!isFinishing) window.decorView.post { ask() } }
+    fun screenOnNow() { if (!isFinishing) window.decorView.post { stillLocked() } }
+    /** The screen is on: if the phone didn't actually lock (it was off only briefly) this closes and you stay where you
+     *  were. Locked: it just shows - nothing asks until you choose an unlock option. */
+    private fun stillLocked() {
+        if (isFinishing) return
+        val awake = getSystemService(android.os.PowerManager::class.java)?.isInteractive == true
+        if (!awake || AodActivity.instance != null) return
+        if (getSystemService(KeyguardManager::class.java)?.isKeyguardLocked != true) { finish(); overridePendingTransition(0, 0) }
+    }
     /** The phone's own unlock prompt, over the Dashboard. */
     private fun ask() {
         if (asking || isFinishing) return
@@ -158,13 +200,25 @@ class LockArt(ctx: android.content.Context) : android.view.View(ctx) {
     private val bmp = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG or android.graphics.Paint.ANTI_ALIAS_FLAG)
     override fun onDraw(c: android.graphics.Canvas) {
         val w = width.toFloat(); val h = height.toFloat(); if (w <= 0f || h <= 0f) return
-        val cx = w / 2f; val cy = h * 0.47f
-        tape(c, cx, cy, 120.5f, w * 0.13f, w * 0.20f, w, h)   // the strip underneath
-        tape(c, cx, cy, 31.9f, w * 0.15f, w * 0.22f, w, h)    // the strip on top
+        // The sign sits in the TOP area only, not across the whole screen (owner, 5 Nov 2026, circling the top of a
+        // picture: 'our screen is locked indicator - not as the full background but where I drew'), its edges fading out.
+        val box = android.graphics.RectF(w * 0.065f, h * 0.107f, w * 0.935f, h * 0.538f)
+        val cx = box.centerX(); val cy = box.centerY()
+        val layer = c.saveLayer(box, null)
+        tape(c, cx, cy, 120.5f, w * 0.13f, w * 0.20f, box.width(), box.height())   // the strip underneath
+        tape(c, cx, cy, 31.9f, w * 0.15f, w * 0.22f, box.width(), box.height())    // the strip on top
+        val f = 60f * w / 1080f
+        val clear = android.graphics.Paint().apply { xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.DST_OUT) }
+        fun fade(x0: Float, y0: Float, x1: Float, y1: Float, r: android.graphics.RectF) {
+            clear.shader = android.graphics.LinearGradient(x0, y0, x1, y1, Color.BLACK, Color.TRANSPARENT, android.graphics.Shader.TileMode.CLAMP); c.drawRect(r, clear) }
+        fade(box.left, 0f, box.left + f, 0f, android.graphics.RectF(box.left, box.top, box.left + f, box.bottom))
+        fade(box.right, 0f, box.right - f, 0f, android.graphics.RectF(box.right - f, box.top, box.right, box.bottom))
+        fade(0f, box.top, 0f, box.top + f, android.graphics.RectF(box.left, box.top, box.right, box.top + f))
+        fade(0f, box.bottom, 0f, box.bottom - f, android.graphics.RectF(box.left, box.bottom - f, box.right, box.bottom))
+        c.restoreToCount(layer)
         words?.let { b ->
-            val ww = w * 0.9185f; val wh = ww * b.height / b.width
-            val mid = cy - w * 0.0179f
-            c.drawBitmap(b, null, android.graphics.RectF(cx - ww / 2f, mid - wh / 2f, cx + ww / 2f, mid + wh / 2f), bmp)
+            val ww = box.width() * 0.86f; val wh = ww * b.height / b.width
+            c.drawBitmap(b, null, android.graphics.RectF(cx - ww / 2f, cy - wh / 2f, cx + ww / 2f, cy + wh / 2f), bmp)
         }
     }
     private fun tape(c: android.graphics.Canvas, cx: Float, cy: Float, angle: Float, tw: Float, period: Float, w: Float, h: Float) {
@@ -187,5 +241,39 @@ class LockArt(ctx: android.content.Context) : android.view.View(ctx) {
         edge.strokeWidth = 2.2f * w / 1080f; edge.alpha = 140
         c.drawLine(-len, -half, len, -half, edge); c.drawLine(-len, half, len, half, edge)
         c.restore()
+    }
+}
+
+/** The unlock options' icons, drawn (no emoji): 0 fingerprint, 1 face, 2 PIN keypad, 3 the arrow. */
+class UnlockIcon(ctx: android.content.Context, private val kind: Int) : android.view.View(ctx) {
+    private val dp = ctx.resources.displayMetrics.density
+    private val pen = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        style = android.graphics.Paint.Style.STROKE; strokeWidth = 2.2f * dp; color = Color.WHITE; strokeCap = android.graphics.Paint.Cap.ROUND; strokeJoin = android.graphics.Paint.Join.ROUND }
+    private val dot = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { style = android.graphics.Paint.Style.FILL; color = Color.WHITE }
+    override fun onDraw(c: android.graphics.Canvas) {
+        val cx = width / 2f; val cy = height / 2f; val u = 1.2f * dp
+        when (kind) {
+            0 -> { // fingerprint: open arcs around the centre
+                for ((k, r) in listOf(4f, 8f, 12f, 16f).withIndex()) {
+                    val rr = r * u; val start = if (k % 2 == 0) 200f else 215f
+                    c.drawArc(cx - rr, cy - rr, cx + rr, cy + rr, start, 250f - k * 12f, false, pen)
+                }
+            }
+            1 -> { // face: corner brackets, two eyes, a smile
+                val h = 15f * u; val l = 6f * u
+                for ((sx, sy) in listOf(-1f to -1f, 1f to -1f, -1f to 1f, 1f to 1f)) {
+                    c.drawLine(cx + sx * h, cy + sy * h, cx + sx * (h - l), cy + sy * h, pen)
+                    c.drawLine(cx + sx * h, cy + sy * h, cx + sx * h, cy + sy * (h - l), pen)
+                }
+                c.drawCircle(cx - 5f * u, cy - 3f * u, 1.6f * u, dot); c.drawCircle(cx + 5f * u, cy - 3f * u, 1.6f * u, dot)
+                c.drawArc(cx - 6f * u, cy - 1f * u, cx + 6f * u, cy + 8f * u, 20f, 140f, false, pen)
+            }
+            2 -> { // PIN keypad: 3 x 3 dots
+                for (r in -1..1) for (k in -1..1) c.drawCircle(cx + k * 9f * u, cy + r * 9f * u, 2.6f * u, dot)
+            }
+            else -> { // the arrow
+                c.drawLine(cx - 3f * u, cy - 7f * u, cx + 4f * u, cy, pen); c.drawLine(cx + 4f * u, cy, cx - 3f * u, cy + 7f * u, pen)
+            }
+        }
     }
 }
