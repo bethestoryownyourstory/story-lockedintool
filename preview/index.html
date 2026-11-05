@@ -21363,7 +21363,7 @@ function buildNeighbor(pg){
   host.innerHTML = frameHTML;
   document.body.appendChild(host);
   const area = host.querySelector('#content-area');
-  if(area){ area.innerHTML = contentHTML; try{ fitPageToScreen(area, null, pg); }catch(e){} try{ litRecolorArea(area, pg); litBgArea(area, pg); }catch(e){} }   // recolour the neighbour so a swipe never flashes its plain look
+  if(area){ area.innerHTML = contentHTML; if(!SCROLL_PAGES.has(pg) && pg !== 'apps') area.classList.add('lit-noscroll'); try{ fitPageToScreen(area, null, pg); }catch(e){} try{ litRecolorArea(area, pg); litBgArea(area, pg); }catch(e){} }   // recolour the neighbour so a swipe never flashes its plain look
   NEIGHBORS[pg] = { host, w:r.width, h:r.height };
   return NEIGHBORS[pg];
 }
@@ -21543,6 +21543,12 @@ function adoptSlidFrame(sl){
     if(typeof updatePhoneStatusClock === 'function') updatePhoneStatusClock();
     updateScrollHint();
     updateScrollbarThumb();
+    // The page that slid in is the same as one opened any other way (owner, 5 Nov 2026: 'in the videos I was able to
+    // scroll on the pages, on the other video I couldn't ... it changes multiple times, which says it is glitching'): it
+    // never scrolls, it's sized for real now that it's on screen (nothing cut), and it's watched like any page.
+    const la = document.getElementById('content-area');
+    if(la){ const may = litMayScroll(la); la.classList.toggle('lit-noscroll', !may); if(!may && la.scrollTop) la.scrollTop = 0;
+      try{ fitPageToScreen(la); }catch(e){} litWatchFit(la); }
   }catch(e){ renderDevice(); return; }
   refreshNeighbors();
 }
