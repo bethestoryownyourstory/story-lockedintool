@@ -149,6 +149,8 @@ export class Hub {
     try { this.sql.exec(`ALTER TABLE users ADD COLUMN name_at INTEGER`); } catch (e) {}
     try { this.sql.exec(`ALTER TABLE users ADD COLUMN username_at INTEGER`); } catch (e) {}
     try { this.sql.exec(`ALTER TABLE users ADD COLUMN official INTEGER`); } catch (e) {}
+    // Deactivate account (owner, 4 Nov 2026): a break - nothing deleted, the plan paused, hidden until you log back in.
+    try { this.sql.exec(`ALTER TABLE users ADD COLUMN deactivated INTEGER`); } catch (e) {}
     // Accounts (owner): sign up with a password, log in on any phone, log out. The password never comes here - only a
     // key worked out from it on the phone (auth), kept hashed. Your chats and your message key are backed up LOCKED
     // with a second key from the password (bksalt) - the server can't open them.
@@ -213,6 +215,7 @@ export class Hub {
   isPrivate(u) { return this.privacy(u).profile === 'private'; }
   canSeeProfile(viewer, owner) {
     if (!viewer || viewer.id === owner.id) return true;
+    if (owner.deactivated) return false;   // deactivated: nobody sees the profile until its owner logs back in
     if (this.blocked(viewer.id, owner.id)) return false;
     if (!this.isPrivate(owner)) return true;
     return this.follows(owner.id, viewer.id)
@@ -220,9 +223,9 @@ export class Hub {
       || !!this.one('SELECT 1 AS x FROM gmembers a JOIN gmembers b ON a.gid = b.gid WHERE a.uid = ? AND b.uid = ? LIMIT 1', owner.id, viewer.id);
   }
   blocked(a, b) { return !!(a && b && a !== b && this.one('SELECT 1 AS x FROM blocks WHERE (uid = ? AND bid = ?) OR (uid = ? AND bid = ?) LIMIT 1', a, b, b, a)); }
-  canCall(from, to) { if (this.blocked(from.id, to.id)) return false; const p = this.privacy(to); return p.calls === 'everyone' || (p.calls === 'people' && (p.callPeople || []).includes(from.id)); }
+  canCall(from, to) { if (to.deactivated || this.blocked(from.id, to.id)) return false; const p = this.privacy(to); return p.calls === 'everyone' || (p.calls === 'people' && (p.callPeople || []).includes(from.id)); }
   canMsg(from, to) { if (this.blocked(from.id, to.id)) return false; const p = this.privacy(to); return p.messages !== 'none' && p.messages !== 'nobody'; }
-  pubView(u, me) { const see = this.canSeeProfile(me, u); return { id: u.id, name: u.name || '', username: u.username || '', pub: u.pub, canCall: me ? this.canCall(me, u) : true, canMsg: me ? this.canMsg(me, u) : true, canPay: !!this.one('SELECT uid FROM paybank WHERE uid = ?', u.id), photo: see ? this.mediaUrl(u.photo) : '', about: see ? u.about || '' : '', official: !!u.official, locked: !see }; }
+  pubView(u, me) { const see = this.canSeeProfile(me, u); return { id: u.id, name: u.name || '', username: u.username || '', pub: u.pub, canCall: me ? this.canCall(me, u) : true, canMsg: me ? this.canMsg(me, u) : true, canPay: !!this.one('SELECT uid FROM paybank WHERE uid = ?', u.id), photo: see ? this.mediaUrl(u.photo) : '', about: see ? u.about || '' : '', official: !!u.official, locked: !see, away: !!u.deactivated }; }
 
   async fetch(req) {
     const url = new URL(req.url), path = url.pathname;
@@ -300,6 +303,7 @@ export class Hub {
       if (path === '/v1/backup/get') return json({ backup: me.backup ? JSON.parse(me.backup) : null, keybox: me.keybox ? JSON.parse(me.keybox) : null, bksalt: me.bksalt || '', mkbox: me.mkbox ? JSON.parse(me.mkbox) : null });
       if (path === '/v1/logout') { this.sql.exec('UPDATE users SET token = ? WHERE id = ?', await sha('tok|' + rand(32)), me.id); return json({ ok: true }); }
       if (path === '/v1/account/delete-start') return this.deleteStart(me, body);
+      if (path === '/v1/account/deactivate') return this.deactivate(me);
       if (path === '/v1/account/delete') return json({ error: 'use-link' }, 400);   // only through the link + code (owner)
       if (path.startsWith('/v1/uposts/')) return this.uposts(me, path.slice(11), body);
       if (path.startsWith('/v1/live/')) return this.live(me, path.slice(9), body);
@@ -425,7 +429,7 @@ export class Hub {
     const rows = this.sql.exec(
       `SELECT * FROM users WHERE (username LIKE ? ESCAPE '\\' OR (? = 0 AND lower(name) LIKE ? ESCAPE '\\'))
        ORDER BY (username = ?) DESC, (username LIKE ? ESCAPE '\\') DESC, (lower(name) LIKE ? ESCAPE '\\') DESC, name LIMIT 80`,
-      like, t.startsWith('@') ? 1 : 0, like, un, start, start).toArray().filter(u => u.id === me.id || (!this.isPrivate(u) && !this.blocked(me.id, u.id))).slice(0, 20);  // a private profile is never found (except by its owner - owner: you can find yourself)
+      like, t.startsWith('@') ? 1 : 0, like, un, start, start).toArray().filter(u => u.id === me.id || (!u.deactivated && !this.isPrivate(u) && !this.blocked(me.id, u.id))).slice(0, 20);  // a private profile is never found (except by its owner - owner: you can find yourself)
     return json({ people: rows.map(u => Object.assign(this.pubView(u, me), { isFollowing: this.follows(me.id, u.id) })) });
   }
 
@@ -652,8 +656,29 @@ export class Hub {
     const token = rand(32);
     this.sql.exec('UPDATE users SET token = ? WHERE id = ?', await sha('tok|' + token), me.id);
     for (const ws of this.ctx.getWebSockets(me.id)) { try { ws.close(4002, 'signed-in-elsewhere'); } catch (e) {} }   // the phone it was on is signed out
-    return json({ id: me.id, token, name: me.name || '', username: me.username || '', country: me.country || '', bksalt: me.bksalt || '', keybox: me.keybox ? JSON.parse(me.keybox) : null, backup: me.backup ? JSON.parse(me.backup) : null,
+    const back = me.deactivated ? await this.reactivate(me, now) : null;
+    return json({ reactivated: back, id: me.id, token, name: me.name || '', username: me.username || '', country: me.country || '', bksalt: me.bksalt || '', keybox: me.keybox ? JSON.parse(me.keybox) : null, backup: me.backup ? JSON.parse(me.backup) : null,
       mkbox: me.mkbox ? JSON.parse(me.mkbox) : null, mk: me.rewrap && me.mkspare ? me.mkspare : '' });
+  }
+  // Deactivate account (owner, 4 Nov 2026): 'I wanna chill a little bit' - the account isn't deleted; nobody can find
+  // or see the profile or call it (messages wait on the server); the plan is paused: a Lemon Squeezy plan is told not
+  // to renew (you're never charged while away; the month you paid for still runs). Signed out everywhere.
+  async deactivate(me) {
+    const now = Date.now();
+    this.sql.exec('UPDATE users SET deactivated = ?, token = ? WHERE id = ?', now, await sha('tok|' + rand(32)), me.id);
+    const r = this.one('SELECT * FROM subs WHERE uid = ?', me.id);
+    if (r && r.lssub && r.until > now) { try { if (!this.lsCache) await this.lsSetup(); const d = await this.ls('DELETE', '/subscriptions/' + encodeURIComponent(r.lssub)); if (d && d.data) this.lsApply(d.data, {}, now); } catch (e) {} }
+    for (const ws of this.ctx.getWebSockets(me.id)) { try { ws.close(4005, 'deactivated'); } catch (e) {} }
+    return json({ ok: true });
+  }
+  // Logging back in activates the account again. Inside the paid days the plan just continues (a Lemon Squeezy plan
+  // is set to renew again); after them the plan has ended and you choose one again ('Activate your subscription').
+  async reactivate(me, now) {
+    this.sql.exec('UPDATE users SET deactivated = NULL WHERE id = ?', me.id);
+    const r = this.one('SELECT * FROM subs WHERE uid = ?', me.id);
+    if (!r || !(r.until > now)) return { plan: r && r.plan ? 'ended' : 'none' };
+    if (r.lssub) { try { if (!this.lsCache) await this.lsSetup(); const d = await this.ls('PATCH', '/subscriptions/' + encodeURIComponent(r.lssub), { data: { type: 'subscriptions', id: String(r.lssub), attributes: { cancelled: false } } }); if (d && d.data) this.lsApply(d.data, {}, now); } catch (e) {} }
+    return { plan: 'active', until: r.until };
   }
   authSet(me, b) {
     if (me.pw) return json({ error: 'has-password' }, 409);
