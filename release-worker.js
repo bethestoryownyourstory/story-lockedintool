@@ -10,10 +10,7 @@
 //   GITHUB_TOKEN  (secret) fine-grained GitHub token: this repo only, "Actions: Read and write".
 const REPO = 'lockedintool/story-lockedintool';
 const WORKFLOW = 'screens.yml';
-// The server's old name (plan B step 3, owner 4 Nov 2026). Its PIN / GITHUB_TOKEN secrets can't be read back, so until
-// the owner adds them here (Cloudflare -> lockedintool-release -> Settings -> Variables and Secrets) every request is
-// passed on to the old server - Publish and the owner PIN keep working the whole time. Remove once both are set here.
-const OLD = 'https://story-release.percyjuniormaseko0.workers.dev';
+// The owner added PIN and GITHUB_TOKEN here on 5 Nov 2026 - the old story-release server is no longer used.
 
 const json = (body, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -31,7 +28,6 @@ async function samePin(a, b) {
 export default {
   async fetch(request, env) {
     const path = new URL(request.url).pathname;
-    if (!env.PIN || !env.GITHUB_TOKEN) return fetch(new Request(OLD + path, request));
     if (request.method !== 'POST') return json({ ok: false, error: 'Lockedintool release server' }, 405);
     if (!env.PIN) return json({ ok: false, error: 'PIN is not set on the server.' }, 500);
     let body = {};

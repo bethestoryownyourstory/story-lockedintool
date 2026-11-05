@@ -23,6 +23,20 @@ jobs:
         run: |
           if [ -n "$T" ] && [ -n "$A" ]; then echo "ok=true" >> "$GITHUB_OUTPUT"
           else echo "### Not deployed: add CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID in Settings -> Secrets and variables -> Actions." >> "$GITHUB_STEP_SUMMARY"; fi
+      # The old-server fallback is gone (owner added both secrets, 5 Nov 2026) - never deploy without them, or the
+      # owner PIN and Publish live update would stop working. Only the secrets' NAMES are read, never their values.
+      - name: Check PIN and GITHUB_TOKEN are set on lockedintool-release
+        if: steps.ready.outputs.ok == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          names=$(npx -y wrangler@3 secret list --name lockedintool-release 2>/dev/null | grep -o '"name": *"[^"]*"' | sed 's/.*"\([^"]*\)"$/\1/' | tr '\n' ' ')
+          echo "Secrets on lockedintool-release: $names"
+          for n in PIN GITHUB_TOKEN; do
+            echo " $names " | grep -q " $n " || { echo "### Not deployed: $n is missing on lockedintool-release (Cloudflare -> Workers & Pages -> lockedintool-release -> Settings -> Variables and Secrets)." >> "$GITHUB_STEP_SUMMARY"; exit 1; }
+          done
+          echo "### lockedintool-release has PIN and GITHUB_TOKEN" >> "$GITHUB_STEP_SUMMARY"
       - name: Deploy to Cloudflare
         if: steps.ready.outputs.ok == 'true'
         uses: cloudflare/wrangler-action@v3
