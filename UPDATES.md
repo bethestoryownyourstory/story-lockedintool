@@ -226,3 +226,4 @@ commits, pushed as a new update) - nothing else changes.
 | 218 | 2026-11-05 | Wallet: a Net worth switch in the bottom-right corner of the Tap to Pay button (remembers your choice; paying a tap from combined accounts needs Lockedintool's own card - Send money already splits over Net worth) | 6d2358c |
 | 219 | 2026-11-05 | Send Money: its own SEND FROM switch - Card or Net worth - like Lockedintool profile / Anyone; Net worth shows the split over your accounts as you type | 099e2bc |
 | 220 | 2026-11-05 | Send Money: Card / Net worth and the accounts to use are never saved - you choose them for every payment (tick the accounts each time) | be5d106 |
+| 221 | 2026-11-05 | Tap to Pay: the Net worth corner button is no longer an on/off switch - it opens Split this payment: pick two or more accounts, set how much from each, Continue, then hold the phone to the reader (never saved) | |
