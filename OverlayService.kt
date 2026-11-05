@@ -2454,7 +2454,21 @@ class OverlayService : Service(), StoryBridge.Host {
         if (mode != android.media.AudioManager.MODE_NORMAL) return   // a call ringing or on
         // Something came up over the lock screen since the screen came on (the phone's camera, a call screen): leave it.
         if (StoryAccessibilityService.frontAt > screenOnAt && StoryAccessibilityService.frontPkg != packageName) return
-        startActivity(Intent(this, LockDashActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION))
+        // Opened the way Android explicitly allows from the background (the phone quietly blocked a plain start on the
+        // lock screen - owner, 5 Nov 2026: the phone's own lock screen showed instead), the plain way as a second try.
+        val i = Intent(this, LockDashActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
+        val pi = android.app.PendingIntent.getActivity(this, 9, i, android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT)
+        runCatching {
+            if (Build.VERSION.SDK_INT >= 34) pi.send(android.app.ActivityOptions.makeBasic().setPendingIntentBackgroundActivityStartMode(android.app.ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED).toBundle())
+            else pi.send()
+        }.onFailure { runCatching { startActivity(i) } }
+        ui.postDelayed({ if (LockDashActivity.instance == null && lockDashLeftAt <= screenOffAt &&
+            getSystemService(android.app.KeyguardManager::class.java)?.isKeyguardLocked == true && userPresentAt <= screenOffAt &&
+            getSystemService(android.os.PowerManager::class.java).isInteractive && !aodShowing()) {
+            runCatching { startActivity(i) }
+            ui.postDelayed({ if (LockDashActivity.instance == null && getSystemService(android.app.KeyguardManager::class.java)?.isKeyguardLocked == true)
+                ProblemLog.record(this, "lockscreen", "Lockedintool's lock screen couldn't open", "lock screen") }, 800)
+        } }, 700)
     } }
     private var secWaitDone = false
     private var secWaitThen: (() -> Unit)? = null

@@ -195,3 +195,4 @@ commits, pushed as a new update) - nothing else changes.
 | 187 | 2026-11-05 | The 'Lockedintool is locked' screen shows your own background picture instead of black | 30f37c0 |
 | 188 | 2026-11-05 | On the Pages the 'Lockedintool is locked' screen is see-through: your Lockedintool home screen always shows, with just the lock and Unlock on top (Station 3's windows keep your background picture, so chats stay private) | 5da2ea5 |
 | 189 | 2026-11-05 | Lockedintool's lock screen says it's locked: a card in the middle with the lock, 'Locked' and 'Tap to unlock' | (this) |
+| 190 | 2026-11-05 | Lockedintool's lock screen opens the way Android allows on the lock screen (the phone's own lock screen showed instead), and reports it if it ever can't | (this) |
