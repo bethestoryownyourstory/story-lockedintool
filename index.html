@@ -8711,7 +8711,7 @@ function tapSplitTemplate(){
         <div class="confirm-sub">Pick two or more accounts, then set how much comes from each.</div>
         <div class="row-card" style="margin:8px 0 0;text-align:left;">${rows}</div>
         ${t.msg ? `<div class="note pay-msg">${escText(t.msg)}</div>` : ''}
-        <div class="confirm-btn-row" style="margin-top:12px;"><button class="btn-wide" style="margin-top:0;" data-action="tap-split-close">Cancel</button><button class="btn-wide btn-primary tsplit-go" style="margin-top:0;" data-action="tap-split-go">${total > 0 ? 'Continue · ' + payMoney(total) : 'Continue'}</button></div>
+        <div class="confirm-btn-row" style="margin-top:12px;"><button class="btn-wide" style="margin-top:0;" data-action="tap-split-close">Cancel</button><button class="btn-wide btn-primary tsplit-go" style="margin-top:0;" data-action="tap-split-go">${total > 0 ? 'Continue to pay · ' + payMoney(total) : 'Continue to pay'}</button></div>
       </div>
     </div>`;
 }
@@ -17759,7 +17759,7 @@ function attachHandlers(){
       const t = state.tapSplit; if(!t) return;
       t.amts[el.getAttribute('data-tsplit-input')] = el.value;
       const total = t.pick.reduce((x, k)=>x + (parseFloat(String(t.amts[k] || '').replace(',', '.')) || 0), 0);
-      const b = document.querySelector('#device-wrap .tsplit-go'); if(b) b.textContent = total > 0 ? 'Continue · ' + payMoney(total) : 'Continue';
+      const b = document.querySelector('#device-wrap .tsplit-go'); if(b) b.textContent = total > 0 ? 'Continue to pay · ' + payMoney(total) : 'Continue to pay';
     });
   });
 
