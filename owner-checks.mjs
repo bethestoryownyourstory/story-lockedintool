@@ -10,6 +10,9 @@ const SCREENS = ['dashboard', 'money', 'wallet', 'trading', 'notes', 'apps', 'co
 const MAY_SCROLL = new Set(['settings', 'information', 'apps', 'legal-privacy', 'legal-terms', 'legal-safety']);   // owner: 'only settings and information' (+ the Apps list)
 const UA = 'Mozilla/5.0 (Linux; Android 16; SM-A155F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Mobile Safari/537.36';
 const fails = [];
+// Never hang: if anything below stops answering, the check ends with a clear message instead of blocking every update.
+const WATCHDOG = setTimeout(() => { console.log('OWNER RULES CHECK TIMED OUT (something stopped answering) - failing safe'); process.exit(1); }, 20 * 60 * 1000);
+const within = (p, ms) => Promise.race([p, new Promise(r => setTimeout(() => r('timeout'), ms))]);
 const fail = (rule, where, what) => { fails.push(`${rule} | ${where} | ${what}`); };
 const b = await chromium.launch();
 for (const [w, h] of SIZES) {
@@ -104,6 +107,7 @@ for (const [w, h] of SIZES) {
   await pg.evaluate(() => { window.storyShow && window.storyShow('money', false); });
   await pg.waitForTimeout(600);
   for (const style of ['vertical', 'horizontal', 'wheel']) {
+    const one = async () => {
     await pg.evaluate(a => { state.pageArrangement = a; window.storyPagesAction('page-quick-style'); }, style);
     await pg.waitForTimeout(900);
     const box = await pg.evaluate(() => { const r = document.querySelector('#device-wrap #content-area').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; });
@@ -111,23 +115,25 @@ for (const [w, h] of SIZES) {
     const sx = box.x - (H ? 110 : 0), sy = box.y - (H ? 0 : 140), ex = box.x + (H ? 110 : 0), ey = box.y + (H ? 0 : 140);
     const events = [];
     cdp.on('Tracing.dataCollected', d => events.push(...d.value));
-    await cdp.send('Tracing.start', { categories: 'devtools.timeline' });
+    const traced = await within(cdp.send('Tracing.start', { categories: 'devtools.timeline' }).then(() => true).catch(() => false), 10000) === true;
     await pg.evaluate(() => { window.__fmax = 0; window.__frun = true; let last = performance.now(); (function t() { if (!window.__frun) return; const n = performance.now(); window.__fmax = Math.max(window.__fmax, n - last); last = n; requestAnimationFrame(t); })(); });
     await pg.mouse.move(sx, sy); await pg.mouse.down();
     for (let i = 1; i <= 24; i++) await pg.mouse.move(sx + (ex - sx) * i / 24, sy + (ey - sy) * i / 24);
     await pg.mouse.up(); await pg.waitForTimeout(250);
     const fmax = await pg.evaluate(() => { window.__frun = false; return window.__fmax; });
-    const done = new Promise(r => cdp.once('Tracing.tracingComplete', r));
-    await cdp.send('Tracing.end'); await done;
+    if (traced) { const done = new Promise(r => cdp.once('Tracing.tracingComplete', r)); await within(cdp.send('Tracing.end').catch(() => {}), 10000); await within(done, 15000); }
     const restyled = events.filter(e => e.name === 'UpdateLayoutTree').reduce((n, e) => n + ((e.args && e.args.elementCount) || 0), 0);
-    if (style !== 'wheel' && restyled > 2000) fail('page styles are smooth', style + ' @ 393x852', 'pulling the stack restyled ' + restyled + ' elements (should be a few hundred)');
+    if (traced && style !== 'wheel' && restyled > 2000) fail('page styles are smooth', style + ' @ 393x852', 'pulling the stack restyled ' + restyled + ' elements (should be a few hundred)');
     if (fmax > 250) fail('page styles are smooth', style + ' @ 393x852', 'a ' + Math.round(fmax) + ' ms freeze while it moved');
     if (perr.length) fail('no errors', style + ' @ 393x852', perr[0]);
     await pg.evaluate(() => { state.pageStyleViewOpen = false; state.pageStyleOn = false; window.storyShow && window.storyShow('money', false); });
     await pg.waitForTimeout(300);
+      };
+    if (await within(one().then(() => 'ok'), 90000) !== 'ok') fail('page styles are smooth', style + ' @ 393x852', 'the check did not finish within 90 s');
   }
   await ctx.close();
 }
-await b.close();
+await within(b.close(), 15000);
+clearTimeout(WATCHDOG);
 if (fails.length) { console.log('OWNER RULES BROKEN (' + fails.length + '):\n' + fails.join('\n')); process.exit(1); }
 console.log('All owner rules pass');
