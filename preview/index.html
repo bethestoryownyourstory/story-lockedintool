@@ -10123,6 +10123,10 @@ function privacySettingsHTML(){
         <div class="set2-text"><div class="set2-name">Log out</div><div class="set2-sub">${litSignedIn() ? 'Signed in as @' + escText(profileData().username || '') : 'Not signed in'}</div></div>
         <span class="chev-right">›</span>
       </div>
+      <div class="set2-row set2-link" data-action="privacy-deactivate">
+        <div class="set2-text"><div class="set2-name">Deactivate account</div><div class="set2-sub">Take a break - your account and plan are paused until you log back in</div></div>
+        <span class="chev-right">›</span>
+      </div>
       <div class="set2-row set2-link" data-action="privacy-delete-account">
         <div class="set2-text"><div class="set2-name" style="color:#ff3b30;">Delete account</div><div class="set2-sub">Remove your Lockedintool account and everything on it</div></div>
         <span class="chev-right">›</span>
@@ -11989,7 +11993,7 @@ function upRenderPerson(){
       '<div class="pf-names"><div class="pf-name">' + escText(upName(p)) + '</div>' + (p.name && p.username ? '<div class="pf-user">@' + escText(p.username) + '</div>' : '') + '</div></div>' +
       '<div class="up-p-btns"><button class="up-follow up-follow-lg' + (p.isFollowing ? ' on' : '') + '" data-pf="up-follow" data-id="' + escText(p.id) + '">' + (p.isFollowing ? 'Following' : 'Follow') + '</button>' +
       (p.canMsg === false ? '' : '<button class="up-follow up-follow-lg" data-pf="up-message">Message</button>') + '</div>' +
-      '<div class="up-p-locked"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><b>This profile is private</b></div>';
+      '<div class="up-p-locked"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><b>' + (p.away ? 'This account isn’t available right now' : 'This profile is private') + '</b></div>';
     return;
   }
   pv.querySelector('.up-p-body').innerHTML =
@@ -12563,6 +12567,7 @@ function msgConnect(){
   ws.onmessage = e=>{ let m; try{ m = JSON.parse(e.data); }catch(err){ return; } msgOnServer(m).catch(()=>{}); };
   ws.onclose = e=>{ msgWsOpen = false; clearInterval(msgPing); if(e && (e.code === 4001 || e.code === 4003)){ msgWs = null; litAccountGone(e.code === 4003 ? 'banned' : 'deleted'); return; }
     if(e && e.code === 4002){ msgWs = null; showToast('You logged in on another phone'); litSignedOut(); return; }
+    if(e && e.code === 4005){ msgWs = null; litSignedOut(); return; }
     if(e && e.code === 4004){ msgWs = null; showToast('Your password was changed - log in with your new password'); litSignedOut(); return; } if(msgWs === ws){ msgWs = null; msgRetry(); } };
   ws.onerror = ()=>{ try{ ws.close(); }catch(e){} };
 }
@@ -19127,6 +19132,7 @@ function attachHandlers(){
         case 'pay-recv-remove': msgApi('/v1/pay/bank', { remove:true }).then(()=>{ if(state.pay.info) state.pay.info.bank = null; showToast('Removed'); payShow(); }).catch(()=>showToast('Couldn\u2019t remove - try again')); break;
         case 'privacy-blocked': litBlockedSheet(); return;
         case 'privacy-delete-account': delAccountSheet(); return;
+        case 'privacy-deactivate': if(litSignedIn()) litDeactivateSheet(); else litAuthGate(); return;
         case 'privacy-logout': if(litSignedIn()) litLogoutSheet(); else litAuthGate(); return;
         case 'community-report-group': litReport('group', el.getAttribute('data-groupid')); return;
         case 'community-report-post': litReport('gpost', el.getAttribute('data-postid')); return;
@@ -20505,7 +20511,8 @@ async function litAuthAct(k, btn){
       if(!j.mkbox){ litBackupAt = 0; litBackupNow(); }   // the backup is locked with the account key from now on
       try{ localStorage.removeItem('story-signed-out'); }catch(e){}
       litForgot = { u:'', opts:null, via:'' };
-      litAuthDone('Welcome back');
+      const back = j.reactivated;
+      litAuthDone(!back ? 'Welcome back' : back.plan === 'active' ? 'Your account is active again - your plan continues' : back.plan === 'ended' ? 'Your account is active again - activate your subscription to continue' : 'Your account is active again');
     }catch(e){ litAuthBusySet(false, 'Log in'); litAuthSay('Couldn’t log in - check your connection and try again.'); }
     return;
   }
@@ -20552,6 +20559,25 @@ function litLogoutSheet(){
       else setTimeout(()=>{ if(msgAccount()) litLogoutHere(); }, 15000);   // no connection window answered: sign out from here
     } }] });
 }
+// Deactivate account (owner, 4 Nov 2026): a break without deleting anything - your profile is hidden, nobody can
+// find or call you, messages wait for you, your plan is paused (no charge while you're away). Logging back in
+// activates it again. Your chats are backed up first, like Log out.
+function litDeactivateSheet(){
+  litSheet({ title:'Deactivate your account?', text: 'Your account is paused, not deleted. While it’s deactivated nobody can find your profile or call you, and messages sent to you wait until you come back. Your plan is paused, so you won’t be charged for next month. Log in again with @' + (profileData().username || '') + ' and your password to activate it - if your paid days haven’t ended, your plan just continues; if they have, you choose a plan again.',
+    items:[{ label:'Deactivate account', danger:true, fn: async ()=>{
+      showToast('Deactivating…');
+      try{ localStorage.setItem('story-deactivate-now', String(Date.now())); }catch(e){}
+      if(MSG_ENGINE) await litDeactivateHere();
+      else setTimeout(()=>{ if(msgAccount()) litDeactivateHere(); }, 15000);
+    } }] });
+}
+async function litDeactivateHere(){
+  if(!litSignedIn()) return;
+  try{ await litBackupNow(); }catch(e){}
+  try{ await msgApi('/v1/account/deactivate', {}); }catch(e){ showToast('Couldn’t deactivate - check your connection and try again'); return; }
+  showToast('Your account is deactivated - log in any time to come back');
+  litSignedOut();
+}
 async function litLogoutHere(){
   if(litSignedIn()){ try{ await litBackupNow(); }catch(e){} try{ await msgApi('/v1/logout', {}); }catch(e){} }
   litSignedOut();
@@ -20566,6 +20592,7 @@ function litSignedOut(){
 }
 window.addEventListener('storage', e=>{
   if(e.key === 'story-logout-now' && e.newValue && MSG_ENGINE) litLogoutHere();
+  if(e.key === 'story-deactivate-now' && e.newValue && MSG_ENGINE) litDeactivateHere();
   if(e.key === 'story-signed-out' && e.newValue){ if(MSG_ENGINE){ try{ if(msgWs) msgWs.close(); }catch(err){} setTimeout(()=>location.reload(), 300); } else litAuthGate(); }
   if(e.key === MSG_ACCOUNT_KEY && !MSG_ENGINE){ if(litSignedIn() && !litLocked()) litAuthClose(); else litAuthGate(); }
   if(e.key === LIT_LOCK_KEY && !MSG_ENGINE){ if(e.newValue === '1') litAuthGate(); else if(litAuthMode === 'unlock' && litSignedIn()) litAuthClose(); }
