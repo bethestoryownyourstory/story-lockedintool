@@ -119,17 +119,24 @@ class OverlayService : Service(), StoryBridge.Host {
         // Wake the screen right now, in parallel with the black screen starting (not after it).
         wakeForAod()
         val i = Intent(this, AodActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
-        runCatching { startActivity(i) }
+        // Opened straight away the way Android explicitly allows from the background - the plain start was quietly
+        // blocked on some phones, leaving a black screen for a second until the retry below (owner, 5 Nov 2026: 'there's
+        // a delay until my always on display shows up, a black screen shows up first').
+        runCatching {
+            if (Build.VERSION.SDK_INT >= 34) android.app.PendingIntent.getActivity(this, 8, i, android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT)
+                .send(android.app.ActivityOptions.makeBasic().setPendingIntentBackgroundActivityStartMode(android.app.ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED).toBundle())
+            else startActivity(i)
+        }.onFailure { runCatching { startActivity(i) } }
         // Some phones quietly block opening it from the background: ask again the way Android allows explicitly.
         val startedAt = aodStartedAt
         ui.postDelayed({
             if (AodActivity.instance == null && AodActivity.enabled(this) && aodStartedAt == startedAt && userPresentAt < startedAt) runCatching {
                 wakeForAod()
                 val pi = android.app.PendingIntent.getActivity(this, 8, i, android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT)
-                if (Build.VERSION.SDK_INT >= 34) pi.send(android.app.ActivityOptions.makeBasic().setPendingIntentBackgroundActivityStartMode(android.app.ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED).toBundle())
+                if (Build.VERSION.SDK_INT >= 34) startActivity(i)   // (the allowed way was tried first; now the plain one)
                 else pi.send()
             }
-        }, 1000)
+        }, 500)
     }
     private fun wakeForAod() {
         runCatching {

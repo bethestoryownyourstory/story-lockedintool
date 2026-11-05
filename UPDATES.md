@@ -204,3 +204,4 @@ commits, pushed as a new update) - nothing else changes.
 | 196 | 2026-11-05 | One unlock only: unlocking your phone on Lockedintool's lock screen unlocks Lockedintool too - no second fingerprint | 570f747 |
 | 197 | 2026-11-05 | Lockedintool's lock screen also on Second system when Lockedintool security is on (Only system: always); unlocking there opens Lockedintool on your Home Screen | ab0c85e |
 | 198 | 2026-11-05 | Always On Display lock screen (Settings > Security): when the screen is off, your Lockedintool lock screen stays on exactly as it looks - not dimmed | 3ffb046 |
+| 199 | 2026-11-05 | The Always On Display shows straight away - no black screen first | (this) |
