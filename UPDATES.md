@@ -222,3 +222,4 @@ commits, pushed as a new update) - nothing else changes.
 | 214 | 2026-11-05 | Settings > System theme > Phone colours: pick a colour and your phone's colours follow it (a plain wallpaper in that colour; the sheet says your wallpaper is replaced first) - Lockedintool's Dashboard and Pages keep their own | 8395c89 |
 | 215 | 2026-11-05 | Lock screen: while the unlock options show, Station 3 and the Wallet button step away - a tap near Enter PIN can't open Profile on a locked phone | 26aa63f |
 | 216 | 2026-11-05 | No scrolling after swiping between pages: the page you swipe to is locked and fitted exactly like one you open directly (it was the cause of 'sometimes it scrolls, sometimes not'); the automatic checks now swipe too | 1fb10d3 |
+| 217 | 2026-11-05 | Your colours show from the very first frame - no more colours disappearing and coming back when you open the Dashboard or any screen; the automatic checks now test it | (this) |

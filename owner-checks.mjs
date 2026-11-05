@@ -71,6 +71,20 @@ for (const [w, h] of SIZES) {
   }
   await ctx.close();
 }
+// 'I just went inside the dashboard, the colors disappeared and they appeared again - you know this is wrong' (5 Nov 2026):
+// with a colour system on, a screen must have your colours from its very first frame - checked straight after it opens.
+{
+  const ctx = await b.newContext({ viewport: { width: 393, height: 852 }, isMobile: true, hasTouch: true, userAgent: UA });
+  await ctx.addInitScript(() => { try { localStorage.setItem('story-msg-account', JSON.stringify({ id: 'check', token: 't', pw: true, username: 'check' }));
+    localStorage.setItem('story-color-systems', JSON.stringify({ all: { bg: '#1ab8d6', text: '#f5d90a' }, dash: { bg: '#1ab8d6', text: '#f5d90a' } })); } catch (e) {} });
+  const pg = await ctx.newPage();
+  await pg.goto(URL); await pg.waitForTimeout(2500);
+  for (const s of ['settings', 'dashboard', 'money', 'dashboard', 'wallet', 'layouts']) {
+    const got = await pg.evaluate(s => { window.storyShow && window.storyShow(s, false); const a = document.querySelector('#device-wrap #content-area'); return a ? getComputedStyle(a).backgroundColor : 'none'; }, s);
+    if (got !== 'rgb(26, 184, 214)') fail('your colours from the first frame', s + ' @ 393x852', 'opened with ' + got);
+  }
+  await ctx.close();
+}
 await b.close();
 if (fails.length) { console.log('OWNER RULES BROKEN (' + fails.length + '):\n' + fails.join('\n')); process.exit(1); }
 console.log('All owner rules pass');
