@@ -10359,6 +10359,33 @@ function informationScreen(){
     <div class="info-foot">#lockedintool${ver ? '<br>Lockedintool ' + escText(ver) : ''}</div>
     </div>`;
 }
+// Phone colours (owner, 5 Nov 2026, under System theme: 'color customization for the whole entire phone, not just
+// Lockedintool ... this won't change Lockedintool dashboard or pages colors'; chose: pick the colour in Lockedintool,
+// 'only if this will be like an instruction ... it tells you you have to set your wallpaper again'). Android lets no app
+// recolour other apps: the PHONE builds its colours from the wallpaper. So Lockedintool sets a plain wallpaper in the
+// colour you pick and the phone takes its colours from it; the sheet says first that your wallpaper is replaced.
+// Lockedintool's own Dashboard / Pages keep their own colours (Layouts > Color customization).
+const PHONE_COLOR_KEY = 'story-phone-color';
+function phoneColorGet(){ try{ return localStorage.getItem(PHONE_COLOR_KEY) || ''; }catch(e){ return ''; } }
+function phoneColorHTML(){
+  const c = phoneColorGet();
+  return `<div class="set2-card" style="margin-top:12px;">
+    <div class="set2-row set2-link" data-openpicker="phonecolor" style="cursor:pointer;">
+      <div class="set2-text"><div class="set2-name">Phone colours</div><div class="set2-sub">Your whole phone's colours - not Lockedintool's Dashboard or Pages</div></div>
+      <span class="litcolor-swatch" data-keep-color style="background:${c || 'transparent'};${c ? '' : 'border:1px dashed #6b6b6b;'}"></span>
+    </div>
+  </div>${state.colorPickerTarget === 'phonecolor' ? colorPickerTemplate() : ''}`;
+}
+function phoneColorAsk(hex){
+  if(!NATIVE || !window.StoryNative || !window.StoryNative.phoneColorSet){ showToast('Phone colours work in the Lockedintool app'); return; }
+  litSheet({ title:'Use this colour for your phone?', text:'Your phone takes its colours from your wallpaper, so Lockedintool will set a plain wallpaper in this colour, on your home screen and lock screen. Your current wallpaper will be replaced - you will need to set your wallpaper again afterwards if you want it back. Your phone may then take its colours from that wallpaper instead. Lockedintool\u2019s Dashboard and Pages keep their own colours.',
+    items:[{ label:'Set this colour', fn: ()=>{ try{ window.StoryNative.phoneColorSet(hex); }catch(e){ showToast('Couldn\u2019t set the colour'); } } }] });
+}
+window.storyPhoneColor = function(hex, ok){
+  if(ok){ try{ localStorage.setItem(PHONE_COLOR_KEY, hex); }catch(e){} showToast('Your phone\u2019s colours now follow this colour'); }
+  else showToast('Couldn\u2019t set the colour - your phone didn\u2019t allow it');
+  if(state.current === 'settings') renderDevice();
+};
 function settingsHubScreen(){
   // Settings (owner, 4 Nov 2026: 'make settings be clean, don't matter if in the screen they will be short. But just show
   // only the words of the options and you have to tap the word to see its options'): a plain list of names; tapping one
@@ -10373,7 +10400,7 @@ function settingsHubScreen(){
           <button class="theme-opt${white ? ' on' : ''}" data-action="theme-white">White</button>
         </div>
       </div>
-    </div>`],
+    </div>${phoneColorHTML()}`],
     ['quick', 'Quick access', quickAccessSettingsHTML],
     ['widgets', 'Widgets', widgetsOnlySettingsHTML],
     ['security', 'Security', securitySettingsHTML],
@@ -14789,6 +14816,7 @@ function colorPickerCurrentHex(target){
     case 'pencolor': return /^#[0-9a-f]{6}$/i.test(state.canvasPenColor) ? state.canvasPenColor : '#000000';
     case 'litcolor-bg': return (litScopeGet(state.colorEditTarget) || {}).bg || '#000000';
     case 'litcolor-text': return (litScopeGet(state.colorEditTarget) || {}).text || '#f3f2ee';
+    case 'phonecolor': return phoneColorGet() || '#1e5f6b';
     default: return '#ffffff';
   }
 }
@@ -18722,6 +18750,7 @@ function attachHandlers(){
             case 'pencolor': state.canvasPenColor = hex; if(state.canvasTool === 'eraser') state.canvasTool = 'pen'; break;
             // Layouts colour customization: picking Background or Text writes this scope's colours live (now "Custom"
             // until you Save it as a named colour system).
+            case 'phonecolor': state.colorPickerTarget = null; setTimeout(()=>phoneColorAsk(hex), 0); break;
             case 'litcolor-bg': case 'litcolor-text': {
               const cur = litScopeGet(state.colorEditTarget) || {};
               const next = { bg: cur.bg || '#000000', text: cur.text || '#f3f2ee', name: '' };
