@@ -9011,7 +9011,7 @@ function payFavToggle(){
 }
 // Send money to a favorite / recent person: Send Money opens with them already chosen.
 function paySendTo(f){
-  const p = state.pay; p.origin = state.current === 'money' ? 'money' : 'wallet'; state.current = 'send-money'; p.info = null; p.loading = false; p.msg = ''; p.found = []; p.q = '';
+  const p = state.pay; p.origin = state.current === 'money' ? 'money' : 'wallet'; state.current = 'send-money'; payResetSrc(); p.info = null; p.loading = false; p.msg = ''; p.found = []; p.q = '';
   if(f.kind === 'bank'){ p.mode = 'bank'; p.name = f.name || ''; p.bank = f.bank || ''; p.acct = f.acct || ''; p.to = null; }
   else { p.mode = 'story'; p.to = { id: f.id || f.uid, name: f.name || '', username: f.username || '', canPay: true }; }
 }
@@ -9110,7 +9110,7 @@ function sendMoneyScreen(){
       <button class="order-type-btn${paySrc() === 'card' ? ' active' : ''}" data-action="pay-src" data-v="card">Card</button>
       <button class="order-type-btn${paySrc() === 'nw' ? ' active' : ''}" data-action="pay-src" data-v="nw">Net worth</button>
     </div>
-    ${paySrc() === 'nw' ? `<div class="note pay-nw-note" style="margin:6px 0 0;">${payNwNote()}</div>` : ''}
+    ${paySrc() === 'nw' ? payNwPickHTML() + `<div class="note pay-nw-note" style="margin:6px 0 0;">${payNwNote()}</div>` : ''}
     <div class="section-title">AMOUNT</div>
     <input class="field-input pay-amount" data-pay-input="amount" type="text" inputmode="decimal" autocomplete="off" placeholder="R0.00" value="${escText(p.amount)}">
     <input class="field-input" data-pay-input="ref" type="text" autocomplete="off" maxlength="20" placeholder="Reference (optional)" value="${escText(p.ref)}" style="margin-top:8px;">
@@ -9179,6 +9179,8 @@ function paySend(){
   if(p.busy) return;
   const amt = parseFloat(String(p.amount).replace(',', '.'));
   if(p.mode === 'story' && !p.to){ p.msg = 'Choose who you’re sending to.'; return; }
+  if(!paySrc()){ p.msg = 'Choose where it comes from - Card or Net worth.'; return; }
+  if(paySrc() === 'nw' && !(p.nwPick || []).length){ p.msg = 'Tick the accounts to use for this payment.'; return; }
   if(p.mode === 'bank' && (!p.name.trim() || !p.bank || !/^\d{6,16}$/.test(p.acct.replace(/\s+/g, '')))){ p.msg = PAY_ERRORS['bank-details']; return; }
   if(!(amt >= 1 && amt <= 50000)){ p.msg = PAY_ERRORS.amount; return; }
   // Before it goes through (owner): Pay with - the card showing in Wallet, a different card, or net worth.
@@ -9187,15 +9189,23 @@ function paySend(){
   if(paySrc() === 'nw'){ payWithGo('nw'); if(p.choose){ p.choose = null; } payShow(); return; }
   payShow();
 }
-// SEND FROM: Card | Net worth (owner, 5 Nov 2026: separate, like Lockedintool profile / Anyone). Remembered on the phone.
-const PAY_SRC_KEY = 'story-pay-src';
-function paySrc(){ try{ return localStorage.getItem(PAY_SRC_KEY) === 'nw' ? 'nw' : 'card'; }catch(e){ return 'card'; } }
+// SEND FROM: Card | Net worth (owner, 5 Nov 2026: separate, like Lockedintool profile / Anyone). NEVER saved (owner:
+// 'the option to select your cards is not saved, and it will never be saved - so every single time, select which
+// accounts to use'): nothing is chosen when Send Money opens, and Net worth's accounts are ticked again every payment.
+function paySrc(){ return state.pay.src || ''; }
+function payResetSrc(){ state.pay.src = ''; state.pay.nwPick = []; }
+function payNwAccounts(){ const bal = acctBalances(); return nwAccounts(WALLET_NW_KEY).map(a=>Object.assign({}, a, { bal: bal[a.key] ? bal[a.key].bal : null, cur: bal[a.key] ? bal[a.key].cur : null })); }
+function payNwPickHTML(){
+  const l = payNwAccounts(), pick = state.pay.nwPick || [];
+  if(!l.length) return '<div class="note" style="margin:6px 0 0;">No bank accounts yet - Lockedintool finds them from your bank’s messages once you add your cards in Wallet.</div>';
+  return `<div class="row-card pay-nw-pick" style="margin-top:8px;">${l.map(a=>`<div class="row" data-action="pay-nw-pick" data-k="${escText(a.key)}" style="cursor:pointer;"><div class="row-left"><div class="row-icon">${pick.includes(a.key) ? '☑' : '☐'}</div><div><div class="row-name">${escText(a.name)}</div><div class="row-sub">${a.bal != null ? fmtCur(a.bal, a.cur || 'ZAR') : 'Balance not known yet'}</div></div></div></div>`).join('')}</div>`;
+}
 function payNwNote(){
   const amt = parseFloat(String(state.pay.amount).replace(',', '.'));
   const sp = netWorthSplit(amt > 0 ? amt : 0);
-  if(!walletNwOn()) return 'Turn on Net worth in Wallet and pick its accounts first.';
-  if(!sp.parts.length && !(amt > 0)) return 'Paid from your Net worth accounts, the most money first - you approve each account in its own bank.';
-  if(!sp.parts.length) return 'Lockedintool doesn’t know your accounts’ balances yet.';
+  if(!(state.pay.nwPick || []).length) return 'Tick the accounts to use for this payment - you choose them every time.';
+  if(!(amt > 0)) return 'Paid from the accounts you ticked, the most money first - you approve each account in its own bank.';
+  if(!sp.parts.length) return 'Lockedintool doesn’t know these accounts’ balances yet.';
   if(sp.short > 0) return 'Your accounts together have ' + payMoney(sp.total) + ' - not enough for ' + payMoney(amt) + '.';
   return sp.parts.map(q=>escText(q.from) + ' ' + payMoney(q.amount)).join(' + ') + ' - you approve each account in its own bank.';
 }
@@ -9204,7 +9214,8 @@ function cardBalance(c){ const t = moneyTx().find(x=>x.bal != null && cardMatche
 const cardLabel = c=>(c.bank || 'Card') + ' ••' + (c.last4 || '');
 // Net worth: the payment split over the accounts added to Wallet's Net worth - the most money first.
 function netWorthSplit(amt){
-  const l = walletNwList().filter(a=>a.bal != null && a.bal > 0 && (a.cur === 'ZAR' || a.cur == null)).sort((a, b)=>b.bal - a.bal);
+  const pick = state.pay.nwPick || [];
+  const l = payNwAccounts().filter(a=>pick.includes(a.key)).filter(a=>a.bal != null && a.bal > 0 && (a.cur === 'ZAR' || a.cur == null)).sort((a, b)=>b.bal - a.bal);
   let left = Math.round(amt * 100); const parts = [];
   for(const a of l){ if(left <= 0) break; const take = Math.min(left, Math.floor(a.bal * 100)); if(take >= 100){ parts.push({ from:a.name, amount: take / 100, status:'todo' }); left -= take; } }
   return { parts, short: left > 0 ? left / 100 : 0, total: l.reduce((x, a)=>x + a.bal, 0) };
@@ -9275,14 +9286,14 @@ function payWithGo(kind, id){
   let parts;
   if(kind === 'nw'){
     const sp = netWorthSplit(amt);
-    if(!sp.parts.length){ showToast(walletNwOn() ? 'Lockedintool doesn’t know your accounts’ balances yet' : 'Turn on Net worth in Wallet and add your accounts'); return; }
+    if(!sp.parts.length){ showToast((p.nwPick || []).length ? 'Lockedintool doesn’t know these accounts’ balances yet' : 'Tick the accounts to use for this payment'); return; }
     if(sp.short > 0){ showToast('Your accounts together have ' + payMoney(sp.total) + ' - not enough for ' + payMoney(amt)); return; }
     parts = sp.parts;
   } else if(kind === 'card'){ const card = walletCards().find(x=>x.id === id); parts = [{ from: card ? cardLabel(card) : '', amount: amt, status:'todo' }]; }
   else parts = [{ from:'', amount: amt, status:'todo' }];
   const body = p.mode === 'story' ? { to:p.to.id, ref:p.ref } : { bank:{ name:p.name.trim(), bank:p.bank, acct:p.acct.replace(/\s+/g, '') }, ref:p.ref };
   p.dest = { body, who: p.mode === 'story' ? (p.to.name || '@' + p.to.username) : p.name.trim(), to: p.mode === 'story' ? { id:p.to.id, name:p.to.name, username:p.to.username } : null };
-  p.parts = parts; p.choose = null; p.amount = ''; p.ref = '';
+  p.parts = parts; p.choose = null; p.amount = ''; p.ref = ''; payResetSrc();
   payStartPart(0);
 }
 function payOpenBank(url){ if(!url) return; if(NATIVE && window.StoryNative.openUrl) window.StoryNative.openUrl(url); else window.open(url, '_blank'); }
@@ -19210,7 +19221,7 @@ function attachHandlers(){
           state.drawToolsPopoverOpen = false;
           break;
         }
-        case 'send-open': state.pay.origin = state.current === 'money' ? 'money' : 'wallet'; state.moneyTransferOpen = false; state.favoritesOpen = false; state.current = 'send-money'; state.pay.info = null; state.pay.loading = false; break;
+        case 'send-open': state.pay.origin = state.current === 'money' ? 'money' : 'wallet'; state.moneyTransferOpen = false; state.favoritesOpen = false; state.current = 'send-money'; payResetSrc(); state.pay.info = null; state.pay.loading = false; break;
         case 'receive-open': state.pay.recvFrom = state.current === 'money' ? 'money' : 'wallet'; state.moneyTransferOpen = false; state.favoritesOpen = false; state.current = 'receive-money'; state.pay.info = null; state.pay.loading = false; break;
         case 'sub-buy': subBuy(el.getAttribute('data-plan')); break;
         case 'widgets-only': widgetsOnlyAsk(); break;
@@ -19226,7 +19237,8 @@ function attachHandlers(){
         case 'sub-end-bg': state.sub.endConfirm = false; renderDevice(); break;
         case 'sub-endplan-do': subEndPlan(); break;
         case 'legal-open': state.legalFrom = el.getAttribute('data-from') || 'information'; state.current = el.getAttribute('data-v'); break;
-        case 'pay-src': try{ localStorage.setItem(PAY_SRC_KEY, el.getAttribute('data-v')); }catch(e){} state.pay.msg = ''; break;
+        case 'pay-src': state.pay.src = el.getAttribute('data-v'); state.pay.nwPick = []; state.pay.msg = ''; break;
+        case 'pay-nw-pick': { const k = el.getAttribute('data-k'), l = state.pay.nwPick = state.pay.nwPick || []; const i = l.indexOf(k); if(i >= 0) l.splice(i, 1); else l.push(k); state.pay.msg = ''; break; }
         case 'pay-mode': state.pay.mode = el.getAttribute('data-v'); state.pay.msg = ''; break;
         case 'pay-fav': payFavToggle(); break;
         case 'pay-recent': { const u = payRecents().find(x=>x.uid === el.getAttribute('data-id')); if(u) paySendTo({ kind:'story', id:u.uid, name:u.who, username:u.username }); break; }
