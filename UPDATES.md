@@ -197,4 +197,5 @@ commits, pushed as a new update) - nothing else changes.
 | 189 | 2026-11-05 | Lockedintool's lock screen says it's locked: a card in the middle with the lock, 'Locked' and 'Tap to unlock' | 979af88 |
 | 190 | 2026-11-05 | Lockedintool's lock screen opens the way Android allows on the lock screen (the phone's own lock screen showed instead), and reports it if it ever can't | 338c81b |
 | 191 | 2026-11-05 | Lockedintool's lock screen is ready before the screen comes on (no glimpse of the phone's own lock screen), the Locked card shows its full words, and unlocking always lands on your Home Screen (Layouts > Home Screen) - your apps stay in Recents | b84e08e |
-| 192 | 2026-11-05 | Lockedintool's lock screen sign is now your logo reading DEVICE LOCKED (tape, stick men, stairs and small words kept), see-through over your screen | (this) |
+| 192 | 2026-11-05 | Lockedintool's lock screen sign is now your logo reading DEVICE LOCKED (tape, stick men, stairs and small words kept), see-through over your screen | d54f2fe |
+| 193 | 2026-11-05 | The DEVICE LOCKED logo without the stick men, stairs, path line and small words - just the tape X and DEVICE LOCKED | (this) |
