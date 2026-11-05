@@ -214,3 +214,4 @@ commits, pushed as a new update) - nothing else changes.
 | 206 | 2026-11-05 | The lock screen always starts untouched (the full-screen sign, no options) each time the screen goes off - the top-area sign with the options only after a tap | f85b211 |
 | 207 | 2026-11-05 | Lock screen buttons do what they say: Fingerprint and Face Unlock never open the PIN pad (touch the sensor / look at the phone); only Enter PIN opens it | 0770122 |
 | 208 | 2026-11-05 | The phone's own lock screen never shows first: Lockedintool's lock screen is brought to the front the moment the screen comes on (or opened at once), not 0.35 s later | 4ef28d3 |
+| 209 | 2026-11-05 | Lock screen: unlocking with the fingerprint sensor closes it at once (it checks while showing); Face Unlock starts the phone's face scan ('Look at the front camera') | (this) |

@@ -115,7 +115,10 @@ class LockDashActivity : Activity() {
                 // it); only Enter PIN opens the phone's unlock screen.
                 setOnClickListener { when (i) {
                     0 -> hint("Touch the fingerprint sensor")
-                    1 -> hint("Look at your phone")
+                    // Face: the phone only runs its face scan on its own unlock screen (Android lets no app start it), so
+                    // Face Unlock asks the phone for it - the face scan unlocks at once (owner: 'it doesn't work' when it
+                    // only showed a hint).
+                    1 -> { hint("Look at the front camera"); ask() }
                     else -> { hint(null); ask() } } }
             }
             row.addView(UnlockIcon(this, i), android.widget.LinearLayout.LayoutParams((76 * dp).toInt(), (68 * dp).toInt()))
@@ -172,8 +175,23 @@ class LockDashActivity : Activity() {
             gravity = Gravity.CENTER; setPadding(0, (4 * dp).toInt(), 0, 0); maxLines = 1 }, wrap())
         return box
     }
-    override fun onResume() { super.onResume(); overridePendingTransition(0, 0); window.decorView.post { stillLocked() } }
-    override fun onPause() { super.onPause(); overridePendingTransition(0, 0) }
+    override fun onResume() { super.onResume(); overridePendingTransition(0, 0); window.decorView.post { stillLocked() }; watch.run() }
+    override fun onPause() { super.onPause(); overridePendingTransition(0, 0); window.decorView.removeCallbacks(watch) }
+    // The phone unlocking by its fingerprint sensor while this covers the lock screen (owner, 5 Nov 2026: 'I pressed my
+    // fingerprint scanner - phone just stayed there unlocked'): some phones send no unlock signal then, so while this
+    // is on screen (screen on) it looks every 0.3 s whether the phone is still locked - and goes the moment it isn't.
+    // Only while it's actually showing; nothing runs when it's out of sight or the screen is off.
+    private val watch = object : Runnable { override fun run() {
+        if (isFinishing) return
+        val pm = getSystemService(android.os.PowerManager::class.java)
+        window.decorView.removeCallbacks(this)
+        if (pm?.isInteractive != true) return   // screen off: stops; screenOnNow starts it again
+        if (AodActivity.instance == null && !asking &&
+            getSystemService(KeyguardManager::class.java)?.isKeyguardLocked == false && seenLocked) { unlockedNow(); return }
+        if (getSystemService(KeyguardManager::class.java)?.isKeyguardLocked == true) seenLocked = true
+        window.decorView.postDelayed(this, 300)
+    } }
+    private var seenLocked = false
     override fun onDestroy() {
         if (Build.VERSION.SDK_INT >= 33) (lockListener as? KeyguardManager.KeyguardLockedStateListener)?.let { l ->
             runCatching { getSystemService(KeyguardManager::class.java)?.removeKeyguardLockedStateListener(l) } }
@@ -221,7 +239,7 @@ class LockDashActivity : Activity() {
     }
 
     /** The screen came on: ask for the unlock now (the screen was off when this came up). */
-    fun screenOnNow() { if (!isFinishing) window.decorView.post { stillLocked() } }
+    fun screenOnNow() { if (!isFinishing) window.decorView.post { stillLocked(); watch.run() } }
     /** The screen is on: if the phone didn't actually lock (it was off only briefly) this closes and you stay where you
      *  were. Locked: it just shows - nothing asks until you choose an unlock option. */
     private fun stillLocked() {
