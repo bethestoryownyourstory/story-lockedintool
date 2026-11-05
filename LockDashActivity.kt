@@ -35,6 +35,9 @@ class LockDashActivity : Activity() {
         val root = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
         val shot = ImageView(this).apply { scaleType = ImageView.ScaleType.FIT_START; adjustViewBounds = true }
         root.addView(shot, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.TOP))
+        // It must SAY it's locked (owner, 5 Nov 2026: 'A locked screen should say that it is locked because I'm confused, I
+        // think it's unlocked'): a card in the middle - the lock, 'Locked', 'Tap to unlock' - like Lockedintool security's lock.
+        root.addView(lockCard(), FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
         root.setOnTouchListener { _, e -> if (e.action == MotionEvent.ACTION_UP) ask(); true }
         setContentView(root)
         instance = this
@@ -46,6 +49,33 @@ class LockDashActivity : Activity() {
             ?: (if (exactOk) runCatching { BitmapFactory.decodeFile(java.io.File(filesDir, "home_shot.jpg").path) }.getOrNull() else null)
         val top = if (svc?.homeShot != null) svc.homeShotTop else prefs.getInt("home_shot_top", 0)
         if (b != null) { shot.setImageBitmap(b); (shot.layoutParams as FrameLayout.LayoutParams).topMargin = top.coerceAtLeast(0) }
+    }
+    private fun lockCard(): android.view.View {
+        val dp = resources.displayMetrics.density
+        val box = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL
+            setPadding((28 * dp).toInt(), (22 * dp).toInt(), (28 * dp).toInt(), (22 * dp).toInt())
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = 22 * dp; setColor(Color.argb(209, 0, 0, 0)); setStroke((1 * dp).toInt(), Color.argb(36, 255, 255, 255)) }
+        }
+        // The lock icon (drawn - no emoji): a body and a shackle, the same as Lockedintool security's lock.
+        val icon = object : android.view.View(this) {
+            val pnt = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                style = android.graphics.Paint.Style.STROKE; strokeWidth = 1.8f * dp; color = Color.WHITE; strokeCap = android.graphics.Paint.Cap.ROUND }
+            override fun onDraw(c: android.graphics.Canvas) {
+                val u = width / 24f
+                c.drawRoundRect(4.5f * u, 10.5f * u, 19.5f * u, 20.5f * u, 2.5f * u, 2.5f * u, pnt)
+                c.drawArc(8f * u, 3.5f * u, 16f * u, 11.5f * u, 180f, 180f, false, pnt)
+                c.drawLine(8f * u, 7.5f * u, 8f * u, 10.5f * u, pnt); c.drawLine(16f * u, 7.5f * u, 16f * u, 10.5f * u, pnt)
+            }
+        }
+        box.addView(icon, android.widget.LinearLayout.LayoutParams((38 * dp).toInt(), (38 * dp).toInt()))
+        box.addView(android.widget.TextView(this).apply { text = "Locked"; setTextColor(Color.WHITE); textSize = 18f
+            typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD); gravity = Gravity.CENTER
+            setPadding(0, (8 * dp).toInt(), 0, 0) })
+        box.addView(android.widget.TextView(this).apply { text = "Tap to unlock"; setTextColor(Color.argb(191, 255, 255, 255)); textSize = 13f
+            gravity = Gravity.CENTER; setPadding(0, (4 * dp).toInt(), 0, 0) })
+        return box
     }
     override fun onResume() { super.onResume(); overridePendingTransition(0, 0); window.decorView.post { ask() } }
     override fun onPause() { super.onPause(); overridePendingTransition(0, 0) }
