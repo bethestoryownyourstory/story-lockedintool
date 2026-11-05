@@ -229,4 +229,4 @@ commits, pushed as a new update) - nothing else changes.
 | 221 | 2026-11-05 | Tap to Pay: the Net worth corner button is no longer an on/off switch - it opens Split this payment: pick two or more accounts, set how much from each, Continue, then hold the phone to the reader (never saved) | 80295be |
 | 222 | 2026-11-05 | Tap to Pay split: the button reads 'Continue to pay' | 38e97a3 |
 | 223 | 2026-11-05 | Phone colours: Background and Text colours - your wallpaper is made from both so the phone builds its colours from both (the preview you chose) | e767a35 |
-| 224 | 2026-11-05 | Phone colours never fail silently: an older app version says to update first, and no answer from the phone in 12 s says so | |
+| 224 | 2026-11-05 | Phone colours never fail silently: an older app version says to update first, and no answer from the phone in 12 s says so | afd1254 |
