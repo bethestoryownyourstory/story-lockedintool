@@ -10460,28 +10460,28 @@ function phoneColorHTML(){
     <div class="set2-row set2-link" data-openpicker="phonecolor-bg" style="cursor:pointer;"><div class="set2-text"><div class="set2-name">Background</div></div>${sw(d.bg)}</div>
     <div class="set2-row set2-link" data-openpicker="phonecolor-text" style="cursor:pointer;"><div class="set2-text"><div class="set2-name">Text</div></div>${sw(d.text)}</div>
     <div class="set2-row set2-stack"><button class="btn-wide btn-primary" style="margin-top:0;" data-action="phonecolor-apply">${applied ? 'On your phone now - set again' : 'Set on my phone'}</button></div>
-    ${applied ? `<div class="set2-row set2-stack"><div class="set2-text"><div class="set2-sub">Your phone builds its colours from ONE main colour of the wallpaper. To use your text colour, pick its palette on your phone's own screen.</div></div><button class="btn-wide" style="margin-top:0;" data-action="phonecolor-palette">Choose your phone’s palette</button></div>` : ''}
+
   </div>${state.colorPickerTarget === 'phonecolor-bg' || state.colorPickerTarget === 'phonecolor-text' ? colorPickerTemplate() : ''}`;
 }
+// #226 (owner: 'No I don't want it to replace the wallpaper. The color palette yes'): no wallpaper any more - the phone's
+// colour palette is set directly (StoryBridge.phonePaletteSet). Android only allows that after a one-time permission
+// given from a computer; until then the sheet explains that step.
 function phoneColorAsk(){
   const d = phoneColorDraft();
   if(!d.bg || !d.text){ showToast('Pick a Background and a Text colour first'); return; }
-  if(!NATIVE || !window.StoryNative || !window.StoryNative.phoneColorSet){ showToast('Phone colours work in the Lockedintool app'); return; }
-  litSheet({ title:'Use these colours for your phone?', text:'Your phone takes its colours from your wallpaper, so Lockedintool will set a wallpaper made from your two colours - the background colour with your text colour running through it - on your home screen and lock screen. Your phone then builds its colours from both. Your current wallpaper will be replaced - you will need to set your wallpaper again afterwards if you want it back. The words in other apps stay light or dark - Android lets no app change their colour. Lockedintool’s Dashboard and Pages keep their own colours.',
-    items:[{ label:'Set these colours', fn: ()=>{
-      // An app version from before #223 can't take two colours and used to do nothing at all - say so instead.
-      const m = /build (\d+)/.exec(window.StoryNative.appVersion ? window.StoryNative.appVersion() : '');
-      if(m && +m[1] < 479){ showToast('Update Lockedintool first - setup screen > Check for updates now. Phone colours need the newest version.'); return; }
-      clearTimeout(phoneColorWait); phoneColorWait = setTimeout(()=>showToast('Your phone didn’t answer - the colours weren’t set. Try again.'), 12000);
-      try{ window.StoryNative.phoneColorSet(d.bg + '|' + d.text); }catch(e){ clearTimeout(phoneColorWait); showToast('Couldn’t set the colours'); } } }] });
+  if(!NATIVE || !window.StoryNative){ showToast('Phone colours work in the Lockedintool app'); return; }
+  if(typeof window.StoryNative.phonePaletteSet !== 'function'){ showToast('Update Lockedintool first - setup screen > Check for updates now. Phone colours need the newest version.'); return; }
+  let r = '';
+  try{ r = String(window.StoryNative.phonePaletteSet(d.bg, d.text) || ''); }catch(e){ r = 'fail'; }
+  if(r === 'ok'){ try{ localStorage.setItem(PHONE_COLOR_KEY, d.bg + '|' + d.text); }catch(e){} showToast('Your phone’s colours are set - your wallpaper stays as it is'); renderDevice(); return; }
+  if(r.indexOf('noperm') === 0){ phonePaletteHelp(r.split('|')[1] || ''); return; }
+  showToast('Your phone didn’t accept the colours');
 }
-let phoneColorWait = 0;
-window.storyPhoneColor = function(hex, ok){
-  clearTimeout(phoneColorWait);
-  if(ok){ try{ localStorage.setItem(PHONE_COLOR_KEY, hex); }catch(e){} showToast('Wallpaper set - now choose your phone’s palette below'); }
-  else showToast('Couldn’t set the colours - your phone didn’t allow it');
-  if(state.current === 'settings') renderDevice();
-};
+function phonePaletteHelp(pkg){
+  const cmd = 'adb shell pm grant ' + pkg + ' android.permission.WRITE_SECURE_SETTINGS';
+  litSheet({ pre:true, title:'One step first', text:'Android only lets an app set your phone’s colour palette after you allow it once from a computer. Your wallpaper is never changed.\n\n1. On your phone: Settings > Developer options > USB debugging on.\n2. Connect the phone to a computer with Android’s adb tool.\n3. Run:\n' + cmd + '\n\nThen come back and tap Set on my phone. You only do this once.',
+    items:[{ label:'Copy the command', fn: ()=>{ try{ navigator.clipboard.writeText(cmd).then(()=>showToast('Copied'), ()=>showToast(cmd)); }catch(e){ showToast(cmd); } } }] });
+}
 function settingsHubScreen(){
   // Settings (owner, 4 Nov 2026: 'make settings be clean, don't matter if in the screen they will be short. But just show
   // only the words of the options and you have to tap the word to see its options'): a plain list of names; tapping one
@@ -19376,7 +19376,6 @@ function attachHandlers(){
         case 'money-all-edit': state.moneyAllEdit = MONEY_ALL_KEY; break;
         case 'tap-nw': state.tapSplit = { pick:[], amts:{}, msg:'' }; break;
         case 'phonecolor-apply': phoneColorAsk(); break;
-        case 'phonecolor-palette': if(NATIVE && window.StoryNative && typeof window.StoryNative.paletteOpen === 'function'){ if(!window.StoryNative.paletteOpen()) showToast('Your phone has no colour palette screen'); else showToast('Tap Color palette there'); } else showToast('Update Lockedintool first - setup screen > Check for updates now'); break;
         case 'tap-split-close': state.tapSplit = null; break;
         case 'tap-split-pick': { const t = state.tapSplit; if(!t) break; const k = el.getAttribute('data-k'), i = t.pick.indexOf(k); if(i >= 0){ t.pick.splice(i, 1); delete t.amts[k]; } else t.pick.push(k); t.msg = ''; break; }
         case 'tap-split-go': tapSplitGo(); break;
@@ -20204,7 +20203,7 @@ function litSheet(o){
   document.querySelectorAll('.lit-sheet-bg').forEach(x=>x.remove());
   const bg = document.createElement('div'); bg.className = 'lit-sheet-bg';
   const box = document.createElement('div'); box.className = 'lit-sheet';
-  box.innerHTML = (o.title ? '<div class="lit-sheet-t">' + escText(o.title) + '</div>' : '') + (o.text ? '<div class="lit-sheet-d">' + escText(o.text) + '</div>' : '');
+  box.innerHTML = (o.title ? '<div class="lit-sheet-t">' + escText(o.title) + '</div>' : '') + (o.text ? '<div class="lit-sheet-d"' + (o.pre ? ' style="white-space:pre-line;user-select:text;-webkit-user-select:text;"' : '') + '>' + escText(o.text) + '</div>' : '');
   let field = null;
   if(o.input){ field = document.createElement('input'); field.className = 'lit-sheet-in'; field.type = o.input.type || 'text'; field.placeholder = o.input.placeholder || ''; field.value = o.input.value || ''; field.autocomplete = o.input.autocomplete || 'off'; box.appendChild(field); }
   let closed = false;

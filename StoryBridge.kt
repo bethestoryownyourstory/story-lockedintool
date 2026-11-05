@@ -588,6 +588,32 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         runCatching { ctx.startActivity(Intent(a).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
             .onFailure { runCatching { ctx.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
     }
+    /** Phone colours = the phone's colour palette, set directly - NO wallpaper (#226 - owner: 'No I don't want it to
+     *  replace the wallpaper. The color palette yes'). Android only lets an app do this with WRITE_SECURE_SETTINGS,
+     *  which is granted once from a computer (adb shell pm grant <package> android.permission.WRITE_SECURE_SETTINGS).
+     *  Returns "ok", "noperm|<package>" or "fail". Writes the same setting the phone's own Wallpaper & style screen
+     *  writes (theme_customization_overlay_packages): the background colour as the system palette, the text colour as
+     *  the accent. Other keys already there are kept. */
+    @JavascriptInterface
+    fun phonePaletteSet(bg: String, text: String): String {
+        if (!pages) return "fail"
+        if (ctx.checkSelfPermission("android.permission.WRITE_SECURE_SETTINGS") != android.content.pm.PackageManager.PERMISSION_GRANTED) return "noperm|" + ctx.packageName
+        val hx = { h: String -> h.trim().removePrefix("#").uppercase().takeIf { Regex("^[0-9A-F]{6}$").matches(it) } }
+        val b = hx(bg) ?: return "fail"; val t = hx(text) ?: return "fail"
+        return runCatching {
+            val key = "theme_customization_overlay_packages"
+            val cur = runCatching { JSONObject(Settings.Secure.getString(ctx.contentResolver, key) ?: "{}") }.getOrNull() ?: JSONObject()
+            cur.put("android.theme.customization.color_source", "preset")
+            cur.put("android.theme.customization.system_palette", b)
+            cur.put("android.theme.customization.accent_color", t)
+            cur.put("android.theme.customization.color_both", "1")
+            cur.put("_applied_timestamp", System.currentTimeMillis())
+            if (Settings.Secure.putString(ctx.contentResolver, key, cur.toString())) "ok" else "fail"
+        }.getOrDefault("fail")
+    }
+    @JavascriptInterface
+    fun phonePaletteState(): String = if (!pages) "" else
+        (if (ctx.checkSelfPermission("android.permission.WRITE_SECURE_SETTINGS") == android.content.pm.PackageManager.PERMISSION_GRANTED) "ok" else "noperm") + "|" + ctx.packageName
     /** Phone colours (#225): the phone's OWN wallpaper & colour-palette screen (Samsung: Wallpaper and style >
      *  Color palette; Pixel: Wallpaper & style) - only the phone can pick its palette. Lockedintool steps aside. */
     @JavascriptInterface
