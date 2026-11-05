@@ -9,7 +9,7 @@ name: Lockedintool screens - Test, then Approve
 #     launch  = going public: publish + the download page for new users (/get/). Only when the owner says yes.
 on:
   push:
-    paths: ['index.html', 'manifest.json', 'icon-192.png', 'icon-512.png', 'get.html', 'screens.yml']
+    paths: ['index.html', 'manifest.json', 'icon-192.png', 'icon-512.png', 'get.html', 'screens.yml', 'owner-checks.mjs']
   workflow_dispatch:
     inputs:
       action:
