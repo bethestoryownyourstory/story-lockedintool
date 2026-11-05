@@ -3757,6 +3757,12 @@
   .sec-cover .sec-box{ display:flex; flex-direction:column; align-items:center; gap:10px; padding:24px; text-align:center; }
   .sec-cover .sec-t{ font-size:18px; font-weight:800; margin-top:6px; }
   .sec-cover .sec-s{ font-size:13px; color:#8a8a8a; }
+  /* The Pages (your home screen): see-through - your Lockedintool always shows, only the lock card on top (owner, 5 Nov
+     2026: 'Or transparent ... I like it to show lockedintool always, like your home screen always, not just a background
+     with unlock'). Nothing under it can be used (the cover takes every touch). */
+  .sec-cover.sec-see{ background:transparent !important; background-image:none !important; }
+  .sec-cover.sec-see .sec-box{ background:rgba(0,0,0,0.82); border:1px solid rgba(255,255,255,0.14); border-radius:22px; padding:22px 26px; color:#ffffff; }
+  .sec-cover.sec-see .sec-s{ color:rgba(255,255,255,0.75); }
   .sec-cover .sec-btn{ margin-top:14px; min-width:150px; padding:12px 26px; border-radius:999px; border:0; background:#ffffff; color:#000000; font-family:inherit; font-size:15px; font-weight:800; line-height:1; cursor:pointer; }
   .lit-auth::-webkit-scrollbar{ display:none; }
   .lit-auth-in{ max-width:420px; margin:0 auto; padding:calc(var(--pf-top, 24px) + 40px) 22px 80px; box-sizing:border-box; }
@@ -5652,6 +5658,8 @@ function secCoverSync(){
 // let apps read the phone's own wallpaper). Station 3's window loads just that one picture, only when the lock shows.
 let SEC_BG_LOADING = false;
 function secCoverBg(el){
+  // The Pages: see-through, your home screen shows (no picture needed). Station 3's window (your chats) keeps the picture.
+  if(!/[?&]s3=1/.test(location.search)){ el.classList.add('sec-see'); return; }
   const url = LIT_BG.dashboard;
   if(url){
     if(el.__bg === url) return; el.__bg = url;
