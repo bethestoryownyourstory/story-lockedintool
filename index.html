@@ -9105,6 +9105,12 @@ function sendMoneyScreen(){
     </div>
     <div class="section-title">SEND TO</div>
     ${ready ? who : '<div class="note">Your Lockedintool account is being set up - one moment.</div>'}
+    <div class="section-title">SEND FROM</div>
+    <div class="order-type-grid pay-tabs pay-src">
+      <button class="order-type-btn${paySrc() === 'card' ? ' active' : ''}" data-action="pay-src" data-v="card">Card</button>
+      <button class="order-type-btn${paySrc() === 'nw' ? ' active' : ''}" data-action="pay-src" data-v="nw">Net worth</button>
+    </div>
+    ${paySrc() === 'nw' ? `<div class="note pay-nw-note" style="margin:6px 0 0;">${payNwNote()}</div>` : ''}
     <div class="section-title">AMOUNT</div>
     <input class="field-input pay-amount" data-pay-input="amount" type="text" inputmode="decimal" autocomplete="off" placeholder="R0.00" value="${escText(p.amount)}">
     <input class="field-input" data-pay-input="ref" type="text" autocomplete="off" maxlength="20" placeholder="Reference (optional)" value="${escText(p.ref)}" style="margin-top:8px;">
@@ -9176,7 +9182,22 @@ function paySend(){
   if(p.mode === 'bank' && (!p.name.trim() || !p.bank || !/^\d{6,16}$/.test(p.acct.replace(/\s+/g, '')))){ p.msg = PAY_ERRORS['bank-details']; return; }
   if(!(amt >= 1 && amt <= 50000)){ p.msg = PAY_ERRORS.amount; return; }
   // Before it goes through (owner): Pay with - the card showing in Wallet, a different card, or net worth.
-  p.choose = { amt, more:false }; p.msg = ''; payShow();
+  p.choose = { amt, more:false }; p.msg = '';
+  // Net worth chosen in SEND FROM (owner): straight to the split over your Net worth accounts - no card question.
+  if(paySrc() === 'nw'){ payWithGo('nw'); if(p.choose){ p.choose = null; } payShow(); return; }
+  payShow();
+}
+// SEND FROM: Card | Net worth (owner, 5 Nov 2026: separate, like Lockedintool profile / Anyone). Remembered on the phone.
+const PAY_SRC_KEY = 'story-pay-src';
+function paySrc(){ try{ return localStorage.getItem(PAY_SRC_KEY) === 'nw' ? 'nw' : 'card'; }catch(e){ return 'card'; } }
+function payNwNote(){
+  const amt = parseFloat(String(state.pay.amount).replace(',', '.'));
+  const sp = netWorthSplit(amt > 0 ? amt : 0);
+  if(!walletNwOn()) return 'Turn on Net worth in Wallet and pick its accounts first.';
+  if(!sp.parts.length && !(amt > 0)) return 'Paid from your Net worth accounts, the most money first - you approve each account in its own bank.';
+  if(!sp.parts.length) return 'Lockedintool doesn’t know your accounts’ balances yet.';
+  if(sp.short > 0) return 'Your accounts together have ' + payMoney(sp.total) + ' - not enough for ' + payMoney(amt) + '.';
+  return sp.parts.map(q=>escText(q.from) + ' ' + payMoney(q.amount)).join(' + ') + ' - you approve each account in its own bank.';
 }
 // The balance your bank last stated for a card (null = not known).
 function cardBalance(c){ const t = moneyTx().find(x=>x.bal != null && cardMatches(c, x)); return t ? { bal:t.bal, cur:t.cur } : null; }
@@ -9227,7 +9248,7 @@ function payWithTemplate(){
           ${act ? row('paywith-card', 'Use card ' + escText(cardLabel(act)), bal(act), ' data-id="' + escText(act.id) + '"') : ''}
           ${cards.length > (act ? 1 : 0) ? row('paywith-more', 'Use different card ( + )', c.more ? 'Pick one below' : 'All your cards on Lockedintool') : ''}
           ${c.more ? cards.filter(x=>!act || x.id !== act.id).map(x=>row('paywith-card', '&nbsp;&nbsp;' + escText(cardLabel(x)), bal(x), ' data-id="' + escText(x.id) + '"')).join('') : ''}
-          ${row('paywith-nw', 'Use net worth', split.parts.length > 1 ? 'Combines ' + split.parts.length + ' accounts - you approve each one in its bank' : split.parts.length === 1 ? 'From ' + escText(split.parts[0].from) : 'Turn on Net worth in Wallet and add your accounts')}
+          ${paySrc() === 'nw' ? row('paywith-nw', 'Use net worth', split.parts.length > 1 ? 'Combines ' + split.parts.length + ' accounts - you approve each one in its bank' : split.parts.length === 1 ? 'From ' + escText(split.parts[0].from) : 'Turn on Net worth in Wallet and add your accounts') : ''}
           ${!cards.length ? row('paywith-bank', 'Choose at my bank', 'Pick the account on your bank’s page') : ''}
         </div>
         <div class="confirm-btn-row" style="margin-top:12px;"><button class="btn-wide" style="margin-top:0;" data-action="paywith-close">Cancel</button></div>
@@ -17686,7 +17707,7 @@ function attachHandlers(){
       else if(k === 'rname') p.recv.name = el.value;
       else if(k === 'racct') p.recv.acct = el.value;
       else p[k] = el.value;
-      if(k === 'amount'){ const b = document.querySelector('#device-wrap [data-action="pay-send"]'); const amt = parseFloat(String(el.value).replace(',', '.')); const to = p.mode === 'story' ? (p.to ? (p.to.name || '@' + p.to.username) : '') : p.name.trim(); if(b && !p.busy) b.textContent = 'Send' + (amt > 0 ? ' ' + payMoney(amt) : '') + (to ? ' to ' + to : ''); }
+      if(k === 'amount'){ const b = document.querySelector('#device-wrap [data-action="pay-send"]'); const amt = parseFloat(String(el.value).replace(',', '.')); const to = p.mode === 'story' ? (p.to ? (p.to.name || '@' + p.to.username) : '') : p.name.trim(); if(b && !p.busy) b.textContent = 'Send' + (amt > 0 ? ' ' + payMoney(amt) : '') + (to ? ' to ' + to : '');  const nn = document.querySelector('#device-wrap .pay-nw-note'); if(nn) nn.innerHTML = payNwNote(); }
     });
   });
   attachPayFound();
@@ -19205,6 +19226,7 @@ function attachHandlers(){
         case 'sub-end-bg': state.sub.endConfirm = false; renderDevice(); break;
         case 'sub-endplan-do': subEndPlan(); break;
         case 'legal-open': state.legalFrom = el.getAttribute('data-from') || 'information'; state.current = el.getAttribute('data-v'); break;
+        case 'pay-src': try{ localStorage.setItem(PAY_SRC_KEY, el.getAttribute('data-v')); }catch(e){} state.pay.msg = ''; break;
         case 'pay-mode': state.pay.mode = el.getAttribute('data-v'); state.pay.msg = ''; break;
         case 'pay-fav': payFavToggle(); break;
         case 'pay-recent': { const u = payRecents().find(x=>x.uid === el.getAttribute('data-id')); if(u) paySendTo({ kind:'story', id:u.uid, name:u.who, username:u.username }); break; }
