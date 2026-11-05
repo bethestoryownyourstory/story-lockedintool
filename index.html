@@ -10467,9 +10467,16 @@ function phoneColorAsk(){
   if(!d.bg || !d.text){ showToast('Pick a Background and a Text colour first'); return; }
   if(!NATIVE || !window.StoryNative || !window.StoryNative.phoneColorSet){ showToast('Phone colours work in the Lockedintool app'); return; }
   litSheet({ title:'Use these colours for your phone?', text:'Your phone takes its colours from your wallpaper, so Lockedintool will set a wallpaper made from your two colours - the background colour with your text colour running through it - on your home screen and lock screen. Your phone then builds its colours from both. Your current wallpaper will be replaced - you will need to set your wallpaper again afterwards if you want it back. The words in other apps stay light or dark - Android lets no app change their colour. Lockedintool’s Dashboard and Pages keep their own colours.',
-    items:[{ label:'Set these colours', fn: ()=>{ try{ window.StoryNative.phoneColorSet(d.bg + '|' + d.text); }catch(e){ showToast('Couldn’t set the colours'); } } }] });
+    items:[{ label:'Set these colours', fn: ()=>{
+      // An app version from before #223 can't take two colours and used to do nothing at all - say so instead.
+      const m = /build (\d+)/.exec(window.StoryNative.appVersion ? window.StoryNative.appVersion() : '');
+      if(m && +m[1] < 479){ showToast('Update Lockedintool first - setup screen > Check for updates now. Phone colours need the newest version.'); return; }
+      clearTimeout(phoneColorWait); phoneColorWait = setTimeout(()=>showToast('Your phone didn’t answer - the colours weren’t set. Try again.'), 12000);
+      try{ window.StoryNative.phoneColorSet(d.bg + '|' + d.text); }catch(e){ clearTimeout(phoneColorWait); showToast('Couldn’t set the colours'); } } }] });
 }
+let phoneColorWait = 0;
 window.storyPhoneColor = function(hex, ok){
+  clearTimeout(phoneColorWait);
   if(ok){ try{ localStorage.setItem(PHONE_COLOR_KEY, hex); }catch(e){} showToast('Your phone’s colours now follow these colours'); }
   else showToast('Couldn’t set the colours - your phone didn’t allow it');
   if(state.current === 'settings') renderDevice();
