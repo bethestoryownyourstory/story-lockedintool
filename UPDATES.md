@@ -232,4 +232,4 @@ commits, pushed as a new update) - nothing else changes.
 | 224 | 2026-11-05 | Phone colours never fail silently: an older app version says to update first, and no answer from the phone in 12 s says so | afd1254 |
 | 225 | 2026-11-05 | Phone colours: after it's set, 'Choose your phone's palette' opens your phone's own Wallpaper and style screen to pick a palette from your text colour | a7e464c |
 | 226 | 2026-11-05 | Phone colours: no wallpaper - it sets your phone's colour palette directly (Background + Text) after a one-time permission from a computer | 17bd327 |
-| 227 | 2026-11-05 | Phone colours removed from System theme (owner) - System theme is Black / White only; nothing in Lockedintool changes the wallpaper or the phone's palette | |
+| 227 | 2026-11-05 | Phone colours removed from System theme (owner) - System theme is Black / White only; nothing in Lockedintool changes the wallpaper or the phone's palette | 0562222 |
