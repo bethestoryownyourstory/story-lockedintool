@@ -217,3 +217,4 @@ commits, pushed as a new update) - nothing else changes.
 | 209 | 2026-11-05 | Lock screen: unlocking with the fingerprint sensor closes it at once (it checks while showing); Face Unlock starts the phone's face scan ("Look at the front camera") | 0781ff4 |
 | 210 | 2026-11-05 | No app-icon flash on black when the screen comes on; after a swipe Lockedintool's lock screen keeps coming back until it's in front (the phone's own lock screen never stays) | 2f08770 |
 | 211 | 2026-11-05 | Always On Display: caught at the earliest sign the screen is going off and it switches the screen back on itself when ready - the shortest black moment Android allows | 0d36181 |
+| 212 | 2026-11-05 | Pages are never cut: a page that runs off the bottom (something grew after its size was worked out) is fitted again every time it shows | (this) |

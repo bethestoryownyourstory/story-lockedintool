@@ -21204,6 +21204,13 @@ function fitPageToScreen(area, el, pageKey){
       const mm = measure(), lim = limitNow(), gap = lim - mm.bottom;
       if(mm.bottom > lim + 2 || (NATIVE && gap > lim * 0.1 && cached.zoom < FIT_MAX_SCALE - 0.01)){ delete FIT_CACHE[key]; return fitPageToScreen(area, el, pageKey); }
     }
+    // Nothing is ever cut (owner, 5 Nov 2026, a screenshot of Money with its last row under the screen's edge: 'See how
+    // pages still are like cutting'): whenever a page shown on screen runs off the bottom - something grew after its
+    // size was worked out - it's worked out again so everything fits. Only ever to stop a cut, never to zoom in.
+    if(!unsure){
+      const mm = measure(), lim = limitNow();
+      if(mm.bottom > lim + 2){ delete FIT_CACHE[key]; return fitPageToScreen(area, el, pageKey); }
+    }
     return;
   }
   applyZoom(1);
