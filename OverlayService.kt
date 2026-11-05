@@ -825,7 +825,7 @@ class OverlayService : Service(), StoryBridge.Host {
     }
 
     private fun setShown(p: Pane, shown: Boolean) {
-        if (p === pagesPane && shown) parkedDash = false
+        if (p === pagesPane && shown) { parkedDash = false; if (dashUp) homeShotSoon() }
         if (shown && p === pagesPane && pagesInHome() && LockedintoolHome.current?.visibleNow != true) homeDetach()
         p.shown = shown
         if (p === pagesPane) { if (shown) SystemMode.reset() else if (SystemMode.on(this)) { ui.removeCallbacks(systemCheckRun); ui.postDelayed(systemCheckRun, 700) } }
@@ -1306,6 +1306,7 @@ class OverlayService : Service(), StoryBridge.Host {
     private var dashBandInPage = true
     override fun dashInPage(on: Boolean) { ui.post { if (dashBandInPage != on) { dashBandInPage = on; updateBubble() } } }
     override fun dashShown(on: Boolean) { ui.post { if (dashUp != on) { dashUp = on
+        if (on) homeShotSoon()
         // Pre-lay the band in its Dashboard layout the instant the Dashboard page renders (while the band is still
         // hidden), so when it's revealed it appears WITH the Dashboard instead of ~0.2 s later while it re-lays-out
         // (owner: the band 'wasn't there, then it's there ... comes in'). No visual effect here - the band stays hidden
@@ -1532,7 +1533,38 @@ class OverlayService : Service(), StoryBridge.Host {
     // LockedintoolHome shows this picture there, and a tap on it brings the live Dashboard back.
     @Volatile var homeShot: android.graphics.Bitmap? = null
     @Volatile var homeShotTop = 0
+    /** The Home's picture of the Dashboard, copied from the SCREEN exactly as it shows (Android 14+, PixelCopy) - a moment
+     *  after the Dashboard is on screen. Drawing the page into a picture ourselves (snapHome below) squashed the
+     *  Dashboard's bottom bar flat (owner's video, 5 Nov 2026: 'Can't you just get the right picture') - this copy is
+     *  exactly what you saw. One copy each time the Dashboard shows, never on a loop. */
+    private val homeShotRun = Runnable { homeShotCopy() }
+    private fun homeShotSoon() {
+        if (Build.VERSION.SDK_INT < 34 || !SystemMode.on(this)) return
+        ui.removeCallbacks(homeShotRun); ui.postDelayed(homeShotRun, 700)
+    }
+    private fun homeShotCopy() { if (Build.VERSION.SDK_INT >= 34) runCatching {
+        val p = pagesPane ?: return
+        if (!p.shown || !dashUp || !SystemMode.on(this) || keyguardLocked() || p.frame.alpha < 1f || p.loading) return
+        val v = p.web; if (v.width <= 0 || v.height <= 0 || !v.isAttachedToWindow) return
+        val loc = IntArray(2); p.frame.getLocationOnScreen(loc)
+        val req = android.view.PixelCopy.Request.Builder.ofWindow(p.frame).build()
+        android.view.PixelCopy.request(req, mainExecutor) { r -> runCatching {
+            val b = r.bitmap
+            if (r.status != android.view.PixelCopy.SUCCESS || b.width <= 0 || b.height <= 0) return@runCatching
+            if (!dashUp || p.shown != true) { b.recycle(); return@runCatching }   // left the Dashboard meanwhile
+            homeShot?.takeIf { it !== b && !it.isRecycled }?.recycle()
+            homeShot = b; homeShotTop = loc[1]
+            LockedintoolHome.current?.showShot()
+            val top = loc[1]; val copy = b.copy(android.graphics.Bitmap.Config.ARGB_8888, false)
+            Thread { runCatching {
+                java.io.File(filesDir, "home_shot.jpg").outputStream().use { copy.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, it) }
+                getSharedPreferences("story", MODE_PRIVATE).edit().putInt("home_shot_top", top).putBoolean("home_shot_exact", true).apply()
+            }; copy.recycle() }.start()
+        } }
+    } }
     private fun snapHome(p: Pane) { runCatching {
+        // Android 14+: the exact copy of the screen is kept (homeShotCopy) - never redrawn into a squashed picture.
+        if (Build.VERSION.SDK_INT >= 34) return
         val v = p.web; if (v.width <= 0 || v.height <= 0) return
         val b = homeShot?.takeIf { !it.isRecycled && it.width == v.width && it.height == v.height }
             ?: android.graphics.Bitmap.createBitmap(v.width, v.height, android.graphics.Bitmap.Config.RGB_565)

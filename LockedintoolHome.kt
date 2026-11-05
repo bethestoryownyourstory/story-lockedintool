@@ -54,7 +54,9 @@ class LockedintoolHome : Activity() {
         // dashboard'). Never black here.
         shot?.visibility = android.view.View.VISIBLE
         // The latest picture, or the one kept on the phone (Lockedintool was just restarted).
-        val b = svc?.homeShot ?: runCatching { android.graphics.BitmapFactory.decodeFile(java.io.File(filesDir, "home_shot.jpg").path) }.getOrNull() ?: return@runCatching
+        // (Android 14+: only an exact copy of the screen - an older drawn picture with the squashed bar is never shown.)
+        val exactOk = android.os.Build.VERSION.SDK_INT < 34 || getSharedPreferences("story", MODE_PRIVATE).getBoolean("home_shot_exact", false)
+        val b = svc?.homeShot ?: (if (exactOk) runCatching { android.graphics.BitmapFactory.decodeFile(java.io.File(filesDir, "home_shot.jpg").path) }.getOrNull() else null) ?: return@runCatching
         val top = svc?.homeShot?.let { svc.homeShotTop } ?: getSharedPreferences("story", MODE_PRIVATE).getInt("home_shot_top", 0)
         val v = shot ?: return@runCatching
         val loc = IntArray(2); window.decorView.getLocationOnScreen(loc)

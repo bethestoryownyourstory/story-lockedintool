@@ -187,3 +187,4 @@ commits, pushed as a new update) - nothing else changes.
 | 179 | 2026-11-05 | Lockedintool security: the Dashboard shows behind the unlock prompt again - never a black screen first | 2a0382a |
 | 180 | 2026-11-05 | Lockedintool security: unlocking your phone opens Lockedintool with no second prompt, and the squashed Dashboard bar after unlocking is fixed at its cause (the prompt was being asked for twice) | ed2c64b |
 | 181 | 2026-11-05 | No squashed Dashboard bar when Lockedintool restarts (an update installing): the backup bar no longer opens while the Dashboard loads | bd08176 |
+| 182 | 2026-11-05 | The Dashboard's picture (shown while the live Dashboard gets ready) is now an exact copy of the screen - its bottom bar is no longer squashed | (this) |
