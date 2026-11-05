@@ -1299,7 +1299,11 @@ class OverlayService : Service(), StoryBridge.Host {
      *  station 3 be attached to the dashboard now its part of the dashboard design'): one picture, so it can never come in
      *  late or from the side. Our own Station 3 window then stays hidden on the Dashboard; it's only used when the Pages
      *  step aside (Create's camera) or on a page from before this change (which never says so). Reset when the Pages reload. */
-    private var dashBandInPage = false
+    // Every screens version (the built-in copy too) draws the Dashboard's bar itself, so this starts true: after Lockedintool
+    // restarts (an update installing, Android freeing memory) the backup bar no longer opens - and gets resized on screen -
+    // until the page reports in (owner, 5 Nov 2026: on the phone's control panel 'this app just randomly glitched showed
+    // me the squash thing then reloaded again').
+    private var dashBandInPage = true
     override fun dashInPage(on: Boolean) { ui.post { if (dashBandInPage != on) { dashBandInPage = on; updateBubble() } } }
     override fun dashShown(on: Boolean) { ui.post { if (dashUp != on) { dashUp = on
         // Pre-lay the band in its Dashboard layout the instant the Dashboard page renders (while the band is still
