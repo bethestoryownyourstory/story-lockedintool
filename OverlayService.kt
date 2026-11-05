@@ -95,7 +95,11 @@ class OverlayService : Service(), StoryBridge.Host {
             lockedAtScreenOn = runCatching { getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked }.getOrDefault(false)
             screenOnAt = System.currentTimeMillis()
             ui.post { LockDashActivity.instance?.screenOnNow() }   // already up (put there while the screen was off): it asks now
-            ui.removeCallbacks(lockDashRun); ui.postDelayed(lockDashRun, 350)
+            // The phone's own lock screen must never show (owner's video, 5 Nov 2026: 'see how I was able to still see my
+            // phone's original lock screen? That's a huge no no'): the moment the screen comes on, Lockedintool's lock
+            // screen is brought to the front - or opened at once if it isn't up - not 0.35 s later.
+            ui.post { lockDashFront() }
+            ui.removeCallbacks(lockDashRun); ui.post(lockDashRun); ui.postDelayed(lockDashRun, 350)
             ui.post { syncLockDial(); updateBubble() }; ui.postDelayed({ syncLockDial(); updateBubble() }, 400) }   // on the lock screen the Dashboard band must step out (keyguardLocked)
     }
     // Always On Display: the moment the screen goes off, switch it straight back on with Station 3
@@ -2504,6 +2508,17 @@ class OverlayService : Service(), StoryBridge.Host {
         secWaitUnlocked(); if (!secIsOpen()) { secOpen = true; secTell() }   // (called on the main thread)
     }
     private val lockDashRun = Runnable { lockDashCheck() }
+    /** Screen on, phone locked, Lockedintool's lock screen already up (put there while the screen was off): bring it in
+     *  front of the phone's own lock screen straight away (some phones draw their lock screen over it first). */
+    private fun lockDashFront() { runCatching {
+        if (LockDashActivity.instance == null || !lockScreenOurs() || callActive || createActive || aodShowing()) return
+        if (getSystemService(android.app.KeyguardManager::class.java)?.isKeyguardLocked != true) return
+        if (StoryAccessibilityService.frontAt > screenOnAt && StoryAccessibilityService.frontPkg != packageName) return
+        val i = Intent(this, LockDashActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+        val pi = android.app.PendingIntent.getActivity(this, 9, i, android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT)
+        if (Build.VERSION.SDK_INT >= 34) pi.send(android.app.ActivityOptions.makeBasic().setPendingIntentBackgroundActivityStartMode(android.app.ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED).toBundle())
+        else pi.send()
+    } }
     /** Lockedintool's lock screen is put up while the screen goes OFF, so when you turn it on it's already there - never
      *  a glimpse of the phone's own lock screen first (owner, 5 Nov 2026: 'I can still see my lockscreen still'). With
      *  the Always On Display on, it sits ready underneath it. */
