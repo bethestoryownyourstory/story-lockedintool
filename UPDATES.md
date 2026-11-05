@@ -230,3 +230,4 @@ commits, pushed as a new update) - nothing else changes.
 | 222 | 2026-11-05 | Tap to Pay split: the button reads 'Continue to pay' | 38e97a3 |
 | 223 | 2026-11-05 | Phone colours: Background and Text colours - your wallpaper is made from both so the phone builds its colours from both (the preview you chose) | e767a35 |
 | 224 | 2026-11-05 | Phone colours never fail silently: an older app version says to update first, and no answer from the phone in 12 s says so | afd1254 |
+| 225 | 2026-11-05 | Phone colours: after it's set, 'Choose your phone's palette' opens your phone's own Wallpaper and style screen to pick a palette from your text colour | |

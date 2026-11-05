@@ -10460,6 +10460,7 @@ function phoneColorHTML(){
     <div class="set2-row set2-link" data-openpicker="phonecolor-bg" style="cursor:pointer;"><div class="set2-text"><div class="set2-name">Background</div></div>${sw(d.bg)}</div>
     <div class="set2-row set2-link" data-openpicker="phonecolor-text" style="cursor:pointer;"><div class="set2-text"><div class="set2-name">Text</div></div>${sw(d.text)}</div>
     <div class="set2-row set2-stack"><button class="btn-wide btn-primary" style="margin-top:0;" data-action="phonecolor-apply">${applied ? 'On your phone now - set again' : 'Set on my phone'}</button></div>
+    ${applied ? `<div class="set2-row set2-stack"><div class="set2-text"><div class="set2-sub">Your phone builds its colours from ONE main colour of the wallpaper. To use your text colour, pick its palette on your phone's own screen.</div></div><button class="btn-wide" style="margin-top:0;" data-action="phonecolor-palette">Choose your phone’s palette</button></div>` : ''}
   </div>${state.colorPickerTarget === 'phonecolor-bg' || state.colorPickerTarget === 'phonecolor-text' ? colorPickerTemplate() : ''}`;
 }
 function phoneColorAsk(){
@@ -10477,7 +10478,7 @@ function phoneColorAsk(){
 let phoneColorWait = 0;
 window.storyPhoneColor = function(hex, ok){
   clearTimeout(phoneColorWait);
-  if(ok){ try{ localStorage.setItem(PHONE_COLOR_KEY, hex); }catch(e){} showToast('Your phone’s colours now follow these colours'); }
+  if(ok){ try{ localStorage.setItem(PHONE_COLOR_KEY, hex); }catch(e){} showToast('Wallpaper set - now choose your phone’s palette below'); }
   else showToast('Couldn’t set the colours - your phone didn’t allow it');
   if(state.current === 'settings') renderDevice();
 };
@@ -19375,6 +19376,7 @@ function attachHandlers(){
         case 'money-all-edit': state.moneyAllEdit = MONEY_ALL_KEY; break;
         case 'tap-nw': state.tapSplit = { pick:[], amts:{}, msg:'' }; break;
         case 'phonecolor-apply': phoneColorAsk(); break;
+        case 'phonecolor-palette': if(NATIVE && window.StoryNative && typeof window.StoryNative.paletteOpen === 'function'){ if(!window.StoryNative.paletteOpen()) showToast('Your phone has no colour palette screen'); else showToast('Tap Color palette there'); } else showToast('Update Lockedintool first - setup screen > Check for updates now'); break;
         case 'tap-split-close': state.tapSplit = null; break;
         case 'tap-split-pick': { const t = state.tapSplit; if(!t) break; const k = el.getAttribute('data-k'), i = t.pick.indexOf(k); if(i >= 0){ t.pick.splice(i, 1); delete t.amts[k]; } else t.pick.push(k); t.msg = ''; break; }
         case 'tap-split-go': tapSplitGo(); break;

@@ -588,6 +588,20 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         runCatching { ctx.startActivity(Intent(a).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
             .onFailure { runCatching { ctx.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
     }
+    /** Phone colours (#225): the phone's OWN wallpaper & colour-palette screen (Samsung: Wallpaper and style >
+     *  Color palette; Pixel: Wallpaper & style) - only the phone can pick its palette. Lockedintool steps aside. */
+    @JavascriptInterface
+    fun paletteOpen(): Boolean {
+        if (!pages) return false
+        val pm = ctx.packageManager
+        val list = runCatching { pm.queryIntentActivities(Intent(Intent.ACTION_SET_WALLPAPER), 0) }.getOrNull().orEmpty()
+        val best = list.sortedBy { r -> val p = r.activityInfo.packageName
+            when { p.startsWith("com.samsung") || p.startsWith("com.sec.") -> 0; p.contains("wallpaper") -> 1; p == "com.android.settings" -> 2; else -> 3 } }.firstOrNull()
+        host.hidePanel()
+        val ok = best != null && runCatching { ctx.startActivity(Intent(Intent.ACTION_SET_WALLPAPER).setClassName(best.activityInfo.packageName, best.activityInfo.name).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess
+        if (ok) return true
+        return runCatching { ctx.startActivity(Intent(Settings.ACTION_DISPLAY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess
+    }
     /** Only to switch NFC on (Android doesn't let an app do it itself). */
     @JavascriptInterface
     fun nfcSettings() {
