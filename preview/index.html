@@ -16793,6 +16793,10 @@ function renderDevice(){
   const wrap = document.getElementById('device-wrap');
   wrap.innerHTML = state.device==='phone' ? buildPhone() : buildLaptop();
   document.getElementById('content-area').innerHTML = renderScreenContent() + (state.contentBlock ? contentBlockOverlay(state.contentBlock) : '');
+  // Your colours go on BEFORE the page is measured (owner, 5 Nov 2026: 'I just went inside the dashboard, the colors
+  // disappeared and they appeared again - you know this is wrong'): measuring first fixed the plain colours for a moment,
+  // so one frame showed them before yours. Now the very first frame already has your colours.
+  try{ litApplyColors(); }catch(e){}
   fitPageToScreen(document.getElementById('content-area'));
   litWatchFit(document.getElementById('content-area'));
   // Any interaction that doesn't actually change which screen is showing (toggling a
@@ -21363,7 +21367,7 @@ function buildNeighbor(pg){
   host.innerHTML = frameHTML;
   document.body.appendChild(host);
   const area = host.querySelector('#content-area');
-  if(area){ area.innerHTML = contentHTML; if(!SCROLL_PAGES.has(pg) && pg !== 'apps') area.classList.add('lit-noscroll'); try{ fitPageToScreen(area, null, pg); }catch(e){} try{ litRecolorArea(area, pg); litBgArea(area, pg); }catch(e){} }   // recolour the neighbour so a swipe never flashes its plain look
+  if(area){ area.innerHTML = contentHTML; if(!SCROLL_PAGES.has(pg) && pg !== 'apps') area.classList.add('lit-noscroll'); try{ litRecolorArea(area, pg); litBgArea(area, pg); }catch(e){} try{ fitPageToScreen(area, null, pg); }catch(e){} }   // recolour the neighbour so a swipe never flashes its plain look
   NEIGHBORS[pg] = { host, w:r.width, h:r.height };
   return NEIGHBORS[pg];
 }
