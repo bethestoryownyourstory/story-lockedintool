@@ -196,6 +196,7 @@ class LockDashActivity : Activity() {
     override fun onDestroy() {
         if (Build.VERSION.SDK_INT >= 33) (lockListener as? KeyguardManager.KeyguardLockedStateListener)?.let { l ->
             runCatching { getSystemService(KeyguardManager::class.java)?.removeKeyguardLockedStateListener(l) } }
+        OverlayService.instance?.lockOptions(false)
         if (instance === this) instance = null; super.onDestroy() }
     private var lockListener: Any? = null
     /** The phone was unlocked some other way - its fingerprint sensor straight on the lock screen, face unlock (owner's
@@ -220,6 +221,7 @@ class LockDashActivity : Activity() {
         // The sign shrinks from the full screen into the top area (the owner's animation), then the options show.
         if (art == null) optsView?.visibility = android.view.View.VISIBLE
         else art.shrink { optsView?.visibility = android.view.View.VISIBLE }
+        OverlayService.instance?.lockOptions(true)
     }
     private var hintView: android.widget.TextView? = null
     private fun hint(t: String?) { hintView?.let { it.text = t ?: ""; it.visibility = if (t == null) android.view.View.GONE else android.view.View.VISIBLE } }
@@ -227,6 +229,7 @@ class LockDashActivity : Activity() {
     fun resetLook() {
         if (isFinishing) return
         optsView?.visibility = android.view.View.GONE; hint(null)
+        OverlayService.instance?.lockOptions(false)
         (window.decorView.findViewWithTag<android.view.View>("lockart") as? LockArt)?.reset()
     }
     @Deprecated("Back shows the unlock options")

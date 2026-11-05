@@ -1554,6 +1554,7 @@ class OverlayService : Service(), StoryBridge.Host {
         if (WidgetMode.on(this)) on = false   // Only use widgets: no Station 3
         if (dash) on = false                  // the Dashboard's Station 3 has no button
         if (panelOver) on = false             // the phone's own panel is pulled down over everything
+        if (lockOptsUp) on = false            // Lockedintool's lock screen is showing its unlock options
         // Station 3 must stay on top everywhere (owner): it can only sit above the keyboard and every app's screen in
         // the accessibility layer. If that layer came back (the system re-connected Lockedintool system actions) while
         // Station 3 was still in the normal layer, move everything up at once.
@@ -2202,7 +2203,7 @@ class OverlayService : Service(), StoryBridge.Host {
             if (!want && p.stale) reload(p)  // new screens were published while it was up: pick them up now it's hidden
         }
         // The Wallet page button (Settings > QUICK ACCESS): on the Always On Display only when its own Always On Display is on.
-        val wallet = walletCan && !lockDialAway && !lockDialPeek && entry != true && !shade && (if (onAod) QuickAccess.walletAod(this) else true)
+        val wallet = walletCan && !lockOptsUp && !lockDialAway && !lockDialPeek && entry != true && !shade && (if (onAod) QuickAccess.walletAod(this) else true)
         showWalletBtn(wallet)
         // While it's up, keep checking: the moment the phone unlocks (by any route) it goes.
         // (and while the PIN page is up, it comes back as soon as you drag that away).
@@ -2531,6 +2532,11 @@ class OverlayService : Service(), StoryBridge.Host {
     /** Lockedintool's lock screen is put up while the screen goes OFF, so when you turn it on it's already there - never
      *  a glimpse of the phone's own lock screen first (owner, 5 Nov 2026: 'I can still see my lockscreen still'). With
      *  the Always On Display on, it sits ready underneath it. */
+    /** Lockedintool's lock screen shows its unlock options (owner's video, 5 Nov 2026: tapping near Enter PIN hit Station 3
+     *  in the corner and opened Profile over the locked phone): while they show, Station 3 and the Wallet page button step
+     *  away so nothing covers or competes with the options; they come back when the options go. */
+    @Volatile var lockOptsUp = false
+    fun lockOptions(on: Boolean) { ui.post { if (lockOptsUp == on) return@post; lockOptsUp = on; updateBubble(); syncLockDial() } }
     fun pagesJs(js: String) { ui.post { pagesPane?.web?.evaluateJavascript(js, null) } }
     private fun lockDashPrepare() { runCatching {
         // Already up from before (tapped, then the screen went off): back to the untouched full-screen look, so the
