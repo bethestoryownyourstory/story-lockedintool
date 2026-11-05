@@ -140,7 +140,7 @@ class MainActivity : Activity() {
         col.addView(btn("Check for updates now") { Updater.setStatus(this, "Checking…"); showUpdateStatus(); Updater.check(applicationContext, force = true, now = true) })
         // Owner only: you see the newest version (Test channel) and can publish it to everyone.
         if (Release.isOwner(this)) {
-            col.addView(title("Owner - Test channel: you always get the newest version first.", 15f).apply { setTextColor(Color.parseColor("#FFE8B23D")); setPadding(0, pad, 0, pad / 2) })
+            col.addView(title("Owner - your private version: you always get the newest version first.", 15f).apply { setTextColor(Color.parseColor("#FFE8B23D")); setPadding(0, pad, 0, pad / 2) })
             col.addView(btn("Publish live update") { askPin("Publish live update", "Everything you see on this phone now goes to everyone.") { pin -> publish(pin, "publish") } })
             col.addView(btn("Undo last update") { askPin("Undo last update", "Everyone goes back to the screens from before the last update.") { pin -> publish(pin, "undo") } })
             col.addView(btn("Leave owner mode") { Release.setOwner(this, false); channelChanged() })
