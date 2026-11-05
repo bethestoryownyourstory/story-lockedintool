@@ -68,6 +68,7 @@ class OverlayService : Service(), StoryBridge.Host {
     private val unlocked = object : android.content.BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) {
             userPresentAt = System.currentTimeMillis()
+            ui.post { secWaitUnlocked() }
             widgetLiveEvent(false)  // unlocked onto the home screen: live widgets come back
             if (SystemMode.on(c)) { ui.removeCallbacks(systemCheckRun); ui.postDelayed(systemCheckRun, 500) }  // Lockedintool as your system: unlocked onto another app / the home screen
             AodActivity.instance?.finish()  // unlocked (e.g. fingerprint) while the Always On Display was up
@@ -81,7 +82,7 @@ class OverlayService : Service(), StoryBridge.Host {
     // Always On Display: when the screen goes off, STORY's dim always-on screen comes up instead
     // (if switched on). Pressing power while it's up turns the screen truly off.
     private val screenOff = object : android.content.BroadcastReceiver() {
-        override fun onReceive(c: Context, i: Intent) { screenOffAt = System.currentTimeMillis(); ui.post { hideLiveWidgets(); secLock() }; lockDialAway = false; lockDialPeek = false; lockDialBackAt = 0L; onScreenOff(); ui.post { syncLockDial() }
+        override fun onReceive(c: Context, i: Intent) { screenOffAt = System.currentTimeMillis(); ui.post { hideLiveWidgets(); secLock(); if (secWaiting) { ui.removeCallbacks(secWaitRun); secWaiting = false; secWaitThen = null } }; lockDialAway = false; lockDialPeek = false; lockDialBackAt = 0L; onScreenOff(); ui.post { syncLockDial() }
             if (!callActive) Updater.installWaiting(applicationContext)    // updates install while nobody's using the phone (owner)
             // New screens reach the Pages when they hide - but someone whose home is the Dashboard may never hide them.
             // The screen going off is also a moment nobody is looking: bring the Pages up to date then.
@@ -2346,6 +2347,19 @@ class OverlayService : Service(), StoryBridge.Host {
             runCatching { getSystemService(android.app.KeyguardManager::class.java).isDeviceSecure }.getOrDefault(false)) {
             secOpen = true; secTell(); LockedintoolHome.current?.showShot(); then?.invoke(); return
         }
+        // The phone's prompt is already up: this waits for its answer - never a second prompt. (Lockedintool's Home coming
+        // back under the prompt asked again, which switched the prompt's guard off, so the backup bar opened and was resized
+        // on screen - the squashed bar after every unlock, owner, 5 Nov 2026: 'the squashed thing still shows up'.)
+        if (secPrompting) { val t0 = secThen; secThen = if (then == null) t0 else if (t0 == null) then else ({ t0(); then() }); return }
+        // The phone is being unlocked right now (its unlock hasn't been reported yet - Android tells apps a moment after the
+        // Home shows): wait for it, up to 1.5 s, so the phone's own unlock counts and no second prompt shows (owner's choice
+        // 'Count phone unlock'). No unlock reported in time -> the prompt, as always.
+        if (!secWaitDone && screenOffAt > 0 && userPresentAt <= screenOffAt &&
+            runCatching { getSystemService(android.app.KeyguardManager::class.java).isDeviceSecure }.getOrDefault(false)) {
+            val t0 = secWaitThen; secWaitThen = if (then == null) t0 else if (t0 == null) then else ({ t0(); then() })
+            if (!secWaiting) { secWaiting = true; ui.postDelayed(secWaitRun, 1500) }
+            return
+        }
         secPrompting = true
         if (!stepAsideForSystem()) { secPrompting = false; then?.invoke(); return }   // another of the phone's screens is up: just show it locked
         secThen = then
@@ -2358,6 +2372,21 @@ class OverlayService : Service(), StoryBridge.Host {
             .putExtra(IdentityActivity.EXTRA_FOR, "security").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)) }
             .onFailure { secDone("fail") }
         updateBubble()
+    }
+    private var secWaiting = false
+    private var secWaitDone = false
+    private var secWaitThen: (() -> Unit)? = null
+    private val secWaitRun = Runnable {
+        if (!secWaiting) return@Runnable
+        secWaiting = false; val t = secWaitThen; secWaitThen = null
+        secWaitDone = true; secPrompt(t); secWaitDone = false
+    }
+    /** The phone reported its unlock (USER_PRESENT): a waiting entry into Lockedintool opens with no second prompt. */
+    private fun secWaitUnlocked() {
+        if (!secWaiting) return
+        ui.removeCallbacks(secWaitRun); secWaiting = false
+        val t = secWaitThen; secWaitThen = null
+        secOpen = true; secTell(); LockedintoolHome.current?.showShot(); t?.invoke()
     }
     fun secDone(result: String) { ui.post {
         secPrompting = false
