@@ -225,4 +225,4 @@ commits, pushed as a new update) - nothing else changes.
 | 217 | 2026-11-05 | Your colours show from the very first frame - no more colours disappearing and coming back when you open the Dashboard or any screen; the automatic checks now test it | 2424aa7 6f3c56c |
 | 218 | 2026-11-05 | Wallet: a Net worth switch in the bottom-right corner of the Tap to Pay button (remembers your choice; paying a tap from combined accounts needs Lockedintool's own card - Send money already splits over Net worth) | 6d2358c |
 | 219 | 2026-11-05 | Send Money: its own SEND FROM switch - Card or Net worth - like Lockedintool profile / Anyone; Net worth shows the split over your accounts as you type | 099e2bc |
-| 220 | 2026-11-05 | Send Money: Card / Net worth and the accounts to use are never saved - you choose them for every payment (tick the accounts each time) | |
+| 220 | 2026-11-05 | Send Money: Card / Net worth and the accounts to use are never saved - you choose them for every payment (tick the accounts each time) | be5d106 |
