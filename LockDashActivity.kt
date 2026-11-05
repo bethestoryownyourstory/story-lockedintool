@@ -175,8 +175,8 @@ class LockDashActivity : Activity() {
             gravity = Gravity.CENTER; setPadding(0, (4 * dp).toInt(), 0, 0); maxLines = 1 }, wrap())
         return box
     }
-    override fun onResume() { super.onResume(); overridePendingTransition(0, 0); window.decorView.post { stillLocked() }; watch.run() }
-    override fun onPause() { super.onPause(); overridePendingTransition(0, 0); window.decorView.removeCallbacks(watch) }
+    override fun onResume() { super.onResume(); inFront = true; overridePendingTransition(0, 0); window.decorView.post { stillLocked() }; watch.run() }
+    override fun onPause() { super.onPause(); inFront = false; overridePendingTransition(0, 0); window.decorView.removeCallbacks(watch) }
     // The phone unlocking by its fingerprint sensor while this covers the lock screen (owner, 5 Nov 2026: 'I pressed my
     // fingerprint scanner - phone just stayed there unlocked'): some phones send no unlock signal then, so while this
     // is on screen (screen on) it looks every 0.3 s whether the phone is still locked - and goes the moment it isn't.
@@ -192,6 +192,7 @@ class LockDashActivity : Activity() {
         window.decorView.postDelayed(this, 300)
     } }
     private var seenLocked = false
+    @Volatile var inFront = false
     override fun onDestroy() {
         if (Build.VERSION.SDK_INT >= 33) (lockListener as? KeyguardManager.KeyguardLockedStateListener)?.let { l ->
             runCatching { getSystemService(KeyguardManager::class.java)?.removeKeyguardLockedStateListener(l) } }

@@ -2474,7 +2474,10 @@ class OverlayService : Service(), StoryBridge.Host {
      *  phone's own lock screen): it comes back - unless the camera / a call / any app came up over the lock screen. */
     fun lockDashAgain() { ui.post {
         val since = System.currentTimeMillis()
-        ui.postDelayed({ runCatching {
+        // Tried again until it's really back in front (owner's videos, 5 Nov 2026: after a swipe the phone's own lock
+        // screen stayed for seconds - one try at 0.25 s wasn't always let through while the phone's lock screen moved).
+        for (d in longArrayOf(250, 700, 1500)) ui.postDelayed({ runCatching {
+            if (LockDashActivity.instance?.inFront == true) return@runCatching
             if (!lockScreenOurs() || WidgetMode.on(this) || callActive || createActive) return@runCatching
             if (getSystemService(android.app.KeyguardManager::class.java)?.isKeyguardLocked != true || userPresentAt > screenOffAt) return@runCatching
             if (!getSystemService(android.os.PowerManager::class.java).isInteractive || aodShowing()) return@runCatching
@@ -2486,7 +2489,7 @@ class OverlayService : Service(), StoryBridge.Host {
             val pi = android.app.PendingIntent.getActivity(this, 9, i, android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT)
             if (Build.VERSION.SDK_INT >= 34) pi.send(android.app.ActivityOptions.makeBasic().setPendingIntentBackgroundActivityStartMode(android.app.ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED).toBundle())
             else pi.send()
-        } }, 250)
+        } }, d)
     } }
     /** Lockedintool is your lock screen (owner, 5 Nov 2026): on Only system it's your whole phone - home screen, lock
      *  screen, everything; on Second system only when Lockedintool security is your security ('even if you're on second
