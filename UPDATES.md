@@ -233,3 +233,4 @@ commits, pushed as a new update) - nothing else changes.
 | 225 | 2026-11-05 | Phone colours: after it's set, 'Choose your phone's palette' opens your phone's own Wallpaper and style screen to pick a palette from your text colour | a7e464c |
 | 226 | 2026-11-05 | Phone colours: no wallpaper - it sets your phone's colour palette directly (Background + Text) after a one-time permission from a computer | 17bd327 |
 | 227 | 2026-11-05 | Phone colours removed from System theme (owner) - System theme is Black / White only; nothing in Lockedintool changes the wallpaper or the phone's palette | 0562222 |
+| 228 | 2026-11-05 | Page Styles smooth: Vertical / Horizontal stacks pull apart without stutter (no more restyling every page preview on each finger move), the 3D Circle turns once per frame with no freeze on the first swipe; the automatic checks now test it | |

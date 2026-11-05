@@ -3030,11 +3030,11 @@
      and below, a little smaller behind it. */
   .pswitch-vstack{ --card-w:280px; --card-h:360px; --step:72px; position:relative; width:var(--card-w); margin:0 auto;
     height:calc(var(--card-h) + (var(--n) - 1) * (var(--step) + var(--spread, 0px))); touch-action:none; -webkit-user-select:none; user-select:none; }
-  .pswitch-vcard{ position:absolute; left:0; top:calc(var(--i) * (var(--step) + var(--spread, 0px))); width:var(--card-w); height:var(--card-h); --mscale:0.68;
-    transform:scale(calc(1 - var(--b) * 0.06)); transform-origin:50% 0; box-shadow:0 -6px 22px rgba(0,0,0,0.55); transition:opacity 0.2s ease; }
+  .pswitch-vcard{ position:absolute; left:0; top:calc(var(--i) * var(--step)); width:var(--card-w); height:var(--card-h); --mscale:0.68;
+    transform:translateY(calc(var(--i) * var(--spread, 0px))) scale(calc(1 - var(--b) * 0.06)); transform-origin:50% 0; will-change:transform; box-shadow:0 -6px 22px rgba(0,0,0,0.55); transition:opacity 0.2s ease; }
   /* Horizontal: the same stack sideways - home in front on the right, the others peeking out to its left. */
   .pswitch-hstack{ --card-w:260px; --card-h:420px; --step:56px; width:calc(var(--card-w) + (var(--n) - 1) * (var(--step) + var(--spread, 0px))); height:var(--card-h); max-width:none; }
-  .pswitch-hstack .pswitch-vcard{ top:0; left:calc(var(--i) * (var(--step) + var(--spread, 0px))); --mscale:0.63; transform-origin:0 50%; box-shadow:-6px 0 22px rgba(0,0,0,0.55); }
+  .pswitch-hstack .pswitch-vcard{ top:0; left:calc(var(--i) * var(--step)); transform:translateX(calc(var(--i) * var(--spread, 0px))) scale(calc(1 - var(--b) * 0.06)); --mscale:0.63; transform-origin:0 50%; box-shadow:-6px 0 22px rgba(0,0,0,0.55); }
   .pswitch-vcard.picked{ opacity:0.25; }
   .pswitch-vfloat{ position:fixed; inset:0; z-index:40; background:rgba(0,0,0,0.6); }
   /* Exactly the size of the whole stack, right where the stack is (owner). */
@@ -16567,6 +16567,10 @@ function setupCircleAndWheelDrag(){
       updateSliceShading();
     };
     updateSliceShading(); // paint the correct shading immediately, not just after the first drag
+    // The phone builds the 42 curved strips' 3D layers the first time the wheel turns (a one-time ~0.1-0.4 s job);
+    // do it right as the 3D Circle opens (an invisible turn there and back) so the first swipe is already smooth.
+    requestAnimationFrame(()=>{ if(!rig.isConnected) return; rig.style.transform = `rotateX(${state.wheelRotX}deg) rotateY(${state.wheelRotY + 0.01}deg)`;
+      requestAnimationFrame(()=>{ if(rig.isConnected) applyTransform(); }); });
     // Left alone, the wheel keeps itself turning slowly on its own -- a drag (or its
     // momentum afterward) takes over immediately and this pauses for it, then picks back up
     // once the wheel is at rest again. Tilt (wheelRotX) is never touched by this, only spin.
@@ -16632,7 +16636,8 @@ function setupCircleAndWheelDrag(){
       const dt = now - lastT;
       if(dt > 0) velocity = (e.clientX - lastX) * 0.5 / dt;
       lastX = e.clientX; lastT = now;
-      applyTransform();
+      // One turn per drawn frame - a finger reports several moves per frame on many phones.
+      if(!rig.__raf) rig.__raf = requestAnimationFrame(()=>{ rig.__raf = 0; applyTransform(); });
       e.stopPropagation();
     });
     const endWheelDrag = (e)=>{
@@ -17397,6 +17402,14 @@ function attachHandlers(){
       if(!horiz && k < 1){ const r = st.getBoundingClientRect(); dy = Math.round(window.innerHeight / 2 + 30 - (r.top + r.height / 2)); }
       st.style.transform = (dy ? `translateY(${dy}px) ` : '') + (k < 1 ? `scale(${k.toFixed(4)})` : '');
     };
+    const cards = Array.from(st.querySelectorAll('.pswitch-vcard'));
+    const spreadNow = ()=>{
+      const sp = state.vstackSpread || 0;
+      cards.forEach((c, i)=>{ const b = parseFloat(c.style.getPropertyValue('--b')) || 0;
+        c.style.transform = (horiz ? 'translateX(' : 'translateY(') + (i * sp) + 'px) scale(' + (1 - b * 0.06).toFixed(4) + ')'; });
+      const len = (horiz ? cw : ch) + (n - 1) * (step + sp);
+      if(horiz) st.style.width = len + 'px'; else st.style.height = len + 'px';
+    };
     fit();
     st.addEventListener('pointerdown', e=>{
       if(state.vstackPick) return;
@@ -17409,8 +17422,10 @@ function attachHandlers(){
       if(!moved && Math.abs(d) < 8) return;
       if(!moved){ moved = true; try{ st.setPointerCapture(down.id); }catch(err){} }  // (only once it's a drag, so taps still pick a page)
       state.vstackSpread = Math.round(Math.max(0, Math.min(maxSpread(), startSpread + d)));
-      st.style.setProperty('--spread', state.vstackSpread + 'px');
-      fit();
+      // One update per drawn frame (smooth on every phone): the finger can report several moves per frame.
+      // Each card moves by its own transform and the stack's size is set directly - changing the --spread variable
+      // made every element inside every page preview recompute its style (seconds of work per drag on a phone).
+      if(!st.__raf) st.__raf = requestAnimationFrame(()=>{ st.__raf = 0; spreadNow(); fit(); });
       e.stopPropagation();
     });
     const up = e=>{ if(!down) return; down = null; e.stopPropagation(); if(moved){ st.__dragged = true; setTimeout(()=>{ st.__dragged = false; }, 0); } };

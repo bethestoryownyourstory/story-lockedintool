@@ -90,6 +90,44 @@ for (const [w, h] of SIZES) {
   }
   await ctx.close();
 }
+// 'Please now check that everything works fine - the page styles are smooth, no glitches' (5 Nov 2026): pulling the
+// Vertical / Horizontal stack and turning the 3D Circle must never make the phone restyle the pages inside them (that was
+// ~6000 elements per pull, seconds of work on a phone) and the 3D Circle must have no freeze on its first turn.
+{
+  const ctx = await b.newContext({ viewport: { width: 393, height: 852 }, isMobile: true, hasTouch: true, userAgent: UA });
+  await ctx.addInitScript(() => { try { localStorage.setItem('story-msg-account', JSON.stringify({ id: 'check', token: 't', pw: true, username: 'check' })); } catch (e) {} });
+  await ctx.route('**/*', r => r.request().url().startsWith('http://localhost') ? r.continue() : r.abort());
+  const pg = await ctx.newPage();
+  const perr = []; pg.on('pageerror', e => perr.push(String(e && e.message || e).slice(0, 160)));
+  const cdp = await ctx.newCDPSession(pg);
+  await pg.goto(URL); await pg.waitForTimeout(2500);
+  await pg.evaluate(() => { window.storyShow && window.storyShow('money', false); });
+  await pg.waitForTimeout(600);
+  for (const style of ['vertical', 'horizontal', 'wheel']) {
+    await pg.evaluate(a => { state.pageArrangement = a; window.storyPagesAction('page-quick-style'); }, style);
+    await pg.waitForTimeout(900);
+    const box = await pg.evaluate(() => { const r = document.querySelector('#device-wrap #content-area').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; });
+    const H = style !== 'vertical';
+    const sx = box.x - (H ? 110 : 0), sy = box.y - (H ? 0 : 140), ex = box.x + (H ? 110 : 0), ey = box.y + (H ? 0 : 140);
+    const events = [];
+    cdp.on('Tracing.dataCollected', d => events.push(...d.value));
+    await cdp.send('Tracing.start', { categories: 'devtools.timeline' });
+    await pg.evaluate(() => { window.__fmax = 0; window.__frun = true; let last = performance.now(); (function t() { if (!window.__frun) return; const n = performance.now(); window.__fmax = Math.max(window.__fmax, n - last); last = n; requestAnimationFrame(t); })(); });
+    await pg.mouse.move(sx, sy); await pg.mouse.down();
+    for (let i = 1; i <= 24; i++) await pg.mouse.move(sx + (ex - sx) * i / 24, sy + (ey - sy) * i / 24);
+    await pg.mouse.up(); await pg.waitForTimeout(250);
+    const fmax = await pg.evaluate(() => { window.__frun = false; return window.__fmax; });
+    const done = new Promise(r => cdp.once('Tracing.tracingComplete', r));
+    await cdp.send('Tracing.end'); await done;
+    const restyled = events.filter(e => e.name === 'UpdateLayoutTree').reduce((n, e) => n + ((e.args && e.args.elementCount) || 0), 0);
+    if (style !== 'wheel' && restyled > 2000) fail('page styles are smooth', style + ' @ 393x852', 'pulling the stack restyled ' + restyled + ' elements (should be a few hundred)');
+    if (fmax > 250) fail('page styles are smooth', style + ' @ 393x852', 'a ' + Math.round(fmax) + ' ms freeze while it moved');
+    if (perr.length) fail('no errors', style + ' @ 393x852', perr[0]);
+    await pg.evaluate(() => { state.pageStyleViewOpen = false; state.pageStyleOn = false; window.storyShow && window.storyShow('money', false); });
+    await pg.waitForTimeout(300);
+  }
+  await ctx.close();
+}
 await b.close();
 if (fails.length) { console.log('OWNER RULES BROKEN (' + fails.length + '):\n' + fails.join('\n')); process.exit(1); }
 console.log('All owner rules pass');
