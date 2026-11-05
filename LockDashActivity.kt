@@ -37,7 +37,11 @@ class LockDashActivity : Activity() {
         root.addView(shot, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.TOP))
         // It must SAY it's locked (owner, 5 Nov 2026: 'A locked screen should say that it is locked because I'm confused, I
         // think it's unlocked'): a card in the middle - the lock, 'Locked', 'Tap to unlock' - like Lockedintool security's lock.
-        root.addView(lockCard(), FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
+        // The sign is Lockedintool's own logo, see-through over your screen, its words reading DEVICE LOCKED - the tape, the
+        // stick men, the stairs and the small words stay (owner, 5 Nov 2026: 'I want it to be lockedintool logo, but like in
+        // that transparent effect, but the words lockedintool be device locked, but the stick men and the stairs in this
+        // logo and the tiny words there should be available'). 'Tap to unlock' under it.
+        root.addView(lockSign(), FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
         root.setOnTouchListener { _, e -> if (e.action == MotionEvent.ACTION_UP) ask(); true }
         setContentView(root)
         instance = this
@@ -49,6 +53,19 @@ class LockDashActivity : Activity() {
             ?: (if (exactOk) runCatching { BitmapFactory.decodeFile(java.io.File(filesDir, "home_shot.jpg").path) }.getOrNull() else null)
         val top = if (svc?.homeShot != null) svc.homeShotTop else prefs.getInt("home_shot_top", 0)
         if (b != null) { shot.setImageBitmap(b); (shot.layoutParams as FrameLayout.LayoutParams).topMargin = top.coerceAtLeast(0) }
+    }
+    private fun lockSign(): android.view.View {
+        val dp = resources.displayMetrics.density
+        val box = android.widget.LinearLayout(this).apply { orientation = android.widget.LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL }
+        val w = (resources.displayMetrics.widthPixels * 0.82f).toInt()
+        box.addView(ImageView(this).apply { setImageResource(R.drawable.device_locked); scaleType = ImageView.ScaleType.FIT_CENTER
+            adjustViewBounds = true; contentDescription = "Device locked" },
+            android.widget.LinearLayout.LayoutParams(w, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT))
+        box.addView(android.widget.TextView(this).apply { text = "Tap to unlock"; setTextColor(Color.WHITE); textSize = 14f
+            typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD); gravity = Gravity.CENTER
+            setShadowLayer(6 * dp, 0f, 0f, Color.BLACK); setPadding(0, (10 * dp).toInt(), 0, 0) },
+            android.widget.LinearLayout.LayoutParams(android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT))
+        return box
     }
     private fun lockCard(): android.view.View {
         val dp = resources.displayMetrics.density

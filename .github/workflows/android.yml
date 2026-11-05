@@ -21,6 +21,7 @@ jobs:
           cp widget_page.xml $M/res/layout/
           cp strings.xml themes.xml $M/res/values/
           cp ic_launcher.png $M/res/drawable-nodpi/
+          cp device_locked.png $M/res/drawable-nodpi/
           cp index.html $M/assets/index.html
           cat > $B/settings.gradle.kts <<'X'
           pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
