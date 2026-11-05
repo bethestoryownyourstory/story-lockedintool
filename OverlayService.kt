@@ -2508,6 +2508,9 @@ class OverlayService : Service(), StoryBridge.Host {
      *  a glimpse of the phone's own lock screen first (owner, 5 Nov 2026: 'I can still see my lockscreen still'). With
      *  the Always On Display on, it sits ready underneath it. */
     private fun lockDashPrepare() { runCatching {
+        // Already up from before (tapped, then the screen went off): back to the untouched full-screen look, so the
+        // options only ever show after a tap (owner, 5 Nov 2026: 'the one with the tick is only when the screen is tapped').
+        LockDashActivity.instance?.resetLook()
         if (!lockScreenOurs() || WidgetMode.on(this) || callActive || createActive || LockDashActivity.instance != null) return
         if (getSystemService(android.app.KeyguardManager::class.java)?.isDeviceSecure != true) return
         val mode = getSystemService(android.media.AudioManager::class.java)?.mode ?: android.media.AudioManager.MODE_NORMAL

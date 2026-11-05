@@ -190,6 +190,12 @@ class LockDashActivity : Activity() {
         if (art == null) optsView?.visibility = android.view.View.VISIBLE
         else art.shrink { optsView?.visibility = android.view.View.VISIBLE }
     }
+    /** The screen went off: back to the untouched look - the full-screen sign, no options (they show only after a tap). */
+    fun resetLook() {
+        if (isFinishing) return
+        optsView?.visibility = android.view.View.GONE
+        (window.decorView.findViewWithTag<android.view.View>("lockart") as? LockArt)?.reset()
+    }
     @Deprecated("Back shows the unlock options")
     override fun onBackPressed() { showOptions() }
     override fun onStop() {
@@ -247,6 +253,7 @@ class LockArt(ctx: android.content.Context) : android.view.View(ctx) {
     var progress = 0f
     val compact get() = progress >= 1f
     private var anim: android.animation.ValueAnimator? = null
+    fun reset() { anim?.removeAllListeners(); anim?.removeAllUpdateListeners(); anim?.cancel(); anim = null; progress = 0f; invalidate() }
     fun shrink(onEnd: () -> Unit) {
         if (progress >= 1f || anim != null) { if (progress >= 1f) onEnd(); return }
         anim = android.animation.ValueAnimator.ofFloat(progress, 1f).apply {
