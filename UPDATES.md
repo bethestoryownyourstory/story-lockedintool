@@ -190,3 +190,4 @@ commits, pushed as a new update) - nothing else changes.
 | 182 | 2026-11-05 | The Dashboard's picture (shown while the live Dashboard gets ready) is now an exact copy of the screen - its bottom bar is no longer squashed | dc12b78 |
 | 183 | 2026-11-05 | Fixed a crash right after unlocking into Lockedintool (1.344): the Dashboard's old picture was thrown away while it was still on screen | 6b3e8bf |
 | 184 | 2026-11-05 | Your background picture no longer pops in after unlocking - the Dashboard shows only once the picture is ready | (this) |
+| 185 | 2026-11-05 | Lockedintool security asks at once again - no wait that made it look unlocked (it only waits for your phone's own unlock when the lock screen really was up, 0.8 s at most) | (this) |

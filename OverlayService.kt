@@ -90,7 +90,10 @@ class OverlayService : Service(), StoryBridge.Host {
     }
     // Screen on: the lock screen may be showing -> the lock screen dial pad (Settings > QUICK ACCESS).
     private val screenOn = object : android.content.BroadcastReceiver() {
-        override fun onReceive(c: Context, i: Intent) { ui.post { syncLockDial(); updateBubble() }; ui.postDelayed({ syncLockDial(); updateBubble() }, 400) }   // on the lock screen the Dashboard band must step out (keyguardLocked)
+        override fun onReceive(c: Context, i: Intent) {
+            // Was the lock screen really up when the screen came on? Only then can an unlock be on its way (secPrompt waits for it).
+            lockedAtScreenOn = runCatching { getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked }.getOrDefault(false)
+            ui.post { syncLockDial(); updateBubble() }; ui.postDelayed({ syncLockDial(); updateBubble() }, 400) }   // on the lock screen the Dashboard band must step out (keyguardLocked)
     }
     // Always On Display: the moment the screen goes off, switch it straight back on with Station 3
     // showing. Android's display watcher usually reports "off" before the screen-off broadcast does,
@@ -2406,10 +2409,13 @@ class OverlayService : Service(), StoryBridge.Host {
         // The phone is being unlocked right now (its unlock hasn't been reported yet - Android tells apps a moment after the
         // Home shows): wait for it, up to 1.5 s, so the phone's own unlock counts and no second prompt shows (owner's choice
         // 'Count phone unlock'). No unlock reported in time -> the prompt, as always.
-        if (!secWaitDone && screenOffAt > 0 && userPresentAt <= screenOffAt &&
+        // Only when the lock screen really was up (owner, 5 Nov 2026: 'the security pop up takes way too long it looks like
+        // it's unlocked until you tap the screen or wait a bit' - a screen that came on without the lock screen never
+        // reports an unlock, so it waited the full time every time).
+        if (!secWaitDone && lockedAtScreenOn && screenOffAt > 0 && userPresentAt <= screenOffAt &&
             runCatching { getSystemService(android.app.KeyguardManager::class.java).isDeviceSecure }.getOrDefault(false)) {
             val t0 = secWaitThen; secWaitThen = if (then == null) t0 else if (t0 == null) then else ({ t0(); then() })
-            if (!secWaiting) { secWaiting = true; ui.postDelayed(secWaitRun, 1500) }
+            if (!secWaiting) { secWaiting = true; ui.postDelayed(secWaitRun, 800) }
             return
         }
         secPrompting = true
@@ -2426,6 +2432,7 @@ class OverlayService : Service(), StoryBridge.Host {
         updateBubble()
     }
     private var secWaiting = false
+    @Volatile private var lockedAtScreenOn = false
     private var secWaitDone = false
     private var secWaitThen: (() -> Unit)? = null
     private val secWaitRun = Runnable {
