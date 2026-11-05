@@ -1552,7 +1552,8 @@ class OverlayService : Service(), StoryBridge.Host {
             val b = r.bitmap
             if (r.status != android.view.PixelCopy.SUCCESS || b.width <= 0 || b.height <= 0) return@runCatching
             if (!dashUp || p.shown != true) { b.recycle(); return@runCatching }   // left the Dashboard meanwhile
-            homeShot?.takeIf { it !== b && !it.isRecycled }?.recycle()
+            // The old picture is NEVER recycled here: Lockedintool's Home may still be drawing it, and drawing a recycled
+            // picture crashes the app (owner, 5 Nov 2026, 1.344: unlocked, then 'crash now I'm back on my phone's apps').
             homeShot = b; homeShotTop = loc[1]
             LockedintoolHome.current?.showShot()
             val top = loc[1]; val copy = b.copy(android.graphics.Bitmap.Config.ARGB_8888, false)
