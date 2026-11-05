@@ -77,6 +77,9 @@ for (const [w, h] of SIZES) {
   const ctx = await b.newContext({ viewport: { width: 393, height: 852 }, isMobile: true, hasTouch: true, userAgent: UA });
   await ctx.addInitScript(() => { try { localStorage.setItem('story-msg-account', JSON.stringify({ id: 'check', token: 't', pw: true, username: 'check' }));
     localStorage.setItem('story-color-systems', JSON.stringify({ all: { bg: '#1ab8d6', text: '#f5d90a' }, dash: { bg: '#1ab8d6', text: '#f5d90a' } })); } catch (e) {} });
+  // Kept offline: on GitHub's machine the test account is refused by the real server and the log-in screen comes up,
+  // under which Lockedintool deliberately shows no colours - so this check would test the log-in screen, not yours.
+  await ctx.route('**/*', r => r.request().url().startsWith('http://localhost') ? r.continue() : r.abort());
   const pg = await ctx.newPage();
   const cerr = []; pg.on('pageerror', e => cerr.push(String(e && e.message || e).slice(0, 160)));
   await pg.goto(URL); await pg.waitForTimeout(2500);
