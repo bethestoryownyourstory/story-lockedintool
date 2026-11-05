@@ -198,6 +198,7 @@ export class Hub {
     this.sql.exec(`CREATE TABLE IF NOT EXISTS tombs (tok TEXT PRIMARY KEY, at INTEGER)`);
     try { this.sql.exec(`ALTER TABLE tombs ADD COLUMN why TEXT`); } catch (e) {}   // 'deleted' (by its owner) | 'banned'
     this.sql.exec(`CREATE TABLE IF NOT EXISTS delreasons (reason TEXT, note TEXT, at INTEGER)`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS blockfix (k TEXT PRIMARY KEY, kind TEXT, value TEXT, n INTEGER, first INTEGER, last INTEGER, status TEXT)`);   // adult block 'This is a mistake' reports (owner) - no names
     this.sql.exec(`CREATE TABLE IF NOT EXISTS callrates (uid TEXT, stars INTEGER, note TEXT, video INTEGER, grp INTEGER, secs INTEGER, at INTEGER)`);   // the end-of-call rating (owner) - no names shown
     this.sql.exec(`CREATE TABLE IF NOT EXISTS reports (id TEXT PRIMARY KEY, uid TEXT, kind TEXT, target TEXT, owner TEXT, reason TEXT, text TEXT, at INTEGER, status TEXT)`);
     this.sql.exec(`CREATE TABLE IF NOT EXISTS ucomments (id TEXT PRIMARY KEY, pid TEXT, uid TEXT, text TEXT, at INTEGER)`);
@@ -265,6 +266,8 @@ export class Hub {
       const body = req.method === 'POST' ? await req.json().catch(() => ({})) : {};
       if (path === '/v1/problems' && req.method === 'POST') return this.problemsIn(body, req.headers.get('cf-connecting-ip') || '');
       if (path === '/v1/problems/list') return this.problemsList(body, url);
+      if (path === '/v1/blockfix' && req.method === 'POST') return this.blockFixIn(body, req.headers.get('cf-connecting-ip') || '');
+      if (path === '/v1/blockallow') return this.blockAllow();
       if (path === '/v1/problems/fixed') return this.problemsFixed(body);
       if (path === '/v1/register') return this.register(body, req.headers.get('cf-connecting-ip') || '');
       if (path === '/v1/login') return this.login(body);
@@ -292,6 +295,8 @@ export class Hub {
       if (path === '/v1/reports') return this.reportsList(me);
       if (path === '/v1/callrate') return this.callRate(me, body);
       if (path === '/v1/callrates') return this.callRates(me);
+      if (path === '/v1/blockfix/list') return this.blockFixList(me);
+      if (path === '/v1/blockfix/act') return this.blockFixAct(me, body);
       if (path === '/v1/reports/act') return this.reportAct(me, body);
       if (path === '/v1/auth/set') return this.authSet(me, body);
       if (path === '/v1/auth/mk') return this.authMk(me, body);
@@ -968,6 +973,43 @@ export class Hub {
     return json({ ok: true });
   }
   // Only Lockedintool's official profile sees them (Profile ⋮ > Reports) - totals + the newest, never who rated.
+  // The adult-content block's 'This is a mistake' (owner, 5 Nov 2026: 'Report only, no viewing'): a phone sends what was
+  // blocked (a website's address, an app's package, or the words searched) - no account, no name. It stays blocked until
+  // the official profile reviews it: Unblock for everyone -> every phone stops blocking exactly that (GET /v1/blockallow);
+  // Keep blocked -> closed. 20 an hour per network.
+  blockFixKey(kind, raw) {
+    let v = String(raw || '').trim().toLowerCase().slice(0, 120);
+    if (kind === 'site') v = v.replace(/^https?:\/\//, '').replace(/[\/?#\s].*$/, '').replace(/^www\./, '');
+    if (kind === 'app' && !/^[a-z0-9_.]+$/.test(v)) return '';
+    return v;
+  }
+  async blockFixIn(b, ip) {
+    const kind = ['site', 'app', 'search'].includes(b.kind) ? b.kind : '';
+    const value = kind ? this.blockFixKey(kind, b.value) : '';
+    if (!value) return json({ error: 'bad' }, 400);
+    if (this.limit('bfx|' + await sha('ip|' + ip), 20)) return json({ ok: true, limited: true });
+    const k = kind + '|' + value, now = Date.now(), row = this.one('SELECT status FROM blockfix WHERE k = ?', k);
+    if (row) this.sql.exec("UPDATE blockfix SET n = n + 1, last = ?, status = CASE WHEN status = 'kept' THEN 'open' ELSE status END WHERE k = ?", now, k);
+    else this.sql.exec("INSERT INTO blockfix (k, kind, value, n, first, last, status) VALUES (?, ?, ?, 1, ?, ?, 'open')", k, kind, value, now, now);
+    return json({ ok: true });
+  }
+  blockAllow() {
+    const out = { sites: [], apps: [], terms: [] };
+    for (const r of this.sql.exec("SELECT kind, value FROM blockfix WHERE status = 'allowed'").toArray()) (r.kind === 'site' ? out.sites : r.kind === 'app' ? out.apps : out.terms).push(r.value);
+    return new Response(JSON.stringify(out), { headers: { 'content-type': 'application/json', 'cache-control': 'public, max-age=600', 'access-control-allow-origin': '*' } });
+  }
+  blockFixList(me) {
+    if (!me.official) return json({ error: 'official' }, 403);
+    return json({ open: this.sql.exec("SELECT k, kind, value, n, last FROM blockfix WHERE status = 'open' ORDER BY last DESC LIMIT 200").toArray(),
+      allowed: this.sql.exec("SELECT k, kind, value FROM blockfix WHERE status = 'allowed' ORDER BY last DESC LIMIT 200").toArray() });
+  }
+  blockFixAct(me, b) {
+    if (!me.official) return json({ error: 'official' }, 403);
+    const st = b.action === 'allow' ? 'allowed' : b.action === 'keep' ? 'kept' : '';
+    if (!st || !b.k) return json({ error: 'bad' }, 400);
+    this.sql.exec('UPDATE blockfix SET status = ? WHERE k = ?', st, String(b.k));
+    return this.blockFixList(me);
+  }
   callRates(me) {
     if (!me.official) return json({ error: 'official' }, 403);
     const all = this.sql.exec('SELECT stars, COUNT(*) AS n FROM callrates GROUP BY stars').toArray(), by = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };

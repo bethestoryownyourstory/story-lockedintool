@@ -14,7 +14,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 class StoryAccessibilityService : AccessibilityService() {
     // Android keeps this service connected, so it's also a good moment to bring STORY back if it was switched on.
-    override fun onServiceConnected() { instance = this; KeepAlive.ensureRunning(this); refreshOverlay() }
+    override fun onServiceConnected() { instance = this; KeepAlive.ensureRunning(this); refreshOverlay(); ContentGuard.refresh(this) }
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         val e = event ?: return
         // Windows moved / focus changed (the phone's panel pulled down or closed...): Station 3 checks whether the
@@ -77,21 +77,22 @@ class StoryAccessibilityService : AccessibilityService() {
     private var lastBlockAt = 0L
     private fun contentGuard(e: AccessibilityEvent, pkg: String) {
         val et = e.eventType
-        if (et == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && ContentGuard.appBlocked(pkg)) { contentBlock(pkg); return }
+        if (et == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && ContentGuard.appBlocked(pkg)) { contentBlock(pkg, "app", pkg); return }
         if (et != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && et != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) return
         if (!ContentGuard.isBrowser(pkg)) return
         val now = System.currentTimeMillis()
         if (now - lastUrlCheckAt < 600) return   // cool phone: browsers only, at most ~1.5x a second
         lastUrlCheckAt = now
         val url = ContentGuard.browserUrl(rootInActiveWindow, pkg) ?: return
-        if (ContentGuard.hostBlocked(url)) contentBlock(pkg + "|" + url.take(60))
+        if (ContentGuard.hostBlocked(url)) contentBlock(pkg + "|" + url.take(60), "site", ContentGuard.siteOf(url))
     }
-    private fun contentBlock(key: String) {
+    private fun contentBlock(key: String, kind: String, value: String) {
+        ContentGuard.refresh(this)   // picks up what Lockedintool unblocked (looks online at most every 6 hours)
         val now = System.currentTimeMillis()
         if (key == lastBlockKey && now - lastBlockAt < 4000) return   // don't re-launch for the same thing
         lastBlockKey = key; lastBlockAt = now
         runCatching { performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME) }
-        runCatching { startActivity(Intent(this, BlockActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+        runCatching { startActivity(Intent(this, BlockActivity::class.java).putExtra("kind", kind).putExtra("value", value).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
     }
 
     override fun onUnbind(intent: Intent?): Boolean { instance = null; refreshOverlay(); return super.onUnbind(intent) }

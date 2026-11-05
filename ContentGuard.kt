@@ -1,6 +1,8 @@
 package com.story.launcher
 
+import android.content.Context
 import android.view.accessibility.AccessibilityNodeInfo
+import org.json.JSONObject
 
 /** The adult-content filter's lists + matchers (owner: adult content is blocked across the whole phone - part of
  *  Lockedintool, not a choice). Matches on the APP PACKAGE and the browser's ADDRESS BAR (host) only - never on page
@@ -38,6 +40,52 @@ object ContentGuard {
 
     fun isBrowser(pkg: String) = BROWSER_URL_IDS.containsKey(pkg)
 
+    // 'This is a mistake' (owner, 5 Nov 2026 - report only, no viewing): websites / apps Lockedintool unblocked for
+    // everyone after reviewing a report. Fetched at most every 6 hours (api.lockedintool.com/v1/blockallow), kept in
+    // prefs 'story' block_allow so it works offline. Only EXACT sites / apps - everything else stays blocked.
+    @Volatile private var allowSites: Set<String> = emptySet()
+    @Volatile private var allowApps: Set<String> = emptySet()
+    private const val API = "https://api.lockedintool.com"
+    fun load(ctx: Context) {
+        val raw = ctx.getSharedPreferences("story", Context.MODE_PRIVATE).getString("block_allow", null) ?: return
+        runCatching { applyAllow(JSONObject(raw)) }
+    }
+    private fun applyAllow(j: JSONObject) {
+        fun set(k: String) = j.optJSONArray(k)?.let { a -> (0 until a.length()).map { a.optString(it).lowercase() }.filter { it.isNotEmpty() }.toSet() } ?: emptySet()
+        allowSites = set("sites"); allowApps = set("apps")
+    }
+    fun refresh(ctx: Context) {
+        val prefs = ctx.getSharedPreferences("story", Context.MODE_PRIVATE)
+        load(ctx)
+        if (System.currentTimeMillis() - prefs.getLong("block_allow_at", 0) < 6 * 3600_000L) return
+        Thread {
+            runCatching {
+                val c = (java.net.URL("$API/v1/blockallow").openConnection() as java.net.HttpURLConnection).apply { connectTimeout = 8000; readTimeout = 8000 }
+                if (c.responseCode == 200) {
+                    val body = c.inputStream.bufferedReader().readText()
+                    applyAllow(JSONObject(body))
+                    prefs.edit().putString("block_allow", body).putLong("block_allow_at", System.currentTimeMillis()).apply()
+                }
+                c.disconnect()
+            }
+        }.start()
+    }
+    /** The block screen's 'This is a mistake': what was blocked goes to Lockedintool to check (no account, no name). */
+    fun reportMistake(kind: String, value: String) {
+        if (value.isBlank()) return
+        Thread {
+            runCatching {
+                val c = (java.net.URL("$API/v1/blockfix").openConnection() as java.net.HttpURLConnection).apply {
+                    requestMethod = "POST"; doOutput = true; connectTimeout = 8000; readTimeout = 8000
+                    setRequestProperty("content-type", "application/json")
+                }
+                c.outputStream.use { it.write(JSONObject().put("kind", kind).put("value", value).toString().toByteArray()) }
+                c.responseCode; c.disconnect()
+            }
+        }.start()
+    }
+    fun siteOf(raw: String) = hostOf(raw)
+
     private fun hostOf(raw: String): String {
         var u = raw.trim().lowercase()
         if (u.isEmpty()) return ""
@@ -51,11 +99,13 @@ object ContentGuard {
     fun hostBlocked(raw: String): Boolean {
         val h = hostOf(raw)
         if (h.isEmpty() || !h.contains('.')) return false
+        if (allowSites.any { h == it || h.endsWith(".$it") }) return false
         return HOST_TOKENS.any { h.contains(it) }
     }
 
     fun appBlocked(pkg: String): Boolean {
         val p = pkg.lowercase()
+        if (p in allowApps) return false
         return APP_TOKENS.any { p.contains(it) }
     }
 

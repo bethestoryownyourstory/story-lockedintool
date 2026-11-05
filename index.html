@@ -1933,6 +1933,8 @@
   .lit-block-ctx{ margin-top:10px; font-size:13px; color:#9a9aa2; }
   .lit-block-more{ margin-top:22px; display:inline-block; background:none; border:none; color:#0a84ff; font-size:13px; text-decoration:underline; cursor:pointer; padding:6px 4px; }
   .lit-block-hint{ margin-top:18px; font-size:11px; color:#5a5a62; }
+  .lit-block-mistake{ margin-top:10px; display:inline-block; background:none; border:1px solid #3a3a40; border-radius:18px; color:#d8d8dc; font-size:13px; font-weight:600; padding:8px 16px; cursor:pointer; }
+  .lit-block-sent{ margin-top:12px; font-size:12.5px; color:#9a9aa2; }
   .modal-overlay{
     position:fixed; inset:0; background:rgba(0,0,0,0.72); display:flex;
     align-items:flex-end; justify-content:center; z-index:20; border-radius:inherit;
@@ -2577,7 +2579,8 @@
   #story-profile .pf-pv-opt.on .pf-pv-dot{ border-color:var(--pf-fg); background:radial-gradient(circle, var(--pf-fg) 0 4.5px, transparent 5px); }
   #story-profile .up-p-more{ margin-left:auto; flex:none; }
   #story-profile .pf-rep{ border-top:1px solid var(--pf-hair); padding:12px 2px; font-size:13px; }
-  #story-profile .pf-rate-sum:empty{ display:none; }
+  #story-profile .pf-rate-sum:empty, #story-profile .pf-blockfix:empty{ display:none; }
+  #story-profile .pf-blockfix{ padding:4px 2px 14px; font-size:13px; }
   #story-profile .pf-rate-sum{ padding:4px 2px 14px; font-size:13px; }
   #story-profile .pf-rate-stars{ color:#d4a017; letter-spacing:1px; }
   #story-profile .pf-rep-k{ font-weight:800; }
@@ -5095,9 +5098,25 @@ function isBlockedSearchQuery(q){
   const lower = q.toLowerCase();
   return ADULT_SEARCH_TERMS.some(term => lower.includes(term)) || UNSAFE_SEARCH_TERMS.some(term => lower.includes(term));
 }
+// 'This is a mistake' on the block screen (owner, 5 Nov 2026 - chose 'Report only, no viewing'): what was blocked goes to
+// Lockedintool (no account, no name) and it stays blocked until Lockedintool's official profile reviews it. Anything
+// unblocked for everyone comes back in /v1/blockallow (kept on the phone, looked at again every 6 hours).
+const BLOCK_ALLOW_KEY = 'story-blockallow';
+function blockAllowGet(){ try{ return JSON.parse(localStorage.getItem(BLOCK_ALLOW_KEY) || 'null') || {}; }catch(e){ return {}; } }
+function blockAllowed(kind, v){ const a = blockAllowGet(); return !!(v && Array.isArray(a[kind]) && a[kind].includes(v)); }
+function blockAllowRefresh(){
+  const a = blockAllowGet(); if(a.at && Date.now() - a.at < 6 * 3600000) return;
+  fetch(MSG_API + '/v1/blockallow').then(r=>r.ok ? r.json() : null).then(j=>{ if(!j) return; try{ localStorage.setItem(BLOCK_ALLOW_KEY, JSON.stringify({ terms: j.terms || [], sites: j.sites || [], apps: j.apps || [], at: Date.now() })); }catch(e){} }).catch(()=>{});
+}
+function blockMistakeSend(){
+  const b = state.contentBlock; if(!b || b.sent) return;
+  b.sent = true;
+  if(b.q) fetch(MSG_API + '/v1/blockfix', { method:'POST', headers:{ 'content-type':'application/json' }, body: JSON.stringify({ kind:'search', value: b.q }) }).catch(()=>{});
+}
 // The context line on the block screen - what was blocked (owner: "Context: nudity / adult content").
 function searchBlockContext(q){
   const lower = (q || '').toLowerCase();
+  if(blockAllowed('terms', lower.trim())) return '';   // unblocked for everyone by Lockedintool after a 'This is a mistake' review
   if(ADULT_SEARCH_TERMS.some(term => lower.includes(term))) return 'nudity / adult content';
   if(UNSAFE_SEARCH_TERMS.some(term => lower.includes(term))) return 'harmful or unsafe content';
   return '';
@@ -5113,6 +5132,7 @@ function contentBlockOverlay(b){
         <div class="lit-block-title">Locked by Lockedintool from viewing this</div>
         <div class="lit-block-ctx">Context: ${escText(ctx)}</div>
         <button class="lit-block-more" data-action="lit-block-info">Find out more about Lockedintool’s privacy and rules</button>
+        ${b && b.sent ? `<div class="lit-block-sent">Sent to Lockedintool to check. It stays blocked until then.</div>` : `<button class="lit-block-mistake" data-action="lit-block-mistake">This is a mistake</button>`}
         <div class="lit-block-hint">Tap anywhere to go back</div>
       </div>
     </div>`;
@@ -5126,7 +5146,7 @@ function searchStepGo(inputId){
   const blockCtx = searchBlockContext(q);
   if(blockCtx){
     // Adult content is blocked across Lockedintool - the plain black block screen (owner); no ban, no counting, no warning.
-    state.contentBlock = { context: blockCtx };
+    state.contentBlock = { context: blockCtx, q };
     state.searchBlocked = false;
     state.searchOpen = false;
     state.pendingSearchQuery = null;
@@ -5157,11 +5177,12 @@ function searchStepGo(inputId){
 // Block the view the moment an adult word is typed (owner: even before you search), and clear the box so you're not
 // stuck on the block each time. Used live by both search bars; searchStepGo still blocks on Enter too.
 function searchLiveBlock(inputEl){
-  const ctx = searchBlockContext(inputEl ? inputEl.value : '');
+  const typed = inputEl ? inputEl.value : '';
+  const ctx = searchBlockContext(typed);
   if(!ctx) return false;
   if(inputEl) inputEl.value = '';
   state.searchQuery = '';
-  state.contentBlock = { context: ctx };
+  state.contentBlock = { context: ctx, q: typed };
   state.searchBlocked = false;
   state.pendingSearchQuery = null;
   renderDevice();
@@ -10129,7 +10150,22 @@ async function rateSumLoad(){
   box.innerHTML = '<div class="pf-rep-k">Call ratings</div><div class="pf-rep-m">' + (r.count ? r.avg + ' ★ average from ' + r.count + (r.count === 1 ? ' rating' : ' ratings') + ' · ' + [5, 4, 3, 2, 1].map(n=>n + '★ ' + (r.by[n] || 0)).join(' · ') : 'No calls rated yet') + '</div>' +
     (r.recent || []).filter(x=>x.note).slice(0, 15).map(x=>'<div class="pf-rep"><div>' + st(x.stars) + ' · ' + escText((x.grp ? 'Group ' : '') + (x.video ? 'video call' : 'voice call')) + ' · ' + escText(callLen(x.secs)) + ' · ' + escText(msgTime(x.at)) + '</div><div class="pf-rep-m">' + escText(x.note) + '</div></div>').join('');
 }
-async function repLoad(){ rateSumLoad(); repRender(null); try{ repRender((await msgApi('/v1/reports')).reports || []); }catch(e){ const box = document.querySelector('#story-profile .pf-rep-list'); if(box) box.innerHTML = '<div class="pf-ed-note">' + (e.code === 'official' ? 'Only Lockedintool’s official profile sees reports.' : 'No connection right now') + '</div>'; } }
+// 'This is a mistake' reports from the adult-content block screen (owner chose: report only, no viewing) - only the
+// official profile sees them: Unblock for everyone (every phone stops blocking exactly that) or Keep blocked.
+function bfxRender(r){
+  const box = document.querySelector('#story-profile .pf-blockfix'); if(!box) return;
+  const open = (r && r.open) || [], allowed = (r && r.allowed) || [];
+  const kindWord = { site:'Website', app:'App', search:'Search' };
+  box.innerHTML = '<div class="pf-rep-k">Blocked by mistake?</div>' + (open.length ? open.map(x=>'<div class="pf-rep"><div>' + escText(kindWord[x.kind] || x.kind) + ' · ' + escText(x.value) + '</div><div class="pf-rep-m">Reported ' + x.n + (x.n === 1 ? ' time' : ' times') + ' · ' + escText(msgTime(x.last)) + '</div>' +
+    '<div class="pf-rep-btns"><button data-pf="bfx-act" data-a="allow" data-id="' + escText(x.k) + '">Unblock for everyone</button><button data-pf="bfx-act" data-a="keep" data-id="' + escText(x.k) + '">Keep blocked</button></div></div>').join('') : '<div class="pf-rep-m">Nothing reported</div>') +
+    (allowed.length ? '<div class="pf-rep-m" style="margin-top:8px;">Unblocked: ' + allowed.map(x=>escText(x.value)).join(', ') + '</div>' : '');
+}
+async function bfxLoad(){ try{ bfxRender(await msgApi('/v1/blockfix/list')); }catch(e){} }
+async function bfxAct(k, a){
+  try{ bfxRender(await msgApi('/v1/blockfix/act', { k, action:a })); showToast(a === 'allow' ? 'Unblocked for everyone' : 'Kept blocked'); }
+  catch(e){ showToast('No connection right now'); }
+}
+async function repLoad(){ rateSumLoad(); bfxLoad(); repRender(null); try{ repRender((await msgApi('/v1/reports')).reports || []); }catch(e){ const box = document.querySelector('#story-profile .pf-rep-list'); if(box) box.innerHTML = '<div class="pf-ed-note">' + (e.code === 'official' ? 'Only Lockedintool’s official profile sees reports.' : 'No connection right now') + '</div>'; } }
 async function repAct(id, a, sure){
   if(a === 'ban' && !sure){ litSheet({ title:'Ban this account?', text:'It is deleted with everything it posted. This can’t be undone.', items:[{ label:'Ban account', danger:true, fn: ()=>repAct(id, a, true) }] }); return; }
   try{ repRender((await msgApi('/v1/reports/act', { id, action:a })).reports || []); showToast(a === 'remove' ? 'Removed' : a === 'ban' ? 'Account banned' : 'Dismissed'); }
@@ -10302,7 +10338,8 @@ const LEGAL = {
       'The block is for Lockedintool and, as it rolls out, for your whole phone - every app, every search and every website - not only inside Lockedintool.',
       'No filter is ever perfect, but Lockedintool blocks the normal ways this content is reached and is the strongest a phone app can do.' ]],
     ['Your privacy', [
-      'The filter runs on your phone. Lockedintool doesn’t keep a list of what you searched or send it anywhere.' ]],
+      'The filter runs on your phone. Lockedintool doesn’t keep a list of what you searched or send it anywhere.',
+      'Blocked by mistake? Tap “This is a mistake” on the black screen. Only what was blocked - the website’s address, the app or the words searched - goes to Lockedintool, never your name or account. It stays blocked until Lockedintool has checked it; if it really was a mistake, it is unblocked for everyone.' ]],
   ] },
   'legal-privacy': { title:'Privacy Policy', sections:[
     ['Who we are', [
@@ -11027,6 +11064,7 @@ window.storyProfileOnly = function(){
     <div class="pf-scroll pf-reports" hidden>
       <div class="pf-ed-head"><button class="pf-ed-back" data-pf="rep-back" aria-label="Back">‹</button><div class="pf-ed-title">Reports</div></div>
       <div class="pf-rate-sum"></div>
+      <div class="pf-blockfix"></div>
       <div class="pf-rep-list"></div>
     </div>
     <div class="pf-scroll pf-field" hidden>
@@ -11203,6 +11241,7 @@ window.storyProfileOnly = function(){
     else if(k === 'menu-reports'){ el.querySelector('.pf-menupage').hidden = true; main.hidden = true; const r = el.querySelector('.pf-reports'); r.hidden = false; r.scrollTop = 0; repLoad(); }
     else if(k === 'rep-back'){ el.querySelector('.pf-reports').hidden = true; pfMenuOpen(); }
     else if(k === 'rep-act') repAct(b.getAttribute('data-id'), b.getAttribute('data-a'));
+    else if(k === 'bfx-act') bfxAct(b.getAttribute('data-id'), b.getAttribute('data-a'));
     else if(k === 'up-p-more'){ const p = UP.person; if(p) litPersonSheet(p, { after: ()=>upOpenPerson(p.id) }); }
     else if(k === 'upv-more'){ const v = UP.view; if(!v) return; const it = v.items[v.i]; upPause();
       litSheet({ onClose: ()=>{ if(UP.view === v) upShowItem(); }, items: [
@@ -18493,7 +18532,7 @@ function attachHandlers(){
     if(el.getAttribute('data-action') === 'note-undo' || el.getAttribute('data-action') === 'note-redo') return;
     el.addEventListener('click', ev=>{
       const action = el.getAttribute('data-action');
-      if(action === 'tap-nw' && ev) ev.stopPropagation();   // the switch sits inside the Tap to Pay button: only the switch acts
+      if((action === 'tap-nw' || action === 'lit-block-mistake') && ev) ev.stopPropagation();   // the switch sits inside the Tap to Pay button: only the switch acts
       if(NOTE_PAGE_SWITCH_ACTIONS.has(action)) resetNoteUndoStack();
       else if(NOTE_UNDOABLE_ACTIONS.has(action)) pushNoteUndoSnapshot();
       switch(action){
@@ -18682,6 +18721,7 @@ function attachHandlers(){
         case 'search-open': state.searchOpen = true; state.searchQuery = ''; state.pendingSearchQuery = null; state.searchBlocked = false; break;
         case 'search-bg': state.searchOpen = false; state.pendingSearchQuery = null; break;
         case 'lit-block-close': state.contentBlock = null; break;
+        case 'lit-block-mistake': blockMistakeSend(); break;
         case 'lit-block-info': state.contentBlock = null; state.legalFrom = 'dashboard'; state.current = 'legal-safety'; break;
         case 'perm-toggle': { const on = !!(NATIVE && window.StoryNative.permanentState && (()=>{ try{ return window.StoryNative.permanentState(); }catch(e){ return false; } })()); if(on) showToast('Lockedintool is set to stay on this phone'); else state.permAgree = { open:true, scrolled:false }; break; }
         case 'perm-bg': state.permAgree = { open:false, scrolled:false }; break;
@@ -21991,6 +22031,7 @@ if(REAL_DEVICE){
   window.addEventListener('offline', renderWifi);
 }
 loadNativeApps();
+if(!/[?&](s3|widget)=/.test(location.search)) setTimeout(blockAllowRefresh, 4000);   // what Lockedintool unblocked after a 'This is a mistake' review
 renderDevice();
 
 // Real-device status-row clock: unlike the desktop mockup's frozen "9:41" (a deliberate,
