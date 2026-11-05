@@ -216,4 +216,4 @@ commits, pushed as a new update) - nothing else changes.
 | 208 | 2026-11-05 | The phone's own lock screen never shows first: Lockedintool's lock screen is brought to the front the moment the screen comes on (or opened at once), not 0.35 s later | 4ef28d3 |
 | 209 | 2026-11-05 | Lock screen: unlocking with the fingerprint sensor closes it at once (it checks while showing); Face Unlock starts the phone's face scan ("Look at the front camera") | 0781ff4 |
 | 210 | 2026-11-05 | No app-icon flash on black when the screen comes on; after a swipe Lockedintool's lock screen keeps coming back until it's in front (the phone's own lock screen never stays) | 2f08770 |
-| 211 | 2026-11-05 | Always On Display: caught at the earliest sign the screen is going off and it switches the screen back on itself when ready - the shortest black moment Android allows | (this) |
+| 211 | 2026-11-05 | Always On Display: caught at the earliest sign the screen is going off and it switches the screen back on itself when ready - the shortest black moment Android allows | 0d36181 |
