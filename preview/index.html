@@ -5605,8 +5605,16 @@ function securitySettingsHTML(){
           <button class="theme-opt${lit ? ' on' : ''}" data-action="sec-mode" data-v="lit">Lockedintool security</button>
         </div>
       </div>
+      ${aodLockHTML()}
       ${phoneCheckHTML()}
     </div>`;
+}
+// Always On Display lock screen (owner, 5 Nov 2026: 'I also want an always on display lockscreen - put that option in
+// Lockedintool settings'; 'like how your Lockedintool lock screen is, with the Lockedintool home screen'; 'don't dim it').
+function aodLockHTML(){
+  if(!NATIVE || !window.StoryNative.aodLockState) return '';
+  let on = false; try{ on = !!window.StoryNative.aodLockState(); }catch(e){}
+  return `<div class="set2-row"><div class="set2-text"><div class="set2-name">Always On Display lock screen</div><div class="set2-sub">When your screen is off, your Lockedintool lock screen stays on - your home screen behind it, the tape and DEVICE LOCKED.</div></div><button class="toggle-switch${on ? ' on' : ''}" data-action="aod-lock"><span class="toggle-knob"></span></button></div>`;
 }
 // Extra protection (owner, Oct 2026: 'a real fight ... a second layer of protection ... not removing the phone's
 // protection'; NEVER worded as 'can't be hacked'): Lockedintool looks at what makes this phone easier to break into and
@@ -19181,6 +19189,7 @@ function attachHandlers(){
         case 'pay-recv-remove': msgApi('/v1/pay/bank', { remove:true }).then(()=>{ if(state.pay.info) state.pay.info.bank = null; showToast('Removed'); payShow(); }).catch(()=>showToast('Couldn\u2019t remove - try again')); break;
         case 'privacy-blocked': litBlockedSheet(); return;
         case 'privacy-delete-account': delAccountSheet(); return;
+        case 'aod-lock': { let on = false; try{ on = !window.StoryNative.aodLockState(); window.StoryNative.aodLockSet(on); }catch(e){} showToast(on ? 'Always On Display lock screen is on' : 'Always On Display lock screen is off'); renderDevice(); return; }
         case 'privacy-deactivate': if(litSignedIn()) litDeactivateSheet(); else litAuthGate(); return;
         case 'privacy-logout': if(litSignedIn()) litLogoutSheet(); else litAuthGate(); return;
         case 'community-report-group': litReport('group', el.getAttribute('data-groupid')); return;
