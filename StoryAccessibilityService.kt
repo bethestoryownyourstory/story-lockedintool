@@ -34,7 +34,7 @@ class StoryAccessibilityService : AccessibilityService() {
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
                 val cls = e.className?.toString() ?: return
                 val activity = runCatching { packageManager.getActivityInfo(ComponentName(pkg, cls), 0) }.isSuccess
-                if (activity) frontPkg = pkg   // Lockedintool's own screens too (Lockedintool as your system)
+                if (activity) { frontPkg = pkg; frontAt = System.currentTimeMillis() }   // Lockedintool's own screens too (Lockedintool as your system)
                 if (pkg == packageName) return
                 // The phone's OWN nav (gesture or buttons) took the owner Home or to Recents while they were on the Pages.
                 // Those are SystemUI / launcher screens that float UNDER Lockedintool's Pages overlay, so the owner saw
@@ -298,6 +298,8 @@ class StoryAccessibilityService : AccessibilityService() {
         }
         @Volatile var foregroundPkg: String? = null
         @Volatile var frontPkg: String? = null
+        /** When frontPkg last changed (Lockedintool's lock screen leaves alone an app that came up over the lock screen - the camera, a call). */
+        @Volatile var frontAt = 0L
         private val mediaSessions = ConcurrentHashMap<String, MediaSession.Token>()
 
         /** Music: something playing from an app that isn't the one on screen (Spotify, YouTube Music...). */

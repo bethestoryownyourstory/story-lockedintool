@@ -180,6 +180,19 @@
             android:screenOrientation="portrait"
             android:theme="@style/Theme.Story.Aod" />
 
+        <!-- Lockedintool's lock screen (Only system): your Dashboard over the phone's lock screen with the phone's own
+             unlock prompt on top (owner, 5 Nov 2026). The unlocking is always the phone's own. -->
+        <activity
+            android:name=".LockDashActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleInstance"
+            android:taskAffinity="com.story.launcher.lockdash"
+            android:showWhenLocked="true"
+            android:noHistory="true"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.Story.Home" />
+
         <!-- Restarts STORY after a phone restart or an update. -->
         <receiver android:name=".BootReceiver" android:exported="true">
             <intent-filter>

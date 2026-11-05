@@ -93,6 +93,8 @@ class OverlayService : Service(), StoryBridge.Host {
         override fun onReceive(c: Context, i: Intent) {
             // Was the lock screen really up when the screen came on? Only then can an unlock be on its way (secPrompt waits for it).
             lockedAtScreenOn = runCatching { getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked }.getOrDefault(false)
+            screenOnAt = System.currentTimeMillis()
+            ui.removeCallbacks(lockDashRun); ui.postDelayed(lockDashRun, 350)
             ui.post { syncLockDial(); updateBubble() }; ui.postDelayed({ syncLockDial(); updateBubble() }, 400) }   // on the lock screen the Dashboard band must step out (keyguardLocked)
     }
     // Always On Display: the moment the screen goes off, switch it straight back on with Station 3
@@ -1734,6 +1736,8 @@ class OverlayService : Service(), StoryBridge.Host {
             ui.removeCallbacks(aodSwap)
             if (on) ui.postDelayed(aodSwap, 60_000)
             applyAodMask()
+            // The Always On Display ended onto the lock screen (double tap / power): Lockedintool's lock screen (Only system).
+            if (!on) { screenOnAt = System.currentTimeMillis(); ui.removeCallbacks(lockDashRun); ui.postDelayed(lockDashRun, 350) }
         }
     }
 
@@ -2433,6 +2437,25 @@ class OverlayService : Service(), StoryBridge.Host {
     }
     private var secWaiting = false
     @Volatile private var lockedAtScreenOn = false
+    // ---- Lockedintool's lock screen (owner, 5 Nov 2026 - Only system): the screen comes on locked -> your Dashboard with
+    //      the phone's own unlock prompt over it (LockDashActivity). Never over the Always On Display, a call, the
+    //      camera or any app that came up over the lock screen; after Back it leaves the phone's own lock screen alone
+    //      until the screen next goes off. ----
+    @Volatile private var screenOnAt = 0L
+    @Volatile private var lockDashLeftAt = 0L
+    fun lockDashLeft() { lockDashLeftAt = System.currentTimeMillis() }
+    private val lockDashRun = Runnable { lockDashCheck() }
+    private fun lockDashCheck() { runCatching {
+        if (!SystemMode.on(this) || WidgetMode.on(this) || callActive || createActive) return
+        if (LockDashActivity.instance != null || lockDashLeftAt > screenOffAt) return
+        if (getSystemService(android.app.KeyguardManager::class.java)?.isKeyguardLocked != true || userPresentAt > screenOffAt) return
+        if (!getSystemService(android.os.PowerManager::class.java).isInteractive || aodShowing()) return
+        val mode = getSystemService(android.media.AudioManager::class.java)?.mode ?: android.media.AudioManager.MODE_NORMAL
+        if (mode != android.media.AudioManager.MODE_NORMAL) return   // a call ringing or on
+        // Something came up over the lock screen since the screen came on (the phone's camera, a call screen): leave it.
+        if (StoryAccessibilityService.frontAt > screenOnAt && StoryAccessibilityService.frontPkg != packageName) return
+        startActivity(Intent(this, LockDashActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION))
+    } }
     private var secWaitDone = false
     private var secWaitThen: (() -> Unit)? = null
     private val secWaitRun = Runnable {
