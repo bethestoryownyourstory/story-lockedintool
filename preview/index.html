@@ -15669,9 +15669,19 @@ function dashTellNative(){
   const on = state.current === 'dashboard' && !state.rowsViewOpen && !(state.pageStyleOn && state.pageStyleViewOpen) && !authUp;
   document.documentElement.classList.toggle('s3-dash-on', on && dashS3On());   // its pop-ups end on top of Station 3
   if(typeof dashBandSync === 'function') dashBandSync(on);   // the Dashboard's own Station 3 bar - drawn in this same frame
+  homeTellNative();
   if(on === dashToldNative) return;
   dashToldNative = on;
   try{ window.StoryNative.dashShown(on); }catch(e){}
+}
+// Your Home Screen (Layouts > Home Screen) is on screen: the app keeps an exact copy of it for its Home / lock screen.
+let homeToldNative = null;
+function homeTellNative(){
+  if(!NATIVE || IN_STATION3_WINDOW || document.documentElement.classList.contains('story-widget') || !window.StoryNative.homeShown) return;
+  const on = state.current === (state.homeScreen || 'wallet') && !state.rowsViewOpen && !(state.pageStyleOn && state.pageStyleViewOpen) && !document.querySelector('.lit-auth');
+  if(on === homeToldNative) return;
+  homeToldNative = on;
+  try{ window.StoryNative.homeShown(on); }catch(e){}
 }
 window.storyQuickAccessChanged = function(){ renderDevice(); };
 // The app says when the phone locks / unlocks (Station 3's dial pad button follows it).
