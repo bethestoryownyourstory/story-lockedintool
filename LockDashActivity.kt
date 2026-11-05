@@ -91,6 +91,11 @@ class LockDashActivity : Activity() {
         val dp = resources.displayMetrics.density
         root.addView(opts, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM).apply {
             val side = (resources.displayMetrics.widthPixels * 0.065f).toInt(); leftMargin = side; rightMargin = side; bottomMargin = (64 * dp).toInt() })
+        hintView = android.widget.TextView(this).apply { setTextColor(Color.WHITE); textSize = 17f; gravity = Gravity.CENTER
+            typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+            setShadowLayer(6 * dp, 0f, 0f, Color.BLACK); visibility = android.view.View.GONE }
+        root.addView(hintView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM).apply {
+            bottomMargin = (64 * dp + 3 * 68 * dp + 2 * 12 * dp + 18 * dp).toInt() })
         root.setOnTouchListener { _, e -> if (e.action == MotionEvent.ACTION_UP) showOptions(); true }
         setContentView(root)
         instance = this
@@ -104,7 +109,14 @@ class LockDashActivity : Activity() {
                 background = android.graphics.drawable.GradientDrawable(android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
                     intArrayOf(Color.rgb(22, 22, 22), Color.rgb(10, 10, 10))).apply { cornerRadius = 24 * dp; setStroke((1 * dp).toInt(), Color.rgb(48, 48, 48)) }
                 isClickable = true; contentDescription = name
-                setOnClickListener { ask() }
+                // Each button does what it says (owner, 5 Nov 2026: 'I wanted it to work as how the buttons are saying ...
+                // It should only pop up when I press Enter PIN'): Fingerprint and Face Unlock never open the phone's PIN
+                // pad - the phone's own fingerprint sensor / face unlock work straight on this screen (unlockedNow closes
+                // it); only Enter PIN opens the phone's unlock screen.
+                setOnClickListener { when (i) {
+                    0 -> hint("Touch the fingerprint sensor")
+                    1 -> hint("Look at your phone")
+                    else -> { hint(null); ask() } } }
             }
             row.addView(UnlockIcon(this, i), android.widget.LinearLayout.LayoutParams((76 * dp).toInt(), (68 * dp).toInt()))
             row.addView(android.view.View(this).apply { setBackgroundColor(Color.rgb(44, 44, 44)) },
@@ -190,10 +202,12 @@ class LockDashActivity : Activity() {
         if (art == null) optsView?.visibility = android.view.View.VISIBLE
         else art.shrink { optsView?.visibility = android.view.View.VISIBLE }
     }
+    private var hintView: android.widget.TextView? = null
+    private fun hint(t: String?) { hintView?.let { it.text = t ?: ""; it.visibility = if (t == null) android.view.View.GONE else android.view.View.VISIBLE } }
     /** The screen went off: back to the untouched look - the full-screen sign, no options (they show only after a tap). */
     fun resetLook() {
         if (isFinishing) return
-        optsView?.visibility = android.view.View.GONE
+        optsView?.visibility = android.view.View.GONE; hint(null)
         (window.decorView.findViewWithTag<android.view.View>("lockart") as? LockArt)?.reset()
     }
     @Deprecated("Back shows the unlock options")
