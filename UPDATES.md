@@ -208,3 +208,4 @@ commits, pushed as a new update) - nothing else changes.
 | 200 | 2026-11-05 | The lock screen's Home Screen picture: an all-black copy is never kept, and the phone reports why when there's no picture | ed04a4b |
 | 201 | 2026-11-05 | Lock screen unlock options: nothing asks by itself; the DEVICE LOCKED sign sits in the top area; tap the screen for Fingerprint / Face Unlock / Enter PIN (solid buttons) | 7876a00 |
 | 202 | 2026-11-05 | Swiping on Lockedintool's lock screen no longer shows the phone's own lock screen: Back shows the unlock options, and after the Home swipe Lockedintool's lock screen comes straight back | (this) |
+| 203 | 2026-11-05 | The lock screen looks exactly like the Always On Display until you tap it (full-screen tape + DEVICE LOCKED); a tap moves the sign to the top and shows the unlock options. The Always On Display has its full-screen look back | (this) |

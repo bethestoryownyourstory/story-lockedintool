@@ -35,7 +35,7 @@ class LockDashActivity : Activity() {
             root.addView(shot, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.TOP))
             root.addView(android.view.View(act).apply { setBackgroundColor(Color.argb(95, 0, 0, 0)) },
                 FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
-            root.addView(LockArt(act), FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+            root.addView(LockArt(act).apply { tag = "lockart" }, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         // Your Dashboard exactly as it last showed (the same picture Lockedintool's Home uses).
         val svc = OverlayService.instance
         val prefs = act.getSharedPreferences("story", android.content.Context.MODE_PRIVATE)
@@ -82,7 +82,7 @@ class LockDashActivity : Activity() {
         val dp = resources.displayMetrics.density
         root.addView(opts, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM).apply {
             val side = (resources.displayMetrics.widthPixels * 0.065f).toInt(); leftMargin = side; rightMargin = side; bottomMargin = (64 * dp).toInt() })
-        root.setOnTouchListener { _, e -> if (e.action == MotionEvent.ACTION_UP) opts.visibility = android.view.View.VISIBLE; true }
+        root.setOnTouchListener { _, e -> if (e.action == MotionEvent.ACTION_UP) showOptions(); true }
         setContentView(root)
         instance = this
     }
@@ -157,7 +157,14 @@ class LockDashActivity : Activity() {
     // Back / a swipe never drops you on the phone's own lock screen (owner, 5 Nov 2026: 'when I swipe to the right or
     // anywhere my phone's lockscreen appears - that's wrong'): it shows the unlock options instead.
     private var optsView: android.view.View? = null
-    private fun showOptions() { optsView?.visibility = android.view.View.VISIBLE }
+    // Untouched it looks exactly like the Always On Display (the full-screen tape + DEVICE LOCKED - owner, 5 Nov 2026: 'you
+    // see always on display how it was beautiful ... the unlock options ... should only show if the screen is tapped. If
+    // the screen is not tapped, then my always on display shows as it is. After it's tapped, then it can'); a tap moves
+    // the sign into the top area and shows the options.
+    private fun showOptions() {
+        optsView?.visibility = android.view.View.VISIBLE
+        (window.decorView.findViewWithTag<android.view.View>("lockart") as? LockArt)?.let { if (!it.compact) { it.compact = true; it.invalidate() } }
+    }
     @Deprecated("Back shows the unlock options")
     override fun onBackPressed() { showOptions() }
     override fun onStop() {
@@ -207,12 +214,24 @@ class LockDashActivity : Activity() {
 /** Two long, thin strips of see-through glass tape crossing the whole screen, and DEVICE LOCKED (device_locked.png - the
  *  logo's glitch words, white) where they cross. Drawn to fit any screen; nothing moves (no animation anywhere). */
 class LockArt(ctx: android.content.Context) : android.view.View(ctx) {
+    /** false = the full-screen sign (the Always On Display, the lock screen untouched); true = in the top area, with the unlock options under it. */
+    var compact = false
     private val words = runCatching { BitmapFactory.decodeResource(ctx.resources, R.drawable.device_locked) }.getOrNull()
     private val fill = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { style = android.graphics.Paint.Style.FILL; color = Color.WHITE }
     private val edge = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { style = android.graphics.Paint.Style.STROKE; color = Color.WHITE }
     private val bmp = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG or android.graphics.Paint.ANTI_ALIAS_FLAG)
     override fun onDraw(c: android.graphics.Canvas) {
         val w = width.toFloat(); val h = height.toFloat(); if (w <= 0f || h <= 0f) return
+        if (!compact) {   // the full-screen sign
+            val cx = w / 2f; val cy = h * 0.47f
+            tape(c, cx, cy, 120.5f, w * 0.13f, w * 0.20f, w, h)
+            tape(c, cx, cy, 31.9f, w * 0.15f, w * 0.22f, w, h)
+            words?.let { b ->
+                val ww = w * 0.9185f; val wh = ww * b.height / b.width; val mid = cy - w * 0.0179f
+                c.drawBitmap(b, null, android.graphics.RectF(cx - ww / 2f, mid - wh / 2f, cx + ww / 2f, mid + wh / 2f), bmp)
+            }
+            return
+        }
         // The sign sits in the TOP area only, not across the whole screen (owner, 5 Nov 2026, circling the top of a
         // picture: 'our screen is locked indicator - not as the full background but where I drew'), its edges fading out.
         val box = android.graphics.RectF(w * 0.065f, h * 0.107f, w * 0.935f, h * 0.538f)
