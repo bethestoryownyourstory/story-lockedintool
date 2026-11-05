@@ -53,6 +53,8 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         fun pagesAction(action: String)
         fun hidePanelFor(pkg: String?, what: String)
         fun dashShown(on: Boolean)
+        /** Your Home Screen (Layouts > Home Screen) is the page on screen - its exact copy is Lockedintool's Home / lock screen picture. */
+        fun homeShown(on: Boolean)
         fun controlToggle(id: String)
         fun outputSwitch()
         fun outputSwitchTo(name: String)
@@ -785,6 +787,8 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
     /** The Pages say whether the Dashboard is on screen (Station 3 stays open at its bottom - Settings > QUICK ACCESS). */
     @JavascriptInterface
     fun dashShown(on: Boolean) { if (!station3 && !widget) host.dashShown(on) }
+    @JavascriptInterface
+    fun homeShown(on: Boolean) { if (!station3 && !widget) host.homeShown(on) }
 
     /** The Dashboard's Controls are the phone's real ones (PhoneControls): their state now, and changing one. */
     @JavascriptInterface

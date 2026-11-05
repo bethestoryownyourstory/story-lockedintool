@@ -189,7 +189,6 @@
             android:launchMode="singleInstance"
             android:taskAffinity="com.story.launcher.lockdash"
             android:showWhenLocked="true"
-            android:noHistory="true"
             android:screenOrientation="portrait"
             android:theme="@style/Theme.Story.Home" />
 

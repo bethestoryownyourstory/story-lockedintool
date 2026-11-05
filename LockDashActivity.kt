@@ -70,11 +70,13 @@ class LockDashActivity : Activity() {
             }
         }
         box.addView(icon, android.widget.LinearLayout.LayoutParams((38 * dp).toInt(), (38 * dp).toInt()))
+        // The words decide the card's width (owner's screenshot, 5 Nov 2026: 'Loc' / 'Tap to' - cut to the icon's width).
+        val wrap = { android.widget.LinearLayout.LayoutParams(android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT) }
         box.addView(android.widget.TextView(this).apply { text = "Locked"; setTextColor(Color.WHITE); textSize = 18f
             typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD); gravity = Gravity.CENTER
-            setPadding(0, (8 * dp).toInt(), 0, 0) })
+            setPadding(0, (8 * dp).toInt(), 0, 0); maxLines = 1 }, wrap())
         box.addView(android.widget.TextView(this).apply { text = "Tap to unlock"; setTextColor(Color.argb(191, 255, 255, 255)); textSize = 13f
-            gravity = Gravity.CENTER; setPadding(0, (4 * dp).toInt(), 0, 0) })
+            gravity = Gravity.CENTER; setPadding(0, (4 * dp).toInt(), 0, 0); maxLines = 1 }, wrap())
         return box
     }
     override fun onResume() { super.onResume(); overridePendingTransition(0, 0); window.decorView.post { ask() } }
@@ -83,16 +85,27 @@ class LockDashActivity : Activity() {
     @Deprecated("Back closes it: the phone's own lock screen is underneath")
     override fun onBackPressed() { OverlayService.instance?.lockDashLeft(); finish() }
 
+    /** The screen came on: ask for the unlock now (the screen was off when this came up). */
+    fun screenOnNow() { if (!isFinishing) window.decorView.post { ask() } }
     /** The phone's own unlock prompt, over the Dashboard. */
     private fun ask() {
         if (asking || isFinishing) return
         val km = getSystemService(KeyguardManager::class.java)
-        if (km == null || !km.isKeyguardLocked) { finish(); return }   // already unlocked
+        val awake = getSystemService(android.os.PowerManager::class.java)?.isInteractive == true
+        if (!awake) return   // put up while the screen went off: it asks once you turn the screen on
+        if (AodActivity.instance != null) return   // the Always On Display is over it: it asks once that ends (onResume)
+        if (km == null || !km.isKeyguardLocked) { finish(); overridePendingTransition(0, 0); return }   // the phone didn't lock (it was off only briefly): you stay where you were
         if (Build.VERSION.SDK_INT < 26) { finish(); return }
         asking = true
         runCatching {
             km.requestDismissKeyguard(this, object : KeyguardManager.KeyguardDismissCallback() {
-                override fun onDismissSucceeded() { asking = false; finish(); overridePendingTransition(0, 0) }
+                // Unlocked: you land where the lock screen showed - your Lockedintool Home Screen - not the app you were in
+                // (owner, 5 Nov 2026: 'whatever is showing at the background of the unlock ... that's where I will be ...
+                // for me to go to an app I was using I need to swipe up'). Your apps stay in the phone's Recents.
+                override fun onDismissSucceeded() { asking = false
+                    runCatching { startActivity(android.content.Intent(this@LockDashActivity, LockedintoolHome::class.java)
+                        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_NO_ANIMATION)) }
+                    finish(); overridePendingTransition(0, 0) }
                 override fun onDismissCancelled() { asking = false }   // stays; a tap asks again
                 override fun onDismissError() { asking = false; OverlayService.instance?.lockDashLeft(); finish() }   // never stuck: the phone's own lock screen
             })
