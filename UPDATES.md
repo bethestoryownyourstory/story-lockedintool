@@ -210,3 +210,4 @@ commits, pushed as a new update) - nothing else changes.
 | 202 | 2026-11-05 | Swiping on Lockedintool's lock screen no longer shows the phone's own lock screen: Back shows the unlock options, and after the Home swipe Lockedintool's lock screen comes straight back | (this) |
 | 203 | 2026-11-05 | The lock screen looks exactly like the Always On Display until you tap it (full-screen tape + DEVICE LOCKED); a tap moves the sign to the top and shows the unlock options. The Always On Display has its full-screen look back | (this) |
 | 204 | 2026-11-05 | Unlocking the phone any way (fingerprint sensor, face) closes Lockedintool's lock screen at once and lands on your Home Screen | (this) |
+| 205 | 2026-11-05 | Tapping the lock screen: the DEVICE LOCKED sign shrinks smoothly from the full screen into the top area, then the unlock options show (the owner's own animation) | (this) |

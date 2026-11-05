@@ -185,8 +185,10 @@ class LockDashActivity : Activity() {
     // the screen is not tapped, then my always on display shows as it is. After it's tapped, then it can'); a tap moves
     // the sign into the top area and shows the options.
     private fun showOptions() {
-        optsView?.visibility = android.view.View.VISIBLE
-        (window.decorView.findViewWithTag<android.view.View>("lockart") as? LockArt)?.let { if (!it.compact) { it.compact = true; it.invalidate() } }
+        val art = window.decorView.findViewWithTag<android.view.View>("lockart") as? LockArt
+        // The sign shrinks from the full screen into the top area (the owner's animation), then the options show.
+        if (art == null) optsView?.visibility = android.view.View.VISIBLE
+        else art.shrink { optsView?.visibility = android.view.View.VISIBLE }
     }
     @Deprecated("Back shows the unlock options")
     override fun onBackPressed() { showOptions() }
@@ -238,42 +240,54 @@ class LockDashActivity : Activity() {
  *  logo's glitch words, white) where they cross. Drawn to fit any screen; nothing moves (no animation anywhere). */
 class LockArt(ctx: android.content.Context) : android.view.View(ctx) {
     /** false = the full-screen sign (the Always On Display, the lock screen untouched); true = in the top area, with the unlock options under it. */
-    var compact = false
+    /** 0 = the full-screen sign (the Always On Display, the lock screen untouched), 1 = in the top area with the unlock
+     *  options under it. In between only while shrink() moves it - the owner's own animation (owner, 5 Nov 2026: 'the
+     *  logo should get an animation that goes from the big full screen to that size of how it will be when the unlock
+     *  options show'), the one exception to 'no animations anywhere'. */
+    var progress = 0f
+    val compact get() = progress >= 1f
+    private var anim: android.animation.ValueAnimator? = null
+    fun shrink(onEnd: () -> Unit) {
+        if (progress >= 1f || anim != null) { if (progress >= 1f) onEnd(); return }
+        anim = android.animation.ValueAnimator.ofFloat(progress, 1f).apply {
+            duration = 320; interpolator = android.view.animation.DecelerateInterpolator()
+            addUpdateListener { progress = it.animatedValue as Float; invalidate() }
+            addListener(object : android.animation.AnimatorListenerAdapter() {
+                override fun onAnimationEnd(a: android.animation.Animator) { anim = null; progress = 1f; invalidate(); onEnd() } })
+            start()
+        }
+    }
     private val words = runCatching { BitmapFactory.decodeResource(ctx.resources, R.drawable.device_locked) }.getOrNull()
     private val fill = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { style = android.graphics.Paint.Style.FILL; color = Color.WHITE }
     private val edge = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { style = android.graphics.Paint.Style.STROKE; color = Color.WHITE }
     private val bmp = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG or android.graphics.Paint.ANTI_ALIAS_FLAG)
+    private val clear = android.graphics.Paint().apply { xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.DST_OUT) }
+    private fun lerp(a: Float, b: Float, t: Float) = a + (b - a) * t
     override fun onDraw(c: android.graphics.Canvas) {
         val w = width.toFloat(); val h = height.toFloat(); if (w <= 0f || h <= 0f) return
-        if (!compact) {   // the full-screen sign
-            val cx = w / 2f; val cy = h * 0.47f
-            tape(c, cx, cy, 120.5f, w * 0.13f, w * 0.20f, w, h)
-            tape(c, cx, cy, 31.9f, w * 0.15f, w * 0.22f, w, h)
-            words?.let { b ->
-                val ww = w * 0.9185f; val wh = ww * b.height / b.width; val mid = cy - w * 0.0179f
-                c.drawBitmap(b, null, android.graphics.RectF(cx - ww / 2f, mid - wh / 2f, cx + ww / 2f, mid + wh / 2f), bmp)
-            }
-            return
-        }
-        // The sign sits in the TOP area only, not across the whole screen (owner, 5 Nov 2026, circling the top of a
-        // picture: 'our screen is locked indicator - not as the full background but where I drew'), its edges fading out.
-        val box = android.graphics.RectF(w * 0.065f, h * 0.107f, w * 0.935f, h * 0.538f)
-        val cx = box.centerX(); val cy = box.centerY()
+        val t = progress.coerceIn(0f, 1f)
+        // The sign's area: the whole screen -> the top area (owner, 5 Nov 2026, circling the top of a picture: 'our screen
+        // is locked indicator - not as the full background but where I drew'), its edges fading out there.
+        val small = android.graphics.RectF(w * 0.065f, h * 0.107f, w * 0.935f, h * 0.538f)
+        val box = android.graphics.RectF(lerp(0f, small.left, t), lerp(0f, small.top, t), lerp(w, small.right, t), lerp(h, small.bottom, t))
+        val cx = lerp(w / 2f, small.centerX(), t); val cy = lerp(h * 0.47f, small.centerY(), t)
         val layer = c.saveLayer(box, null)
         tape(c, cx, cy, 120.5f, w * 0.13f, w * 0.20f, box.width(), box.height())   // the strip underneath
         tape(c, cx, cy, 31.9f, w * 0.15f, w * 0.22f, box.width(), box.height())    // the strip on top
-        val f = 60f * w / 1080f
-        val clear = android.graphics.Paint().apply { xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.DST_OUT) }
-        fun fade(x0: Float, y0: Float, x1: Float, y1: Float, r: android.graphics.RectF) {
-            clear.shader = android.graphics.LinearGradient(x0, y0, x1, y1, Color.BLACK, Color.TRANSPARENT, android.graphics.Shader.TileMode.CLAMP); c.drawRect(r, clear) }
-        fade(box.left, 0f, box.left + f, 0f, android.graphics.RectF(box.left, box.top, box.left + f, box.bottom))
-        fade(box.right, 0f, box.right - f, 0f, android.graphics.RectF(box.right - f, box.top, box.right, box.bottom))
-        fade(0f, box.top, 0f, box.top + f, android.graphics.RectF(box.left, box.top, box.right, box.top + f))
-        fade(0f, box.bottom, 0f, box.bottom - f, android.graphics.RectF(box.left, box.bottom - f, box.right, box.bottom))
+        val f = 60f * w / 1080f * t
+        if (f > 0.5f) {
+            fun fade(x0: Float, y0: Float, x1: Float, y1: Float, r: android.graphics.RectF) {
+                clear.shader = android.graphics.LinearGradient(x0, y0, x1, y1, Color.BLACK, Color.TRANSPARENT, android.graphics.Shader.TileMode.CLAMP); c.drawRect(r, clear) }
+            fade(box.left, 0f, box.left + f, 0f, android.graphics.RectF(box.left, box.top, box.left + f, box.bottom))
+            fade(box.right, 0f, box.right - f, 0f, android.graphics.RectF(box.right - f, box.top, box.right, box.bottom))
+            fade(0f, box.top, 0f, box.top + f, android.graphics.RectF(box.left, box.top, box.right, box.top + f))
+            fade(0f, box.bottom, 0f, box.bottom - f, android.graphics.RectF(box.left, box.bottom - f, box.right, box.bottom))
+        }
         c.restoreToCount(layer)
         words?.let { b ->
-            val ww = box.width() * 0.86f; val wh = ww * b.height / b.width
-            c.drawBitmap(b, null, android.graphics.RectF(cx - ww / 2f, cy - wh / 2f, cx + ww / 2f, cy + wh / 2f), bmp)
+            val ww = lerp(w * 0.9185f, small.width() * 0.86f, t); val wh = ww * b.height / b.width
+            val mid = cy - lerp(w * 0.0179f, 0f, t)
+            c.drawBitmap(b, null, android.graphics.RectF(cx - ww / 2f, mid - wh / 2f, cx + ww / 2f, mid + wh / 2f), bmp)
         }
     }
     private fun tape(c: android.graphics.Canvas, cx: Float, cy: Float, angle: Float, tw: Float, period: Float, w: Float, h: Float) {
