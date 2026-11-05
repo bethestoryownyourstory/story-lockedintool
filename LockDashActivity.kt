@@ -78,6 +78,12 @@ class LockDashActivity : Activity() {
         val opts = unlockOptions()
         opts.visibility = android.view.View.GONE
         optsView = opts
+        // Watch for the phone unlocking by itself (fingerprint / face straight on the lock screen).
+        if (Build.VERSION.SDK_INT >= 33) runCatching {
+            val km = getSystemService(KeyguardManager::class.java)
+            val l = KeyguardManager.KeyguardLockedStateListener { locked -> if (!locked && !isFinishing) unlockedNow() }
+            km.addKeyguardLockedStateListener(mainExecutor, l); lockListener = l
+        }
         if (Build.VERSION.SDK_INT >= 33) onBackInvokedDispatcher.registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT) { showOptions() }
         val dp = resources.displayMetrics.density
         root.addView(opts, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM).apply {
@@ -153,7 +159,21 @@ class LockDashActivity : Activity() {
     }
     override fun onResume() { super.onResume(); overridePendingTransition(0, 0); window.decorView.post { stillLocked() } }
     override fun onPause() { super.onPause(); overridePendingTransition(0, 0) }
-    override fun onDestroy() { if (instance === this) instance = null; super.onDestroy() }
+    override fun onDestroy() {
+        if (Build.VERSION.SDK_INT >= 33) (lockListener as? KeyguardManager.KeyguardLockedStateListener)?.let { l ->
+            runCatching { getSystemService(KeyguardManager::class.java)?.removeKeyguardLockedStateListener(l) } }
+        if (instance === this) instance = null; super.onDestroy() }
+    private var lockListener: Any? = null
+    /** The phone was unlocked some other way - its fingerprint sensor straight on the lock screen, face unlock (owner's
+     *  screenshot, 5 Nov 2026: 'Phone unlocked with fingerprint' with DEVICE LOCKED still showing): this goes at once
+     *  and you land on your Home Screen, the same as unlocking through the options. */
+    fun unlockedNow() {
+        if (isFinishing) return
+        asking = false
+        OverlayService.instance?.lockDashUnlocked()
+        OverlayService.instance?.lockDashOpenHome(this)
+        finish(); overridePendingTransition(0, 0)
+    }
     // Back / a swipe never drops you on the phone's own lock screen (owner, 5 Nov 2026: 'when I swipe to the right or
     // anywhere my phone's lockscreen appears - that's wrong'): it shows the unlock options instead.
     private var optsView: android.view.View? = null

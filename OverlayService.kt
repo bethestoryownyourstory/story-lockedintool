@@ -68,7 +68,7 @@ class OverlayService : Service(), StoryBridge.Host {
     private val unlocked = object : android.content.BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) {
             userPresentAt = System.currentTimeMillis()
-            ui.post { secWaitUnlocked() }
+            ui.post { secWaitUnlocked(); LockDashActivity.instance?.unlockedNow() }   // unlocked some other way: Lockedintool's lock screen goes
             widgetLiveEvent(false)  // unlocked onto the home screen: live widgets come back
             if (SystemMode.on(c)) { ui.removeCallbacks(systemCheckRun); ui.postDelayed(systemCheckRun, 500) }  // Lockedintool as your system: unlocked onto another app / the home screen
             AodActivity.instance?.finish()  // unlocked (e.g. fingerprint) while the Always On Display was up
