@@ -2466,6 +2466,24 @@ class OverlayService : Service(), StoryBridge.Host {
     @Volatile private var screenOnAt = 0L
     @Volatile private var lockDashLeftAt = 0L
     fun lockDashLeft() { lockDashLeftAt = System.currentTimeMillis() }
+    /** Lockedintool's lock screen was pushed out of sight while the phone is still locked (the Home swipe showed the
+     *  phone's own lock screen): it comes back - unless the camera / a call / any app came up over the lock screen. */
+    fun lockDashAgain() { ui.post {
+        val since = System.currentTimeMillis()
+        ui.postDelayed({ runCatching {
+            if (!lockScreenOurs() || WidgetMode.on(this) || callActive || createActive) return@runCatching
+            if (getSystemService(android.app.KeyguardManager::class.java)?.isKeyguardLocked != true || userPresentAt > screenOffAt) return@runCatching
+            if (!getSystemService(android.os.PowerManager::class.java).isInteractive || aodShowing()) return@runCatching
+            val mode = getSystemService(android.media.AudioManager::class.java)?.mode ?: android.media.AudioManager.MODE_NORMAL
+            if (mode != android.media.AudioManager.MODE_NORMAL) return@runCatching
+            // (an app that just came up over the lock screen - the camera, a call - made this go out of sight: leave it)
+            if (StoryAccessibilityService.frontPkg != packageName && StoryAccessibilityService.frontAt > since - 1500) return@runCatching
+            val i = Intent(this, LockDashActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+            val pi = android.app.PendingIntent.getActivity(this, 9, i, android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT)
+            if (Build.VERSION.SDK_INT >= 34) pi.send(android.app.ActivityOptions.makeBasic().setPendingIntentBackgroundActivityStartMode(android.app.ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED).toBundle())
+            else pi.send()
+        } }, 250)
+    } }
     /** Lockedintool is your lock screen (owner, 5 Nov 2026): on Only system it's your whole phone - home screen, lock
      *  screen, everything; on Second system only when Lockedintool security is your security ('even if you're on second
      *  system ... and you set Lockedintool security, Lockedintool would be now your lock screen'). Phone's security on

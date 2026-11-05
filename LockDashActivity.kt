@@ -77,6 +77,8 @@ class LockDashActivity : Activity() {
         // choose the method: the phone's unlock screen takes whichever you use).
         val opts = unlockOptions()
         opts.visibility = android.view.View.GONE
+        optsView = opts
+        if (Build.VERSION.SDK_INT >= 33) onBackInvokedDispatcher.registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT) { showOptions() }
         val dp = resources.displayMetrics.density
         root.addView(opts, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM).apply {
             val side = (resources.displayMetrics.widthPixels * 0.065f).toInt(); leftMargin = side; rightMargin = side; bottomMargin = (64 * dp).toInt() })
@@ -152,8 +154,19 @@ class LockDashActivity : Activity() {
     override fun onResume() { super.onResume(); overridePendingTransition(0, 0); window.decorView.post { stillLocked() } }
     override fun onPause() { super.onPause(); overridePendingTransition(0, 0) }
     override fun onDestroy() { if (instance === this) instance = null; super.onDestroy() }
-    @Deprecated("Back closes it: the phone's own lock screen is underneath")
-    override fun onBackPressed() { OverlayService.instance?.lockDashLeft(); finish() }
+    // Back / a swipe never drops you on the phone's own lock screen (owner, 5 Nov 2026: 'when I swipe to the right or
+    // anywhere my phone's lockscreen appears - that's wrong'): it shows the unlock options instead.
+    private var optsView: android.view.View? = null
+    private fun showOptions() { optsView?.visibility = android.view.View.VISIBLE }
+    @Deprecated("Back shows the unlock options")
+    override fun onBackPressed() { showOptions() }
+    override fun onStop() {
+        super.onStop()
+        // Something took the screen while the phone is still locked (the Home swipe -> the phone's own lock screen):
+        // Lockedintool's lock screen comes straight back. Not while the phone's unlock is up, and never over the camera
+        // or a call (lockDashAgain checks).
+        if (!isFinishing && !asking) OverlayService.instance?.lockDashAgain()
+    }
 
     /** The screen came on: ask for the unlock now (the screen was off when this came up). */
     fun screenOnNow() { if (!isFinishing) window.decorView.post { stillLocked() } }
