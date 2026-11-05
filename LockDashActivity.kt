@@ -129,6 +129,7 @@ class LockDashActivity : Activity() {
                 // (owner, 5 Nov 2026: 'whatever is showing at the background of the unlock ... that's where I will be ...
                 // for me to go to an app I was using I need to swipe up'). Your apps stay in the phone's Recents.
                 override fun onDismissSucceeded() { asking = false
+                    OverlayService.instance?.lockDashUnlocked()   // your phone's unlock counts for Lockedintool too - no second prompt
                     runCatching { startActivity(android.content.Intent(this@LockDashActivity, LockedintoolHome::class.java)
                         .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_NO_ANIMATION)) }
                     finish(); overridePendingTransition(0, 0) }

@@ -201,3 +201,4 @@ commits, pushed as a new update) - nothing else changes.
 | 193 | 2026-11-05 | The DEVICE LOCKED logo without the stick men, stairs, path line and small words - just the tape X and DEVICE LOCKED | 9622f77 |
 | 194 | 2026-11-05 | The DEVICE LOCKED sign in black and white - no colour (the owner's choice) | b22cd6f |
 | 195 | 2026-11-05 | The lock screen's final look: your screen a little blurry behind it, long thin glass tape across the whole screen, and DEVICE LOCKED - no colour, no padlock, nothing else | (this) |
+| 196 | 2026-11-05 | One unlock only: unlocking your phone on Lockedintool's lock screen unlocks Lockedintool too - no second fingerprint | (this) |

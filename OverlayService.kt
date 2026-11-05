@@ -2450,6 +2450,13 @@ class OverlayService : Service(), StoryBridge.Host {
     @Volatile private var screenOnAt = 0L
     @Volatile private var lockDashLeftAt = 0L
     fun lockDashLeft() { lockDashLeftAt = System.currentTimeMillis() }
+    /** The phone was just unlocked on Lockedintool's lock screen: that IS Lockedintool's unlock too - straight away, never a
+     *  second prompt (owner, 5 Nov 2026: 'I unlock my phone, then when it's unlocked I need to unlock it again' - the
+     *  phone's own 'unlocked' report came after Lockedintool had already asked). */
+    fun lockDashUnlocked() {
+        userPresentAt = System.currentTimeMillis()
+        secWaitUnlocked(); if (!secIsOpen()) { secOpen = true; secTell() }   // (called on the main thread)
+    }
     private val lockDashRun = Runnable { lockDashCheck() }
     /** Lockedintool's lock screen is put up while the screen goes OFF, so when you turn it on it's already there - never
      *  a glimpse of the phone's own lock screen first (owner, 5 Nov 2026: 'I can still see my lockscreen still'). With
