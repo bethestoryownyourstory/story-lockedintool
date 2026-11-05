@@ -78,10 +78,12 @@ for (const [w, h] of SIZES) {
   await ctx.addInitScript(() => { try { localStorage.setItem('story-msg-account', JSON.stringify({ id: 'check', token: 't', pw: true, username: 'check' }));
     localStorage.setItem('story-color-systems', JSON.stringify({ all: { bg: '#1ab8d6', text: '#f5d90a' }, dash: { bg: '#1ab8d6', text: '#f5d90a' } })); } catch (e) {} });
   const pg = await ctx.newPage();
+  const cerr = []; pg.on('pageerror', e => cerr.push(String(e && e.message || e).slice(0, 160)));
   await pg.goto(URL); await pg.waitForTimeout(2500);
   for (const s of ['settings', 'dashboard', 'money', 'dashboard', 'wallet', 'layouts']) {
-    const got = await pg.evaluate(s => { window.storyShow && window.storyShow(s, false); const a = document.querySelector('#device-wrap #content-area'); return a ? getComputedStyle(a).backgroundColor : 'none'; }, s);
-    if (got !== 'rgb(26, 184, 214)') fail('your colours from the first frame', s + ' @ 393x852', 'opened with ' + got);
+    const got = await pg.evaluate(s => { window.storyShow && window.storyShow(s, false); const a = document.querySelector('#device-wrap #content-area');
+      return a ? getComputedStyle(a).backgroundColor + (document.querySelector('.lit-auth') ? ' (log-in screen up)' : '') + ' sys=' + JSON.stringify((window.litColorSystemFor && litColorSystemFor(s)) || null) : 'none'; }, s);
+    if (!got.startsWith('rgb(26, 184, 214)')) fail('your colours from the first frame', s + ' @ 393x852', 'opened with ' + got + (cerr.length ? ' | error: ' + cerr[0] : ''));
   }
   await ctx.close();
 }
