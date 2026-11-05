@@ -4560,6 +4560,7 @@ async function litBgLoadAll(){
     // Decoded before it's used, so it paints in the very first frame.
     await Promise.all(Object.values(LIT_BG).map(u=>{ try{ const im = new Image(); im.src = u; return im.decode().catch(()=>{}); }catch(e){ return null; } }));
     litApplyColors();
+    const sc = document.getElementById('sec-cover'); if(sc) secCoverBg(sc);
   }catch(e){}
   litBgTell(true);
 }
@@ -5635,7 +5636,7 @@ function secCoverSync(){
   // (Station 3's window shows only #story-profile - the lock goes inside it, like the account gate; not before it's there.)
   const host = /[?&]profile=1/.test(location.search) ? document.getElementById('story-profile') : document.body;
   if(!host) return;
-  if(el){ if(el.parentElement !== host) host.appendChild(el); return; }
+  if(el){ if(el.parentElement !== host) host.appendChild(el); secCoverBg(el); return; }
   el = document.createElement('div'); el.id = 'sec-cover'; el.className = 'sec-cover';
   el.innerHTML = '<div class="sec-box"><svg viewBox="0 0 24 24" width="38" height="38" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/></svg>' +
     '<div class="sec-t">Lockedintool is locked</div><div class="sec-s">Unlock with your fingerprint, face or PIN</div><button class="sec-btn" type="button">Unlock</button></div>';
@@ -5643,6 +5644,28 @@ function secCoverSync(){
   // Nothing under the lock reacts to a touch on it (no page swipes, no pull-down panel behind it).
   ['touchstart', 'touchmove', 'touchend', 'pointerdown', 'pointermove', 'pointerup', 'click', 'wheel'].forEach(t=>el.addEventListener(t, e=>{ if(!(e.target.closest && e.target.closest('.sec-btn'))) e.stopPropagation(); }, { passive:true }));
   host.appendChild(el);
+  secCoverBg(el);
+}
+// The lock shows YOUR background (owner, 5 Nov 2026: 'the black background with unlock - can it be the user's background
+// that's on their home screen, not a black background'): the Dashboard's background picture (Layouts > Dashboard >
+// Background picture), with a light shade so the words stay readable. No picture set = black, as before (Android doesn't
+// let apps read the phone's own wallpaper). Station 3's window loads just that one picture, only when the lock shows.
+let SEC_BG_LOADING = false;
+function secCoverBg(el){
+  const url = LIT_BG.dashboard;
+  if(url){
+    if(el.__bg === url) return; el.__bg = url;
+    el.style.setProperty('background-image', `linear-gradient(rgba(0,0,0,0.35), rgba(0,0,0,0.35)), url("${url}")`, 'important');
+    el.style.setProperty('background-size', 'cover', 'important'); el.style.setProperty('background-position', 'center', 'important');
+    el.style.setProperty('color', '#ffffff', 'important');
+    const sub = el.querySelector('.sec-s'); if(sub) sub.style.setProperty('color', 'rgba(255,255,255,0.8)', 'important');
+    return;
+  }
+  if(SEC_BG_LOADING || !litBgSet().dashboard) return;
+  SEC_BG_LOADING = true;
+  litBgDb().then(db=>new Promise(res=>{ const q = db.transaction('pics').objectStore('pics').get('dashboard');
+    q.onsuccess = ()=>{ if(q.result && !LIT_BG.dashboard) LIT_BG.dashboard = URL.createObjectURL(q.result); res(); }; q.onerror = ()=>res(); }))
+    .catch(()=>{}).then(()=>{ SEC_BG_LOADING = false; const c = document.getElementById('sec-cover'); if(c && LIT_BG.dashboard) secCoverBg(c); });
 }
 window.storySecLock = function(locked){ SEC_LOCKED = !!locked; secCoverSync(); };
 setTimeout(()=>{ const st = secState(); SEC_LOCKED = st.mode === 'lit' && !st.open; secCoverSync(); }, 0);

@@ -192,3 +192,4 @@ commits, pushed as a new update) - nothing else changes.
 | 184 | 2026-11-05 | Your background picture no longer pops in after unlocking - the Dashboard shows only once the picture is ready | be6d7f5 |
 | 185 | 2026-11-05 | Lockedintool security asks at once again - no wait that made it look unlocked (it only waits for your phone's own unlock when the lock screen really was up, 0.8 s at most) | bea9c73 |
 | 186 | 2026-11-05 | Lockedintool's lock screen (Only system): turn your screen on and you see your Dashboard with your phone's own unlock prompt on top | (this) |
+| 187 | 2026-11-05 | The 'Lockedintool is locked' screen shows your own background picture instead of black | (this) |
