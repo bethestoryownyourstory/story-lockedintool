@@ -43,6 +43,7 @@ class LockDashActivity : Activity() {
         val b = svc?.homeShot?.takeIf { !it.isRecycled }
             ?: (if (exactOk) runCatching { BitmapFactory.decodeFile(java.io.File(act.filesDir, "home_shot.jpg").path) }.getOrNull() else null)
         val top = if (svc?.homeShot != null) svc.homeShotTop else prefs.getInt("home_shot_top", 0)
+        if (b == null) ProblemLog.record(act, "lockscreen", "no Home Screen picture: mem=${svc?.homeShot != null} file=${java.io.File(act.filesDir, "home_shot.jpg").exists()} exact=$exactOk last=${svc?.homeShotWhy}", "lock screen")
         if (b != null) {
             (shot.layoutParams as FrameLayout.LayoutParams).topMargin = top.coerceAtLeast(0)
             val r = 9f * act.resources.displayMetrics.widthPixels / 1080f

@@ -1575,15 +1575,24 @@ class OverlayService : Service(), StoryBridge.Host {
         if (Build.VERSION.SDK_INT < 34 || !lockScreenOurs()) return
         ui.removeCallbacks(homeShotRun); ui.postDelayed(homeShotRun, 700)
     }
+    /** Why the last copy wasn't taken (sent with the problem report when the lock screen has no picture). */
+    @Volatile var homeShotWhy = "never asked"
     private fun homeShotCopy() { if (Build.VERSION.SDK_INT >= 34) runCatching {
-        val p = pagesPane ?: return
-        if (!p.shown || !homeUp || !lockScreenOurs() || keyguardLocked() || p.frame.alpha < 1f || p.loading) return
+        val p = pagesPane ?: run { homeShotWhy = "no pages"; return }
+        if (!p.shown || !homeUp || !lockScreenOurs() || keyguardLocked() || p.frame.alpha < 1f || p.loading) {
+            homeShotWhy = "skipped shown=${p.shown} home=$homeUp ours=${lockScreenOurs()} locked=${keyguardLocked()} alpha=${p.frame.alpha} loading=${p.loading}"; return }
         val v = p.web; if (v.width <= 0 || v.height <= 0 || !v.isAttachedToWindow) return
         val loc = IntArray(2); p.frame.getLocationOnScreen(loc)
         val req = android.view.PixelCopy.Request.Builder.ofWindow(p.frame).build()
         android.view.PixelCopy.request(req, mainExecutor) { r -> runCatching {
             val b = r.bitmap
-            if (r.status != android.view.PixelCopy.SUCCESS || b.width <= 0 || b.height <= 0) return@runCatching
+            if (r.status != android.view.PixelCopy.SUCCESS) { homeShotWhy = "copy failed ${r.status}"; return@runCatching }
+            if (b.width <= 0 || b.height <= 0) return@runCatching
+            // A copy that came out (nearly) all black isn't kept - it would be your lock screen's picture.
+            var lit = 0; val sx = b.width / 9; val sy = b.height / 17
+            for (yy in 1..16) for (xx in 1..8) { val c = b.getPixel(xx * sx, yy * sy); if (((c shr 16) and 255) + ((c shr 8) and 255) + (c and 255) > 60) lit++ }
+            if (lit < 6) { homeShotWhy = "copy was black"; b.recycle(); return@runCatching }
+            homeShotWhy = "ok" 
             if (!homeUp || p.shown != true) { b.recycle(); return@runCatching }   // left your Home Screen meanwhile
             // The old picture is NEVER recycled here: Lockedintool's Home may still be drawing it, and drawing a recycled
             // picture crashes the app (owner, 5 Nov 2026, 1.344: unlocked, then 'crash now I'm back on my phone's apps').
