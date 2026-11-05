@@ -183,4 +183,5 @@ commits, pushed as a new update) - nothing else changes.
 | 175 | 2026-11-04 | Lockedintool security: no picture of your Dashboard before you unlock Lockedintool - that picture was the squashed bar after every unlock | e8b73bf |
 | 176 | 2026-11-04 | Lockedintool security: unlocking your phone straight into Lockedintool opens it at once - no second fingerprint (opening it any other time still asks) | d751b1e |
 | 177 | 2026-11-04 | Professional wording: 'Public community', 'Always open on Your Community', the price note and the Only system note written properly; the Privacy Policy corrected to match the app (card details are kept locked on your phone; PayFast for South African plans); casual spelling now blocked by the automatic checks | 2c6cee4 |
-| 178 | 2026-11-05 | Deactivate account (Settings > Privacy, above Delete account): take a break - nothing deleted, nobody can find or call you, messages wait for you, your plan is paused; logging in activates it again | (this) |
+| 178 | 2026-11-05 | Deactivate account (Settings > Privacy, above Delete account): take a break - nothing deleted, nobody can find or call you, messages wait for you, your plan is paused; logging in activates it again | 0f7cee9 |
+| 179 | 2026-11-05 | Lockedintool security: the Dashboard shows behind the unlock prompt again - never a black screen first | (this) |

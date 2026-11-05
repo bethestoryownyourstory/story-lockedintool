@@ -49,12 +49,10 @@ class LockedintoolHome : Activity() {
     /** The latest picture of Lockedintool, placed exactly where the Pages were on screen. */
     fun showShot() { runOnUiThread { runCatching {
         val svc = OverlayService.instance
-        // Lockedintool security on and not unlocked yet: no picture of your Dashboard before you've unlocked Lockedintool
-        // (owner, 4 Nov 2026: the Dashboard's bar showed squashed for a moment after every unlock - it was this saved
-        // picture, shown until Lockedintool's own unlock finished). Plain black until the unlock; the live Dashboard follows.
-        val locked = Security.lit(this) && svc?.secIsOpen() != true
-        shot?.visibility = if (locked) android.view.View.INVISIBLE else android.view.View.VISIBLE
-        if (locked) return@runCatching
+        // The Dashboard always shows first - also behind Lockedintool security's unlock prompt (owner, 5 Nov 2026: 'you
+        // put a black screen that shows with the security pop up screen first ... At first it will always show the
+        // dashboard'). Never black here.
+        shot?.visibility = android.view.View.VISIBLE
         // The latest picture, or the one kept on the phone (Lockedintool was just restarted).
         val b = svc?.homeShot ?: runCatching { android.graphics.BitmapFactory.decodeFile(java.io.File(filesDir, "home_shot.jpg").path) }.getOrNull() ?: return@runCatching
         val top = svc?.homeShot?.let { svc.homeShotTop } ?: getSharedPreferences("story", MODE_PRIVATE).getInt("home_shot_top", 0)
