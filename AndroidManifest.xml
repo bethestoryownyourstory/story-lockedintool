@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.SET_WALLPAPER" />
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Lockedintool's own Android ID move (AppMove.kt): only apps signed with Lockedintool's key may use the hand-over door. -->
     <permission android:name="com.lockedintool.permission.MOVE" android:protectionLevel="signature" />

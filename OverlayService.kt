@@ -2531,6 +2531,7 @@ class OverlayService : Service(), StoryBridge.Host {
     /** Lockedintool's lock screen is put up while the screen goes OFF, so when you turn it on it's already there - never
      *  a glimpse of the phone's own lock screen first (owner, 5 Nov 2026: 'I can still see my lockscreen still'). With
      *  the Always On Display on, it sits ready underneath it. */
+    fun pagesJs(js: String) { ui.post { pagesPane?.web?.evaluateJavascript(js, null) } }
     private fun lockDashPrepare() { runCatching {
         // Already up from before (tapped, then the screen went off): back to the untouched full-screen look, so the
         // options only ever show after a tap (owner, 5 Nov 2026: 'the one with the tick is only when the screen is tapped').

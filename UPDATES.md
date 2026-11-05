@@ -218,4 +218,5 @@ commits, pushed as a new update) - nothing else changes.
 | 210 | 2026-11-05 | No app-icon flash on black when the screen comes on; after a swipe Lockedintool's lock screen keeps coming back until it's in front (the phone's own lock screen never stays) | 2f08770 |
 | 211 | 2026-11-05 | Always On Display: caught at the earliest sign the screen is going off and it switches the screen back on itself when ready - the shortest black moment Android allows | 0d36181 |
 | 212 | 2026-11-05 | Pages are never cut: a page that runs off the bottom (something grew after its size was worked out) is fitted again every time it shows | 84e50f1 |
-| 213 | 2026-11-05 | Pages stay fitted while you look at them: parts that load later can't push the bottom off the screen any more (no more 'sometimes cut, sometimes fine') | (this) |
+| 213 | 2026-11-05 | Pages stay fitted while you look at them: parts that load later can't push the bottom off the screen any more (no more 'sometimes cut, sometimes fine') | 0d4950b |
+| 214 | 2026-11-05 | Settings > System theme > Phone colours: pick a colour and your phone's colours follow it (a plain wallpaper in that colour; the sheet says your wallpaper is replaced first) - Lockedintool's Dashboard and Pages keep their own | (this) |

@@ -386,6 +386,26 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
     fun aodLockState(): Boolean = QuickAccess.aodLock(ctx)
     @JavascriptInterface
     fun aodLockSet(on: Boolean) { if (pages) ctx.getSharedPreferences("story", android.content.Context.MODE_PRIVATE).edit().putBoolean("aod_lock", on).apply() }
+    /** Settings > System theme > Phone colours (owner, 5 Nov 2026): the phone builds its own colours from its wallpaper and
+     *  no app may recolour other apps, so this sets a plain wallpaper in the chosen colour (home + lock screen) - after the
+     *  owner's confirm sheet, which says the wallpaper is replaced. The answer comes back as window.storyPhoneColor. */
+    @JavascriptInterface
+    fun phoneColorSet(hex: String) {
+        if (!pages) return
+        val c = runCatching { android.graphics.Color.parseColor(hex) }.getOrNull() ?: return
+        Thread {
+            val ok = runCatching {
+                val dm = ctx.resources.displayMetrics
+                val w = dm.widthPixels.coerceAtLeast(64); val h = dm.heightPixels.coerceAtLeast(64)
+                val bmp = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888).apply { eraseColor(c) }
+                val wm = android.app.WallpaperManager.getInstance(ctx)
+                if (android.os.Build.VERSION.SDK_INT >= 24) wm.setBitmap(bmp, null, true, android.app.WallpaperManager.FLAG_SYSTEM or android.app.WallpaperManager.FLAG_LOCK)
+                else wm.setBitmap(bmp)
+                bmp.recycle()
+            }.isSuccess
+            OverlayService.instance?.pagesJs("window.storyPhoneColor&&window.storyPhoneColor(" + JSONObject.quote(hex) + "," + ok + ")")
+        }.start()
+    }
     @JavascriptInterface
     fun secUnlock() { if (pages || profile || widget) host.secUnlock() }
     /** The lock screen's Wallet page button only shows when the Wallet page can open (signed in, a plan with the Pages,
