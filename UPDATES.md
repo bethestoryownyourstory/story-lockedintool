@@ -203,4 +203,4 @@ commits, pushed as a new update) - nothing else changes.
 | 195 | 2026-11-05 | The lock screen's final look: your screen a little blurry behind it, long thin glass tape across the whole screen, and DEVICE LOCKED - no colour, no padlock, nothing else | 4a3418e |
 | 196 | 2026-11-05 | One unlock only: unlocking your phone on Lockedintool's lock screen unlocks Lockedintool too - no second fingerprint | 570f747 |
 | 197 | 2026-11-05 | Lockedintool's lock screen also on Second system when Lockedintool security is on (Only system: always); unlocking there opens Lockedintool on your Home Screen | ab0c85e |
-| 198 | 2026-11-05 | Always On Display lock screen (Settings > Security): when the screen is off, your Lockedintool lock screen stays on exactly as it looks - not dimmed | (this) |
+| 198 | 2026-11-05 | Always On Display lock screen (Settings > Security): when the screen is off, your Lockedintool lock screen stays on exactly as it looks - not dimmed | 3ffb046 |
