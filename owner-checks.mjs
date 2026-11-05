@@ -24,7 +24,7 @@ for (const [w, h] of SIZES) {
     await pg.evaluate(s => window.storyShow && window.storyShow(s, false), s);
     await pg.waitForTimeout(900);
     const r = await pg.evaluate(() => {
-      const a = document.getElementById('content-area'); if (!a) return null;
+      const a = document.querySelector('#device-wrap #content-area') || document.getElementById('content-area'); if (!a) return null;
       const ab = a.getBoundingClientRect(), cs = getComputedStyle(a);
       let cut = [];
       a.querySelectorAll('*').forEach(e => { const er = e.getBoundingClientRect(); const st = getComputedStyle(e);
@@ -52,6 +52,22 @@ for (const [w, h] of SIZES) {
     if (casual) fail('professional wording', where, casual[0]);
     // the app must never break: no errors while opening a screen
     if (errs.length) fail('no errors', where, errs[0]);
+  }
+  // 'in the videos I was able to scroll on the pages, on the other video I couldn't ... it changes multiple times' (5 Nov 2026):
+  // a page you SWIPE to must be the same as one opened directly - no scrolling, nothing cut.
+  await pg.evaluate(() => window.storyShow && window.storyShow('money', false));
+  await pg.waitForTimeout(2500);
+  for (let i = 0; i < 2; i++) {
+    const moved = await pg.evaluate(() => { try { const n = PAGES.indexOf(state.current) + 1; if (n >= PAGES.length) return null; goToPageIndex(n); return PAGES[n]; } catch (e) { return 'err ' + e.message; } });
+    if (!moved) break;
+    await pg.waitForTimeout(1200);
+    const r = await pg.evaluate(() => { const a = document.querySelector('#device-wrap #content-area'); if (!a) return null; const ab = a.getBoundingClientRect(), cs = getComputedStyle(a);
+      let cut = 0; a.querySelectorAll('*').forEach(e => { const er = e.getBoundingClientRect(), st = getComputedStyle(e); if (er.height > 0 && st.visibility !== 'hidden' && st.position !== 'fixed' && er.bottom > ab.bottom + 3 && !e.closest('[class*="scroll"], .pay-list, .notes-ghosts')) cut++; });
+      return { cur: state.current, canScroll: cs.overflowY !== 'hidden' && a.scrollHeight > a.clientHeight + 1, cut }; });
+    const where = `swiped to ${moved} @ ${w}x${h}`;
+    if (!r) { fail('screen opens', where, 'no content area'); continue; }
+    if (!MAY_SCROLL.has(r.cur) && r.canScroll) fail('no scrolling except Settings / Information', where, 'the swiped-to page scrolls');
+    if (!MAY_SCROLL.has(r.cur) && r.cut) fail('nothing cut', where, r.cut + ' parts run off the bottom');
   }
   await ctx.close();
 }
