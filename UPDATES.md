@@ -206,4 +206,4 @@ commits, pushed as a new update) - nothing else changes.
 | 198 | 2026-11-05 | Always On Display lock screen (Settings > Security): when the screen is off, your Lockedintool lock screen stays on exactly as it looks - not dimmed | 3ffb046 |
 | 199 | 2026-11-05 | The Always On Display shows straight away - no black screen first | 53f8f21 |
 | 200 | 2026-11-05 | The lock screen's Home Screen picture: an all-black copy is never kept, and the phone reports why when there's no picture | ed04a4b |
-| 201 | 2026-11-05 | Lock screen unlock options: nothing asks by itself; the DEVICE LOCKED sign sits in the top area; tap the screen for Fingerprint / Face Unlock / Enter PIN (solid buttons) | (this) |
+| 201 | 2026-11-05 | Lock screen unlock options: nothing asks by itself; the DEVICE LOCKED sign sits in the top area; tap the screen for Fingerprint / Face Unlock / Enter PIN (solid buttons) | 7876a00 |
