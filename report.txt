@@ -1,0 +1,92 @@
+open: 13
+---
+sig: update|updater|Quiet update stopped (INSTALL_FAILED_VERIFICATION_FAILURE: Install not allowed for file:///… - it will try again
+kind: update | 11 times | 2 phones | fixed: 0 1.302
+where: updater
+what: Quiet update stopped (INSTALL_FAILED_VERIFICATION_FAILURE: Install not allowed for file:///… - it will try again
+latest: app 1.359 / screens main 3ffb046 / samsung SM-A155F · Android 16 (API 36)
+first: 2026-10-22T08:27:26Z last: 2026-11-05T11:43:05Z
+---
+sig: update|updater|Quiet update stopped (INSTALL_FAILED_ABORTED: Session was abandoned) - it will try again
+kind: update | 2 times | 1 phones | fixed: 0 
+where: updater
+what: Quiet update stopped (INSTALL_FAILED_ABORTED: Session was abandoned) - it will try again
+latest: app 1.357 / screens main 3ffb046 / samsung SM-A155F · Android 16 (API 36)
+first: 2026-11-04T21:59:07Z last: 2026-11-05T11:16:25Z
+---
+sig: slow|pages|an app took over #.# s to open
+kind: slow | 15 times | 2 phones | fixed: 0 1.302
+where: pages
+what: an app took over 1.5 s to open
+latest: app 1.357 / screens main b84e08e / samsung SM-A155F · Android 16 (API 36)
+first: 2026-10-25T13:51:26Z last: 2026-11-05T11:15:15Z
+---
+sig: music|dashboard music card|play not done (refused) by com.spotify.music
+kind: music | 2 times | 2 phones | fixed: 0 1.302
+where: dashboard music card
+what: play not done (refused) by com.spotify.music
+latest: app 1.347 / screens main be6d7f5 / samsung SM-A155F · Android 16 (API 36)
+first: 2026-10-22T12:14:24Z last: 2026-11-05T10:12:41Z
+---
+sig: slow|pages|GALLERY took over #.# s to open
+kind: slow | 4 times | 2 phones | fixed: 0 1.302
+where: pages
+what: GALLERY took over 1.5 s to open
+latest: app 1.339 / screens main 2c6cee4 / samsung SM-A155F · Android 16 (API 36)
+first: 2026-10-24T17:02:11Z last: 2026-11-05T01:22:51Z
+---
+sig: slow|pages|ALARM took over #.# s to open
+kind: slow | 4 times | 2 phones | fixed: 0 1.302
+where: pages
+what: ALARM took over 1.5 s to open
+latest: app 1.325 / screens main 363f156 / samsung SM-A155F · Android 16 (API 36)
+first: 2026-10-25T13:48:57Z last: 2026-11-04T18:37:42Z
+---
+sig: slow|pages|CAMERA took over #.# s to open
+kind: slow | 4 times | 2 phones | fixed: 0 1.302
+where: pages
+what: CAMERA took over 1.5 s to open
+latest: app 1.325 / screens main 363f156 / samsung SM-A155F · Android 16 (API 36)
+first: 2026-10-25T13:46:42Z last: 2026-11-04T18:04:47Z
+---
+sig: music|dashboard music card|play not done (refused) by com.google.android.apps.youtube.music
+kind: music | 1 times | 1 phones | fixed: 0 
+where: dashboard music card
+what: play not done (refused) by com.google.android.apps.youtube.music
+latest: app 1.312 / screens main 1c9f64a / samsung SM-A155F · Android 16 (API 36)
+first: 2026-11-04T16:38:25Z last: 2026-11-04T16:38:25Z
+---
+sig: window|profile|page stopped (closed by Android for memory)
+kind: window | 56 times | 3 phones | fixed: 0 1.302
+where: profile
+what: page stopped (closed by Android for memory)
+latest: app 1.308 / screens main 715311f / samsung SM-A155F · Android 16 (API 36)
+first: 2026-10-22T15:56:43Z last: 2026-11-04T04:16:07Z
+---
+sig: window|profile gap|page stopped (closed by Android for memory)
+kind: window | 56 times | 3 phones | fixed: 0 1.302
+where: profile gap
+what: page stopped (closed by Android for memory)
+latest: app 1.308 / screens main 715311f / samsung SM-A155F · Android 16 (API 36)
+first: 2026-10-22T15:56:43Z last: 2026-11-04T04:16:07Z
+---
+sig: window|station3|page stopped (closed by Android for memory)
+kind: window | 56 times | 3 phones | fixed: 0 1.302
+where: station3
+what: page stopped (closed by Android for memory)
+latest: app 1.308 / screens main 715311f / samsung SM-A155F · Android 16 (API 36)
+first: 2026-10-22T15:56:43Z last: 2026-11-04T04:16:07Z
+---
+sig: window|pages|page stopped (closed by Android for memory)
+kind: window | 56 times | 3 phones | fixed: 0 1.302
+where: pages
+what: page stopped (closed by Android for memory)
+latest: app 1.308 / screens main 715311f / samsung SM-A155F · Android 16 (API 36)
+first: 2026-10-22T15:56:43Z last: 2026-11-04T04:16:07Z
+---
+sig: window|dial pad|page stopped (closed by Android for memory)
+kind: window | 56 times | 3 phones | fixed: 0 1.302
+where: dial pad
+what: page stopped (closed by Android for memory)
+latest: app 1.308 / screens main 715311f / samsung SM-A155F · Android 16 (API 36)
+first: 2026-10-22T15:56:43Z last: 2026-11-04T04:16:07Z
