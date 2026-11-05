@@ -16766,6 +16766,7 @@ function renderDevice(){
   wrap.innerHTML = state.device==='phone' ? buildPhone() : buildLaptop();
   document.getElementById('content-area').innerHTML = renderScreenContent() + (state.contentBlock ? contentBlockOverlay(state.contentBlock) : '');
   fitPageToScreen(document.getElementById('content-area'));
+  litWatchFit(document.getElementById('content-area'));
   // Any interaction that doesn't actually change which screen is showing (toggling a
   // switch, picking a filter, tapping a button anywhere on the page, etc.) restores exactly
   // where the user was scrolled to, instead of silently snapping back to the top.
@@ -21124,6 +21125,29 @@ const FIT_MAX_SCALE = 1.35;
 // every swipe, every live price tick -- applies it in one layout pass instead of re-measuring
 // six times. A remembered zoom is only used when one check shows it still fits exactly.
 const FIT_CACHE = {};
+// Parts of a page that finish after it was sized (payments arriving, the music card, pictures loading) could push its
+// last row under the screen's edge - sometimes cut, sometimes fine (owner, 5 Nov 2026: 'they glitch, they like scroll
+// sometimes and sometimes they go back to how they're supposed to be - everything showing on the screen, no scroll').
+// The page on screen is watched: the moment it grows past the bottom it's fitted again (once per frame, only to stop a cut).
+let FIT_WATCH = null;
+function litWatchFit(area){
+  try{ if(FIT_WATCH) FIT_WATCH.disconnect(); FIT_WATCH = null; }catch(e){}
+  if(!area || !window.ResizeObserver || IN_STATION3_WINDOW) return;
+  const el = area.firstElementChild, page = state.current;
+  if(!el || NO_FIT_SCREENS.has(page) || SCROLL_PAGES.has(page) || page === 'apps') return;
+  let queued = false, tries = 0;
+  FIT_WATCH = new ResizeObserver(()=>{
+    if(queued) return; queued = true;
+    requestAnimationFrame(()=>{ queued = false;
+      if(state.current !== page || !area.isConnected || pageSwipeAnimating) return;
+      const ab = area.getBoundingClientRect().bottom;
+      let over = false;
+      for(const c of el.children){ const cs = getComputedStyle(c); if(cs.position === 'fixed' || cs.position === 'absolute' || cs.display === 'none') continue; if(c.getBoundingClientRect().bottom > ab + 2){ over = true; break; } }
+      if(over && tries++ < 4) try{ fitPageToScreen(area); }catch(e){}
+    });
+  });
+  try{ for(const c of el.children) FIT_WATCH.observe(c); FIT_WATCH.observe(el); }catch(e){}
+}
 function fitPageToScreen(area, el, pageKey){
   if(!area) return;
   // Station 3's windows (bar, dial pad, lock screen dial pad, Profile and its gap) never show the Pages - sizing a page there
