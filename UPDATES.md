@@ -191,6 +191,6 @@ commits, pushed as a new update) - nothing else changes.
 | 183 | 2026-11-05 | Fixed a crash right after unlocking into Lockedintool (1.344): the Dashboard's old picture was thrown away while it was still on screen | 6b3e8bf |
 | 184 | 2026-11-05 | Your background picture no longer pops in after unlocking - the Dashboard shows only once the picture is ready | be6d7f5 |
 | 185 | 2026-11-05 | Lockedintool security asks at once again - no wait that made it look unlocked (it only waits for your phone's own unlock when the lock screen really was up, 0.8 s at most) | bea9c73 |
-| 186 | 2026-11-05 | Lockedintool's lock screen (Only system): turn your screen on and you see your Dashboard with your phone's own unlock prompt on top | (this) |
+| 186 | 2026-11-05 | Lockedintool's lock screen (Only system): turn your screen on and you see your Dashboard with your phone's own unlock prompt on top | c7dba16 |
 | 187 | 2026-11-05 | The 'Lockedintool is locked' screen shows your own background picture instead of black | 30f37c0 |
-| 188 | 2026-11-05 | On the Pages the 'Lockedintool is locked' screen is see-through: your Lockedintool home screen always shows, with just the lock and Unlock on top (Station 3's windows keep your background picture, so chats stay private) | (this) |
+| 188 | 2026-11-05 | On the Pages the 'Lockedintool is locked' screen is see-through: your Lockedintool home screen always shows, with just the lock and Unlock on top (Station 3's windows keep your background picture, so chats stay private) | 5da2ea5 |
