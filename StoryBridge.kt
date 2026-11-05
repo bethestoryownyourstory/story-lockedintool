@@ -392,12 +392,26 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
     @JavascriptInterface
     fun phoneColorSet(hex: String) {
         if (!pages) return
-        val c = runCatching { android.graphics.Color.parseColor(hex) }.getOrNull() ?: return
+        // "bg|text" (owner, #223: both colours used) - the background fills the wallpaper and the text colour runs
+        // through it as a band (the same picture the owner approved: CSS 160deg, 58% - 72%), so the phone's own
+        // colours come from both. A single colour (older screens) is a plain wallpaper.
+        val parts = hex.split("|")
+        val c = runCatching { android.graphics.Color.parseColor(parts[0]) }.getOrNull() ?: return
+        val t = if (parts.size > 1) runCatching { android.graphics.Color.parseColor(parts[1]) }.getOrNull() else null
         Thread {
             val ok = runCatching {
                 val dm = ctx.resources.displayMetrics
                 val w = dm.widthPixels.coerceAtLeast(64); val h = dm.heightPixels.coerceAtLeast(64)
                 val bmp = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888).apply { eraseColor(c) }
+                if (t != null) {
+                    val a = Math.toRadians(160.0)
+                    val dx = Math.sin(a).toFloat(); val dy = (-Math.cos(a)).toFloat()
+                    val len = Math.abs(w * dx) + Math.abs(h * dy)
+                    val cx = w / 2f; val cy = h / 2f
+                    val shader = android.graphics.LinearGradient(cx - dx * len / 2, cy - dy * len / 2, cx + dx * len / 2, cy + dy * len / 2,
+                        intArrayOf(c, c, t, t, c, c), floatArrayOf(0f, 0.58f, 0.58f, 0.72f, 0.72f, 1f), android.graphics.Shader.TileMode.CLAMP)
+                    android.graphics.Canvas(bmp).drawRect(0f, 0f, w.toFloat(), h.toFloat(), android.graphics.Paint().apply { this.shader = shader; isDither = false })
+                }
                 val wm = android.app.WallpaperManager.getInstance(ctx)
                 if (android.os.Build.VERSION.SDK_INT >= 24) wm.setBitmap(bmp, null, true, android.app.WallpaperManager.FLAG_SYSTEM or android.app.WallpaperManager.FLAG_LOCK)
                 else wm.setBitmap(bmp)

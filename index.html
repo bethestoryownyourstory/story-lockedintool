@@ -10440,25 +10440,38 @@ function informationScreen(){
 // recolour other apps: the PHONE builds its colours from the wallpaper. So Lockedintool sets a plain wallpaper in the
 // colour you pick and the phone takes its colours from it; the sheet says first that your wallpaper is replaced.
 // Lockedintool's own Dashboard / Pages keep their own colours (Layouts > Color customization).
-const PHONE_COLOR_KEY = 'story-phone-color';
-function phoneColorGet(){ try{ return localStorage.getItem(PHONE_COLOR_KEY) || ''; }catch(e){ return ''; } }
-function phoneColorHTML(){
-  const c = phoneColorGet();
-  return `<div class="set2-card" style="margin-top:12px;">
-    <div class="set2-row set2-link" data-openpicker="phonecolor" style="cursor:pointer;">
-      <div class="set2-text"><div class="set2-name">Phone colours</div><div class="set2-sub">Your whole phone's colours - not Lockedintool's Dashboard or Pages</div></div>
-      <span class="litcolor-swatch" data-keep-color style="background:${c || 'transparent'};${c ? '' : 'border:1px dashed #6b6b6b;'}"></span>
-    </div>
-  </div>${state.colorPickerTarget === 'phonecolor' ? colorPickerTemplate() : ''}`;
+// Phone colours (#214, two colours #223 - owner, 5 Nov 2026: 'I want it to work the same for both the text and the
+// background'; chose way 1 from the previews: 'both used'): Background + Text, like Layouts' colours. Lockedintool makes
+// the wallpaper from both (the background fills it, the text colour runs through it as a band), so the phone builds its
+// own colours from both. Android lets no app colour other apps' words - the phone keeps them light or dark itself.
+const PHONE_COLOR_KEY = 'story-phone-color', PHONE_COLOR_DRAFT = 'story-phone-color-draft';
+function phoneColorGet(){ try{ const v = localStorage.getItem(PHONE_COLOR_KEY) || ''; const [bg, text] = v.split('|'); return { bg: bg || '', text: text || '' }; }catch(e){ return { bg:'', text:'' }; } }
+function phoneColorDraft(){
+  try{ const d = JSON.parse(localStorage.getItem(PHONE_COLOR_DRAFT) || 'null'); if(d && typeof d === 'object') return { bg: d.bg || '', text: d.text || '' }; }catch(e){}
+  return phoneColorGet();
 }
-function phoneColorAsk(hex){
+function phoneColorDraftSet(k, hex){ const d = phoneColorDraft(); d[k] = hex; try{ localStorage.setItem(PHONE_COLOR_DRAFT, JSON.stringify(d)); }catch(e){} }
+function phoneColorHTML(){
+  const d = phoneColorDraft(), on = phoneColorGet();
+  const sw = c=>`<span class="litcolor-swatch" data-keep-color style="background:${c || 'transparent'};${c ? '' : 'border:1px dashed #6b6b6b;'}"></span>`;
+  const applied = on.bg && on.bg === d.bg && on.text === d.text;
+  return `<div class="set2-card" style="margin-top:12px;">
+    <div class="set2-row set2-stack"><div class="set2-text"><div class="set2-name">Phone colours</div><div class="set2-sub">Your whole phone's colours - not Lockedintool's Dashboard or Pages</div></div></div>
+    <div class="set2-row set2-link" data-openpicker="phonecolor-bg" style="cursor:pointer;"><div class="set2-text"><div class="set2-name">Background</div></div>${sw(d.bg)}</div>
+    <div class="set2-row set2-link" data-openpicker="phonecolor-text" style="cursor:pointer;"><div class="set2-text"><div class="set2-name">Text</div></div>${sw(d.text)}</div>
+    <div class="set2-row set2-stack"><button class="btn-wide btn-primary" style="margin-top:0;" data-action="phonecolor-apply">${applied ? 'On your phone now - set again' : 'Set on my phone'}</button></div>
+  </div>${state.colorPickerTarget === 'phonecolor-bg' || state.colorPickerTarget === 'phonecolor-text' ? colorPickerTemplate() : ''}`;
+}
+function phoneColorAsk(){
+  const d = phoneColorDraft();
+  if(!d.bg || !d.text){ showToast('Pick a Background and a Text colour first'); return; }
   if(!NATIVE || !window.StoryNative || !window.StoryNative.phoneColorSet){ showToast('Phone colours work in the Lockedintool app'); return; }
-  litSheet({ title:'Use this colour for your phone?', text:'Your phone takes its colours from your wallpaper, so Lockedintool will set a plain wallpaper in this colour, on your home screen and lock screen. Your current wallpaper will be replaced - you will need to set your wallpaper again afterwards if you want it back. Your phone may then take its colours from that wallpaper instead. Lockedintool\u2019s Dashboard and Pages keep their own colours.',
-    items:[{ label:'Set this colour', fn: ()=>{ try{ window.StoryNative.phoneColorSet(hex); }catch(e){ showToast('Couldn\u2019t set the colour'); } } }] });
+  litSheet({ title:'Use these colours for your phone?', text:'Your phone takes its colours from your wallpaper, so Lockedintool will set a wallpaper made from your two colours - the background colour with your text colour running through it - on your home screen and lock screen. Your phone then builds its colours from both. Your current wallpaper will be replaced - you will need to set your wallpaper again afterwards if you want it back. The words in other apps stay light or dark - Android lets no app change their colour. Lockedintool’s Dashboard and Pages keep their own colours.',
+    items:[{ label:'Set these colours', fn: ()=>{ try{ window.StoryNative.phoneColorSet(d.bg + '|' + d.text); }catch(e){ showToast('Couldn’t set the colours'); } } }] });
 }
 window.storyPhoneColor = function(hex, ok){
-  if(ok){ try{ localStorage.setItem(PHONE_COLOR_KEY, hex); }catch(e){} showToast('Your phone\u2019s colours now follow this colour'); }
-  else showToast('Couldn\u2019t set the colour - your phone didn\u2019t allow it');
+  if(ok){ try{ localStorage.setItem(PHONE_COLOR_KEY, hex); }catch(e){} showToast('Your phone’s colours now follow these colours'); }
+  else showToast('Couldn’t set the colours - your phone didn’t allow it');
   if(state.current === 'settings') renderDevice();
 };
 function settingsHubScreen(){
@@ -14891,7 +14904,8 @@ function colorPickerCurrentHex(target){
     case 'pencolor': return /^#[0-9a-f]{6}$/i.test(state.canvasPenColor) ? state.canvasPenColor : '#000000';
     case 'litcolor-bg': return (litScopeGet(state.colorEditTarget) || {}).bg || '#000000';
     case 'litcolor-text': return (litScopeGet(state.colorEditTarget) || {}).text || '#f3f2ee';
-    case 'phonecolor': return phoneColorGet() || '#1e5f6b';
+    case 'phonecolor-bg': return phoneColorDraft().bg || '#1e3a8a';
+    case 'phonecolor-text': return phoneColorDraft().text || '#f5c542';
     default: return '#ffffff';
   }
 }
@@ -18839,7 +18853,8 @@ function attachHandlers(){
             case 'pencolor': state.canvasPenColor = hex; if(state.canvasTool === 'eraser') state.canvasTool = 'pen'; break;
             // Layouts colour customization: picking Background or Text writes this scope's colours live (now "Custom"
             // until you Save it as a named colour system).
-            case 'phonecolor': state.colorPickerTarget = null; setTimeout(()=>phoneColorAsk(hex), 0); break;
+            case 'phonecolor-bg': phoneColorDraftSet('bg', hex); break;
+            case 'phonecolor-text': phoneColorDraftSet('text', hex); break;
             case 'litcolor-bg': case 'litcolor-text': {
               const cur = litScopeGet(state.colorEditTarget) || {};
               const next = { bg: cur.bg || '#000000', text: cur.text || '#f3f2ee', name: '' };
@@ -19352,6 +19367,7 @@ function attachHandlers(){
         case 'money-all': { const v = moneyAll(); v.on = !v.on; moneyAllSave(v); showToast(v.on ? 'Net worth' : 'Showing your card'); break; }
         case 'money-all-edit': state.moneyAllEdit = MONEY_ALL_KEY; break;
         case 'tap-nw': state.tapSplit = { pick:[], amts:{}, msg:'' }; break;
+        case 'phonecolor-apply': phoneColorAsk(); break;
         case 'tap-split-close': state.tapSplit = null; break;
         case 'tap-split-pick': { const t = state.tapSplit; if(!t) break; const k = el.getAttribute('data-k'), i = t.pick.indexOf(k); if(i >= 0){ t.pick.splice(i, 1); delete t.amts[k]; } else t.pick.push(k); t.msg = ''; break; }
         case 'tap-split-go': tapSplitGo(); break;
