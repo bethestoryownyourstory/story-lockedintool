@@ -220,4 +220,4 @@ commits, pushed as a new update) - nothing else changes.
 | 212 | 2026-11-05 | Pages are never cut: a page that runs off the bottom (something grew after its size was worked out) is fitted again every time it shows | 84e50f1 |
 | 213 | 2026-11-05 | Pages stay fitted while you look at them: parts that load later can't push the bottom off the screen any more (no more 'sometimes cut, sometimes fine') | 0d4950b |
 | 214 | 2026-11-05 | Settings > System theme > Phone colours: pick a colour and your phone's colours follow it (a plain wallpaper in that colour; the sheet says your wallpaper is replaced first) - Lockedintool's Dashboard and Pages keep their own | 8395c89 |
-| 215 | 2026-11-05 | Lock screen: while the unlock options show, Station 3 and the Wallet button step away - a tap near Enter PIN can't open Profile on a locked phone | (this) |
+| 215 | 2026-11-05 | Lock screen: while the unlock options show, Station 3 and the Wallet button step away - a tap near Enter PIN can't open Profile on a locked phone | 26aa63f |
