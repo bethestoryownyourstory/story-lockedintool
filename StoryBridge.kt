@@ -381,6 +381,11 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         .put("open", OverlayService.instance?.secIsOpen() ?: true).toString()
     @JavascriptInterface
     fun securitySet(mode: String): Boolean = if (!pages) false else Security.set(ctx, mode == "lit")
+    /** Settings > Security > Always On Display lock screen (owner, 5 Nov 2026). */
+    @JavascriptInterface
+    fun aodLockState(): Boolean = QuickAccess.aodLock(ctx)
+    @JavascriptInterface
+    fun aodLockSet(on: Boolean) { if (pages) ctx.getSharedPreferences("story", android.content.Context.MODE_PRIVATE).edit().putBoolean("aod_lock", on).apply() }
     @JavascriptInterface
     fun secUnlock() { if (pages || profile || widget) host.secUnlock() }
     /** The lock screen's Wallet page button only shows when the Wallet page can open (signed in, a plan with the Pages,

@@ -24,7 +24,37 @@ import android.widget.ImageView
  * (or anything going wrong) closes it and leaves the phone's own lock screen - you can never be locked out.
  */
 class LockDashActivity : Activity() {
-    companion object { @Volatile var instance: LockDashActivity? = null }
+    companion object {
+        @Volatile var instance: LockDashActivity? = null
+        /** The lock screen's look - your Home Screen a little blurry and dimmed, the glass tape across the screen and
+         *  DEVICE LOCKED. The same on the lock screen and on the Always On Display (owner: 'like how your Lockedintool
+         *  lock screen is ... don't dim it'). */
+        fun lockLook(act: Activity): FrameLayout {
+            val root = FrameLayout(act).apply { setBackgroundColor(Color.BLACK) }
+            val shot = ImageView(act).apply { scaleType = ImageView.ScaleType.FIT_START; adjustViewBounds = true }
+            root.addView(shot, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.TOP))
+            root.addView(android.view.View(act).apply { setBackgroundColor(Color.argb(95, 0, 0, 0)) },
+                FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+            root.addView(LockArt(act), FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        // Your Dashboard exactly as it last showed (the same picture Lockedintool's Home uses).
+        val svc = OverlayService.instance
+        val prefs = act.getSharedPreferences("story", android.content.Context.MODE_PRIVATE)
+        val exactOk = Build.VERSION.SDK_INT < 34 || prefs.getBoolean("home_shot_exact", false)
+        val b = svc?.homeShot?.takeIf { !it.isRecycled }
+            ?: (if (exactOk) runCatching { BitmapFactory.decodeFile(java.io.File(act.filesDir, "home_shot.jpg").path) }.getOrNull() else null)
+        val top = if (svc?.homeShot != null) svc.homeShotTop else prefs.getInt("home_shot_top", 0)
+        if (b != null) {
+            (shot.layoutParams as FrameLayout.LayoutParams).topMargin = top.coerceAtLeast(0)
+            val r = 9f * act.resources.displayMetrics.widthPixels / 1080f
+            if (Build.VERSION.SDK_INT >= 31) { shot.setImageBitmap(b); shot.setRenderEffect(android.graphics.RenderEffect.createBlurEffect(r, r, android.graphics.Shader.TileMode.CLAMP)) }
+            else runCatching {   // older phones: blurred by shrinking and growing the picture again
+                val small = android.graphics.Bitmap.createScaledBitmap(b, (b.width / 10).coerceAtLeast(1), (b.height / 10).coerceAtLeast(1), true)
+                shot.setImageBitmap(android.graphics.Bitmap.createScaledBitmap(small, b.width, b.height, true))
+            }.onFailure { shot.setImageBitmap(b) }
+        }
+            return root
+        }
+    }
     private var asking = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -32,36 +62,15 @@ class LockDashActivity : Activity() {
         if (Build.VERSION.SDK_INT >= 27) setShowWhenLocked(true)
         @Suppress("DEPRECATION") window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED)
         if (Build.VERSION.SDK_INT >= 30) window.setDecorFitsSystemWindows(false)
-        val root = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
-        val shot = ImageView(this).apply { scaleType = ImageView.ScaleType.FIT_START; adjustViewBounds = true }
-        root.addView(shot, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.TOP))
+        val root = lockLook(this)
         // The lock screen's look (owner, 5 Nov 2026, approved from previews): your screen behind it a little blurry and
         // dimmed ('see how the background is a lil blurry - that's perfect'), two long, thin strips of see-through glass
         // tape across the whole screen ('the tape not that thick, just long ... transparent a lil more, look beautiful')
         // and DEVICE LOCKED in the logo's glitch style ('only the tape and the words device locked ... no colour'). No
         // padlock ('remove the lock and that's it'), no other words. (Was: a 'Locked / Tap to unlock' card, then the logo.)
-        root.addView(android.view.View(this).apply { setBackgroundColor(Color.argb(95, 0, 0, 0)) },
-            FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
-        root.addView(LockArt(this), FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         root.setOnTouchListener { _, e -> if (e.action == MotionEvent.ACTION_UP) ask(); true }
         setContentView(root)
         instance = this
-        // Your Dashboard exactly as it last showed (the same picture Lockedintool's Home uses).
-        val svc = OverlayService.instance
-        val prefs = getSharedPreferences("story", MODE_PRIVATE)
-        val exactOk = Build.VERSION.SDK_INT < 34 || prefs.getBoolean("home_shot_exact", false)
-        val b = svc?.homeShot?.takeIf { !it.isRecycled }
-            ?: (if (exactOk) runCatching { BitmapFactory.decodeFile(java.io.File(filesDir, "home_shot.jpg").path) }.getOrNull() else null)
-        val top = if (svc?.homeShot != null) svc.homeShotTop else prefs.getInt("home_shot_top", 0)
-        if (b != null) {
-            (shot.layoutParams as FrameLayout.LayoutParams).topMargin = top.coerceAtLeast(0)
-            val r = 9f * resources.displayMetrics.widthPixels / 1080f
-            if (Build.VERSION.SDK_INT >= 31) { shot.setImageBitmap(b); shot.setRenderEffect(android.graphics.RenderEffect.createBlurEffect(r, r, android.graphics.Shader.TileMode.CLAMP)) }
-            else runCatching {   // older phones: blurred by shrinking and growing the picture again
-                val small = android.graphics.Bitmap.createScaledBitmap(b, (b.width / 10).coerceAtLeast(1), (b.height / 10).coerceAtLeast(1), true)
-                shot.setImageBitmap(android.graphics.Bitmap.createScaledBitmap(small, b.width, b.height, true))
-            }.onFailure { shot.setImageBitmap(b) }
-        }
     }
     private fun lockSign(): android.view.View {
         val dp = resources.displayMetrics.density

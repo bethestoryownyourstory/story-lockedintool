@@ -30,7 +30,11 @@ class AodActivity : Activity() {
             override fun onDown(e: MotionEvent) = true
             override fun onDoubleTap(e: MotionEvent): Boolean { finish(); return true }
         })
-        setContentView(View(this).apply {
+        // Always On Display lock screen (Settings > Security - owner, 5 Nov 2026: 'Lock screen on always on display like
+        // how your Lockedintool [lock screen] is, with the Lockedintool home screen'; 'please don't dim it'): your lock
+        // screen exactly as it looks, at the phone's own brightness. Off = the plain black Always On Display.
+        if (QuickAccess.aodLock(this)) setContentView(LockDashActivity.lockLook(this).apply { setOnTouchListener { _, e -> tap.onTouchEvent(e) } })
+        else setContentView(View(this).apply {
             setBackgroundColor(Color.BLACK)
             setOnTouchListener { _, e -> tap.onTouchEvent(e) }
         })
