@@ -386,40 +386,6 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
     fun aodLockState(): Boolean = QuickAccess.aodLock(ctx)
     @JavascriptInterface
     fun aodLockSet(on: Boolean) { if (pages) ctx.getSharedPreferences("story", android.content.Context.MODE_PRIVATE).edit().putBoolean("aod_lock", on).apply() }
-    /** Settings > System theme > Phone colours (owner, 5 Nov 2026): the phone builds its own colours from its wallpaper and
-     *  no app may recolour other apps, so this sets a plain wallpaper in the chosen colour (home + lock screen) - after the
-     *  owner's confirm sheet, which says the wallpaper is replaced. The answer comes back as window.storyPhoneColor. */
-    @JavascriptInterface
-    fun phoneColorSet(hex: String) {
-        if (!pages) return
-        // "bg|text" (owner, #223: both colours used) - the background fills the wallpaper and the text colour runs
-        // through it as a band (the same picture the owner approved: CSS 160deg, 58% - 72%), so the phone's own
-        // colours come from both. A single colour (older screens) is a plain wallpaper.
-        val parts = hex.split("|")
-        val c = runCatching { android.graphics.Color.parseColor(parts[0]) }.getOrNull() ?: return
-        val t = if (parts.size > 1) runCatching { android.graphics.Color.parseColor(parts[1]) }.getOrNull() else null
-        Thread {
-            val ok = runCatching {
-                val dm = ctx.resources.displayMetrics
-                val w = dm.widthPixels.coerceAtLeast(64); val h = dm.heightPixels.coerceAtLeast(64)
-                val bmp = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888).apply { eraseColor(c) }
-                if (t != null) {
-                    val a = Math.toRadians(160.0)
-                    val dx = Math.sin(a).toFloat(); val dy = (-Math.cos(a)).toFloat()
-                    val len = Math.abs(w * dx) + Math.abs(h * dy)
-                    val cx = w / 2f; val cy = h / 2f
-                    val shader = android.graphics.LinearGradient(cx - dx * len / 2, cy - dy * len / 2, cx + dx * len / 2, cy + dy * len / 2,
-                        intArrayOf(c, c, t, t, c, c), floatArrayOf(0f, 0.58f, 0.58f, 0.72f, 0.72f, 1f), android.graphics.Shader.TileMode.CLAMP)
-                    android.graphics.Canvas(bmp).drawRect(0f, 0f, w.toFloat(), h.toFloat(), android.graphics.Paint().apply { this.shader = shader; isDither = false })
-                }
-                val wm = android.app.WallpaperManager.getInstance(ctx)
-                if (android.os.Build.VERSION.SDK_INT >= 24) wm.setBitmap(bmp, null, true, android.app.WallpaperManager.FLAG_SYSTEM or android.app.WallpaperManager.FLAG_LOCK)
-                else wm.setBitmap(bmp)
-                bmp.recycle()
-            }.isSuccess
-            OverlayService.instance?.pagesJs("window.storyPhoneColor&&window.storyPhoneColor(" + JSONObject.quote(hex) + "," + ok + ")")
-        }.start()
-    }
     @JavascriptInterface
     fun secUnlock() { if (pages || profile || widget) host.secUnlock() }
     /** The lock screen's Wallet page button only shows when the Wallet page can open (signed in, a plan with the Pages,
@@ -587,46 +553,6 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         host.hidePanel()
         runCatching { ctx.startActivity(Intent(a).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
             .onFailure { runCatching { ctx.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
-    }
-    /** Phone colours = the phone's colour palette, set directly - NO wallpaper (#226 - owner: 'No I don't want it to
-     *  replace the wallpaper. The color palette yes'). Android only lets an app do this with WRITE_SECURE_SETTINGS,
-     *  which is granted once from a computer (adb shell pm grant <package> android.permission.WRITE_SECURE_SETTINGS).
-     *  Returns "ok", "noperm|<package>" or "fail". Writes the same setting the phone's own Wallpaper & style screen
-     *  writes (theme_customization_overlay_packages): the background colour as the system palette, the text colour as
-     *  the accent. Other keys already there are kept. */
-    @JavascriptInterface
-    fun phonePaletteSet(bg: String, text: String): String {
-        if (!pages) return "fail"
-        if (ctx.checkSelfPermission("android.permission.WRITE_SECURE_SETTINGS") != android.content.pm.PackageManager.PERMISSION_GRANTED) return "noperm|" + ctx.packageName
-        val hx = { h: String -> h.trim().removePrefix("#").uppercase().takeIf { Regex("^[0-9A-F]{6}$").matches(it) } }
-        val b = hx(bg) ?: return "fail"; val t = hx(text) ?: return "fail"
-        return runCatching {
-            val key = "theme_customization_overlay_packages"
-            val cur = runCatching { JSONObject(Settings.Secure.getString(ctx.contentResolver, key) ?: "{}") }.getOrNull() ?: JSONObject()
-            cur.put("android.theme.customization.color_source", "preset")
-            cur.put("android.theme.customization.system_palette", b)
-            cur.put("android.theme.customization.accent_color", t)
-            cur.put("android.theme.customization.color_both", "1")
-            cur.put("_applied_timestamp", System.currentTimeMillis())
-            if (Settings.Secure.putString(ctx.contentResolver, key, cur.toString())) "ok" else "fail"
-        }.getOrDefault("fail")
-    }
-    @JavascriptInterface
-    fun phonePaletteState(): String = if (!pages) "" else
-        (if (ctx.checkSelfPermission("android.permission.WRITE_SECURE_SETTINGS") == android.content.pm.PackageManager.PERMISSION_GRANTED) "ok" else "noperm") + "|" + ctx.packageName
-    /** Phone colours (#225): the phone's OWN wallpaper & colour-palette screen (Samsung: Wallpaper and style >
-     *  Color palette; Pixel: Wallpaper & style) - only the phone can pick its palette. Lockedintool steps aside. */
-    @JavascriptInterface
-    fun paletteOpen(): Boolean {
-        if (!pages) return false
-        val pm = ctx.packageManager
-        val list = runCatching { pm.queryIntentActivities(Intent(Intent.ACTION_SET_WALLPAPER), 0) }.getOrNull().orEmpty()
-        val best = list.sortedBy { r -> val p = r.activityInfo.packageName
-            when { p.startsWith("com.samsung") || p.startsWith("com.sec.") -> 0; p.contains("wallpaper") -> 1; p == "com.android.settings" -> 2; else -> 3 } }.firstOrNull()
-        host.hidePanel()
-        val ok = best != null && runCatching { ctx.startActivity(Intent(Intent.ACTION_SET_WALLPAPER).setClassName(best.activityInfo.packageName, best.activityInfo.name).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess
-        if (ok) return true
-        return runCatching { ctx.startActivity(Intent(Settings.ACTION_DISPLAY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess
     }
     /** Only to switch NFC on (Android doesn't let an app do it itself). */
     @JavascriptInterface
