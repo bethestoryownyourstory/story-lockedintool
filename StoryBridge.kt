@@ -28,6 +28,8 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         fun closeDialpad()
         /** The Dashboard page draws its own Station 3 bar (owner: 'make the dashboard station 3 be attached to the dashboard'). */
         fun dashInPage(on: Boolean)
+        /** The Pages' background picture: false = still loading (the Pages wait for it before showing), true = ready. */
+        fun bgState(ready: Boolean)
         fun dashPadPx(): Int
         fun systemSwipe()
         fun systemSwipeKind(kind: String)
@@ -737,6 +739,10 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
     /** The Dashboard says it draws its own Station 3 bar (part of the Dashboard's design - owner, 29 Oct 2026). */
     @JavascriptInterface
     fun dashInPage(on: Boolean) { if (pagesWin) host.dashInPage(on) }
+
+    /** The background picture (Layouts > Background picture) is still loading / ready - the Pages show only with it. */
+    @JavascriptInterface
+    fun bgState(ready: Boolean) { if (pagesWin) host.bgState(ready) }
 
     /** The room at the Dashboard's bottom for its Station 3 bar, asked for as the page loads (right from the first frame). */
     /** The phone took a swipe that started at the bottom edge of the Pages (its own Home / Recents): step aside. */

@@ -959,7 +959,7 @@ class OverlayService : Service(), StoryBridge.Host {
         if (p.shown) { p.web.evaluateJavascript(js, null); after(); return }
         runCatching { p.web.onResume() }
         var done = false
-        val go = Runnable { if (!done) { done = true; if (!p.shown) setShown(p, true); after() } }
+        val go = Runnable { if (!done) { done = true; whenBgReady(p, Runnable { if (!p.shown) setShown(p, true); after() }) } }
         p.web.evaluateJavascript(js) {
             runCatching { p.web.postVisualStateCallback(1L, object : WebView.VisualStateCallback() { override fun onComplete(requestId: Long) { ui.post(go) } }) }
                 .onFailure { ui.post(go) }
@@ -1304,6 +1304,21 @@ class OverlayService : Service(), StoryBridge.Host {
     // until the page reports in (owner, 5 Nov 2026: on the phone's control panel 'this app just randomly glitched showed
     // me the squash thing then reloaded again').
     private var dashBandInPage = true
+    // The Pages' background picture (owner, 5 Nov 2026: 'After unlocking lockedintool my background like reloads why??
+    // It looks like a glitch but like you can see it moving'): a freshly loaded page drew first and the picture popped in
+    // a moment later. The page says while it is still loading the picture; the Pages then show only once it's ready
+    // (0.6 s at most - never stuck).
+    @Volatile private var pagesBgWaiting = false
+    private val bgWaiters = mutableListOf<Runnable>()
+    override fun bgState(ready: Boolean) { ui.post {
+        pagesBgWaiting = !ready
+        if (ready) { val w = bgWaiters.toList(); bgWaiters.clear(); w.forEach { it.run() } }
+    } }
+    private fun whenBgReady(p: Pane, r: Runnable) {
+        if (p !== pagesPane || !pagesBgWaiting) { r.run(); return }
+        bgWaiters.add(r)
+        ui.postDelayed({ if (bgWaiters.remove(r)) r.run() }, 600)
+    }
     override fun dashInPage(on: Boolean) { ui.post { if (dashBandInPage != on) { dashBandInPage = on; updateBubble() } } }
     override fun dashShown(on: Boolean) { ui.post { if (dashUp != on) { dashUp = on
         if (on) homeShotSoon()
