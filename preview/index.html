@@ -1245,8 +1245,6 @@
   .btn-row-action{ position:relative; }
   .ttp-nw{ position:absolute; right:8px; bottom:8px; width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; border:1px solid currentColor; opacity:0.75; }
   .ttp-nw svg{ width:14px; height:14px; }
-  .ttp-nw.on{ opacity:1; background:currentColor; }
-  .ttp-nw.on svg{ color:#e8e6e1; }
   .btn-row-action .row-action-ico{ width:46px; height:30px; overflow:visible; flex-shrink:0; }
   /* The contactless terminal's signal arcs ripple outward on their own loop (a live "ready to
      receive" idle animation -- scale as well as opacity, like a real ripple rather than three
@@ -8694,8 +8692,39 @@ const walletActivityList = ()=>walletPayments().slice(0, 5);
 // a Tap to Pay payment come from two or more of your accounts together - 'yeah you can add it'). A card reader charges ONE
 // card per tap, so splitting a tap needs Lockedintool's own card (a licensed card-issuing partner, with the company); the
 // switch keeps your choice and says so honestly until then - Tap to Pay pays with the card showing in Wallet meanwhile.
-const TAP_NW_KEY = 'story-tap-nw';
-function tapNwOn(){ try{ return localStorage.getItem(TAP_NW_KEY) === '1'; }catch(e){ return false; } }
+// Net worth on Tap to Pay (owner, 5 Nov 2026: 'it shouldn't be a button that you can turn on and off - when it is tapped
+// it tells you to pick two or more accounts to divide your transaction to; if you do not pick any accounts nothing will
+// work. After you pick accounts, select each account to set how much money you want to split between them. Then tap
+// continue / ready to make payment, then you can place the phone at the reader'). Never saved - chosen every time.
+function tapSplitTemplate(){
+  const t = state.tapSplit; if(!t) return '';
+  const l = payNwAccounts();
+  const total = t.pick.reduce((x, k)=>x + (parseFloat(String(t.amts[k] || '').replace(',', '.')) || 0), 0);
+  const rows = l.length ? l.map(a=>{ const on = t.pick.includes(a.key); return `
+    <div class="row" data-action="tap-split-pick" data-k="${escText(a.key)}" style="cursor:pointer;"><div class="row-left"><div class="row-icon">${on ? '☑' : '☐'}</div><div><div class="row-name">${escText(a.name)}</div><div class="row-sub">${a.bal != null ? fmtCur(a.bal, a.cur || 'ZAR') : 'Balance not known yet'}</div></div></div></div>
+    ${on ? `<input class="field-input" data-tsplit-input="${escText(a.key)}" type="text" inputmode="decimal" autocomplete="off" placeholder="How much from ${escText(a.name)}" value="${escText(t.amts[a.key] || '')}" style="margin:0 0 8px;" onclick="event.stopPropagation()">` : ''}`; }).join('')
+    : '<div class="note">No bank accounts yet - Lockedintool finds them from your bank’s messages once you add your cards in Wallet.</div>';
+  return `
+    <div class="modal-overlay" data-action="tap-split-close">
+      <div class="confirm-sheet tsplit-sheet" onclick="event.stopPropagation()" style="max-height:80%;overflow-y:auto;padding-bottom:56px;">
+        <div class="confirm-title">Split this payment</div>
+        <div class="confirm-sub">Pick two or more accounts, then set how much comes from each.</div>
+        <div class="row-card" style="margin:8px 0 0;text-align:left;">${rows}</div>
+        ${t.msg ? `<div class="note pay-msg">${escText(t.msg)}</div>` : ''}
+        <div class="confirm-btn-row" style="margin-top:12px;"><button class="btn-wide" style="margin-top:0;" data-action="tap-split-close">Cancel</button><button class="btn-wide btn-primary tsplit-go" style="margin-top:0;" data-action="tap-split-go">${total > 0 ? 'Continue · ' + payMoney(total) : 'Continue'}</button></div>
+      </div>
+    </div>`;
+}
+function tapSplitGo(){
+  const t = state.tapSplit; if(!t) return;
+  if(t.pick.length < 2){ t.msg = 'Pick two or more accounts to split this payment between.'; return; }
+  const names = {}; payNwAccounts().forEach(a=>{ names[a.key] = a.name; });
+  const parts = t.pick.map(k=>({ from: names[k] || k, amount: Math.round((parseFloat(String(t.amts[k] || '').replace(',', '.')) || 0) * 100) / 100 }));
+  const bad = parts.find(q=>!(q.amount > 0));
+  if(bad){ t.msg = 'Set how much comes from ' + bad.from + '.'; return; }
+  state.tapSplit = null; state.tapSplitReady = { parts };
+  state.tapPayOpen = true; tapMark(true);
+}
 const NW_ICON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg>';
 const NW_PENCIL = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>';
 function walletActivityColor(amt, ts){
@@ -8792,7 +8821,7 @@ function walletScreen(){
                   <path class="ttp-check" d="M41.5 23.5l3 3 6.5-7.5" stroke-width="2.4" stroke-linejoin="round"></path>
                 </g>
               </g>
-            </svg><span class="ttp-nw${tapNwOn() ? ' on' : ''}" data-action="tap-nw" title="Net worth">${NW_ICON}</span></button></div>
+            </svg><span class="ttp-nw" data-action="tap-nw" title="Split with net worth">${NW_ICON}</span></button></div>
     ${pageSecOn('wallet', 'activity') ? `${walletSecTitle('WALLET ACTIVITY', 'activity')}
     <div class="row-card wallet-activity-card">
       ${walletActivityRowsHTML()}
@@ -8816,6 +8845,7 @@ function walletScreen(){
     ${state.addCardOpen ? addCardTemplate() : ''}
     ${state.membSheet ? membSheetTemplate() : ''}
     ${state.tapPayOpen ? tapPayTemplate() : ''}
+    ${state.tapSplit ? tapSplitTemplate() : ''}
     ${state.favoritesOpen ? favoritesPopupTemplate() : ''}
     ${state.pageEdit === 'wallet' ? pageEditTemplate('wallet') : ''}
     ${state.allCardsOpen ? allCardsTemplate() : ''}
@@ -8988,6 +9018,7 @@ function tapPayTemplate(){
       <div class="confirm-sheet tp-sheet" onclick="event.stopPropagation()">
         <div class="confirm-title">Tap to Pay</div>
         ${card}${ring}${body}
+        ${state.tapSplitReady ? `<div class="note" style="margin:8px 0 0;">Split: ${state.tapSplitReady.parts.map(q=>escText(q.from) + ' ' + payMoney(q.amount)).join(' + ')} = ${payMoney(state.tapSplitReady.parts.reduce((x, q)=>x + q.amount, 0))}<br>Splitting a tap at the reader needs Lockedintool’s own card - until it’s ready your phone’s wallet pays the whole amount with its card.</div>` : ''}
         <button class="btn-wide" data-action="tap-pay-close">Done</button>
       </div>
     </div>`;
@@ -17722,6 +17753,15 @@ function attachHandlers(){
     });
   });
   attachPayFound();
+  // Tap to Pay split: amounts are kept as you type (no redraw - the keyboard stays); the Continue total follows.
+  document.querySelectorAll('#device-wrap [data-tsplit-input]').forEach(el=>{
+    el.addEventListener('input', ()=>{
+      const t = state.tapSplit; if(!t) return;
+      t.amts[el.getAttribute('data-tsplit-input')] = el.value;
+      const total = t.pick.reduce((x, k)=>x + (parseFloat(String(t.amts[k] || '').replace(',', '.')) || 0), 0);
+      const b = document.querySelector('#device-wrap .tsplit-go'); if(b) b.textContent = total > 0 ? 'Continue · ' + payMoney(total) : 'Continue';
+    });
+  });
 
   const searchInput = document.getElementById('search-input');
   if(searchInput){
@@ -19311,8 +19351,10 @@ function attachHandlers(){
         case 'bank-unlink': { if(state.bankUnlinkAsk && Date.now() - state.bankUnlinkAsk < 4000){ state.bankUnlinkAsk = 0; bankUnlink(); } else { state.bankUnlinkAsk = Date.now(); showToast('Tap again to disconnect your bank'); } break; }
         case 'money-all': { const v = moneyAll(); v.on = !v.on; moneyAllSave(v); showToast(v.on ? 'Net worth' : 'Showing your card'); break; }
         case 'money-all-edit': state.moneyAllEdit = MONEY_ALL_KEY; break;
-        case 'tap-nw': { const on = !tapNwOn(); try{ localStorage.setItem(TAP_NW_KEY, on ? '1' : '0'); }catch(e){}
-          showToast(on ? 'Net worth on for Tap to Pay - it pays from your combined accounts once Lockedintool’s own card is ready. Until then it pays with the card in Wallet.' : 'Tap to Pay pays with the card in Wallet'); break; }
+        case 'tap-nw': state.tapSplit = { pick:[], amts:{}, msg:'' }; break;
+        case 'tap-split-close': state.tapSplit = null; break;
+        case 'tap-split-pick': { const t = state.tapSplit; if(!t) break; const k = el.getAttribute('data-k'), i = t.pick.indexOf(k); if(i >= 0){ t.pick.splice(i, 1); delete t.amts[k]; } else t.pick.push(k); t.msg = ''; break; }
+        case 'tap-split-go': tapSplitGo(); break;
         case 'wallet-nw': { const v = nwGet(WALLET_NW_KEY); v.on = !v.on; nwSave(WALLET_NW_KEY, v); showToast(v.on ? 'Net worth' : 'Showing your card'); break; }
         case 'wallet-nw-edit': state.moneyAllEdit = WALLET_NW_KEY; break;
         case 'money-all-close': state.moneyAllEdit = false; break;
@@ -19388,7 +19430,7 @@ function attachHandlers(){
           break;
         }
         case 'tap-to-pay': state.tapPayOpen = true; tapMark(true); break;
-        case 'tap-pay-close': state.tapPayOpen = false; tapMark(false); break;
+        case 'tap-pay-close': state.tapPayOpen = false; state.tapSplitReady = null; tapMark(false); break;
         case 'tap-pay-nfc': if(NATIVE && window.StoryNative.nfcSettings) window.StoryNative.nfcSettings(); break;
         case 'money-access': { if(NATIVE && window.StoryNative.moneyAccessOpen) window.StoryNative.moneyAccessOpen(); else showToast('Turn on notification access for Lockedintool'); break; }
         case 'spend-limit-open': state.spendLimitOpen = true; break;
