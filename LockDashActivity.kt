@@ -81,7 +81,10 @@ class LockDashActivity : Activity() {
         // Watch for the phone unlocking by itself (fingerprint / face straight on the lock screen).
         if (Build.VERSION.SDK_INT >= 33) runCatching {
             val km = getSystemService(KeyguardManager::class.java)
-            val l = KeyguardManager.KeyguardLockedStateListener { locked -> if (!locked && !isFinishing) unlockedNow() }
+            // Only a real unlock counts: locked first, then unlocked (it's put up while the screen goes off, before the
+            // phone has locked - that first 'not locked' must not close it).
+            var wasLocked = km.isKeyguardLocked
+            val l = KeyguardManager.KeyguardLockedStateListener { locked -> if (locked) wasLocked = true else if (wasLocked && !isFinishing) unlockedNow() }
             km.addKeyguardLockedStateListener(mainExecutor, l); lockListener = l
         }
         if (Build.VERSION.SDK_INT >= 33) onBackInvokedDispatcher.registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT) { showOptions() }
