@@ -5117,24 +5117,31 @@ function blockAllowRefresh(){
   const a = blockAllowGet(); if(a.at && Date.now() - a.at < 6 * 3600000) return;
   fetch(MSG_API + '/v1/blockallow').then(r=>r.ok ? r.json() : null).then(j=>{ if(!j) return; try{ localStorage.setItem(BLOCK_ALLOW_KEY, JSON.stringify({ terms: j.terms || [], sites: j.sites || [], apps: j.apps || [], at: Date.now() })); }catch(e){} }).catch(()=>{});
 }
-// (owner, 6 Nov 2026: 'Is a report but then you will be able to continue viewing what you where viewing' - replaces
-// 'report only, no viewing'): the report goes to Lockedintool AND the search carries on.
+// 'Continue to view' (#234 - owner, 6 Nov 2026: 'It's should say continue to view'; 'Lockedintool is not made for adults
+// it's made for everyone ... kids that they can't watch this ... the same message pops up for adults but they can view it
+// if they want to by pressing the continue to view button'): the block screen only sits on top - nothing you typed is
+// cleared. Continue = those words aren't blocked again until the Pages close; a search already sent (Enter) runs
+// (SafeSearch on). What was searched still goes quietly to Lockedintool's review list (no name, no account).
 function blockMistakeSend(){
   const b = state.contentBlock; if(!b) return;
   state.contentBlock = null;
   if(b.q){
+    const lower = b.q.toLowerCase();
+    state.blockContinue = state.blockContinue.concat(ADULT_SEARCH_TERMS.concat(UNSAFE_SEARCH_TERMS).filter(t=>lower.includes(t)));
     fetch(MSG_API + '/v1/blockfix', { method:'POST', headers:{ 'content-type':'application/json' }, body: JSON.stringify({ kind:'search', value: b.q }) }).catch(()=>{});
-    const url = 'https://www.google.com/search?q=' + encodeURIComponent(b.q) + '&safe=active';
-    if(NATIVE && window.StoryNative.openUrl) window.StoryNative.openUrl(url); else window.open(url, '_blank');
+    if(!b.live){
+      const url = 'https://www.google.com/search?q=' + encodeURIComponent(b.q) + '&safe=active';
+      if(NATIVE && window.StoryNative.openUrl) window.StoryNative.openUrl(url); else window.open(url, '_blank');
+    }
   }
-  showToast('Sent to Lockedintool to check');
 }
 // The context line on the block screen - what was blocked (owner: "Context: nudity / adult content").
 function searchBlockContext(q){
   const lower = (q || '').toLowerCase();
-  if(blockAllowed('terms', lower.trim())) return '';   // unblocked for everyone by Lockedintool after a 'This is a mistake' review
-  if(ADULT_SEARCH_TERMS.some(term => lower.includes(term))) return 'nudity / adult content';
-  if(UNSAFE_SEARCH_TERMS.some(term => lower.includes(term))) return 'harmful or unsafe content';
+  if(blockAllowed('terms', lower.trim())) return '';   // unblocked for everyone by Lockedintool after a review
+  const hit = term => lower.includes(term) && !state.blockContinue.includes(term);   // 'Continue to view' chosen for it
+  if(ADULT_SEARCH_TERMS.some(hit)) return 'nudity / adult content';
+  if(UNSAFE_SEARCH_TERMS.some(hit)) return 'harmful or unsafe content';
   return '';
 }
 // The block screen (owner's words): a plain black screen shown when adult content is blocked across Lockedintool.
@@ -5148,7 +5155,7 @@ function contentBlockOverlay(b){
         <div class="lit-block-title">Locked by Lockedintool from viewing this</div>
         <div class="lit-block-ctx">Context: ${escText(ctx)}</div>
         <button class="lit-block-more" data-action="lit-block-info">Find out more about Lockedintool’s privacy and rules</button>
-        <button class="lit-block-mistake" data-action="lit-block-mistake">This is a mistake</button>
+        <button class="lit-block-mistake" data-action="lit-block-mistake">Continue to view</button>
         <div class="lit-block-hint">Tap anywhere to go back</div>
       </div>
     </div>`;
@@ -5190,15 +5197,14 @@ function searchStepGo(inputId){
   }
 }
 
-// Block the view the moment an adult word is typed (owner: even before you search), and clear the box so you're not
-// stuck on the block each time. Used live by both search bars; searchStepGo still blocks on Enter too.
+// Block the view the moment an adult word is typed (owner: even before you search). What you typed stays in the box
+// (#234 - the block only sits on top). Used live by both search bars; searchStepGo still blocks on Enter too.
 function searchLiveBlock(inputEl){
   const typed = inputEl ? inputEl.value : '';
   const ctx = searchBlockContext(typed);
   if(!ctx) return false;
-  if(inputEl) inputEl.value = '';
-  state.searchQuery = '';
-  state.contentBlock = { context: ctx, q: typed };
+  state.searchQuery = typed;
+  state.contentBlock = { context: ctx, q: typed, live: true };
   state.searchBlocked = false;
   state.pendingSearchQuery = null;
   renderDevice();
@@ -5429,6 +5435,7 @@ let state = {
   pendingSearchQuery:null,
   searchBlocked:false,
   contentBlock:null,
+  blockContinue:[],
   // Account-wide standing under STORY's content policy. status: 'active' | 'warned' | 'suspended'.
   accountStatus:{ strikes:0, status:'active', lastReason:'', warningDeadline:null },
   groupBrowseFilter:{ category:'All', country:'All' },
@@ -10355,7 +10362,7 @@ const LEGAL = {
       'No filter is ever perfect, but Lockedintool blocks the normal ways this content is reached and is the strongest a phone app can do.' ]],
     ['Your privacy', [
       'The filter runs on your phone. Lockedintool doesn’t keep a list of what you searched or send it anywhere.',
-      'Blocked by mistake? Tap “This is a mistake” on the black screen and you go straight back to what you were viewing. Only what was blocked - the website’s address, the app or the words searched - goes to Lockedintool, never your name or account. That site or app isn’t blocked again until your screen next goes off; Lockedintool checks it, and if it really was a mistake it is unblocked for everyone.' ]],
+      'Lockedintool is made for everyone, so the black screen shows for everyone. It never closes what you were using - it only sits on top. Adults who still want to see it tap “Continue to view” and carry on; that site or app isn’t blocked again until your screen next goes off. Only what was blocked - the website’s address, the app or the words searched - goes to Lockedintool, never your name or account; if it was blocked by mistake, Lockedintool unblocks it for everyone.' ]],
   ] },
   'legal-privacy': { title:'Privacy Policy', sections:[
     ['Who we are', [
@@ -10806,6 +10813,7 @@ document.addEventListener('click', (e)=>{
 window.storyDialClear = function(){ state.station3DialInput = ''; renderDevice(); };
 window.storyReset = function(){
   state.station3Open = false; state.station3DialpadOpen = false;
+  state.blockContinue = [];   // 'Continue to view' lasts until the Pages close
   cardRevealClear();
   renderDevice();
   if(!/[?&]s3=/.test(location.search)){ litLockNow(); litAuthGate(); }   // the Pages closed: log in again next time if you didn't save your login info
