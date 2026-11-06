@@ -91,7 +91,8 @@ class StoryAccessibilityService : AccessibilityService() {
         val now = System.currentTimeMillis()
         if (key == lastBlockKey && now - lastBlockAt < 4000) return   // don't re-launch for the same thing
         lastBlockKey = key; lastBlockAt = now
-        runCatching { performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME) }
+        // #234 (owner: 'adult blocker shouldn't close the app of the page a user was in it should just place that message'):
+        // no Home any more - the black screen opens ON TOP of the app, which stays where it was underneath.
         runCatching { startActivity(Intent(this, BlockActivity::class.java).putExtra("kind", kind).putExtra("value", value).putExtra("pkg", fromPkg).putExtra("url", url).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
     }
 
