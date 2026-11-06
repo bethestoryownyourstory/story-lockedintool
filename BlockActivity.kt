@@ -45,7 +45,7 @@ class BlockActivity : Activity() {
         })
         // 'Continue to view' (#234 - owner, 6 Nov 2026: 'It's should say continue to view'; 'if they want to view it they
         // can'): the app is still right underneath, so this only goes away - that site / app isn't blocked again until the
-        // screen next goes off. What was blocked still goes quietly to Lockedintool's review list (no name, no account).
+        // screen next goes off. Nothing is sent to Lockedintool (#235).
         val kind = intent.getStringExtra("kind") ?: ""
         val value = intent.getStringExtra("value") ?: ""
         root.addView(Button(this).apply {
@@ -65,7 +65,7 @@ class BlockActivity : Activity() {
         if (android.os.Build.VERSION.SDK_INT >= 33) onBackInvokedDispatcher.registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT) { leave() }
     }
     private fun continueToView(kind: String, value: String) {
-        if (value.isNotBlank()) { ContentGuard.reportMistake(kind, value); ContentGuard.allowForNow(kind, value) }
+        if (value.isNotBlank()) ContentGuard.allowForNow(kind, value)   // #235 (owner: 'Yah stop it'): no report sent
         finish()
     }
     // Back = leave what was blocked: the phone's home screen (Lockedintool's Home in Only system).

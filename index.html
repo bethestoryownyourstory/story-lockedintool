@@ -5121,14 +5121,13 @@ function blockAllowRefresh(){
 // it's made for everyone ... kids that they can't watch this ... the same message pops up for adults but they can view it
 // if they want to by pressing the continue to view button'): the block screen only sits on top - nothing you typed is
 // cleared. Continue = those words aren't blocked again until the Pages close; a search already sent (Enter) runs
-// (SafeSearch on). What was searched still goes quietly to Lockedintool's review list (no name, no account).
+// (SafeSearch on). Nothing is sent anywhere (#235 - owner: 'Yah stop it').
 function blockMistakeSend(){
   const b = state.contentBlock; if(!b) return;
   state.contentBlock = null;
   if(b.q){
     const lower = b.q.toLowerCase();
     state.blockContinue = state.blockContinue.concat(ADULT_SEARCH_TERMS.concat(UNSAFE_SEARCH_TERMS).filter(t=>lower.includes(t)));
-    fetch(MSG_API + '/v1/blockfix', { method:'POST', headers:{ 'content-type':'application/json' }, body: JSON.stringify({ kind:'search', value: b.q }) }).catch(()=>{});
     if(!b.live){
       const url = 'https://www.google.com/search?q=' + encodeURIComponent(b.q) + '&safe=active';
       if(NATIVE && window.StoryNative.openUrl) window.StoryNative.openUrl(url); else window.open(url, '_blank');
@@ -10362,7 +10361,7 @@ const LEGAL = {
       'No filter is ever perfect, but Lockedintool blocks the normal ways this content is reached and is the strongest a phone app can do.' ]],
     ['Your privacy', [
       'The filter runs on your phone. Lockedintool doesn’t keep a list of what you searched or send it anywhere.',
-      'Lockedintool is made for everyone, so the black screen shows for everyone. It never closes what you were using - it only sits on top. Adults who still want to see it tap “Continue to view” and carry on; that site or app isn’t blocked again until your screen next goes off. Only what was blocked - the website’s address, the app or the words searched - goes to Lockedintool, never your name or account; if it was blocked by mistake, Lockedintool unblocks it for everyone.' ]],
+      'Lockedintool is made for everyone, so the black screen shows for everyone. It never closes what you were using - it only sits on top. Adults who still want to see it tap “Continue to view” and carry on; that site or app isn’t blocked again until your screen next goes off. Nothing about it is sent to Lockedintool.' ]],
   ] },
   'legal-privacy': { title:'Privacy Policy', sections:[
     ['Who we are', [
