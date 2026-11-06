@@ -152,23 +152,23 @@ commits, pushed as a new update) - nothing else changes.
 | 144 | 2026-11-04 | Only system: the Dashboard lives inside Lockedintool's own Home screen, so Samsung pop-up windows and their floating bubbles stay on top of it (Lockedintool in the back) | 5b717f8 |
 | 145 | 2026-11-04 | Apps: the Lockedintool app is listed with your phone's apps (opens its setup screen) | 9949163 |
 | 146 | 2026-11-04 | Updates install with the screen on too; if the phone wants a tap, Android's own Install screen comes up - no update notification | 458ec16 |
-| 147 | 2026-11-04 | No more 'Lockedintool is on' notification in the panel | (this) |
-| 148 | 2026-11-04 | Only system: no black screen on the way to the Dashboard (it stays drawn in Lockedintool's Home); after an update you're put back on Lockedintool, not the phone's old home screen | (this) |
-| 149 | 2026-11-04 | Only system: no black screen while Lockedintool reloads after Close all - you see Lockedintool's last picture until the Dashboard is ready | (this) |
-| 150 | 2026-11-04 | Only system: the Dashboard comes back by itself after closing an app (no black screen to tap). Colour systems apply instantly and to every screen reached from the Dashboard (Settings, Layouts, Notes, Information...) | (this) |
-| 151 | 2026-11-04 | Layouts > Pages > Color customization shows your colours: the screen in the all-pages colours, each row and page in its own | (this) |
-| 152 | 2026-11-04 | Pages colour screen: its background takes your colours only when every page uses the same ones; otherwise only the options are coloured | (this) |
-| 153 | 2026-11-04 | Dial pad: Search contact (left) and View all contacts (right) - the phone's own contacts; a picked contact's number goes into the dial pad | (this) |
-| 154 | 2026-11-04 | Dial pad's Search contact opens the phone's own Contacts search - type a name, tap the contact to call or anything else | (this) |
-| 155 | 2026-11-04 | Only system: your phone's wallpaper no longer shows for a moment when going back to the Dashboard - Lockedintool's Home is solid | (this) |
-| 156 | 2026-11-04 | Layouts: Background picture - any picture from your phone behind the Dashboard, and behind all pages / a row / one page | (this) |
-| 157 | 2026-11-04 | Dial pad's Search contact opens your Contacts straight on its search box; the Dashboard's bottom bar no longer shows over other apps | (this) |
-| 158 | 2026-11-04 | Apps: hold an app -> Open in pop-up view (the phone's own floating window). A pop-up's sound no longer pauses while you use Lockedintool | (this) |
-| 159 | 2026-11-04 | Information: The future of Lockedintool - PCs, laptops, TVs, Lockedintool's own devices, kit and USB / SD backups | (this) |
+| 147 | 2026-11-04 | No more 'Lockedintool is on' notification in the panel | 98ab684 |
+| 148 | 2026-11-04 | Only system: no black screen on the way to the Dashboard (it stays drawn in Lockedintool's Home); after an update you're put back on Lockedintool, not the phone's old home screen | 98ab684 |
+| 149 | 2026-11-04 | Only system: no black screen while Lockedintool reloads after Close all - you see Lockedintool's last picture until the Dashboard is ready | 98ab684 |
+| 150 | 2026-11-04 | Only system: the Dashboard comes back by itself after closing an app (no black screen to tap). Colour systems apply instantly and to every screen reached from the Dashboard (Settings, Layouts, Notes, Information...) | 98ab684 |
+| 151 | 2026-11-04 | Layouts > Pages > Color customization shows your colours: the screen in the all-pages colours, each row and page in its own | 98ab684 |
+| 152 | 2026-11-04 | Pages colour screen: its background takes your colours only when every page uses the same ones; otherwise only the options are coloured | 98ab684 |
+| 153 | 2026-11-04 | Dial pad: Search contact (left) and View all contacts (right) - the phone's own contacts; a picked contact's number goes into the dial pad | 98ab684 |
+| 154 | 2026-11-04 | Dial pad's Search contact opens the phone's own Contacts search - type a name, tap the contact to call or anything else | 98ab684 |
+| 155 | 2026-11-04 | Only system: your phone's wallpaper no longer shows for a moment when going back to the Dashboard - Lockedintool's Home is solid | 98ab684 |
+| 156 | 2026-11-04 | Layouts: Background picture - any picture from your phone behind the Dashboard, and behind all pages / a row / one page | 98ab684 |
+| 157 | 2026-11-04 | Dial pad's Search contact opens your Contacts straight on its search box; the Dashboard's bottom bar no longer shows over other apps | 98ab684 |
+| 158 | 2026-11-04 | Apps: hold an app -> Open in pop-up view (the phone's own floating window). A pop-up's sound no longer pauses while you use Lockedintool | 98ab684 |
+| 159 | 2026-11-04 | Information: The future of Lockedintool - PCs, laptops, TVs, Lockedintool's own devices, kit and USB / SD backups | 98ab684 |
 | 160 | 2026-11-04 | Apps: the hold menu has an × to close it | e111d71 |
 | 161 | 2026-11-04 | Only system: swiping up from an app back to Lockedintool - the Dashboard is already there, live in the same frame (no redraw, no wait) | dc1251d |
 | 162 | 2026-11-04 | Only system: no black when swiping back from an app - the Dashboard no longer rests behind the app, and Lockedintool's Home shows the Dashboard's picture until the live one is drawn | f622380 |
-| 163 | 2026-11-04 | 0.0 s everywhere: the last small waits are gone - the keyboard comes up at once, swipe-to-confirm acts the moment you let go, a swiped-away recent goes at once, the unlock asks at once | (this) |
+| 163 | 2026-11-04 | 0.0 s everywhere: the last small waits are gone - the keyboard comes up at once, swipe-to-confirm acts the moment you let go, a swiped-away recent goes at once, the unlock asks at once | 98ab684 |
 | 164 | 2026-11-04 | Dial pad: Search contact and View all contacts are joined to the dial pad as one piece, each with its own outline | 40a29ca |
 | 165 | 2026-11-04 | Dashboard: the bottom bar no longer shows squashed for a moment after unlocking (Lockedintool's backup bar no longer opens while the Dashboard reloads) | 0e4d7c0 |
 | 166 | 2026-11-04 | Dial pad: attached to Station 3 - it sits right on Station 3's bar, no gap, straight bottom edge (over apps, the Pages and the Dashboard) | a739218 |
@@ -239,4 +239,4 @@ commits, pushed as a new update) - nothing else changes.
 | 231 | 2026-11-06 | Adult block: 'This is a mistake' now sends the report AND takes you straight back to what you were viewing (search, site or app) - not blocked again until the screen goes off; Lockedintool still reviews it | d988aaf |
 | 232 | 2026-11-06 | Lockedintool is an app with a System switch: Settings > System (fingerprint / face / PIN to turn on or off) and the Second system | Only system box (lights out while off; your phone switches freely with fingerprint / face / PIN; customers see only their system). Off = a pure app - nothing runs outside it | fc67997 |
 | 233 | 2026-11-06 | Brightness: System control now really dims Lockedintool only (its own dim layer over the Pages and Station 3's windows) - your phone's brightness stays yours; it starts at full when you pick it | 7c859e5 |
-| 234 | 2026-11-06 | Adult block for everyone: the button says 'Continue to view'; the black screen opens on top of the app you were in (never closes it or sends you Home) - Continue takes it away and you carry on, Back leaves; in-app searches keep what you typed | (this) |
+| 234 | 2026-11-06 | Adult block for everyone: the button says 'Continue to view'; the black screen opens on top of the app you were in (never closes it or sends you Home) - Continue takes it away and you carry on, Back leaves; in-app searches keep what you typed | 98ab684 |
