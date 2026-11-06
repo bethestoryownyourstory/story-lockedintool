@@ -1202,6 +1202,9 @@
     display:flex; align-items:center; justify-content:center;
     font-size:11px; flex-shrink:0;
   }
+  .lit-ico{ width:14px; height:14px; display:block; }
+  .notif-icon-wrap .lit-ico{ width:16px; height:16px; }
+  .chev-right .lit-ico{ width:13px; height:13px; display:inline-block; vertical-align:-2px; }
   .row-name{ font-size:12px; font-weight:600; }
   .row-sub{ font-size:9.5px; color:var(--muted); }
   .row-amt{
@@ -1930,6 +1933,8 @@
   .lit-block-ctx{ margin-top:10px; font-size:13px; color:#9a9aa2; }
   .lit-block-more{ margin-top:22px; display:inline-block; background:none; border:none; color:#0a84ff; font-size:13px; text-decoration:underline; cursor:pointer; padding:6px 4px; }
   .lit-block-hint{ margin-top:18px; font-size:11px; color:#5a5a62; }
+  .lit-block-mistake{ margin-top:10px; display:inline-block; background:none; border:1px solid #3a3a40; border-radius:18px; color:#d8d8dc; font-size:13px; font-weight:600; padding:8px 16px; cursor:pointer; }
+  .lit-block-sent{ margin-top:12px; font-size:12.5px; color:#9a9aa2; }
   .modal-overlay{
     position:fixed; inset:0; background:rgba(0,0,0,0.72); display:flex;
     align-items:flex-end; justify-content:center; z-index:20; border-radius:inherit;
@@ -2574,7 +2579,8 @@
   #story-profile .pf-pv-opt.on .pf-pv-dot{ border-color:var(--pf-fg); background:radial-gradient(circle, var(--pf-fg) 0 4.5px, transparent 5px); }
   #story-profile .up-p-more{ margin-left:auto; flex:none; }
   #story-profile .pf-rep{ border-top:1px solid var(--pf-hair); padding:12px 2px; font-size:13px; }
-  #story-profile .pf-rate-sum:empty{ display:none; }
+  #story-profile .pf-rate-sum:empty, #story-profile .pf-blockfix:empty{ display:none; }
+  #story-profile .pf-blockfix{ padding:4px 2px 14px; font-size:13px; }
   #story-profile .pf-rate-sum{ padding:4px 2px 14px; font-size:13px; }
   #story-profile .pf-rate-stars{ color:#d4a017; letter-spacing:1px; }
   #story-profile .pf-rep-k{ font-weight:800; }
@@ -3030,11 +3036,11 @@
      and below, a little smaller behind it. */
   .pswitch-vstack{ --card-w:280px; --card-h:360px; --step:72px; position:relative; width:var(--card-w); margin:0 auto;
     height:calc(var(--card-h) + (var(--n) - 1) * (var(--step) + var(--spread, 0px))); touch-action:none; -webkit-user-select:none; user-select:none; }
-  .pswitch-vcard{ position:absolute; left:0; top:calc(var(--i) * (var(--step) + var(--spread, 0px))); width:var(--card-w); height:var(--card-h); --mscale:0.68;
-    transform:scale(calc(1 - var(--b) * 0.06)); transform-origin:50% 0; box-shadow:0 -6px 22px rgba(0,0,0,0.55); transition:opacity 0.2s ease; }
+  .pswitch-vcard{ position:absolute; left:0; top:calc(var(--i) * var(--step)); width:var(--card-w); height:var(--card-h); --mscale:0.68;
+    transform:translateY(calc(var(--i) * var(--spread, 0px))) scale(calc(1 - var(--b) * 0.06)); transform-origin:50% 0; will-change:transform; box-shadow:0 -6px 22px rgba(0,0,0,0.55); transition:opacity 0.2s ease; }
   /* Horizontal: the same stack sideways - home in front on the right, the others peeking out to its left. */
   .pswitch-hstack{ --card-w:260px; --card-h:420px; --step:56px; width:calc(var(--card-w) + (var(--n) - 1) * (var(--step) + var(--spread, 0px))); height:var(--card-h); max-width:none; }
-  .pswitch-hstack .pswitch-vcard{ top:0; left:calc(var(--i) * (var(--step) + var(--spread, 0px))); --mscale:0.63; transform-origin:0 50%; box-shadow:-6px 0 22px rgba(0,0,0,0.55); }
+  .pswitch-hstack .pswitch-vcard{ top:0; left:calc(var(--i) * var(--step)); transform:translateX(calc(var(--i) * var(--spread, 0px))) scale(calc(1 - var(--b) * 0.06)); --mscale:0.63; transform-origin:0 50%; box-shadow:-6px 0 22px rgba(0,0,0,0.55); }
   .pswitch-vcard.picked{ opacity:0.25; }
   .pswitch-vfloat{ position:fixed; inset:0; z-index:40; background:rgba(0,0,0,0.6); }
   /* Exactly the size of the whole stack, right where the stack is (owner). */
@@ -3278,6 +3284,15 @@
     text-align:center; color:rgba(255,255,255,0.35); font-size:11px; line-height:1;
     padding:2px 0 6px; cursor:pointer; user-select:none;
   }
+  .sys-card{ margin-bottom:10px; }
+  .sys-box{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px; }
+  .sys-box .sys-opt.none{ grid-column:1 / -1; }
+  .sys-opt{ position:relative; border:1px solid var(--line, #2a2a2a); border-radius:16px; padding:12px 12px 44px; background:var(--card, #0b0b0b); cursor:pointer; min-height:92px; }
+  .sys-opt.on{ border-color:#f3f2ee; }
+  .sys-opt-name{ font-size:13.5px; font-weight:700; }
+  .sys-opt-sub{ font-size:11px; color:var(--muted, #8a8a8a); margin-top:3px; line-height:1.35; }
+  .sys-opt .toggle-switch{ position:absolute; left:12px; bottom:10px; pointer-events:none; }
+  .sys-box.off{ opacity:0.32; filter:grayscale(1); pointer-events:none; }   /* lights out while the System switch is off */
   .toggle-switch{
     width:38px; height:22px; border-radius:11px; background:var(--card-2); border:1px solid var(--line);
     position:relative; cursor:pointer; padding:0; flex-shrink:0;
@@ -4044,6 +4059,14 @@
   #dash-s3 .station3-bar > button:nth-last-child(-n+2) svg{ flex-shrink:0; width:14px; height:14px; }
   @media (max-width:419px){ #dash-s3 .station3-bar > button:nth-last-child(-n+2) svg{ display:none; } }
 
+  /* EASY TO TAP (whole-app check, 5 Nov 2026 - owner: 'check everything ... every button'): small buttons get a bigger
+     INVISIBLE touch area around them - nothing about how they look changes. Sized so it never reaches a neighbour
+     (the brightness arrow / Controls chevron sit next to sliders, so theirs stays small). */
+  .quote-lock, .close-filter-btn, [data-action="open-tx-from-overview"], [data-action="legal-open"], .notes-swatch{ position:relative; }
+  .quote-lock::after, .close-filter-btn::after, [data-action="open-tx-from-overview"]::after{ content:''; position:absolute; inset:-10px; }
+  [data-action="legal-open"]::after{ content:''; position:absolute; inset:-12px -3px; }
+  .notes-swatch::after{ content:''; position:absolute; inset:-4px; }
+  .brightness-arrow::after, .controls-expand::after, [data-action="controls-expand"]::after{ content:''; position:absolute; inset:-6px; }
   /* ===== NO MOTION ANYWHERE IN LOCKEDINTOOL (owner, 29 Oct 2026: 'I dont want any animations or transitions or
      delay on the whole app. Nothing in this app should have that. So please fix the whole app if it means to'). Every
      transition and animation snaps straight to its end state, so nothing slides, fades, pulses, bounces or waits -
@@ -5084,9 +5107,32 @@ function isBlockedSearchQuery(q){
   const lower = q.toLowerCase();
   return ADULT_SEARCH_TERMS.some(term => lower.includes(term)) || UNSAFE_SEARCH_TERMS.some(term => lower.includes(term));
 }
+// 'This is a mistake' on the block screen (owner, 5 Nov 2026 - chose 'Report only, no viewing'): what was blocked goes to
+// Lockedintool (no account, no name) and it stays blocked until Lockedintool's official profile reviews it. Anything
+// unblocked for everyone comes back in /v1/blockallow (kept on the phone, looked at again every 6 hours).
+const BLOCK_ALLOW_KEY = 'story-blockallow';
+function blockAllowGet(){ try{ return JSON.parse(localStorage.getItem(BLOCK_ALLOW_KEY) || 'null') || {}; }catch(e){ return {}; } }
+function blockAllowed(kind, v){ const a = blockAllowGet(); return !!(v && Array.isArray(a[kind]) && a[kind].includes(v)); }
+function blockAllowRefresh(){
+  const a = blockAllowGet(); if(a.at && Date.now() - a.at < 6 * 3600000) return;
+  fetch(MSG_API + '/v1/blockallow').then(r=>r.ok ? r.json() : null).then(j=>{ if(!j) return; try{ localStorage.setItem(BLOCK_ALLOW_KEY, JSON.stringify({ terms: j.terms || [], sites: j.sites || [], apps: j.apps || [], at: Date.now() })); }catch(e){} }).catch(()=>{});
+}
+// (owner, 6 Nov 2026: 'Is a report but then you will be able to continue viewing what you where viewing' - replaces
+// 'report only, no viewing'): the report goes to Lockedintool AND the search carries on.
+function blockMistakeSend(){
+  const b = state.contentBlock; if(!b) return;
+  state.contentBlock = null;
+  if(b.q){
+    fetch(MSG_API + '/v1/blockfix', { method:'POST', headers:{ 'content-type':'application/json' }, body: JSON.stringify({ kind:'search', value: b.q }) }).catch(()=>{});
+    const url = 'https://www.google.com/search?q=' + encodeURIComponent(b.q) + '&safe=active';
+    if(NATIVE && window.StoryNative.openUrl) window.StoryNative.openUrl(url); else window.open(url, '_blank');
+  }
+  showToast('Sent to Lockedintool to check');
+}
 // The context line on the block screen - what was blocked (owner: "Context: nudity / adult content").
 function searchBlockContext(q){
   const lower = (q || '').toLowerCase();
+  if(blockAllowed('terms', lower.trim())) return '';   // unblocked for everyone by Lockedintool after a 'This is a mistake' review
   if(ADULT_SEARCH_TERMS.some(term => lower.includes(term))) return 'nudity / adult content';
   if(UNSAFE_SEARCH_TERMS.some(term => lower.includes(term))) return 'harmful or unsafe content';
   return '';
@@ -5102,6 +5148,7 @@ function contentBlockOverlay(b){
         <div class="lit-block-title">Locked by Lockedintool from viewing this</div>
         <div class="lit-block-ctx">Context: ${escText(ctx)}</div>
         <button class="lit-block-more" data-action="lit-block-info">Find out more about Lockedintool’s privacy and rules</button>
+        <button class="lit-block-mistake" data-action="lit-block-mistake">This is a mistake</button>
         <div class="lit-block-hint">Tap anywhere to go back</div>
       </div>
     </div>`;
@@ -5115,7 +5162,7 @@ function searchStepGo(inputId){
   const blockCtx = searchBlockContext(q);
   if(blockCtx){
     // Adult content is blocked across Lockedintool - the plain black block screen (owner); no ban, no counting, no warning.
-    state.contentBlock = { context: blockCtx };
+    state.contentBlock = { context: blockCtx, q };
     state.searchBlocked = false;
     state.searchOpen = false;
     state.pendingSearchQuery = null;
@@ -5146,11 +5193,12 @@ function searchStepGo(inputId){
 // Block the view the moment an adult word is typed (owner: even before you search), and clear the box so you're not
 // stuck on the block each time. Used live by both search bars; searchStepGo still blocks on Enter too.
 function searchLiveBlock(inputEl){
-  const ctx = searchBlockContext(inputEl ? inputEl.value : '');
+  const typed = inputEl ? inputEl.value : '';
+  const ctx = searchBlockContext(typed);
   if(!ctx) return false;
   if(inputEl) inputEl.value = '';
   state.searchQuery = '';
-  state.contentBlock = { context: ctx };
+  state.contentBlock = { context: ctx, q: typed };
   state.searchBlocked = false;
   state.pendingSearchQuery = null;
   renderDevice();
@@ -5326,6 +5374,27 @@ function currentScreenKey(){
   return [state.current, (state.pageStyleOn && state.pageStyleViewOpen) ? 1 : 0, state.rowsViewOpen ? 1 : 0].join('|');
 }
 
+// Drawn icons for Lockedintool's own rows and tiles (whole-app check, 5 Nov 2026): emoji look different on every phone
+// brand and clash with the app's drawn icons (owner, earlier: the brightness icon 'a drawn sun, no emoji'). Thin lines
+// in the text colour, so they follow the System theme and a colour system like everything else.
+const LIT_ICO = (()=>{
+  const g = d=>`<svg class="lit-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+  return {
+    bank: g('<path d="M3 9.5 12 4l9 5.5"/><path d="M5 10v7M9.7 10v7M14.3 10v7M19 10v7M3 20h18"/>'),
+    trade: g('<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>'),
+    card: g('<rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 10h19M6.5 15h4"/>'),
+    notes: g('<rect x="5" y="3" width="14" height="18" rx="2.5"/><path d="M9 8h6M9 12h6M9 16h3.5"/>'),
+    community: g('<circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17.2" cy="9" r="2.5"/><path d="M16 14.2c2.8.3 5 2.6 5 5.8"/>'),
+    settings: g('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>'),
+    camera: g('<path d="M4 8h3.2l1.8-2.6h6l1.8 2.6H20v11H4z"/><circle cx="12" cy="13.2" r="3.4"/>'),
+    gallery: g('<rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="8.8" cy="9.6" r="1.8"/><path d="M21 16l-5-5-9.5 9"/>'),
+    lock: g('<rect x="5" y="11" width="14" height="10" rx="2.2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>'),
+    pdf: g('<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/>'),
+    mic: g('<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/>'),
+    table: g('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M9.5 4v16M15 4v16"/>'),
+    save: g('<path d="M5 3h11l3 3v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2z"/><path d="M8 3v5h7V3M8 21v-6h8v6"/>'),
+  };
+})();
 let state = {
   device:'phone',
   homeScreen:'wallet',
@@ -5561,11 +5630,11 @@ let state = {
     {id:'mt5', name:'MetaTrader 5', icon:'📊', section:'WORK & TRADING', launchPopup:'mt5'},
     {id:'shopify', name:'Shopify', icon:'🛍️', section:'WORK & TRADING'},
     {id:'samsungwallet', name:'Samsung Wallet', icon:'🪪', section:'WORK & TRADING'},
-    {id:'notes', name:'Notes', icon:'🗒️', section:'STORY', nav:'notes'},
-    {id:'community', name:'Community', icon:'👥', section:'STORY', nav:'community'},
-    {id:'settings', name:'Settings', icon:'⚙️', section:'STORY', nav:'settings'},
-    {id:'camera', name:'Camera', icon:'📷', section:'STORY'},
-    {id:'gallery', name:'Gallery', icon:'🖼️', section:'STORY'},
+    {id:'notes', name:'Notes', icon:LIT_ICO.notes, section:'STORY', nav:'notes'},
+    {id:'community', name:'Community', icon:LIT_ICO.community, section:'STORY', nav:'community'},
+    {id:'settings', name:'Settings', icon:LIT_ICO.settings, section:'STORY', nav:'settings'},
+    {id:'camera', name:'Camera', icon:LIT_ICO.camera, section:'STORY'},
+    {id:'gallery', name:'Gallery', icon:LIT_ICO.gallery, section:'STORY'},
     {id:'instagram', name:'Instagram', icon:'📷', section:'SOCIAL', locked:true},
     {id:'whatsapp', name:'WhatsApp', icon:'💬', section:'SOCIAL', locked:true},
     {id:'spotify', name:'Spotify', icon:'🎵', section:'SOCIAL'},
@@ -6124,7 +6193,7 @@ async function bankRefresh(force){
 async function bankConnect(){
   if(!litSignedIn()){ showToast('Log in to Lockedintool first'); return; }
   try{ const r = await msgApi('/v1/bank/link', {}); state.bankWaiting = true; payOpenBank(r.url); }
-  catch(e){ showToast(e.code === 'country' ? 'Connecting your bank isn’t available in your country yet' : e.code === 'not-ready' ? 'Connecting your bank switches on once Stitch turns on bank connections for Lockedintool' : 'Couldn’t open your bank - try again'); }
+  catch(e){ showToast(e.code === 'country' ? 'Connecting your bank isn’t available in your country yet' : e.code === 'not-ready' ? 'Connecting your bank switches on once Lockedintool’s open-banking partner is connected' : 'Couldn’t open your bank - try again'); }
 }
 async function bankUnlink(){
   try{ await msgApi('/v1/bank/unlink', {}); }catch(e){}
@@ -6223,8 +6292,8 @@ function moneyAcctOf(t){
 const moneyAcctKey = t=>moneyAcctOf(t).key;
 function moneyAllAccounts(){
   const seen = {}, out = [];
-  moneyTx().forEach(t=>{ const a = moneyAcctOf(t); if(seen[a.key]) return; seen[a.key] = 1; out.push({ key:a.key, name:a.name, icon:'🏦' }); });
-  tradeAccounts().forEach(a=>out.push({ key:'t:' + a.id, name:a.name, icon:'📈' }));
+  moneyTx().forEach(t=>{ const a = moneyAcctOf(t); if(seen[a.key]) return; seen[a.key] = 1; out.push({ key:a.key, name:a.name, icon:LIT_ICO.bank }); });
+  tradeAccounts().forEach(a=>out.push({ key:'t:' + a.id, name:a.name, icon:LIT_ICO.trade }));
   return out;
 }
 function moneyAllHas(key){ return nwHas(MONEY_ALL_KEY, key); }
@@ -6335,13 +6404,13 @@ function moneyBalances(forCard){
     if(!walletCards().some(x=>cardMatches(x, b)) || (c && !cardMatches(c, b))) return;
     const a = moneyAcctOf(b); if(seen[a.key]) return; seen[a.key] = 1;
     const v = to && b.cur !== to ? fxConvert(b.bal, b.cur, to) : null;
-    out.push({ key: a.key, name: a.name, bal: v == null ? b.bal : v, cur: v == null ? b.cur : to, ts: b.ts, icon:'🏦' });
+    out.push({ key: a.key, name: a.name, bal: v == null ? b.bal : v, cur: v == null ? b.cur : to, ts: b.ts, icon:LIT_ICO.bank });
   });
   (forCard ? moneyView() : moneyTx()).forEach(t=>{
     if(t.bal == null) return;
     const a = moneyAcctOf(t);
     if(seen[a.key]) return; seen[a.key] = 1;   // newest first: the newest balance of each account
-    out.push({ key: a.key, name: a.name, bal: t.bal, cur: t.cur, ts: t.ts, icon:'🏦' });
+    out.push({ key: a.key, name: a.name, bal: t.bal, cur: t.cur, ts: t.ts, icon:LIT_ICO.bank });
   });
   return out;
 }
@@ -6351,7 +6420,7 @@ function tradeAssets(){
   let last = {}; try{ last = JSON.parse(localStorage.getItem(TRADE_LAST_KEY) || '{}') || {}; }catch(e){}
   const to = convCur();
   return tradeAccounts().map(a=>{ const l = last[a.id]; if(!(l && l.eq != null)) return null; const cur = a.currency || 'USD', v = to ? fxConvert(+l.eq, cur, to) : null;
-    return { key:'t:' + a.id, name:a.name, bal: v == null ? +l.eq : v, cur: v == null ? cur : to, ts:l.ts, icon:'📈' }; }).filter(Boolean);
+    return { key:'t:' + a.id, name:a.name, bal: v == null ? +l.eq : v, cur: v == null ? cur : to, ts:l.ts, icon:LIT_ICO.trade }; }).filter(Boolean);
 }
 function moneyAssets(){
   if(moneyAllOn()) return moneyBalances().filter(a=>moneyAllHas(a.key)).concat(tradeAssets().filter(a=>moneyAllHas(a.key)));
@@ -6465,8 +6534,8 @@ function paymentCardsHTML(){
   const sp = state.moneySpan || moneyRangeSpan();
   const list = moneyView().filter(t=>t.ts >= sp.from && t.ts <= sp.to).slice(0, 300);
   // Only your cards' payments count (owner) - with no card added none ever will, so say how they start.
-  if(!list.length && !walletCards().length) return `<div class="notif-card notif-empty"><div class="notif-icon-wrap">💳</div><div class="notif-mid"><div class="notif-source">No card added yet</div><div class="notif-label">Add your card in Wallet - its payments show here</div></div><div class="notif-right"><div class="notif-amt">&nbsp;</div><div class="notif-time">&nbsp;</div></div></div>`;
-  if(!list.length) return `<div class="notif-card notif-empty"><div class="notif-icon-wrap">💳</div><div class="notif-mid"><div class="notif-source">${moneyView().length ? 'No payments in this time' : 'No payments yet'}</div><div class="notif-label">They show as your bank apps send them</div></div><div class="notif-right"><div class="notif-amt">&nbsp;</div><div class="notif-time">&nbsp;</div></div></div>`;
+  if(!list.length && !walletCards().length) return `<div class="notif-card notif-empty"><div class="notif-icon-wrap">${LIT_ICO.card}</div><div class="notif-mid"><div class="notif-source">No card added yet</div><div class="notif-label">Add your card in Wallet - its payments show here</div></div><div class="notif-right"><div class="notif-amt">&nbsp;</div><div class="notif-time">&nbsp;</div></div></div>`;
+  if(!list.length) return `<div class="notif-card notif-empty"><div class="notif-icon-wrap">${LIT_ICO.card}</div><div class="notif-mid"><div class="notif-source">${moneyView().length ? 'No payments in this time' : 'No payments yet'}</div><div class="notif-label">They show as your bank apps send them</div></div><div class="notif-right"><div class="notif-amt">&nbsp;</div><div class="notif-time">&nbsp;</div></div></div>`;
   return list.map(t=>`
         <div class="notif-card" data-notif="${escText(t.id)}">
           <div class="notif-icon-wrap">${payIconHTML(t)}</div>
@@ -6483,8 +6552,8 @@ function paymentCardsHTML(){
 }
 const moneyRowsEmpty = text=>`<div class="row"><div class="row-left"><div class="row-name" style="color:var(--muted);">${text}</div></div></div>`;
 const BANK_ROW = ()=>NATIVE || litSignedIn() ? (bankLinked()
-  ? `<div class="row" data-action="bank-unlink"><div class="row-left"><div class="row-icon">🏦</div><div><div class="row-name">Bank connected</div><div class="row-sub">Real balance and history · tap to disconnect</div></div></div></div>`
-  : `<div class="row" data-action="bank-connect"><div class="row-left"><div class="row-icon">🏦</div><div><div class="row-name">Connect your bank</div><div class="row-sub">Your real balance and history</div></div></div><div class="row-amt">›</div></div>`) : '';
+  ? `<div class="row" data-action="bank-unlink"><div class="row-left"><div class="row-icon">${LIT_ICO.bank}</div><div><div class="row-name">Bank connected</div><div class="row-sub">Real balance and history · tap to disconnect</div></div></div></div>`
+  : `<div class="row" data-action="bank-connect"><div class="row-left"><div class="row-icon">${LIT_ICO.bank}</div><div><div class="row-name">Connect your bank</div><div class="row-sub">Your real balance and history</div></div></div><div class="row-amt">›</div></div>`) : '';
 function moneyAssetRows(neg){
   const list = moneyAssets().filter(a=>neg ? a.bal < 0 : a.bal >= 0);
   if(!neg) bankRefresh(false);
@@ -9568,7 +9637,7 @@ function subOptConfirm(){
   else showToast('Only system - now choose your plan');
 }
 // A plan paid under "Only system" turns it on (here, and whenever Lockedintool sees that plan).
-function subApplyMode(){ const s = subState() || {}; if(s.active && s.mode === 'only' && litSignedIn() && !sysModeState().on && sysModeState().ready){ try{ window.StoryNative.systemModeSet(true, ''); }catch(e){} syncAppPages(); } sysHomeCheck(); }
+function subApplyMode(){ const s = subState() || {}; const sw = systemStateGet(); if(s.active && s.mode === 'only' && litSignedIn() && (!sw.app || (sw.on && !sw.owner)) && !sysModeState().on && sysModeState().ready){ try{ window.StoryNative.systemModeSet(true, ''); }catch(e){} syncAppPages(); } sysHomeCheck(); }
 // Only system is on but Lockedintool isn't the phone's Home app yet (Android's question was never answered - owner,
 // 4 Nov 2026: 'Nothing is happening'): ask it again, once each time Lockedintool's screens start, from the Pages window.
 let sysHomeAsked = false;
@@ -10097,7 +10166,22 @@ async function rateSumLoad(){
   box.innerHTML = '<div class="pf-rep-k">Call ratings</div><div class="pf-rep-m">' + (r.count ? r.avg + ' ★ average from ' + r.count + (r.count === 1 ? ' rating' : ' ratings') + ' · ' + [5, 4, 3, 2, 1].map(n=>n + '★ ' + (r.by[n] || 0)).join(' · ') : 'No calls rated yet') + '</div>' +
     (r.recent || []).filter(x=>x.note).slice(0, 15).map(x=>'<div class="pf-rep"><div>' + st(x.stars) + ' · ' + escText((x.grp ? 'Group ' : '') + (x.video ? 'video call' : 'voice call')) + ' · ' + escText(callLen(x.secs)) + ' · ' + escText(msgTime(x.at)) + '</div><div class="pf-rep-m">' + escText(x.note) + '</div></div>').join('');
 }
-async function repLoad(){ rateSumLoad(); repRender(null); try{ repRender((await msgApi('/v1/reports')).reports || []); }catch(e){ const box = document.querySelector('#story-profile .pf-rep-list'); if(box) box.innerHTML = '<div class="pf-ed-note">' + (e.code === 'official' ? 'Only Lockedintool’s official profile sees reports.' : 'No connection right now') + '</div>'; } }
+// 'This is a mistake' reports from the adult-content block screen (owner chose: report only, no viewing) - only the
+// official profile sees them: Unblock for everyone (every phone stops blocking exactly that) or Keep blocked.
+function bfxRender(r){
+  const box = document.querySelector('#story-profile .pf-blockfix'); if(!box) return;
+  const open = (r && r.open) || [], allowed = (r && r.allowed) || [];
+  const kindWord = { site:'Website', app:'App', search:'Search' };
+  box.innerHTML = '<div class="pf-rep-k">Blocked by mistake?</div>' + (open.length ? open.map(x=>'<div class="pf-rep"><div>' + escText(kindWord[x.kind] || x.kind) + ' · ' + escText(x.value) + '</div><div class="pf-rep-m">Reported ' + x.n + (x.n === 1 ? ' time' : ' times') + ' · ' + escText(msgTime(x.last)) + '</div>' +
+    '<div class="pf-rep-btns"><button data-pf="bfx-act" data-a="allow" data-id="' + escText(x.k) + '">Unblock for everyone</button><button data-pf="bfx-act" data-a="keep" data-id="' + escText(x.k) + '">Keep blocked</button></div></div>').join('') : '<div class="pf-rep-m">Nothing reported</div>') +
+    (allowed.length ? '<div class="pf-rep-m" style="margin-top:8px;">Unblocked: ' + allowed.map(x=>escText(x.value)).join(', ') + '</div>' : '');
+}
+async function bfxLoad(){ try{ bfxRender(await msgApi('/v1/blockfix/list')); }catch(e){} }
+async function bfxAct(k, a){
+  try{ bfxRender(await msgApi('/v1/blockfix/act', { k, action:a })); showToast(a === 'allow' ? 'Unblocked for everyone' : 'Kept blocked'); }
+  catch(e){ showToast('No connection right now'); }
+}
+async function repLoad(){ rateSumLoad(); bfxLoad(); repRender(null); try{ repRender((await msgApi('/v1/reports')).reports || []); }catch(e){ const box = document.querySelector('#story-profile .pf-rep-list'); if(box) box.innerHTML = '<div class="pf-ed-note">' + (e.code === 'official' ? 'Only Lockedintool’s official profile sees reports.' : 'No connection right now') + '</div>'; } }
 async function repAct(id, a, sure){
   if(a === 'ban' && !sure){ litSheet({ title:'Ban this account?', text:'It is deleted with everything it posted. This can’t be undone.', items:[{ label:'Ban account', danger:true, fn: ()=>repAct(id, a, true) }] }); return; }
   try{ repRender((await msgApi('/v1/reports/act', { id, action:a })).reports || []); showToast(a === 'remove' ? 'Removed' : a === 'ban' ? 'Account banned' : 'Dismissed'); }
@@ -10260,7 +10344,7 @@ function privacySettingsHTML(){
 // ---- Privacy Policy + Terms of Service (owner, under Information). Written from how Lockedintool really works; the
 //      owner's details: Lockedintool, lockedintool@gmail.com, no refunds (except where the law requires). Also reachable from the
 //      Subscription page (must be readable by someone without a plan, before they agree to it).
-const LEGAL_UPDATED = '4 November 2026';
+const LEGAL_UPDATED = '5 November 2026';
 const LEGAL = {
   'legal-safety': { title:'Safety & Rules', sections:[
     ['Adult content is blocked', [
@@ -10270,7 +10354,8 @@ const LEGAL = {
       'The block is for Lockedintool and, as it rolls out, for your whole phone - every app, every search and every website - not only inside Lockedintool.',
       'No filter is ever perfect, but Lockedintool blocks the normal ways this content is reached and is the strongest a phone app can do.' ]],
     ['Your privacy', [
-      'The filter runs on your phone. Lockedintool doesn’t keep a list of what you searched or send it anywhere.' ]],
+      'The filter runs on your phone. Lockedintool doesn’t keep a list of what you searched or send it anywhere.',
+      'Blocked by mistake? Tap “This is a mistake” on the black screen and you go straight back to what you were viewing. Only what was blocked - the website’s address, the app or the words searched - goes to Lockedintool, never your name or account. That site or app isn’t blocked again until your screen next goes off; Lockedintool checks it, and if it really was a mistake it is unblocked for everyone.' ]],
   ] },
   'legal-privacy': { title:'Privacy Policy', sections:[
     ['Who we are', [
@@ -10282,7 +10367,7 @@ const LEGAL = {
       'We do not sell your information and Lockedintool shows no ads.' ]],
     ['Kept only on your phone', [
       'Money and Wallet: payments read from the notifications and bank SMS your bank and payment apps put on your phone (amount, who, date, balance, the card or account’s last 4 digits). One-time PINs, chats, email and adverts are skipped.',
-      'Connect your bank (only if you choose to; South African banks for now): you log in to your own bank on Stitch’s page (Stitch is a licensed open banking provider). Lockedintool then READS your accounts’ names, last 4 digits, balances and transactions to show them in Money and Wallet - it can’t move money with this. Your bank’s sign-in is kept locked on Lockedintool’s server; disconnect any time (Money > Bank connected) and it is deleted, and it is deleted with your account.',
+      'Connect your bank (only if you choose to, and only where it is available): you log in to your own bank on the page of Lockedintool’s licensed open-banking partner. Lockedintool then READS your accounts’ names, last 4 digits, balances and transactions to show them in Money and Wallet - it can’t move money with this. Your bank’s sign-in is kept locked on Lockedintool’s server; disconnect any time (Money > Bank connected) and it is deleted, and it is deleted with your account.',
       'Cards you add: bank name, last 4 digits and expiry. The full card number, expiry and CVV are kept locked (encrypted with a key in your phone’s own secure key store) on this phone only - never on our server and never in your backup - and they only show after your phone’s own fingerprint, face or PIN. Pictures of scanned cards are kept with the long number and CVV covered.',
       'Notes, drawings, pictures and audio you add to notes; highlights you make with Create; your settings.',
       'Trading: the sign-in tokens and API keys of the broker accounts you add, in Lockedintool’s private storage. Your broker password is never kept.',
@@ -10311,7 +10396,7 @@ const LEGAL = {
       'We share information with authorities only when the law requires it.' ]],
     ['Permissions Lockedintool asks for', [
       'Notification access - to read payments for Money and Wallet and to show the Notifications panel.',
-      'Accessibility - to open recent apps, lock the screen, see when the phone’s PIN page or quick settings are showing (so the lock screen dial pad steps aside), and find Lockedintool’s widgets on your home screen. What it sees is used on the phone at that moment and never stored or sent.',
+      'Accessibility - to open recent apps, see when the phone’s PIN page or quick settings are showing (so the lock screen dial pad steps aside), find Lockedintool’s widgets on your home screen and, for the adult-content block, read which app opens and the address in a browser’s address bar - never what you type or what is on a page. What it sees is used on the phone at that moment and never stored or sent.',
       'Display over other apps - Station 3, the Pages and the dial pad.',
       'Camera, microphone, photos, videos and audio - only when you use them (Create, calls, card scanning, notes, profile picture).',
       'Phone, call log and contacts - to place calls from the dial pad and show Call history.',
@@ -10343,14 +10428,14 @@ const LEGAL = {
       'Before you pay you can cancel or switch plans at any time. Once a payment is made it is not refundable, except where the law requires a refund.',
       'We may change prices or what a plan includes; you will be told in the app before it affects you.' ]],
     ['Lockedintool as your system', [
-      'If you switch on “Lockedintool as your system” (on the Subscription page), the Dashboard becomes your home screen: whenever you press home or leave an app, you land back on Lockedintool. Your apps all still work - you open them from the Apps button, app pages or your recent apps. Phone calls, emergency calls, the lock screen and the phone’s own panel keep working. It turns off only when you log out or delete your account. It needs Lockedintool system actions switched on.' ]],
+      'If you choose “Only system” (on the Subscription page), the Dashboard becomes your home screen: whenever you press home or leave an app, you land back on Lockedintool. Your apps all still work - you open them from the Apps button, app pages or your recent apps. Phone calls, emergency calls, the lock screen and the phone’s own panel keep working. It turns off only when you log out or delete your account. It needs Lockedintool system actions switched on.' ]],
     ['Trading - please read', [
       'Lockedintool is not a broker, not a financial adviser and does not give investment advice. It is only a gateway to your own account at your own broker: your broker agreement is between you and your broker, and deposits and withdrawals always stay with them.',
       'Orders you place in Lockedintool are sent to your broker exactly as you place them. You are responsible for every trade. Trading is risky and you can lose more than you put in.',
       'Prices, charts and balances come from your broker and TradingView and can be late, wrong or unavailable. We are not responsible for losses caused by markets, your broker, TradingView, your connection or app downtime.' ]],
     ['Money and Wallet', [
-      'By using Lockedintool you agree that it reads your bank and card details - your payments, balances and the last 4 digits of your cards and accounts - from your bank’s notifications and messages on your phone and, when you connect your bank, from your bank through Stitch, to show them to you in Money and Wallet.',
-      'Money and Wallet are built from your bank’s notifications and messages (or, if you connect your bank, what your bank shares through Stitch), so they can be incomplete or wrong - they are not bank statements. Check with your bank before relying on them.',
+      'By using Lockedintool you agree that it reads your bank and card details - your payments, balances and the last 4 digits of your cards and accounts - from your bank’s notifications and messages on your phone and, when you connect your bank, from your bank through Lockedintool’s licensed open-banking partner, to show them to you in Money and Wallet.',
+      'Money and Wallet are built from your bank’s notifications and messages (or, if you connect your bank, what your bank shares through Lockedintool’s open-banking partner), so they can be incomplete or wrong - they are not bank statements. Check with your bank before relying on them.',
       'Tap to Pay uses your phone’s own payment app. When sending money is available it goes from your bank account straight into theirs through our payment partner; Lockedintool never holds your money.' ]],
     ['Messages, groups and calls', [
       'You own what you post. You let us carry and show it so the app can work (for example, posts in public groups are visible to everyone).',
@@ -10358,7 +10443,7 @@ const LEGAL = {
       'You can block anyone (they can’t message or call you, see your profile or statuses, or find you - and aren’t told) and report profiles, chats, statuses, posts, comments and groups. Lockedintool reviews every report; nobody - not the person reported and not Lockedintool’s review - sees who reported. The person gets an automatic warning saying how many reports came in about what, and if Lockedintool removes something they’re told why. Reporting a chat sends us the last messages that person sent you, so we can see what happened - nothing else from your chats is ever readable by us.',
       'The dial pad places normal phone calls through your mobile network; your network’s charges apply. For emergencies, use your phone’s own dialer if anything doesn’t work.' ]],
     ['Other services', [
-      'Your brokers, TradingView, Lemon Squeezy, Stitch, your bank and other apps you open from Lockedintool have their own terms, which apply when you use them.' ]],
+      'Your brokers, TradingView, Lemon Squeezy, PayFast, your bank and other apps you open from Lockedintool have their own terms, which apply when you use them.' ]],
     ['The app', [
       'Lockedintool, its name, logo and design belong to Lockedintool. Don’t copy, resell or reverse-engineer the app or misuse our servers.',
       'We work to keep Lockedintool running, but it is provided as it is and may sometimes be unavailable, change or have mistakes. ' ]],
@@ -10434,6 +10519,51 @@ function informationScreen(){
     <div class="info-foot">#lockedintool${ver ? '<br>Lockedintool ' + escText(ver) : ''}</div>
     </div>`;
 }
+// SYSTEM at the top of Settings (owner, 5-6 Nov 2026, with a drawing): (1) one switch - Lockedintool works as a SYSTEM
+// (off = it's an app: 'Let's make lockedintool an app also. The systems will be a feature that someone will choose for
+// themselves'); turning it on or off needs the phone's fingerprint / face / PIN. (2) under it the box with the two
+// systems, Second system | Only system: while the switch is off the box is 'lights out' and can't be used; on, the owner
+// switches freely between them (fingerprint / face / PIN again), while customers only ever see the one they bought.
+function systemStateGet(){
+  try{ if(NATIVE && window.StoryNative.systemState){ const [on, mode, who] = String(window.StoryNative.systemState()).split('|'); return { on: on === 'on', mode, owner: who === 'owner', app: true }; } }catch(e){}
+  return { on:false, mode:'second', owner:true, app:false };
+}
+function systemCardsHTML(){
+  const st = systemStateGet();
+  const sub = (typeof subState === 'function' && subState()) || {};
+  const bought = sub.active && (sub.mode === 'only' || sub.mode === 'second') ? sub.mode : '';
+  const boxes = st.owner ? ['second', 'only'] : (bought ? [bought] : []);
+  const NAMES = { second:'Second system', only:'Only system' };
+  const SUBS = { second:'Lockedintool works alongside your phone', only:'Lockedintool is your whole phone' };
+  return `<div class="set2-card sys-card">
+      <div class="set2-row"><div class="set2-text"><div class="set2-name">System</div><div class="set2-sub">${st.on ? 'Lockedintool is working as a system' : 'Lockedintool is an app - turn on to use it as a system'}</div></div>
+      <button class="toggle-switch${st.on ? ' on' : ''}" data-action="sys-switch"><span class="toggle-knob"></span></button></div>
+    </div>
+    <div class="sys-box${st.on ? '' : ' off'}">${boxes.length ? boxes.map(m=>{ const cur = st.on && st.mode === m; return `
+      <div class="sys-opt${cur ? ' on' : ''}" data-action="sys-pick" data-v="${m}">
+        <div class="sys-opt-name">${NAMES[m]}</div><div class="sys-opt-sub">${SUBS[m]}</div>
+        <span class="toggle-switch sm${cur ? ' on' : ''}"><span class="toggle-knob"></span></span>
+      </div>`; }).join('') : `<div class="sys-opt none"><div class="sys-opt-sub">Your system comes with your plan - see Subscriptions.</div></div>`}
+    </div>`;
+}
+function systemSwitchTap(){
+  const st = systemStateGet();
+  if(!st.app){ showToast('The System switch works in the Lockedintool app'); return; }
+  try{ window.StoryNative.systemSwitch(!st.on); }catch(e){}
+}
+function systemPickTap(m){
+  const st = systemStateGet();
+  if(!st.on) return;   // lights out while the System switch is off
+  if(st.mode === m) return;
+  if(!st.owner){ showToast('Your system comes with your plan'); return; }
+  if(!st.app){ showToast('Switching systems works in the Lockedintool app'); return; }
+  try{ window.StoryNative.systemPick(m); }catch(e){}
+}
+window.storySystemAnswer = function(what, v, result){
+  if(result === 'nolock') showToast('Set a screen lock on your phone first');
+  else if(result === 'ok') showToast(what === 'switch' ? (v === 'on' ? 'Lockedintool is working as a system' : 'Lockedintool is an app now') : (v === 'only' ? 'Only system is on' : 'Second system is on'));
+  if(state.current === 'settings') renderDevice();
+};
 function settingsHubScreen(){
   // Settings (owner, 4 Nov 2026: 'make settings be clean, don't matter if in the screen they will be short. But just show
   // only the words of the options and you have to tap the word to see its options'): a plain list of names; tapping one
@@ -10465,6 +10595,7 @@ function settingsHubScreen(){
   return `
     <div class="page-shell set2">
     ${topBar('Settings', false)}
+    ${systemCardsHTML()}
     <div class="set2-card">
       ${sections.map(([k, name])=>row(`data-action="set-open" data-v="${k}"`, name)).join('')}
       ${row('data-nav="notif-settings"', 'Notifications')}
@@ -10995,6 +11126,7 @@ window.storyProfileOnly = function(){
     <div class="pf-scroll pf-reports" hidden>
       <div class="pf-ed-head"><button class="pf-ed-back" data-pf="rep-back" aria-label="Back">‹</button><div class="pf-ed-title">Reports</div></div>
       <div class="pf-rate-sum"></div>
+      <div class="pf-blockfix"></div>
       <div class="pf-rep-list"></div>
     </div>
     <div class="pf-scroll pf-field" hidden>
@@ -11171,6 +11303,7 @@ window.storyProfileOnly = function(){
     else if(k === 'menu-reports'){ el.querySelector('.pf-menupage').hidden = true; main.hidden = true; const r = el.querySelector('.pf-reports'); r.hidden = false; r.scrollTop = 0; repLoad(); }
     else if(k === 'rep-back'){ el.querySelector('.pf-reports').hidden = true; pfMenuOpen(); }
     else if(k === 'rep-act') repAct(b.getAttribute('data-id'), b.getAttribute('data-a'));
+    else if(k === 'bfx-act') bfxAct(b.getAttribute('data-id'), b.getAttribute('data-a'));
     else if(k === 'up-p-more'){ const p = UP.person; if(p) litPersonSheet(p, { after: ()=>upOpenPerson(p.id) }); }
     else if(k === 'upv-more'){ const v = UP.view; if(!v) return; const it = v.items[v.i]; upPause();
       litSheet({ onClose: ()=>{ if(UP.view === v) upShowItem(); }, items: [
@@ -11244,7 +11377,8 @@ window.storyProfileOnly = function(){
     else if(k === 'cr-add'){
       if(crRecording) return;
       pfGridFor = 'create';
-      const access = window.StoryNative.mediaAccess ? window.StoryNative.mediaAccess() : 'none';
+      if(!window.StoryNative || !window.StoryNative.mediaAccess){ showToast('Adding pictures and videos works in the app'); return; }
+      const access = window.StoryNative.mediaAccess();
       if(access === 'none') window.StoryNative.requestPhotoAccess(); else openPhotoGrid(access);
     }
     else if(k === 'cr-post') crPost();
@@ -13756,7 +13890,7 @@ function morePhotos(){
 }
 window.storyPhotoAccessDone = function(access){
   if(pfGridFor === 'chat') return;   // a chat's picture / video grid answers in storyChatAccessDone
-  if((pfGridFor === 'create' || pfGridFor === 'post') && window.StoryNative.mediaAccess) access = window.StoryNative.mediaAccess();  // pictures AND videos
+  if((pfGridFor === 'create' || pfGridFor === 'post') && window.StoryNative && window.StoryNative.mediaAccess) access = window.StoryNative.mediaAccess();  // pictures AND videos
   if(access !== 'none') openPhotoGrid(access);
   else if(pfGridFor === 'create' || pfGridFor === 'post') showToast('Lockedintool isn’t allowed to see your pictures');
   else window.StoryNative.pickProfilePhoto();  // not allowed: the phone's own picker instead
@@ -13963,7 +14097,7 @@ function appsScreen(){
             <div class="row-card app-row" style="cursor:pointer;" data-app-id="${a.id}" ${attr}>
               <div class="row">
                 <div class="row-left"><div class="row-icon">${appIconHTML(a)}</div><div class="row-name">${escText(a.name)}</div></div>
-                ${a.locked ? `<span class="chev-right" title="Locked">🔒</span>` : `<span class="chev-right">›</span>`}
+                ${a.locked ? `<span class="chev-right" title="Locked">${LIT_ICO.lock}</span>` : `<span class="chev-right">›</span>`}
               </div>
             </div>
           `;
@@ -14032,9 +14166,8 @@ function communityGuidelinesScreen(){
       leads to a suspension.
     </div>
     <div class="community-policy-box">
-      This only applies inside Lockedintool itself. Lockedintool doesn't control apps like TikTok, Instagram, or Facebook,
-      or what you do in them — you're free to have and use those outside Lockedintool. The restriction is on what
-      Lockedintool's own search and groups allow.
+      These community rules are about what you post and share in Lockedintool's search, groups and chats. Separately,
+      Lockedintool blocks adult content across your whole phone - see Safety &amp; Rules under Information.
     </div>
     </div>
   `;
@@ -15446,12 +15579,12 @@ function notesCanvasScreen(){
 
 function plusMenuTemplate(){
   const items = [
-    {id:'picture', label:'Picture', icon:'🖼️', action:'note-media', kind:'picture'},
-    {id:'camera', label:'Camera', icon:'📷', action:'note-media', kind:'camera'},
-    {id:'pdf', label:'PDF', icon:'📄', action:'note-export-pdf'},
-    {id:'audio', label:'Audio File', icon:'🎙️', action:'note-media', kind:'audio'},
-    {id:'table', label:'Table', icon:'▦', action:'note-add-table'},
-    {id:'saveas', label:'Save As', icon:'💾', action:'note-saveas'},
+    {id:'picture', label:'Picture', icon:LIT_ICO.gallery, action:'note-media', kind:'picture'},
+    {id:'camera', label:'Camera', icon:LIT_ICO.camera, action:'note-media', kind:'camera'},
+    {id:'pdf', label:'PDF', icon:LIT_ICO.pdf, action:'note-export-pdf'},
+    {id:'audio', label:'Audio File', icon:LIT_ICO.mic, action:'note-media', kind:'audio'},
+    {id:'table', label:'Table', icon:LIT_ICO.table, action:'note-add-table'},
+    {id:'saveas', label:'Save As', icon:LIT_ICO.save, action:'note-saveas'},
   ];
   return `
     <div class="notes-popover-overlay" data-action="notes-plus-bg">
@@ -16567,6 +16700,10 @@ function setupCircleAndWheelDrag(){
       updateSliceShading();
     };
     updateSliceShading(); // paint the correct shading immediately, not just after the first drag
+    // The phone builds the 42 curved strips' 3D layers the first time the wheel turns (a one-time ~0.1-0.4 s job);
+    // do it right as the 3D Circle opens (an invisible turn there and back) so the first swipe is already smooth.
+    requestAnimationFrame(()=>{ if(!rig.isConnected) return; rig.style.transform = `rotateX(${state.wheelRotX}deg) rotateY(${state.wheelRotY + 0.01}deg)`;
+      requestAnimationFrame(()=>{ if(rig.isConnected) applyTransform(); }); });
     // Left alone, the wheel keeps itself turning slowly on its own -- a drag (or its
     // momentum afterward) takes over immediately and this pauses for it, then picks back up
     // once the wheel is at rest again. Tilt (wheelRotX) is never touched by this, only spin.
@@ -16632,7 +16769,8 @@ function setupCircleAndWheelDrag(){
       const dt = now - lastT;
       if(dt > 0) velocity = (e.clientX - lastX) * 0.5 / dt;
       lastX = e.clientX; lastT = now;
-      applyTransform();
+      // One turn per drawn frame - a finger reports several moves per frame on many phones.
+      if(!rig.__raf) rig.__raf = requestAnimationFrame(()=>{ rig.__raf = 0; applyTransform(); });
       e.stopPropagation();
     });
     const endWheelDrag = (e)=>{
@@ -17116,8 +17254,9 @@ function initCanvas(canvasId, isOverlay){
   canvas.addEventListener('pointerleave', stop);
 }
 
-// In the app the slider is the phone's REAL brightness (OverlayService.setBrightness): "System control" = STORY's
-// Pages at that brightness while they're up, "Device control" = the whole phone's brightness setting. No grey veil
+// In the app (OverlayService.setBrightness): "System control" = Lockedintool's OWN brightness - Lockedintool dims its
+// own screens itself (a native dim layer), the phone's brightness is left alone (owner, 6 Nov 2026); "Device control" =
+// the whole phone's brightness setting. No grey veil
 // over the pages (that greyed everything in the White theme). Until you move it, the slider shows the phone's own
 // brightness and STORY leaves it alone. Kept on the phone (story-brightness). The browser preview still uses the veil.
 const BRIGHT_NATIVE = (()=>{ try{ const j = JSON.parse(window.StoryNative && StoryNative.brightness ? (StoryNative.brightness() || '{}') : '{}'); return !!(j && j.v != null); }catch(e){ return false; } })();
@@ -17397,6 +17536,14 @@ function attachHandlers(){
       if(!horiz && k < 1){ const r = st.getBoundingClientRect(); dy = Math.round(window.innerHeight / 2 + 30 - (r.top + r.height / 2)); }
       st.style.transform = (dy ? `translateY(${dy}px) ` : '') + (k < 1 ? `scale(${k.toFixed(4)})` : '');
     };
+    const cards = Array.from(st.querySelectorAll('.pswitch-vcard'));
+    const spreadNow = ()=>{
+      const sp = state.vstackSpread || 0;
+      cards.forEach((c, i)=>{ const b = parseFloat(c.style.getPropertyValue('--b')) || 0;
+        c.style.transform = (horiz ? 'translateX(' : 'translateY(') + (i * sp) + 'px) scale(' + (1 - b * 0.06).toFixed(4) + ')'; });
+      const len = (horiz ? cw : ch) + (n - 1) * (step + sp);
+      if(horiz) st.style.width = len + 'px'; else st.style.height = len + 'px';
+    };
     fit();
     st.addEventListener('pointerdown', e=>{
       if(state.vstackPick) return;
@@ -17409,8 +17556,10 @@ function attachHandlers(){
       if(!moved && Math.abs(d) < 8) return;
       if(!moved){ moved = true; try{ st.setPointerCapture(down.id); }catch(err){} }  // (only once it's a drag, so taps still pick a page)
       state.vstackSpread = Math.round(Math.max(0, Math.min(maxSpread(), startSpread + d)));
-      st.style.setProperty('--spread', state.vstackSpread + 'px');
-      fit();
+      // One update per drawn frame (smooth on every phone): the finger can report several moves per frame.
+      // Each card moves by its own transform and the stack's size is set directly - changing the --spread variable
+      // made every element inside every page preview recompute its style (seconds of work per drag on a phone).
+      if(!st.__raf) st.__raf = requestAnimationFrame(()=>{ st.__raf = 0; spreadNow(); fit(); });
       e.stopPropagation();
     });
     const up = e=>{ if(!down) return; down = null; e.stopPropagation(); if(moved){ st.__dragged = true; setTimeout(()=>{ st.__dragged = false; }, 0); } };
@@ -17807,8 +17956,12 @@ function attachHandlers(){
   }
   document.querySelectorAll('[data-brightmode]').forEach(el=>{
     el.addEventListener('click', ()=>{
+      const was = state.brightnessMode;
       state.brightnessMode = el.getAttribute('data-brightmode');
       state.brightnessMenuOpen = false;
+      // System control is Lockedintool's own brightness, separate from the phone's (owner, 6 Nov 2026): it starts at full
+      // (no dimming); Device control starts from the phone's brightness as it is now.
+      if(BRIGHT_NATIVE && was !== state.brightnessMode){ if(state.brightnessMode === 'system') state.brightnessValue = 100; else { const j = brightPhone(); if(j.v != null) state.brightnessValue = Math.max(0, Math.min(100, +j.v || 0)); } }
       brightnessUserSet();
       renderDevice();
     });
@@ -18446,7 +18599,7 @@ function attachHandlers(){
     if(el.getAttribute('data-action') === 'note-undo' || el.getAttribute('data-action') === 'note-redo') return;
     el.addEventListener('click', ev=>{
       const action = el.getAttribute('data-action');
-      if(action === 'tap-nw' && ev) ev.stopPropagation();   // the switch sits inside the Tap to Pay button: only the switch acts
+      if((action === 'tap-nw' || action === 'lit-block-mistake') && ev) ev.stopPropagation();   // the switch sits inside the Tap to Pay button: only the switch acts
       if(NOTE_PAGE_SWITCH_ACTIONS.has(action)) resetNoteUndoStack();
       else if(NOTE_UNDOABLE_ACTIONS.has(action)) pushNoteUndoSnapshot();
       switch(action){
@@ -18635,6 +18788,9 @@ function attachHandlers(){
         case 'search-open': state.searchOpen = true; state.searchQuery = ''; state.pendingSearchQuery = null; state.searchBlocked = false; break;
         case 'search-bg': state.searchOpen = false; state.pendingSearchQuery = null; break;
         case 'lit-block-close': state.contentBlock = null; break;
+        case 'lit-block-mistake': blockMistakeSend(); break;
+        case 'sys-switch': systemSwitchTap(); break;
+        case 'sys-pick': systemPickTap(el.getAttribute('data-v')); break;
         case 'lit-block-info': state.contentBlock = null; state.legalFrom = 'dashboard'; state.current = 'legal-safety'; break;
         case 'perm-toggle': { const on = !!(NATIVE && window.StoryNative.permanentState && (()=>{ try{ return window.StoryNative.permanentState(); }catch(e){ return false; } })()); if(on) showToast('Lockedintool is set to stay on this phone'); else state.permAgree = { open:true, scrolled:false }; break; }
         case 'perm-bg': state.permAgree = { open:false, scrolled:false }; break;
@@ -20235,7 +20391,7 @@ function litBrowserPick(kind, onFiles){
 }
 function litPickMedia(kind, onFiles){
   if(!NATIVE || !window.StoryNative.listMedia){ litBrowserPick(kind, onFiles); return; }
-  const access = window.StoryNative.mediaAccess ? window.StoryNative.mediaAccess() : 'none';
+  const access = window.StoryNative && window.StoryNative.mediaAccess ? window.StoryNative.mediaAccess() : 'none';
   if(access === 'none'){ litGridWant = { kind, onFiles }; if(typeof pfGridFor !== 'undefined') pfGridFor = 'chat'; window.StoryNative.requestPhotoAccess(); return; }
   litGrid(kind, onFiles);
 }
@@ -21944,6 +22100,7 @@ if(REAL_DEVICE){
   window.addEventListener('offline', renderWifi);
 }
 loadNativeApps();
+if(!/[?&](s3|widget)=/.test(location.search)) setTimeout(blockAllowRefresh, 4000);   // what Lockedintool unblocked after a 'This is a mistake' review
 renderDevice();
 
 // Real-device status-row clock: unlike the desktop mockup's frozen "9:41" (a deliberate,
