@@ -85,6 +85,14 @@
             </intent-filter>
         </activity>
 
+        <!-- Lockedintool as an APP (Settings > System off - owner, 5 Nov 2026: 'Let's make lockedintool an app also'):
+             a normal app window holding the Dashboard and Pages; leaving it leaves nothing of Lockedintool behind. -->
+        <activity
+            android:name=".LockedintoolApp"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.Story.Home" />
+
         <!-- "Update available" for Live users (Update now / Later; required after 3 days). -->
         <activity
             android:name=".UpdateActivity"

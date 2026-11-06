@@ -82,6 +82,12 @@ class MainActivity : Activity() {
             setContentView(ScrollView(this).apply { setBackgroundColor(StoryTheme.swap(this@MainActivity, Color.BLACK)); addView(col) })
             return
         }
+        // Lockedintool as an APP (owner, 5 Nov 2026: 'Let's make lockedintool an app also'): once it's set up, the icon
+        // opens Lockedintool itself - its Dashboard - like any app. (Opened from inside Lockedintool's own Apps list it
+        // shows this setup screen, so the owner controls stay reachable.)
+        if (getSharedPreferences("story", MODE_PRIVATE).getBoolean("enabled", false) && AppMode.appOnly(this) && !intent.getBooleanExtra("setup", false)) {
+            LockedintoolApp.open(this, null); finish(); return
+        }
         // Everything was copied from the old Lockedintool: remove it (asked once by itself, the button stays until it's gone).
         if (AppMove.removeOld(this)) {
             col.addView(title("Everything was copied from the old Lockedintool. Remove the old one so only this one runs. Log in once to bring your chats back.", 15f))

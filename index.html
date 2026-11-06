@@ -3284,6 +3284,15 @@
     text-align:center; color:rgba(255,255,255,0.35); font-size:11px; line-height:1;
     padding:2px 0 6px; cursor:pointer; user-select:none;
   }
+  .sys-card{ margin-bottom:10px; }
+  .sys-box{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px; }
+  .sys-box .sys-opt.none{ grid-column:1 / -1; }
+  .sys-opt{ position:relative; border:1px solid var(--line, #2a2a2a); border-radius:16px; padding:12px 12px 44px; background:var(--card, #0b0b0b); cursor:pointer; min-height:92px; }
+  .sys-opt.on{ border-color:#f3f2ee; }
+  .sys-opt-name{ font-size:13.5px; font-weight:700; }
+  .sys-opt-sub{ font-size:11px; color:var(--muted, #8a8a8a); margin-top:3px; line-height:1.35; }
+  .sys-opt .toggle-switch{ position:absolute; left:12px; bottom:10px; pointer-events:none; }
+  .sys-box.off{ opacity:0.32; filter:grayscale(1); pointer-events:none; }   /* lights out while the System switch is off */
   .toggle-switch{
     width:38px; height:22px; border-radius:11px; background:var(--card-2); border:1px solid var(--line);
     position:relative; cursor:pointer; padding:0; flex-shrink:0;
@@ -9628,7 +9637,7 @@ function subOptConfirm(){
   else showToast('Only system - now choose your plan');
 }
 // A plan paid under "Only system" turns it on (here, and whenever Lockedintool sees that plan).
-function subApplyMode(){ const s = subState() || {}; if(s.active && s.mode === 'only' && litSignedIn() && !sysModeState().on && sysModeState().ready){ try{ window.StoryNative.systemModeSet(true, ''); }catch(e){} syncAppPages(); } sysHomeCheck(); }
+function subApplyMode(){ const s = subState() || {}; const sw = systemStateGet(); if(s.active && s.mode === 'only' && litSignedIn() && (!sw.app || (sw.on && !sw.owner)) && !sysModeState().on && sysModeState().ready){ try{ window.StoryNative.systemModeSet(true, ''); }catch(e){} syncAppPages(); } sysHomeCheck(); }
 // Only system is on but Lockedintool isn't the phone's Home app yet (Android's question was never answered - owner,
 // 4 Nov 2026: 'Nothing is happening'): ask it again, once each time Lockedintool's screens start, from the Pages window.
 let sysHomeAsked = false;
@@ -10510,6 +10519,51 @@ function informationScreen(){
     <div class="info-foot">#lockedintool${ver ? '<br>Lockedintool ' + escText(ver) : ''}</div>
     </div>`;
 }
+// SYSTEM at the top of Settings (owner, 5-6 Nov 2026, with a drawing): (1) one switch - Lockedintool works as a SYSTEM
+// (off = it's an app: 'Let's make lockedintool an app also. The systems will be a feature that someone will choose for
+// themselves'); turning it on or off needs the phone's fingerprint / face / PIN. (2) under it the box with the two
+// systems, Second system | Only system: while the switch is off the box is 'lights out' and can't be used; on, the owner
+// switches freely between them (fingerprint / face / PIN again), while customers only ever see the one they bought.
+function systemStateGet(){
+  try{ if(NATIVE && window.StoryNative.systemState){ const [on, mode, who] = String(window.StoryNative.systemState()).split('|'); return { on: on === 'on', mode, owner: who === 'owner', app: true }; } }catch(e){}
+  return { on:false, mode:'second', owner:true, app:false };
+}
+function systemCardsHTML(){
+  const st = systemStateGet();
+  const sub = (typeof subState === 'function' && subState()) || {};
+  const bought = sub.active && (sub.mode === 'only' || sub.mode === 'second') ? sub.mode : '';
+  const boxes = st.owner ? ['second', 'only'] : (bought ? [bought] : []);
+  const NAMES = { second:'Second system', only:'Only system' };
+  const SUBS = { second:'Lockedintool works alongside your phone', only:'Lockedintool is your whole phone' };
+  return `<div class="set2-card sys-card">
+      <div class="set2-row"><div class="set2-text"><div class="set2-name">System</div><div class="set2-sub">${st.on ? 'Lockedintool is working as a system' : 'Lockedintool is an app - turn on to use it as a system'}</div></div>
+      <button class="toggle-switch${st.on ? ' on' : ''}" data-action="sys-switch"><span class="toggle-knob"></span></button></div>
+    </div>
+    <div class="sys-box${st.on ? '' : ' off'}">${boxes.length ? boxes.map(m=>{ const cur = st.on && st.mode === m; return `
+      <div class="sys-opt${cur ? ' on' : ''}" data-action="sys-pick" data-v="${m}">
+        <div class="sys-opt-name">${NAMES[m]}</div><div class="sys-opt-sub">${SUBS[m]}</div>
+        <span class="toggle-switch sm${cur ? ' on' : ''}"><span class="toggle-knob"></span></span>
+      </div>`; }).join('') : `<div class="sys-opt none"><div class="sys-opt-sub">Your system comes with your plan - see Subscriptions.</div></div>`}
+    </div>`;
+}
+function systemSwitchTap(){
+  const st = systemStateGet();
+  if(!st.app){ showToast('The System switch works in the Lockedintool app'); return; }
+  try{ window.StoryNative.systemSwitch(!st.on); }catch(e){}
+}
+function systemPickTap(m){
+  const st = systemStateGet();
+  if(!st.on) return;   // lights out while the System switch is off
+  if(st.mode === m) return;
+  if(!st.owner){ showToast('Your system comes with your plan'); return; }
+  if(!st.app){ showToast('Switching systems works in the Lockedintool app'); return; }
+  try{ window.StoryNative.systemPick(m); }catch(e){}
+}
+window.storySystemAnswer = function(what, v, result){
+  if(result === 'nolock') showToast('Set a screen lock on your phone first');
+  else if(result === 'ok') showToast(what === 'switch' ? (v === 'on' ? 'Lockedintool is working as a system' : 'Lockedintool is an app now') : (v === 'only' ? 'Only system is on' : 'Second system is on'));
+  if(state.current === 'settings') renderDevice();
+};
 function settingsHubScreen(){
   // Settings (owner, 4 Nov 2026: 'make settings be clean, don't matter if in the screen they will be short. But just show
   // only the words of the options and you have to tap the word to see its options'): a plain list of names; tapping one
@@ -10541,6 +10595,7 @@ function settingsHubScreen(){
   return `
     <div class="page-shell set2">
     ${topBar('Settings', false)}
+    ${systemCardsHTML()}
     <div class="set2-card">
       ${sections.map(([k, name])=>row(`data-action="set-open" data-v="${k}"`, name)).join('')}
       ${row('data-nav="notif-settings"', 'Notifications')}
@@ -18729,6 +18784,8 @@ function attachHandlers(){
         case 'search-bg': state.searchOpen = false; state.pendingSearchQuery = null; break;
         case 'lit-block-close': state.contentBlock = null; break;
         case 'lit-block-mistake': blockMistakeSend(); break;
+        case 'sys-switch': systemSwitchTap(); break;
+        case 'sys-pick': systemPickTap(el.getAttribute('data-v')); break;
         case 'lit-block-info': state.contentBlock = null; state.legalFrom = 'dashboard'; state.current = 'legal-safety'; break;
         case 'perm-toggle': { const on = !!(NATIVE && window.StoryNative.permanentState && (()=>{ try{ return window.StoryNative.permanentState(); }catch(e){ return false; } })()); if(on) showToast('Lockedintool is set to stay on this phone'); else state.permAgree = { open:true, scrolled:false }; break; }
         case 'perm-bg': state.permAgree = { open:false, scrolled:false }; break;

@@ -64,7 +64,7 @@ class IdentityActivity : Activity() {
 
     private fun report(result: String) {
         val s = OverlayService.instance ?: return
-        when (purpose) { "security" -> s.secDone(result); "wallet" -> s.walletDone(result); "card" -> s.cardDone(result); else -> s.identityDone(result) }
+        when (purpose) { "security" -> s.secDone(result); "wallet" -> s.walletDone(result); "card" -> s.cardDone(result); "systemsw" -> s.systemSwitchDone(result); "system" -> s.systemPickDone(result); else -> s.identityDone(result) }
     }
 
     private fun done(result: String) {

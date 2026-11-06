@@ -159,6 +159,8 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
     @JavascriptInterface
     fun launchApp(pkg: String) {
         if (SystemMode.refuses(ctx)) return
+        // Lockedintool's own app in its Apps list = the setup screen (never back into the app itself).
+        if (pkg == ctx.packageName) { runCatching { ctx.startActivity(Intent(ctx, MainActivity::class.java).putExtra("setup", true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }; return }
         val i = ctx.packageManager.getLaunchIntentForPackage(pkg) ?: return
         openFirst(sequenceOf(i))
     }
@@ -311,6 +313,16 @@ class StoryBridge(private val ctx: Context, private val host: Host, private val 
         // to pick Lockedintool as the phone's Home app, so the phone's OWN nav works 100% normally and home -> Dashboard.
         if (on) askHomeApp()
     }
+    /** Settings > System (owner, 5-6 Nov 2026): "on|off" (Lockedintool works as a system or is an app) + "|only|second"
+     *  (the system it runs as) + "|owner|user" (only the owner's phone may switch between the two systems). */
+    @JavascriptInterface
+    fun systemState(): String = (if (AppMode.systemOn(ctx)) "on" else "off") + "|" + (if (SystemMode.on(ctx)) "only" else "second") + "|" + (if (Release.isOwner(ctx)) "owner" else "user")
+    /** Turning the System switch on / off - always after the phone's own fingerprint / face / PIN (owner). */
+    @JavascriptInterface
+    fun systemSwitch(on: Boolean) { if (pages) OverlayService.instance?.systemSwitchAsk(on) }
+    /** Switching between Second system and Only system (owner's phone only; fingerprint / face / PIN first). */
+    @JavascriptInterface
+    fun systemPick(mode: String) { if (pages && (mode == "only" || mode == "second")) OverlayService.instance?.systemPickAsk(mode) }
     /** Ask the owner to set Lockedintool as the phone's Home app (Android's own prompt; Settings as a fallback). */
     private fun askHomeApp() {
         runCatching {

@@ -513,7 +513,7 @@ class OverlayService : Service(), StoryBridge.Host {
         // Only use widgets (owner): the bottom line that switches Apps | Lockedintool doesn't exist at all. (Only system
         // KEEPS the line now - owner, 28 Oct 2026: apps fully work there, so the switch / swipe-up stay.)
         pagesPane?.web?.evaluateJavascript(dashPadJs(), null)   // with or without the line, the Dashboard keeps the right room
-        if (WidgetMode.on(this)) { bar = null; barLine = null; hidePicker(); dashLineSync(); return }
+        if (sysQuiet()) { bar = null; barLine = null; hidePicker(); dashLineSync(); return }
         val hasLine = phoneHasGestureLine()
         val w = (150 * dp).toInt(); val h = (26 * dp).toInt()
         val touch = ViewConfiguration.get(this).scaledTouchSlop
@@ -955,6 +955,7 @@ class OverlayService : Service(), StoryBridge.Host {
      *  Lockedintool lands on your Home Screen (Layouts > Home Screen, owner). */
     private fun showPanel(station3Only: Boolean, back: Boolean = false) {
         if (WidgetMode.on(this)) return   // Only use widgets: only the widgets
+        if (AppMode.appOnly(this)) { if (!station3Only) LockedintoolApp.open(this, null); return }   // the app: its own window
         warmUp()
         if (station3Only) {
             // Station 3 opens exactly the same over the Pages as over any app -- the Pages stay put.
@@ -998,6 +999,7 @@ class OverlayService : Service(), StoryBridge.Host {
     override fun openPages(page: String) { ui.post { openPageFromWidget(page) } }
     private fun openPageFromWidget(page: String) {
         if (WidgetMode.on(this)) { showToast("Only use widgets is on - open the Lockedintool app to turn it off"); return }
+        if (AppMode.appOnly(this)) { LockedintoolApp.open(this, page); return }   // the app: the page opens in its own window
         hideLiveWidgets()
         warmUp()
         secGate(pagesPane) {
@@ -1125,7 +1127,7 @@ class OverlayService : Service(), StoryBridge.Host {
         val onHome = home != null && StoryAccessibilityService.foregroundPkg == home && !keyguardLocked() &&
             pagesPane?.shown != true && profilePane?.shown != true &&
             getSystemService(android.os.PowerManager::class.java)?.isInteractive == true
-        if (!onHome) { hideLiveWidgets(); return }
+        if (!onHome || AppMode.appOnly(this)) { hideLiveWidgets(); return }
         val found = StoryAccessibilityService.storyWidgets(home!!)
         // Widgets that are gone from the home screen for good: their live page goes too.
         val placed = if (found.isEmpty() && liveWidgets.isEmpty()) emptySet() else PageWidgets.allIds(this)
@@ -1355,7 +1357,7 @@ class OverlayService : Service(), StoryBridge.Host {
         // hidden), so when it's revealed it appears WITH the Dashboard instead of ~0.2 s later while it re-lays-out
         // (owner: the band 'wasn't there, then it's there ... comes in'). No visual effect here - the band stays hidden
         // until updateBubble's dash branch actually shows it; this only gives its layout a head start.
-        if (on && QuickAccess.s3Dash(this) && !WidgetMode.on(this)) tellS3(onPages = false, onDash = true)
+        if (on && QuickAccess.s3Dash(this) && !sysQuiet()) tellS3(onPages = false, onDash = true)
         updateBubble() } } }
     /** The Pages stepped aside for a moment for Lockedintool's own screens (Create's camera, a system picker): the
      *  Dashboard's Station 3 stays where it is. Not for the phone's own switch screens opened from the Dashboard's
@@ -1371,7 +1373,7 @@ class OverlayService : Service(), StoryBridge.Host {
         else if (phoneHasGestureLine()) 0 else navBarHeightPx()
     /** How far above the screen's bottom edge the Dashboard's Station 3 sits: right above the bottom line's area. */
     private fun dashBandYPx(): Int {
-        val line = if (WidgetMode.on(this)) 0
+        val line = if (sysQuiet()) 0
             else (if (phoneHasGestureLine()) 0 else navBarHeightPx() + (6 * dp).toInt()) + (26 * dp).toInt()
         return maxOf(line, navInsetPx())
     }
@@ -1499,7 +1501,7 @@ class OverlayService : Service(), StoryBridge.Host {
     private fun inLit(): Boolean = inLitCache ?: getSharedPreferences("story", MODE_PRIVATE).getBoolean("in_lit", false).also { inLitCache = it }
     private fun setInLit(on: Boolean) { if (inLit() != on) { inLitCache = on; getSharedPreferences("story", MODE_PRIVATE).edit().putBoolean("in_lit", on).apply() } }
     private fun litHomeCheck() {
-        if (!inLit() || pagesPane == null || pagesPane?.shown == true || keyguardLocked() || WidgetMode.on(this) || SystemMode.on(this)) return
+        if (!inLit() || pagesPane == null || pagesPane?.shown == true || keyguardLocked() || sysQuiet() || SystemMode.on(this)) return
         if (pickerHid.isNotEmpty() || openingPkg != null || createActive || callActive || picker != null) return
         // Only the phone's OWN home screen counts: the last app Android brought to the front must be the home-screen app
         // (owner's recording, 29 Oct 2026: Lockedintool opened by itself while they were in another app).
@@ -1523,7 +1525,7 @@ class OverlayService : Service(), StoryBridge.Host {
         // The Dashboard's Station 3 band shows only while the Dashboard itself is up and the phone is unlocked - never on
         // the lock screen / AOD / under the phone's own panel (owner, 28 Oct 2026: 'the dashboard station 3 pops up
         // everywhere ... is not fixed'). The lock screen has its own Station 3 rules.
-        val dash = (pagesUp || (s3Held && pagesAside())) && dashUp && QuickAccess.s3Dash(this) && !WidgetMode.on(this) && !aodShowing() && !panelOver && !keyguardLocked()
+        val dash = (pagesUp || (s3Held && pagesAside())) && dashUp && QuickAccess.s3Dash(this) && !sysQuiet() && !aodShowing() && !panelOver && !keyguardLocked()
         if (dash) {
             s3Held = true
             val p = s3Pane
@@ -1552,7 +1554,7 @@ class OverlayService : Service(), StoryBridge.Host {
         // is separate (s3Dash, always on) and overrides this below (dash -> on = false).
         var on = QuickAccess.s3Apps(this) && when (where) { "pages" -> pagesUp; "apps" -> !pagesUp; else -> true }
         if (aodShowing() && !QuickAccess.s3Aod(this)) on = false
-        if (WidgetMode.on(this)) on = false   // Only use widgets: no Station 3
+        if (sysQuiet()) on = false   // Only use widgets: no Station 3
         if (dash) on = false                  // the Dashboard's Station 3 has no button
         if (panelOver) on = false             // the phone's own panel is pulled down over everything
         if (lockOptsUp) on = false            // Lockedintool's lock screen is showing its unlock options
@@ -1852,7 +1854,7 @@ class OverlayService : Service(), StoryBridge.Host {
         // 2026: 'the system switch button ... On lockedintool it's supposed to work. Doesn't matter what system the plans
         // is. This should be a permanent feature'). Lockedintool never does Home / Recents itself - it only steps aside so
         // what the phone opened shows. Only system included: there Home is the Dashboard, so only Recents counts.
-        if ((pagesPane?.shown != true && profilePane?.shown != true) || keyguardLocked() || WidgetMode.on(this)) return@post
+        if ((pagesPane?.shown != true && profilePane?.shown != true) || keyguardLocked() || sysQuiet()) return@post
         if (pickerHid.isNotEmpty() || openingPkg != null || createActive || appPagePkg != null) return@post
         if (pkg == packageName) return@post
         val recents = StoryAccessibilityService.RECENTS_CLASS.containsMatchIn(cls) || (recentsPkg != null && pkg == recentsPkg)
@@ -1894,7 +1896,7 @@ class OverlayService : Service(), StoryBridge.Host {
     // swipe to the Dashboard) is gone - in Only system the phone's own Home brings the Dashboard (LockedintoolHome).
     private fun phoneSwipe(kind: String) { ui.post {
         if (kind != "cancel") return@post
-        if (keyguardLocked() || WidgetMode.on(this)) return@post
+        if (keyguardLocked() || sysQuiet()) return@post
         if (pickerHid.isNotEmpty() || openingPkg != null || createActive) return@post
         if (SystemMode.on(this)) return@post
         // In Lockedintool the phone's Home is Lockedintool itself - only its Recents (caught by recentsShown) steps aside.
@@ -1956,7 +1958,10 @@ class OverlayService : Service(), StoryBridge.Host {
     fun pagesShownNow() = pagesPane?.shown == true
     /** Called on the main thread by LockedintoolHome once its window is up. */
     fun homeAttach(act: android.app.Activity) {
-        if (!SystemMode.on(this) || keyguardLocked() || WidgetMode.on(this)) return
+        if (!SystemMode.on(this) || keyguardLocked() || WidgetMode.on(this) || AppMode.appOnly(this)) return
+        attachPagesTo(act)
+    }
+    private fun attachPagesTo(act: android.app.Activity) {
         val p = pagesPane ?: return
         val hw = act.windowManager
         if (p.wm === hw) return
@@ -2019,6 +2024,97 @@ class OverlayService : Service(), StoryBridge.Host {
     }
     /** The Home is going away: the Pages go back to their own overlay window. */
     fun homeGone(act: android.app.Activity) { if (homeHostWm === act.windowManager) homeDetach() }
+
+    // ---- Lockedintool as an APP (AppMode off - owner, 5 Nov 2026: 'Let's make lockedintool an app also ... If turned on
+    //      lockedintool will work as a system'; chose 'Nothing - pure app'). The Pages live inside LockedintoolApp's own
+    //      window while it is on screen (the same way Only system's Home holds them) and go away with it. ----
+    /** Everything that only belongs to Lockedintool as a SYSTEM is off: Only use widgets, or Lockedintool as an app. */
+    private fun sysQuiet() = WidgetMode.on(this) || AppMode.appOnly(this)
+    fun appShow(act: android.app.Activity, page: String?) {
+        if (!AppMode.appOnly(this)) { act.finish(); openPageFromWidget(page ?: "dashboard"); return }   // a system again
+        warmUp()
+        val p = pagesPane ?: return
+        if (p.wm !== act.windowManager) attachPagesTo(act)
+        if (p.wm !== act.windowManager) return
+        p.web.setOnKeyListener { _, code, e ->
+            // Back on the app: like any app, it goes to the background (the screens keep their own back buttons).
+            if (code == android.view.KeyEvent.KEYCODE_BACK && e.action == android.view.KeyEvent.ACTION_UP && AppMode.appOnly(this) && pagesInHome()) {
+                LockedintoolApp.current?.moveTaskToBack(true); true } else false }
+        val js = "window.storyShow&&window.storyShow(" + (if (page != null) org.json.JSONObject.quote(page) else "null") + ",false)"
+        secGate(p) { showPagesOn(p, js) { updateBubble() } }
+    }
+    /** The app went out of sight: everything of Lockedintool goes with it (never left over another app). */
+    fun appStopped(act: android.app.Activity) {
+        if (homeHostWm !== act.windowManager) return
+        if (pickerHid.isNotEmpty() || createActive) return   // Lockedintool's own picker / camera opened over it
+        listOfNotNull(dialPane, s3Pane).filter { it.shown }.forEach { hideOne(it) }
+        profilePane?.takeIf { it.shown && !callActive }?.let { hideOne(it) }
+        pagesPane?.takeIf { it.shown }?.let { hideOne(it) }
+        homeDetach()
+        updateBubble()
+    }
+    /** Settings > System (owner, 6 Nov 2026: 'put a pin or biometrics lock for it to be turned on or off') - the
+     *  phone's own fingerprint / face / PIN first (IdentityActivity 'systemsw'), then the switch flips. */
+    @Volatile private var systemSwitchWant: Boolean? = null
+    fun systemSwitchAsk(on: Boolean) { ui.post {
+        if (!stepAsideForSystem()) { systemAnswer("switch", if (on) "on" else "off", "fail"); return@post }
+        systemSwitchWant = on
+        runCatching { startActivity(Intent(this, IdentityActivity::class.java).putExtra(IdentityActivity.EXTRA_TITLE, if (on) "Turn on System" else "Turn off System").putExtra(IdentityActivity.EXTRA_FOR, "systemsw").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)) }
+            .onFailure { systemSwitchDone("fail") }
+    } }
+    fun systemSwitchDone(result: String) { ui.post {
+        comeBackFromSystem()
+        val on = systemSwitchWant ?: return@post; systemSwitchWant = null
+        if (result == "ok" && AppMode.systemOn(this) != on) { AppMode.set(this, on); appModeChanged() }
+        systemAnswer("switch", if (on) "on" else "off", result)
+    } }
+    /** The System switch flipped: off = the app (everything outside it goes away; Only system is let go and remembered,
+     *  so switching back on brings it back); on = the system again. */
+    private fun appModeChanged() {
+        val prefs = getSharedPreferences("story", MODE_PRIVATE)
+        if (AppMode.appOnly(this)) {
+            if (SystemMode.on(this)) { prefs.edit().putString("system_pick", "only").apply(); SystemMode.set(this, false); systemModeChanged() }
+            listOfNotNull(dialPane, s3Pane).filter { it.shown }.forEach { hideOne(it) }
+            profilePane?.takeIf { it.shown && !callActive }?.let { hideOne(it) }
+            closeStation3Now(); hideLiveWidgets()
+            pagesPane?.takeIf { it.shown && !pagesInHome() }?.let { hideOne(it) }
+            setInLit(false)
+            LockedintoolApp.open(this, "settings")
+            // Lockedintool was the phone's Home app (Only system): the phone asks you to pick your own home screen again.
+            if (isHomeApp()) runCatching { startActivity(Intent(android.provider.Settings.ACTION_HOME_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+        } else {
+            LockedintoolApp.current?.let { a -> homeGone(a); a.finish() }
+            if (prefs.getString("system_pick", "second") == "only" && StoryAccessibilityService.instance != null) { SystemMode.set(this, true); systemModeChanged(); askHomeRole() }
+            openPageFromWidget("settings")
+        }
+        addBar(); updateBubble(); syncLockDial()
+    }
+    /** The owner switches between Second system and Only system inside the System box (owner: 'to switch system I need
+     *  to put my phone pin or biometrics') - customers only ever see the system they bought. */
+    @Volatile private var systemPickWant: String? = null
+    fun systemPickAsk(mode: String) { ui.post {
+        if (!AppMode.systemOn(this) || !Release.isOwner(this)) { systemAnswer("pick", mode, "fail"); return@post }
+        if (!stepAsideForSystem()) { systemAnswer("pick", mode, "fail"); return@post }
+        systemPickWant = mode
+        runCatching { startActivity(Intent(this, IdentityActivity::class.java).putExtra(IdentityActivity.EXTRA_TITLE, "Switch system").putExtra(IdentityActivity.EXTRA_FOR, "system").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)) }
+            .onFailure { systemPickDone("fail") }
+    } }
+    fun systemPickDone(result: String) { ui.post {
+        comeBackFromSystem()
+        val mode = systemPickWant ?: return@post; systemPickWant = null
+        if (result == "ok") {
+            getSharedPreferences("story", MODE_PRIVATE).edit().putString("system_pick", mode).apply()
+            if (mode == "only" && !SystemMode.on(this) && StoryAccessibilityService.instance != null) { SystemMode.set(this, true); systemModeChanged(); askHomeRole() }
+            if (mode == "second" && SystemMode.on(this)) {
+                SystemMode.set(this, false); systemModeChanged()
+                if (isHomeApp()) runCatching { startActivity(Intent(android.provider.Settings.ACTION_HOME_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            }
+        }
+        systemAnswer("pick", mode, result)
+    } }
+    private fun systemAnswer(what: String, v: String, result: String) {
+        pagesPane?.web?.evaluateJavascript("window.storySystemAnswer&&window.storySystemAnswer(" + org.json.JSONObject.quote(what) + "," + org.json.JSONObject.quote(v) + "," + org.json.JSONObject.quote(result) + ")", null)
+    }
     private fun homeDetach() {
         val hw = homeHostWm ?: return
         homeHostWm = null; homeWaking = false
@@ -2196,7 +2292,7 @@ class OverlayService : Service(), StoryBridge.Host {
         // It never moves (owner): it simply stays put through screen off / Always On Display / lock screen, so it's
         // already there the instant anything shows. Only hidden on the Always On Display if that's switched off for it.
         val onAod = aodUp || (!awake && AodActivity.enabled(this))
-        val want = !WidgetMode.on(this) && QuickAccess.lockDial(this) && locked && !lockDialAway && !lockDialPeek && entry != true && !shade &&
+        val want = !sysQuiet() && QuickAccess.lockDial(this) && locked && !lockDialAway && !lockDialPeek && entry != true && !shade &&
             (if (onAod) QuickAccess.dialAod(this) else true)
         if (p != null && want != p.shown) {
             if (!want) p.web.evaluateJavascript("window.storyDialClear&&window.storyDialClear()", null)
@@ -2486,7 +2582,7 @@ class OverlayService : Service(), StoryBridge.Host {
         // screen stayed for seconds - one try at 0.25 s wasn't always let through while the phone's lock screen moved).
         for (d in longArrayOf(250, 700, 1500)) ui.postDelayed({ runCatching {
             if (LockDashActivity.instance?.inFront == true) return@runCatching
-            if (!lockScreenOurs() || WidgetMode.on(this) || callActive || createActive) return@runCatching
+            if (!lockScreenOurs() || sysQuiet() || callActive || createActive) return@runCatching
             if (getSystemService(android.app.KeyguardManager::class.java)?.isKeyguardLocked != true || userPresentAt > screenOffAt) return@runCatching
             if (!getSystemService(android.os.PowerManager::class.java).isInteractive || aodShowing()) return@runCatching
             val mode = getSystemService(android.media.AudioManager::class.java)?.mode ?: android.media.AudioManager.MODE_NORMAL
@@ -2543,7 +2639,7 @@ class OverlayService : Service(), StoryBridge.Host {
         // Already up from before (tapped, then the screen went off): back to the untouched full-screen look, so the
         // options only ever show after a tap (owner, 5 Nov 2026: 'the one with the tick is only when the screen is tapped').
         LockDashActivity.instance?.resetLook()
-        if (!lockScreenOurs() || WidgetMode.on(this) || callActive || createActive || LockDashActivity.instance != null) return
+        if (!lockScreenOurs() || sysQuiet() || callActive || createActive || LockDashActivity.instance != null) return
         if (getSystemService(android.app.KeyguardManager::class.java)?.isDeviceSecure != true) return
         val mode = getSystemService(android.media.AudioManager::class.java)?.mode ?: android.media.AudioManager.MODE_NORMAL
         if (mode != android.media.AudioManager.MODE_NORMAL) return
@@ -2555,7 +2651,7 @@ class OverlayService : Service(), StoryBridge.Host {
         }.onFailure { runCatching { startActivity(i) } }
     } }
     private fun lockDashCheck() { runCatching {
-        if (!lockScreenOurs() || WidgetMode.on(this) || callActive || createActive) return
+        if (!lockScreenOurs() || sysQuiet() || callActive || createActive) return
         if (LockDashActivity.instance != null || lockDashLeftAt > screenOffAt) return
         if (getSystemService(android.app.KeyguardManager::class.java)?.isKeyguardLocked != true || userPresentAt > screenOffAt) return
         if (!getSystemService(android.os.PowerManager::class.java).isInteractive || aodShowing()) return
@@ -2661,7 +2757,7 @@ class OverlayService : Service(), StoryBridge.Host {
         return natural.coerceAtMost(maxOf(max, (paint.measureText("Wallet page") + 16 * dp).toInt()))
     }
     /** Could it show now (the lock screen, nothing of Lockedintool's open over it)? */
-    private fun walletBtnCan(locked: Boolean) = locked && QuickAccess.walletLock(this) && walletOk() && walletBtn != null && !WidgetMode.on(this) && !walletOpening && !callActive && !createActive &&
+    private fun walletBtnCan(locked: Boolean) = locked && QuickAccess.walletLock(this) && walletOk() && walletBtn != null && !sysQuiet() && !walletOpening && !callActive && !createActive &&
         s3Pane?.shown != true && profilePane?.let { it.shown && it.wm === layerWm } != true   // (the Pages / a normal-layer Profile are under the lock screen)
     private fun showWalletBtn(on: Boolean) {
         val v = walletBtn ?: return; val lp = walletBtnLp ?: return
