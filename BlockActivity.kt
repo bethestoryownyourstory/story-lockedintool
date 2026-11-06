@@ -42,26 +42,21 @@ class BlockActivity : Activity() {
             textSize = 13f
             setOnClickListener { runCatching { OverlayService.instance?.openPages("legal-safety") }; finish() }
         })
-        // 'This is a mistake' (owner, 5 Nov 2026 - report only, no viewing): sends what was blocked to Lockedintool to check;
-        // it stays blocked until Lockedintool reviews it.
+        // 'This is a mistake' (owner, 6 Nov 2026: 'Is a report but then you will be able to continue viewing what you where
+        // viewing' - replaces 'report only, no viewing'): what was blocked goes to Lockedintool to check, and you go straight
+        // back to it - that site / app isn't blocked again until the screen next goes off.
         val kind = intent.getStringExtra("kind") ?: ""
         val value = intent.getStringExtra("value") ?: ""
         if (value.isNotBlank()) {
-            val sent = TextView(this).apply {
-                text = "Sent to Lockedintool to check. It stays blocked until then."
-                setTextColor(Color.parseColor("#9a9aa2")); textSize = 12.5f; gravity = Gravity.CENTER
-                setPadding(0, px(12), 0, 0); visibility = android.view.View.GONE
-            }
             val btn = Button(this).apply {
                 text = "This is a mistake"
                 setAllCaps(false); textSize = 13f
                 setTextColor(Color.parseColor("#d8d8dc"))
                 background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = 18 * d; setStroke(px(1), Color.parseColor("#3a3a40")); setColor(Color.TRANSPARENT) }
                 setPadding(px(16), 0, px(16), 0)
-                setOnClickListener { ContentGuard.reportMistake(kind, value); visibility = android.view.View.GONE; sent.visibility = android.view.View.VISIBLE }
+                setOnClickListener { goBackToIt(kind, value) }
             }
             root.addView(btn, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, px(40)).apply { topMargin = px(10) })
-            root.addView(sent)
         }
         root.addView(TextView(this).apply {
             text = "Tap anywhere to go back"
@@ -69,5 +64,19 @@ class BlockActivity : Activity() {
             setPadding(0, px(18), 0, 0)
         })
         setContentView(root)
+    }
+    private fun goBackToIt(kind: String, value: String) {
+        ContentGuard.reportMistake(kind, value)
+        ContentGuard.allowForNow(kind, value)
+        val pkg = intent.getStringExtra("pkg") ?: ""
+        val url = intent.getStringExtra("url") ?: ""
+        runCatching {
+            if (kind == "site" && url.isNotBlank()) {
+                val u = if (url.startsWith("http")) url else "https://" + url.trim()
+                startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(u)).apply { if (pkg.isNotBlank()) setPackage(pkg) }.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+            } else if (pkg.isNotBlank()) packageManager.getLaunchIntentForPackage(pkg)?.let { startActivity(it.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+        }
+        android.widget.Toast.makeText(this, "Sent to Lockedintool to check", android.widget.Toast.LENGTH_SHORT).show()
+        finish()
     }
 }

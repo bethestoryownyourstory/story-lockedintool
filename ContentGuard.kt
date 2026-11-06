@@ -85,6 +85,15 @@ object ContentGuard {
         }.start()
     }
     fun siteOf(raw: String) = hostOf(raw)
+    // 'This is a mistake' lets you carry on (owner, 6 Nov 2026: 'Is a report but then you will be able to continue viewing
+    // what you where viewing'): that one site / app isn't blocked again until the screen next goes off.
+    @Volatile private var nowSites: Set<String> = emptySet()
+    @Volatile private var nowApps: Set<String> = emptySet()
+    fun allowForNow(kind: String, value: String) {
+        val v = value.lowercase(); if (v.isEmpty()) return
+        if (kind == "app") nowApps = nowApps + v else if (kind == "site") nowSites = nowSites + v
+    }
+    fun clearForNow() { nowSites = emptySet(); nowApps = emptySet() }
 
     private fun hostOf(raw: String): String {
         var u = raw.trim().lowercase()
@@ -99,13 +108,13 @@ object ContentGuard {
     fun hostBlocked(raw: String): Boolean {
         val h = hostOf(raw)
         if (h.isEmpty() || !h.contains('.')) return false
-        if (allowSites.any { h == it || h.endsWith(".$it") }) return false
+        if (allowSites.any { h == it || h.endsWith(".$it") } || nowSites.any { h == it || h.endsWith(".$it") }) return false
         return HOST_TOKENS.any { h.contains(it) }
     }
 
     fun appBlocked(pkg: String): Boolean {
         val p = pkg.lowercase()
-        if (p in allowApps) return false
+        if (p in allowApps || p in nowApps) return false
         return APP_TOKENS.any { p.contains(it) }
     }
 

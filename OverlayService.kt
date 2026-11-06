@@ -107,6 +107,7 @@ class OverlayService : Service(), StoryBridge.Host {
     // so whichever comes first wins; the other one is ignored.
     @Volatile private var aodStartedAt = 0L
     private fun onScreenOff() {
+        ContentGuard.clearForNow()   // 'This is a mistake' lets you carry on only until the screen goes off
         val now = System.currentTimeMillis()
         if (now - aodStartedAt < 800) return               // the same screen-off, reported twice
         aodStartedAt = now

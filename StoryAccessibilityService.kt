@@ -77,22 +77,22 @@ class StoryAccessibilityService : AccessibilityService() {
     private var lastBlockAt = 0L
     private fun contentGuard(e: AccessibilityEvent, pkg: String) {
         val et = e.eventType
-        if (et == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && ContentGuard.appBlocked(pkg)) { contentBlock(pkg, "app", pkg); return }
+        if (et == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && ContentGuard.appBlocked(pkg)) { contentBlock(pkg, "app", pkg, pkg, ""); return }
         if (et != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && et != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) return
         if (!ContentGuard.isBrowser(pkg)) return
         val now = System.currentTimeMillis()
         if (now - lastUrlCheckAt < 600) return   // cool phone: browsers only, at most ~1.5x a second
         lastUrlCheckAt = now
         val url = ContentGuard.browserUrl(rootInActiveWindow, pkg) ?: return
-        if (ContentGuard.hostBlocked(url)) contentBlock(pkg + "|" + url.take(60), "site", ContentGuard.siteOf(url))
+        if (ContentGuard.hostBlocked(url)) contentBlock(pkg + "|" + url.take(60), "site", ContentGuard.siteOf(url), pkg, url)
     }
-    private fun contentBlock(key: String, kind: String, value: String) {
+    private fun contentBlock(key: String, kind: String, value: String, fromPkg: String, url: String) {
         ContentGuard.refresh(this)   // picks up what Lockedintool unblocked (looks online at most every 6 hours)
         val now = System.currentTimeMillis()
         if (key == lastBlockKey && now - lastBlockAt < 4000) return   // don't re-launch for the same thing
         lastBlockKey = key; lastBlockAt = now
         runCatching { performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME) }
-        runCatching { startActivity(Intent(this, BlockActivity::class.java).putExtra("kind", kind).putExtra("value", value).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+        runCatching { startActivity(Intent(this, BlockActivity::class.java).putExtra("kind", kind).putExtra("value", value).putExtra("pkg", fromPkg).putExtra("url", url).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
     }
 
     override fun onUnbind(intent: Intent?): Boolean { instance = null; refreshOverlay(); return super.onUnbind(intent) }

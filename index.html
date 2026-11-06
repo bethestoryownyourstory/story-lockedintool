@@ -5108,10 +5108,17 @@ function blockAllowRefresh(){
   const a = blockAllowGet(); if(a.at && Date.now() - a.at < 6 * 3600000) return;
   fetch(MSG_API + '/v1/blockallow').then(r=>r.ok ? r.json() : null).then(j=>{ if(!j) return; try{ localStorage.setItem(BLOCK_ALLOW_KEY, JSON.stringify({ terms: j.terms || [], sites: j.sites || [], apps: j.apps || [], at: Date.now() })); }catch(e){} }).catch(()=>{});
 }
+// (owner, 6 Nov 2026: 'Is a report but then you will be able to continue viewing what you where viewing' - replaces
+// 'report only, no viewing'): the report goes to Lockedintool AND the search carries on.
 function blockMistakeSend(){
-  const b = state.contentBlock; if(!b || b.sent) return;
-  b.sent = true;
-  if(b.q) fetch(MSG_API + '/v1/blockfix', { method:'POST', headers:{ 'content-type':'application/json' }, body: JSON.stringify({ kind:'search', value: b.q }) }).catch(()=>{});
+  const b = state.contentBlock; if(!b) return;
+  state.contentBlock = null;
+  if(b.q){
+    fetch(MSG_API + '/v1/blockfix', { method:'POST', headers:{ 'content-type':'application/json' }, body: JSON.stringify({ kind:'search', value: b.q }) }).catch(()=>{});
+    const url = 'https://www.google.com/search?q=' + encodeURIComponent(b.q) + '&safe=active';
+    if(NATIVE && window.StoryNative.openUrl) window.StoryNative.openUrl(url); else window.open(url, '_blank');
+  }
+  showToast('Sent to Lockedintool to check');
 }
 // The context line on the block screen - what was blocked (owner: "Context: nudity / adult content").
 function searchBlockContext(q){
@@ -5132,7 +5139,7 @@ function contentBlockOverlay(b){
         <div class="lit-block-title">Locked by Lockedintool from viewing this</div>
         <div class="lit-block-ctx">Context: ${escText(ctx)}</div>
         <button class="lit-block-more" data-action="lit-block-info">Find out more about Lockedintool’s privacy and rules</button>
-        ${b && b.sent ? `<div class="lit-block-sent">Sent to Lockedintool to check. It stays blocked until then.</div>` : `<button class="lit-block-mistake" data-action="lit-block-mistake">This is a mistake</button>`}
+        <button class="lit-block-mistake" data-action="lit-block-mistake">This is a mistake</button>
         <div class="lit-block-hint">Tap anywhere to go back</div>
       </div>
     </div>`;
@@ -10339,7 +10346,7 @@ const LEGAL = {
       'No filter is ever perfect, but Lockedintool blocks the normal ways this content is reached and is the strongest a phone app can do.' ]],
     ['Your privacy', [
       'The filter runs on your phone. Lockedintool doesn’t keep a list of what you searched or send it anywhere.',
-      'Blocked by mistake? Tap “This is a mistake” on the black screen. Only what was blocked - the website’s address, the app or the words searched - goes to Lockedintool, never your name or account. It stays blocked until Lockedintool has checked it; if it really was a mistake, it is unblocked for everyone.' ]],
+      'Blocked by mistake? Tap “This is a mistake” on the black screen and you go straight back to what you were viewing. Only what was blocked - the website’s address, the app or the words searched - goes to Lockedintool, never your name or account. That site or app isn’t blocked again until your screen next goes off; Lockedintool checks it, and if it really was a mistake it is unblocked for everyone.' ]],
   ] },
   'legal-privacy': { title:'Privacy Policy', sections:[
     ['Who we are', [
