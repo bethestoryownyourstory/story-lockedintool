@@ -122,7 +122,10 @@ for (const [w, h] of SIZES) {
     await pg.mouse.up(); await pg.waitForTimeout(250);
     const fmax = await pg.evaluate(() => { window.__frun = false; return window.__fmax; });
     if (traced) { const done = new Promise(r => cdp.once('Tracing.tracingComplete', r)); await within(cdp.send('Tracing.end').catch(() => {}), 10000); await within(done, 15000); }
-    const restyled = events.filter(e => e.name === 'UpdateLayoutTree').reduce((n, e) => n + ((e.args && e.args.elementCount) || 0), 0);
+    // Leave out the single biggest restyle: the finger touching down restyles the page once (pressed / hover state) -
+    // normal. The bug restyled EVERY page preview on EVERY move (thousands each time).
+    const counts = events.filter(e => e.name === 'UpdateLayoutTree').map(e => (e.args && e.args.elementCount) || 0).sort((x, y) => y - x);
+    const restyled = counts.slice(1).reduce((n, c) => n + c, 0);
     if (traced && style !== 'wheel' && restyled > 2000) fail('page styles are smooth', style + ' @ 393x852', 'pulling the stack restyled ' + restyled + ' elements (should be a few hundred)');
     if (fmax > 250) fail('page styles are smooth', style + ' @ 393x852', 'a ' + Math.round(fmax) + ' ms freeze while it moved');
     if (perr.length) fail('no errors', style + ' @ 393x852', perr[0]);
