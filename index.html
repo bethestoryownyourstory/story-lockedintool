@@ -4081,6 +4081,21 @@
     animation-iteration-count:1 !important;
     scroll-behavior:auto !important;
   }
+  /* Apps search + letter bar (#236 - owner). The two wiggles are the owner's own exception to the rule above. */
+  .apps-shell{ padding-right:24px; }
+  .apps-search{ display:flex; align-items:center; gap:8px; margin:4px 0 10px; padding:0 12px; height:40px; border-radius:12px; background:#141414; border:1px solid #262626; color:#8e8e93; }
+  .apps-search input{ flex:1; min-width:0; background:none; border:none; outline:none; color:#fff; font-size:15px; font-family:inherit; }
+  .apps-search input::placeholder{ color:#6e6e73; }
+  .apps-search-x{ background:none; border:none; color:#8e8e93; font-size:20px; line-height:1; padding:4px 2px 4px 10px; margin:-4px 0; cursor:pointer; }
+  .az-bar{ position:fixed; right:2px; top:96px; bottom:58px; width:22px; z-index:40; display:flex; flex-direction:column; justify-content:space-between; align-items:center; touch-action:none; -webkit-user-select:none; user-select:none; padding:4px 0; }
+  .az-l{ font-size:10px; font-weight:700; line-height:1; color:#8e8e93; will-change:transform; pointer-events:none; }
+  .az-l.az-off{ color:#3a3a3e; }
+  .az-l.az-on{ color:#fff; }
+  .az-bubble{ position:fixed; right:58px; width:56px; height:56px; border-radius:50%; background:#fff; color:#000; font-size:26px; font-weight:800; display:flex; align-items:center; justify-content:center; z-index:41; pointer-events:none; box-shadow:0 6px 20px rgba(0,0,0,.45); }
+  @keyframes azWiggle{ 0%{ transform:rotate(0) scale(1); } 20%{ transform:rotate(-9deg) scale(1.08); } 45%{ transform:rotate(7deg) scale(1.04); } 70%{ transform:rotate(-4deg); } 100%{ transform:rotate(0) scale(1); } }
+  .az-bubble.az-wiggle{ animation:azWiggle .38s ease-out !important; animation-duration:.38s !important; animation-iteration-count:1 !important; }
+  @keyframes azRowWiggle{ 0%{ transform:translateX(0); } 20%{ transform:translateX(-6px) rotate(-.6deg); } 45%{ transform:translateX(5px) rotate(.5deg); } 70%{ transform:translateX(-3px); } 100%{ transform:translateX(0); } }
+  .app-row.az-wiggle{ animation:azRowWiggle .42s ease-out !important; animation-duration:.42s !important; animation-iteration-count:1 !important; }
 </style>
 <script>
 // ===== SYSTEM THEME (Settings > System theme: Black / White) =====
@@ -14091,17 +14106,19 @@ document.addEventListener('click', (e)=>{
 function appsScreen(){
   const sections = NATIVE ? ['STORY', 'PHONE APPS'] : ['WORK & TRADING', 'STORY', 'SOCIAL'];
   return `
-    <div class="page-shell">
+    <div class="page-shell apps-shell">
     ${topBar('Apps', false)}
+    <div class="apps-search"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="apps-search-input" type="text" placeholder="Search apps" autocomplete="off" value="${escText(state.appsQuery || '').replace(/"/g,'&quot;')}"><button class="apps-search-x" data-apps-clear aria-label="Clear"${state.appsQuery ? '' : ' style="visibility:hidden"'}>×</button></div>
     ${sections.map(sec=>{
       const items = state.installedApps.filter(a=>a.section===sec).sort((x, y)=>(y.own ? 1 : 0) - (x.own ? 1 : 0));
       if(!items.length) return '';
+      const az = sec !== 'STORY';   // the letter bar jumps through the phone's apps (Lockedintool's own space stays first)
       return `
-        <div class="section-title">${sec === 'STORY' ? 'LOCKEDINTOOL' : sec}</div>
+        <div class="section-title" data-apps-sec="${sec}">${sec === 'STORY' ? 'LOCKEDINTOOL' : sec}</div>
         ${items.map(a=>{
           const attr = a.pkg ? `data-native-pkg="${escText(a.pkg)}"` : a.nav ? `data-nav="${a.nav}"` : a.launchPopup ? `data-app-launchpopup="${a.launchPopup}"` : a.locked ? `data-app-locked="${escText(a.name)}"` : `data-app-toast="${escText(a.name)}"`;
           return `
-            <div class="row-card app-row" style="cursor:pointer;" data-app-id="${a.id}" ${attr}>
+            <div class="row-card app-row" style="cursor:pointer;" data-app-id="${a.id}" data-app-sec="${sec}" data-app-name="${escText((a.name || '').toLowerCase())}"${az ? ` data-az="${appsLetterOf(a.name)}"` : ''} ${attr}>
               <div class="row">
                 <div class="row-left"><div class="row-icon">${appIconHTML(a)}</div><div class="row-name">${escText(a.name)}</div></div>
                 ${a.locked ? `<span class="chev-right" title="Locked">${LIT_ICO.lock}</span>` : `<span class="chev-right">›</span>`}
@@ -14111,11 +14128,63 @@ function appsScreen(){
         }).join('')}
       `;
     }).join('')}
+    <div class="note apps-none" style="margin-top:18px;text-align:center;display:none;">No apps found</div>
     <div class="note" style="margin-top:12px;text-align:center;">Hold an app for more options</div>
     </div>
+    <div class="az-bar" aria-label="Jump to letter">${APPS_AZ.map(l=>`<span class="az-l" data-az-l="${l}">${l}</span>`).join('')}</div>
+    <div class="az-bubble" style="display:none;"></div>
     ${state.appMenuId ? appMenuTemplate() : ''}
     ${state.appRowPick ? appRowPickTemplate() : ''}
   `;
+}
+// Apps search + letter bar (#236 - owner, 6 Nov 2026: 'Can you add a app search bar. And a letter scroll bar With a lil fun
+// wiggle animation scroll', drawing the bar down the right edge beside the app list). Search filters as you type (no redraw);
+// slide a finger along the letters: the letters near it bulge out in a wave that follows the finger, a big letter bubble
+// pops with a little wiggle each time the letter changes, and the first app of that letter wiggles when you land on it.
+// The wiggles are the owner's own exception to 'no animations' (asked for in their own words).
+const APPS_AZ = '#ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+function appsLetterOf(name){ const c = String(name || '').trim().charAt(0).toUpperCase(); return /[A-Z]/.test(c) ? c : '#'; }
+function appsFilterApply(){
+  const q = (state.appsQuery || '').trim().toLowerCase();
+  const wrap = document.querySelector('#device-wrap .apps-shell'); if(!wrap) return;
+  const shown = {};
+  wrap.querySelectorAll('.app-row').forEach(r=>{ const ok = !q || (r.getAttribute('data-app-name') || '').includes(q); r.style.display = ok ? '' : 'none'; if(ok) shown[r.getAttribute('data-app-sec')] = 1; });
+  wrap.querySelectorAll('[data-apps-sec]').forEach(t=>{ t.style.display = shown[t.getAttribute('data-apps-sec')] ? '' : 'none'; });
+  const none = wrap.querySelector('.apps-none'); if(none) none.style.display = Object.keys(shown).length ? 'none' : '';
+  const x = wrap.querySelector('[data-apps-clear]'); if(x) x.style.visibility = q ? 'visible' : 'hidden';
+  // letters with no app (in what's showing) are dimmed
+  const have = {}; wrap.querySelectorAll('.app-row[data-az]').forEach(r=>{ if(r.style.display !== 'none') have[r.getAttribute('data-az')] = 1; });
+  document.querySelectorAll('#device-wrap .az-l').forEach(l=>l.classList.toggle('az-off', !have[l.getAttribute('data-az-l')]));
+}
+function appsWiggle(el){ if(!el) return; el.classList.remove('az-wiggle'); void el.offsetWidth; el.classList.add('az-wiggle'); }
+function appsAzBind(){
+  const bar = document.querySelector('#device-wrap .az-bar'); if(!bar) return;
+  const bubble = document.querySelector('#device-wrap .az-bubble');
+  const area = document.getElementById('content-area');
+  const letters = Array.from(bar.querySelectorAll('.az-l'));
+  let cur = -1, pid = null;
+  const jump = l=>{
+    const rows = Array.from(document.querySelectorAll('#device-wrap .app-row[data-az]')).filter(r=>r.style.display !== 'none');
+    const i = APPS_AZ.indexOf(l);
+    const row = rows.find(r=>APPS_AZ.indexOf(r.getAttribute('data-az')) >= i) || rows[rows.length - 1];
+    if(!row || !area) return;
+    const go = ()=>{ area.scrollTop = Math.max(0, row.getBoundingClientRect().top - area.getBoundingClientRect().top + area.scrollTop - 8); };
+    go(); requestAnimationFrame(go);   // rows further down are sized for real once in view, so set it again next frame
+    appsWiggle(row);
+  };
+  const at = y=>{
+    const r = bar.getBoundingClientRect();
+    const i = Math.max(0, Math.min(letters.length - 1, Math.floor((y - r.top) / (r.height / letters.length))));
+    letters.forEach((el, k)=>{ const d = Math.abs(k - i); const s = d < 4 ? 1 + (4 - d) * 0.22 : 1; el.style.transform = d < 4 ? `translateX(${-(4 - d) * 7}px) scale(${s})` : ''; el.classList.toggle('az-on', k === i); });
+    if(bubble){ bubble.style.display = ''; bubble.style.top = Math.max(r.top, Math.min(r.bottom - 56, y - 28)) + 'px'; }
+    if(i !== cur){ cur = i; if(bubble){ bubble.textContent = APPS_AZ[i]; appsWiggle(bubble); } jump(APPS_AZ[i]); try{ navigator.vibrate && navigator.vibrate(8); }catch(e){} }
+  };
+  const end = ()=>{ pid = null; cur = -1; letters.forEach(el=>{ el.style.transform = ''; el.classList.remove('az-on'); }); if(bubble) bubble.style.display = 'none'; };
+  bar.addEventListener('pointerdown', e=>{ e.preventDefault(); e.stopPropagation(); pid = e.pointerId; try{ bar.setPointerCapture(pid); }catch(err){} at(e.clientY); });
+  bar.addEventListener('pointermove', e=>{ if(e.pointerId !== pid) return; e.stopPropagation(); at(e.clientY); });
+  bar.addEventListener('pointerup', e=>{ if(e.pointerId === pid){ e.stopPropagation(); end(); } });
+  bar.addEventListener('pointercancel', e=>{ if(e.pointerId === pid) end(); });
+  ['touchstart','touchmove'].forEach(t=>bar.addEventListener(t, e=>e.stopPropagation(), { passive:true }));
 }
 // Create into a page (owner): pick its row - every row with the pages already in it (Add to row N), or a new row.
 function appRowPickTemplate(){
@@ -17868,6 +17937,13 @@ function attachHandlers(){
       renderDevice();
     });
   });
+  const appsSearch = document.getElementById('apps-search-input');
+  if(appsSearch){
+    appsSearch.addEventListener('input', ()=>{ state.appsQuery = appsSearch.value; appsFilterApply(); });
+    const x = document.querySelector('#device-wrap [data-apps-clear]');
+    if(x) x.addEventListener('click', e=>{ e.stopPropagation(); state.appsQuery = ''; appsSearch.value = ''; appsFilterApply(); });
+    appsFilterApply(); appsAzBind();
+  }
   // Money transfer's boxes keep what you type (no redraw while typing; the people search fills in under its box).
   document.querySelectorAll('#device-wrap [data-pay-input]').forEach(el=>{
     const k = el.getAttribute('data-pay-input');
