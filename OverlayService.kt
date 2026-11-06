@@ -874,9 +874,8 @@ class OverlayService : Service(), StoryBridge.Host {
         p.lp.alpha = if (shown) 1f else 0f
         if (p.small && shown) { p.lp.width = p.openW; p.lp.height = p.openH }
         p.frame.alpha = if (shown && !((p.small && p.loading) || (p === pagesPane && pagesInHome() && ((p.loading && p.web.progress < 100) || homeWaking)))) 1f else 0f
-        // The Pages' own brightness (the slider's "system" mode) only while they're up - never over other apps.
-        if (p === pagesPane) p.lp.screenBrightness = if (shown && pagesBright >= 0f) pagesBright else WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
         runCatching { p.wm.updateViewLayout(p.frame, p.lp) }
+        if (shown && (p === pagesPane || p === profilePane)) applyDim(p)
         if (p === s3Pane) { syncBarBg(); syncBarTouch(); tellProfileStation3() }
         if (p === dialPane) syncDialStrip()
         if (p === s3Pane || p === profilePane) ui.post { syncLockDial() }   // the lock screen's Wallet page button steps aside / comes back
@@ -3120,6 +3119,7 @@ class OverlayService : Service(), StoryBridge.Host {
         val v = TvView(this) { sym -> evalPages("window.storyTvSymbol&&window.storyTvSymbol(" + org.json.JSONObject.quote(sym) + ")") }
         p.frame.addView(v, FrameLayout.LayoutParams(-1, -1))   // on top of the page; it only takes touches on the chart
         tvView = v
+        applyDim(p)   // Lockedintool's own dimming stays on top of the chart too
         return v
     }
     override fun tvPlace(json: String) { ui.post {
@@ -3133,10 +3133,21 @@ class OverlayService : Service(), StoryBridge.Host {
     //      STORY's Pages are up (the Pages window's own brightness); "device" = the whole phone's brightness setting
     //      (Android asks once to let STORY change it; until then it works like "system"). -1 = leave it to the phone. ----
     private var pagesBright = -1f
-    private fun applyPagesBright() {
-        val p = pagesPane ?: return
-        val want = if (p.shown && pagesBright >= 0f) pagesBright else WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
-        if (p.lp.screenBrightness != want) { p.lp.screenBrightness = want; runCatching { p.wm.updateViewLayout(p.frame, p.lp) } }
+    // System control = Lockedintool's OWN brightness (owner, 6 Nov 2026: 'I can't dim lockedintool using its brightness
+    // and then still control my phone's brightness without it being connected to the device'). Android ignores the
+    // screen-brightness setting of windows that float over other apps, so the old way did nothing: Lockedintool now dims
+    // its own screens itself - a dim layer drawn on top of the Pages and Station 3's windows (never touchable) - and the
+    // phone's brightness is left alone.
+    private fun applyPagesBright() { listOfNotNull(pagesPane, profilePane).forEach { applyDim(it) } }
+    private fun applyDim(p: Pane) {
+        val a = if (pagesBright >= 0f) ((1f - pagesBright) * 0.9f).coerceIn(0f, 0.9f) else 0f
+        var v = p.frame.findViewWithTag<View>("lit-dim")
+        if (a <= 0f) { if (v != null) v.visibility = View.GONE; return }
+        if (v == null) {
+            v = View(this).apply { tag = "lit-dim"; setBackgroundColor(android.graphics.Color.BLACK); isClickable = false; isFocusable = false; importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }
+            p.frame.addView(v, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        } else if (p.frame.getChildAt(p.frame.childCount - 1) !== v) v.bringToFront()   // above TradingView's chart too
+        v.alpha = a; v.visibility = View.VISIBLE
     }
     override fun brightness(): String {
         val cr = contentResolver

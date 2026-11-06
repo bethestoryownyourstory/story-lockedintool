@@ -17254,8 +17254,9 @@ function initCanvas(canvasId, isOverlay){
   canvas.addEventListener('pointerleave', stop);
 }
 
-// In the app the slider is the phone's REAL brightness (OverlayService.setBrightness): "System control" = STORY's
-// Pages at that brightness while they're up, "Device control" = the whole phone's brightness setting. No grey veil
+// In the app (OverlayService.setBrightness): "System control" = Lockedintool's OWN brightness - Lockedintool dims its
+// own screens itself (a native dim layer), the phone's brightness is left alone (owner, 6 Nov 2026); "Device control" =
+// the whole phone's brightness setting. No grey veil
 // over the pages (that greyed everything in the White theme). Until you move it, the slider shows the phone's own
 // brightness and STORY leaves it alone. Kept on the phone (story-brightness). The browser preview still uses the veil.
 const BRIGHT_NATIVE = (()=>{ try{ const j = JSON.parse(window.StoryNative && StoryNative.brightness ? (StoryNative.brightness() || '{}') : '{}'); return !!(j && j.v != null); }catch(e){ return false; } })();
@@ -17955,8 +17956,12 @@ function attachHandlers(){
   }
   document.querySelectorAll('[data-brightmode]').forEach(el=>{
     el.addEventListener('click', ()=>{
+      const was = state.brightnessMode;
       state.brightnessMode = el.getAttribute('data-brightmode');
       state.brightnessMenuOpen = false;
+      // System control is Lockedintool's own brightness, separate from the phone's (owner, 6 Nov 2026): it starts at full
+      // (no dimming); Device control starts from the phone's brightness as it is now.
+      if(BRIGHT_NATIVE && was !== state.brightnessMode){ if(state.brightnessMode === 'system') state.brightnessValue = 100; else { const j = brightPhone(); if(j.v != null) state.brightnessValue = Math.max(0, Math.min(100, +j.v || 0)); } }
       brightnessUserSet();
       renderDevice();
     });
